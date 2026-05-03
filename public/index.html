@@ -1182,9 +1182,14 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
         <button class="btn btn-primary" onclick="openBlogModal()">+ New Post</button>
       </div>
+      <div id="bulk-bar-blogs" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-blogs" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button class="btn-sm danger" onclick="bulkDelete('blogs')">🗑 Delete Selected</button>
+        <button class="btn-sm" onclick="clearBulkSelect('blogs')" style="margin-left:auto">Cancel</button>
+      </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
           <tbody id="admin-blogs-tbody"></tbody>
         </table>
       </div>
@@ -1210,6 +1215,11 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div><h2>Members</h2><p>Add and manage society members</p></div>
         <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
       </div>
+      <div id="bulk-bar-members" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-members" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button class="btn-sm danger" onclick="bulkDelete('members')">🗑 Delete Selected</button>
+        <button class="btn-sm" onclick="clearBulkSelect('members')" style="margin-left:auto">Cancel</button>
+      </div>
       <div class="member-search-wrap">
         <svg class="member-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input class="member-search-input" id="member-admin-search" placeholder="Search by name, role, domain, batch…" oninput="filterAdminMembers(this.value)">
@@ -1217,7 +1227,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-members" onchange="selectAllBulk('members',this.checked)"></th><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="admin-members-tbody"></tbody>
         </table>
       </div>
@@ -1229,9 +1239,14 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div><h2>Films</h2><p>Manage KFS film productions</p></div>
         <button class="btn btn-primary" onclick="openMovieModal()">+ Add Film</button>
       </div>
+      <div id="bulk-bar-movies" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-movies" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button class="btn-sm danger" onclick="bulkDelete('movies')">🗑 Delete Selected</button>
+        <button class="btn-sm" onclick="clearBulkSelect('movies')" style="margin-left:auto">Cancel</button>
+      </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-movies" onchange="selectAllBulk('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
           <tbody id="admin-movies-tbody"></tbody>
         </table>
       </div>
@@ -2274,7 +2289,8 @@ async function loadAdminData(name) {
     const blogs = await apiFetch('/api/blogs');
     const tbody = document.getElementById('admin-blogs-tbody');
     if (!blogs || !blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
-    tbody.innerHTML = blogs.map(b=>`<tr>
+    tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"></td>
       <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}</td>
       <td style="font-weight:500">${b.title}</td>
       <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}</span></td>
@@ -2303,8 +2319,13 @@ async function loadAdminData(name) {
   else if (name==='members') {
     const members = await apiFetch('/api/members');
     const tbody = document.getElementById('admin-members-tbody');
-    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
-    tbody.innerHTML = members.map(m=>`<tr>
+    const searchEl = document.getElementById('member-admin-search');
+    if (searchEl) searchEl.value = '';
+    const clearBtn = document.getElementById('member-search-clear-btn');
+    if (clearBtn) clearBtn.classList.remove('visible');
+    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
+    tbody.innerHTML = members.map(m=>`<tr data-id="${m.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"></td>
       <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
       <td style="font-weight:500">${m.name}</td>
       <td style="color:var(--grey)">${m.role||'—'}</td>
@@ -2348,7 +2369,8 @@ async function loadAdminData(name) {
     const movies = await apiFetch('/api/movies');
     const tbody = document.getElementById('admin-movies-tbody');
     if (!movies || !movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
-    tbody.innerHTML = movies.map(m=>`<tr>
+    tbody.innerHTML = movies.map(m=>`<tr data-id="${m.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"></td>
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'🎬'}</td>
       <td style="font-weight:500">${m.title}</td>
       <td style="color:var(--grey)">${m.release_year||'—'}</td>
@@ -3011,32 +3033,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ── ADMIN MEMBER SEARCH ──────────────────────────────────────────────
-let _allAdminMembers = [];
-
-// Override loadAdminData for members to cache the list
-const _origLoadAdminData = loadAdminData;
-async function loadAdminData(name) {
-  await _origLoadAdminData(name);
-  if (name === 'members') {
-    // cache member rows for search filtering
-    const rows = document.querySelectorAll('#admin-members-tbody tr');
-    _allAdminMembers = [];
-    rows.forEach(row => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length >= 4) {
-        _allAdminMembers.push({
-          el: row,
-          text: Array.from(cells).map(c => c.textContent.toLowerCase()).join(' ')
-        });
-      }
-    });
-    // reset search box
-    const searchEl = document.getElementById('member-admin-search');
-    if (searchEl) { searchEl.value = ''; }
-    const clearBtn = document.getElementById('member-search-clear-btn');
-    if (clearBtn) clearBtn.classList.remove('visible');
-  }
-}
 
 function filterAdminMembers(q) {
   q = q.trim().toLowerCase();
@@ -3064,6 +3060,47 @@ function filterAdminMembers(q) {
 function clearMemberSearch() {
   const searchEl = document.getElementById('member-admin-search');
   if (searchEl) { searchEl.value = ''; filterAdminMembers(''); searchEl.focus(); }
+}
+
+// ── BULK DELETE ──────────────────────────────────────────────────────
+function updateBulkBar(section) {
+  const checked = document.querySelectorAll(`#section-${section} .bulk-cb:checked`);
+  const bar = document.getElementById(`bulk-bar-${section}`);
+  const countEl = document.getElementById(`bulk-count-${section}`);
+  if (!bar) return;
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    countEl.textContent = checked.length + ' selected';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function selectAllBulk(section, checked) {
+  document.querySelectorAll(`#section-${section} .bulk-cb`).forEach(cb => cb.checked = checked);
+  updateBulkBar(section);
+}
+
+function clearBulkSelect(section) {
+  document.querySelectorAll(`#section-${section} .bulk-cb`).forEach(cb => cb.checked = false);
+  const masterCb = document.getElementById(`bulk-select-all-${section}`);
+  if (masterCb) masterCb.checked = false;
+  updateBulkBar(section);
+}
+
+async function bulkDelete(section) {
+  const checked = [...document.querySelectorAll(`#section-${section} .bulk-cb:checked`)];
+  if (!checked.length) return;
+  if (!confirm(`Delete ${checked.length} item(s)? This cannot be undone.`)) return;
+  const apiMap = { blogs: '/api/admin/blogs/', movies: '/api/admin/movies/', members: '/api/admin/members/' };
+  const base = apiMap[section];
+  if (!base) return;
+  const ids = checked.map(cb => cb.dataset.id);
+  await Promise.all(ids.map(id => apiFetch(base + id, 'DELETE')));
+  clearBulkSelect(section);
+  loadAdminData(section);
+  // Show toast if available
+  if (typeof showToast === 'function') showToast(`${ids.length} item(s) deleted`, 'success');
 }
 </script>
 
