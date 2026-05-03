@@ -2090,8 +2090,9 @@ async function loadNotifications() {
   try {
     const res = await fetch('/api/settings');
     const data = await res.json();
-    const raw = Array.isArray(data) ? data.find(s => s.key === 'notifications') : null;
-    allNotifications = raw ? JSON.parse(raw.value || '[]') : [];
+    // /api/settings returns a plain object {key: value, ...}
+    const raw = data && data.notifications;
+    allNotifications = raw ? JSON.parse(raw) : [];
   } catch(e) { allNotifications = []; }
   renderNotifTable();
   // show popups only if not in admin
@@ -2202,6 +2203,27 @@ async function saveNotif() {
   await saveNotifToServer();
   closeNotifModal();
   renderNotifTable();
+  // Show a live preview popup so admin can see it immediately
+  if (notif.active) {
+    const typeIcons = {announcement:'📢',achievement:'🏆',film:'🎬',event:'🎪'};
+    const overlay = document.createElement('div');
+    overlay.className = 'notif-popup-overlay';
+    overlay.innerHTML = `
+      <div class="notif-popup-box">
+        <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666;margin-bottom:8px">PREVIEW</div>
+        <div class="ep-label">${typeIcons[notif.type]||'📢'} ${(notif.type||'').charAt(0).toUpperCase()+(notif.type||'').slice(1)}</div>
+        <div class="ep-title" style="font-size:20px;margin-bottom:10px;line-height:1.3">${notif.title}</div>
+        ${notif.message ? `<div style="font-size:13px;color:#888;line-height:1.6;margin-bottom:20px">${notif.message}</div>` : ''}
+        <div class="ep-actions">
+          ${notif.btnText ? `<button class="ep-btn-primary">${notif.btnText}</button>` : ''}
+          <button class="ep-btn-close" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">Dismiss</button>
+        </div>
+        <button class="ep-x" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">✕</button>
+      </div>`;
+    overlay.addEventListener('click', e => { if(e.target===overlay){overlay.classList.remove('visible');setTimeout(()=>overlay.remove(),400);} });
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('visible'), 100);
+  }
 }
 async function deleteNotif(idx) {
   if (!confirm('Delete this notification?')) return;
@@ -2212,8 +2234,8 @@ async function deleteNotif(idx) {
 async function saveNotifToServer() {
   await fetch('/api/admin/settings', {
     method:'POST',
-    headers:{'Content-Type':'application/json','x-admin-token':localStorage.getItem('kfs_admin_token')||''},
-    body: JSON.stringify({key:'notifications', value: JSON.stringify(allNotifications)})
+    headers:{'Content-Type':'application/json','Authorization':'Bearer ' + (adminToken||'')},
+    body: JSON.stringify({ notifications: JSON.stringify(allNotifications) })
   });
 }
 
