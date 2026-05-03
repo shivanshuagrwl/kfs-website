@@ -17,10 +17,8 @@ body{background:var(--black);color:var(--white);font-family:'Helvetica Neue',Hel
 
 /* ── CURSOR ──────────────────────────────────────────────────────────── */
 #cursor{position:fixed;width:8px;height:8px;background:var(--white);border-radius:50%;pointer-events:none;
-  z-index:9999;transition:transform .15s var(--ease),opacity .2s;mix-blend-mode:difference}
-#cursor-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(255,255,255,.4);border-radius:50%;
-  pointer-events:none;z-index:9998;transition:transform .25s var(--ease),width .2s,height .2s,opacity .2s}
-body:hover #cursor{opacity:1} body #cursor{opacity:0}
+  z-index:9999;transition:opacity .2s;mix-blend-mode:difference;opacity:0}
+#cursor-ring{display:none}
 
 /* ── NAV ─────────────────────────────────────────────────────────────── */
 nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
@@ -220,15 +218,16 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 /* ── ADMIN LOGIN ────────────────────────────────────────────────────────── */
 #admin-login{display:none;min-height:100vh;align-items:center;justify-content:center}
 #admin-login.active{display:flex;animation:fadeUp .6s var(--ease) both}
-.login-box{width:380px;padding:60px 48px;border:1px solid var(--border);text-align:center;background:var(--card)}
+.login-box{width:400px;padding:60px 48px;border:1px solid var(--border);text-align:center;background:var(--card)}
 .login-box h2{font-size:28px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em}
 .login-box p{font-size:13px;color:var(--grey);margin-bottom:40px}
 .form-group{margin-bottom:20px;text-align:left}
 .form-group label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:8px}
-.form-group input,.form-group textarea,.form-group select{width:100%;background:var(--black);
-  border:1px solid var(--border);color:var(--white);padding:12px 16px;font-size:14px;
-  font-family:inherit;outline:none;transition:border-color .2s;border-radius:2px}
-.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--grey)}
+.form-group input,.form-group textarea,.form-group select{
+  width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);
+  padding:14px 18px;font-size:14px;font-family:inherit;outline:none;
+  transition:border-color .2s;border-radius:2px;min-height:44px}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:#555}
 .form-group textarea{min-height:140px;resize:vertical}
 .form-group select option{background:var(--card)}
 .login-error{color:#e74c3c;font-size:13px;margin-top:16px}
@@ -253,13 +252,13 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .admin-sidebar-item .icon{font-size:15px;width:20px;text-align:center}
 .admin-sidebar-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
 
-.admin-main{margin-left:260px;padding:48px 56px;min-height:calc(100vh - 72px);background:var(--black)}
+.admin-main{margin-left:260px;padding:48px 64px;min-height:calc(100vh - 72px);background:var(--black)}
 @media(max-width:768px){.admin-sidebar{display:none}.admin-main{margin-left:0;padding:24px}}
 
 .admin-section{display:none}
 .admin-section.active{display:block;animation:fadeUp .4s var(--ease) both}
 
-.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:40px;
+.admin-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:40px;
   padding-bottom:24px;border-bottom:1px solid var(--border)}
 .admin-header h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
 .admin-header p{font-size:13px;color:var(--grey);margin-top:4px}
@@ -284,13 +283,22 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .admin-empty{text-align:center;padding:60px 24px;color:var(--grey)}
 .admin-empty p{font-size:14px;margin-top:8px}
 
+/* ── SETTINGS FORM ────────────────────────────────────────────────────── */
+.settings-form{max-width:860px}
+.settings-form .form-group label{font-size:12px;letter-spacing:.08em;margin-bottom:10px;color:#aaa}
+.settings-section-title{font-size:18px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em}
+.settings-section-desc{font-size:13px;color:var(--grey);margin-bottom:24px}
+.settings-divider{height:1px;background:var(--border);margin:40px 0}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.settings-grid{grid-template-columns:1fr}}
+
 /* ── MODAL ────────────────────────────────────────────────────────────── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;
   align-items:center;justify-content:center;padding:24px}
 .modal-overlay.open{display:flex;animation:modalIn .3s var(--ease) both}
 @keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
 .modal{background:#0f0f0f;border:1px solid var(--border);padding:40px;width:100%;
-  max-width:600px;max-height:90vh;overflow-y:auto;border-radius:4px}
+  max-width:640px;max-height:90vh;overflow-y:auto;border-radius:4px}
 .modal h3{font-size:20px;font-weight:700;margin-bottom:28px;letter-spacing:-.01em}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:28px;
   padding-top:20px;border-top:1px solid var(--border)}
@@ -615,20 +623,33 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
       <div class="admin-header">
         <div><h2>Site Settings</h2><p>Edit homepage content and links</p></div>
       </div>
-      <div style="max-width:560px">
-        <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline"></div>
-        <div class="form-group"><label>About Text</label><textarea id="set-about"></textarea></div>
-        <div class="form-group"><label>Instagram URL</label><input type="text" id="set-instagram" placeholder="https://instagram.com/kfs"></div>
-        <div class="form-group"><label>YouTube URL</label><input type="text" id="set-youtube" placeholder="https://youtube.com/@kfs"></div>
-        <div class="form-group"><label>Contact Email</label><input type="text" id="set-email"></div>
-        <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-        <div style="margin-top:48px;padding-top:32px;border-top:1px solid var(--border)">
-          <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">Change Password</h3>
-          <p style="font-size:13px;color:var(--grey);margin-bottom:24px">Update your admin login password</p>
+      <div class="settings-form">
+        <p class="settings-section-title">Hero & About</p>
+        <p class="settings-section-desc">Content shown on the homepage</p>
+        <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline" placeholder="Lights. Camera. KFS."></div>
+        <div class="form-group"><label>About Text</label><textarea id="set-about" style="min-height:120px"></textarea></div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Social Links</p>
+        <p class="settings-section-desc">Links shown in the footer</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Instagram URL</label><input type="text" id="set-instagram" placeholder="https://instagram.com/kfs"></div>
+          <div class="form-group"><label>YouTube URL</label><input type="text" id="set-youtube" placeholder="https://youtube.com/@kfs"></div>
+          <div class="form-group"><label>Contact Email</label><input type="text" id="set-email" placeholder="kfs@kiit.ac.in"></div>
+        </div>
+
+        <div style="margin-top:8px">
+          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+        </div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Change Password</p>
+        <p class="settings-section-desc">Update your admin login password</p>
+        <div class="settings-grid">
           <div class="form-group"><label>New Password</label><input type="password" id="new-password"></div>
           <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
-          <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
         </div>
+        <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
       </div>
     </div>
 
@@ -743,24 +764,16 @@ let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
 let allEvents = [];
 
+// ── CURSOR (dot only) ──
 const cursor = document.getElementById('cursor');
-const cursorRing = document.getElementById('cursor-ring');
-let mx=0,my=0,rx=0,ry=0;
+let mx=0,my=0;
 document.addEventListener('mousemove', e=>{
-  mx=e.clientX;my=e.clientY;
+  mx=e.clientX; my=e.clientY;
   cursor.style.transform=`translate(${mx-4}px,${my-4}px)`;
   cursor.style.opacity='1';
 });
-(function animRing(){
-  rx+=(mx-rx)*.12; ry+=(my-ry)*.12;
-  cursorRing.style.transform=`translate(${rx-18}px,${ry-18}px)`;
-  requestAnimationFrame(animRing);
-})();
-document.querySelectorAll('a,button,.btn,.admin-sidebar-item,.events-tab,.blog-card,.member-card,.nav-hamburger').forEach(el=>{
-  el.addEventListener('mouseenter',()=>{ cursorRing.style.width='60px';cursorRing.style.height='60px'; });
-  el.addEventListener('mouseleave',()=>{ cursorRing.style.width='36px';cursorRing.style.height='36px'; });
-});
 
+// ── NAVIGATION ──
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
@@ -970,6 +983,7 @@ function renderTestimonials(testimonials) {
   inner.innerHTML = cards + cards;
 }
 
+// ── ADMIN ──
 async function adminLogin() {
   const password = document.getElementById('admin-password').value;
   const err = document.getElementById('login-error');
