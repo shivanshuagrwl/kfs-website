@@ -27,9 +27,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   display:flex;align-items:center;justify-content:space-between;
   background:rgba(10,10,10,.85);backdrop-filter:blur(20px);
   border-bottom:1px solid rgba(255,255,255,.04);transition:all .3s var(--ease)}
-.nav-logo{display:flex;align-items:center;gap:12px;text-decoration:none;cursor:none}
-.nav-logo img{height:32px;width:32px;object-fit:contain;filter:invert(1)}
-.nav-logo span{font-size:14px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--white)}
+.nav-logo{display:flex;align-items:center;text-decoration:none;cursor:none}
+.nav-logo-text{font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--white)}
 .nav-links{display:flex;gap:32px;list-style:none}
 .nav-links a{color:var(--grey);text-decoration:none;font-size:13px;letter-spacing:.06em;
   text-transform:uppercase;font-weight:500;transition:color .2s;cursor:none}
@@ -66,7 +65,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   width:400px;height:400px;border:1px solid var(--white);border-radius:50%}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
-.hero-logo{width:80px;height:80px;object-fit:contain;filter:invert(1);border-radius:50%;box-shadow:0 0 40px rgba(255,255,255,0.25),0 0 80px rgba(255,255,255,0.1)}
+.hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
+  box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(2.5rem,8vw,7rem);font-weight:700;letter-spacing:-.03em;
   line-height:.95;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards}
@@ -210,73 +210,100 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px}
 @media(max-width:768px){footer{padding:40px 24px;grid-template-columns:1fr}}
 .footer-logo{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.footer-logo img{height:24px;width:24px;object-fit:contain;filter:invert(1)}
-.footer-logo span{font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.footer-logo span{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .footer-copy{font-size:12px;color:var(--grey)}
 .footer-links{display:flex;gap:24px}
 .footer-links a{font-size:12px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--grey);text-decoration:none;cursor:none;transition:color .2s}
 .footer-links a:hover{color:var(--white)}
 
-/* ── ADMIN ────────────────────────────────────────────────────────────── */
+/* ── ADMIN LOGIN ────────────────────────────────────────────────────────── */
 #admin-login{display:none;min-height:100vh;align-items:center;justify-content:center}
 #admin-login.active{display:flex;animation:fadeUp .6s var(--ease) both}
-.login-box{width:360px;padding:60px 40px;border:1px solid var(--border);text-align:center}
-.login-box h2{font-size:24px;font-weight:700;margin-bottom:8px}
+.login-box{width:380px;padding:60px 48px;border:1px solid var(--border);text-align:center;background:var(--card)}
+.login-box h2{font-size:28px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em}
 .login-box p{font-size:13px;color:var(--grey);margin-bottom:40px}
 .form-group{margin-bottom:20px;text-align:left}
 .form-group label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:8px}
-.form-group input,.form-group textarea,.form-group select{width:100%;background:var(--card);
+.form-group input,.form-group textarea,.form-group select{width:100%;background:var(--black);
   border:1px solid var(--border);color:var(--white);padding:12px 16px;font-size:14px;
-  font-family:inherit;outline:none;transition:border-color .2s}
+  font-family:inherit;outline:none;transition:border-color .2s;border-radius:2px}
 .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--grey)}
 .form-group textarea{min-height:140px;resize:vertical}
 .form-group select option{background:var(--card)}
 .login-error{color:#e74c3c;font-size:13px;margin-top:16px}
 
+/* ── ADMIN PANEL ────────────────────────────────────────────────────────── */
 #admin-panel{display:none;min-height:100vh;padding-top:72px}
-#admin-panel.active{display:grid;grid-template-columns:240px 1fr}
+#admin-panel.active{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
 @media(max-width:768px){#admin-panel.active{grid-template-columns:1fr}}
-.admin-sidebar{position:fixed;top:72px;left:0;width:240px;bottom:0;overflow-y:auto;
-  border-right:1px solid var(--border);padding:24px 0;background:var(--black)}
-.admin-sidebar-item{padding:12px 24px;font-size:13px;letter-spacing:.06em;cursor:none;
-  transition:all .2s;display:flex;align-items:center;gap:10px;color:var(--grey)}
-.admin-sidebar-item:hover,.admin-sidebar-item.active{color:var(--white);background:var(--card)}
-.admin-sidebar-item .icon{font-size:16px}
-.admin-main{margin-left:240px;padding:40px;min-height:calc(100vh - 72px)}
+
+.admin-sidebar{position:fixed;top:72px;left:0;width:260px;bottom:0;overflow-y:auto;
+  border-right:1px solid var(--border);padding:20px 12px;background:#0d0d0d;
+  display:flex;flex-direction:column}
+.admin-sidebar-logo{padding:8px 12px 24px;font-size:11px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border);margin-bottom:12px}
+.admin-sidebar-group{font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  color:#444;padding:16px 12px 6px}
+.admin-sidebar-item{padding:10px 14px;font-size:13px;letter-spacing:.04em;cursor:none;
+  transition:all .2s;display:flex;align-items:center;gap:10px;color:var(--grey);
+  border-radius:6px;margin-bottom:2px}
+.admin-sidebar-item:hover{color:var(--white);background:rgba(255,255,255,.06)}
+.admin-sidebar-item.active{color:var(--white);background:rgba(255,255,255,.08);font-weight:500}
+.admin-sidebar-item .icon{font-size:15px;width:20px;text-align:center}
+.admin-sidebar-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
+
+.admin-main{margin-left:260px;padding:48px 56px;min-height:calc(100vh - 72px);background:var(--black)}
 @media(max-width:768px){.admin-sidebar{display:none}.admin-main{margin-left:0;padding:24px}}
+
 .admin-section{display:none}
 .admin-section.active{display:block;animation:fadeUp .4s var(--ease) both}
-.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px}
-.admin-header h2{font-size:24px;font-weight:700;letter-spacing:-.02em}
-.admin-table{width:100%;border-collapse:collapse;margin-top:16px}
+
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:40px;
+  padding-bottom:24px;border-bottom:1px solid var(--border)}
+.admin-header h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.admin-header p{font-size:13px;color:var(--grey);margin-top:4px}
+
+.admin-card{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:8px}
+.admin-table{width:100%;border-collapse:collapse}
 .admin-table th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);
-  padding:12px 16px;border-bottom:1px solid var(--border);text-align:left}
-.admin-table td{padding:16px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
-.admin-table img{width:48px;height:48px;object-fit:cover;filter:grayscale(100%)}
-.btn-sm{padding:6px 14px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);
-  cursor:none;background:transparent;color:var(--grey);transition:all .2s;font-family:inherit;text-transform:uppercase}
+  padding:14px 20px;border-bottom:1px solid var(--border);text-align:left;background:rgba(255,255,255,.02)}
+.admin-table td{padding:16px 20px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
+.admin-table tr:last-child td{border-bottom:none}
+.admin-table tr:hover td{background:rgba(255,255,255,.02)}
+.admin-table img{width:44px;height:44px;object-fit:cover;filter:grayscale(100%);border-radius:2px}
+
+.btn-sm{padding:7px 16px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);
+  cursor:none;background:transparent;color:var(--grey);transition:all .2s;font-family:inherit;
+  text-transform:uppercase;border-radius:3px}
 .btn-sm:hover{border-color:var(--white);color:var(--white)}
 .btn-sm.danger:hover{border-color:#e74c3c;color:#e74c3c}
 .btn-success{background:var(--white);color:var(--black);border-color:var(--white)}
 .btn-success:hover{background:transparent;color:var(--white)}
 
+.admin-empty{text-align:center;padding:60px 24px;color:var(--grey)}
+.admin-empty p{font-size:14px;margin-top:8px}
+
 /* ── MODAL ────────────────────────────────────────────────────────────── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;
   align-items:center;justify-content:center;padding:24px}
 .modal-overlay.open{display:flex;animation:modalIn .3s var(--ease) both}
-@keyframes modalIn{from{opacity:0}to{opacity:1}}
-.modal{background:var(--black);border:1px solid var(--border);padding:40px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto}
-.modal h3{font-size:20px;font-weight:700;margin-bottom:24px}
-.modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
+@keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.modal{background:#0f0f0f;border:1px solid var(--border);padding:40px;width:100%;
+  max-width:600px;max-height:90vh;overflow-y:auto;border-radius:4px}
+.modal h3{font-size:20px;font-weight:700;margin-bottom:28px;letter-spacing:-.01em}
+.modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:28px;
+  padding-top:20px;border-top:1px solid var(--border)}
 
 /* ── EDITOR ──────────────────────────────────────────────────────────── */
-.editor-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid var(--border);border-bottom:none;background:var(--card)}
+.editor-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid var(--border);
+  border-bottom:none;background:#0d0d0d;border-radius:3px 3px 0 0}
 .editor-btn{padding:6px 10px;background:transparent;border:1px solid transparent;color:var(--grey);
-  cursor:none;font-size:13px;font-family:inherit;transition:all .2s}
+  cursor:none;font-size:13px;font-family:inherit;transition:all .2s;border-radius:3px}
 .editor-btn:hover{border-color:var(--border);color:var(--white)}
 #blog-editor-content{min-height:200px;border:1px solid var(--border);padding:16px;color:var(--white);
-  outline:none;font-family:inherit;font-size:15px;line-height:1.7;background:var(--card)}
+  outline:none;font-family:inherit;font-size:15px;line-height:1.7;background:var(--card);
+  border-radius:0 0 3px 3px}
 #blog-editor-content:focus{border-color:var(--grey)}
 
 /* ── LOADING ──────────────────────────────────────────────────────────── */
@@ -284,21 +311,19 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .empty-state{text-align:center;padding:60px 24px;color:var(--grey)}
 .empty-state p{font-size:14px;margin-top:8px}
 .tag{display:inline-block;padding:3px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  border:1px solid var(--border);color:var(--grey);margin-bottom:12px}
+  border:1px solid var(--border);color:var(--grey);margin-bottom:12px;border-radius:2px}
 .tag.upcoming{border-color:var(--white);color:var(--white)}
 </style>
 </head>
 <body>
 
-<!-- Custom cursor -->
 <div id="cursor"></div>
 <div id="cursor-ring"></div>
 
 <!-- NAV -->
 <nav id="main-nav">
   <a class="nav-logo" onclick="navigate('home')">
-    <img src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
-    <span>KFS</span>
+    <span class="nav-logo-text">KFS</span>
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a onclick="navigate('home');closeMenu()" class="active" data-page="home">Home</a></li>
@@ -311,10 +336,8 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </nav>
 
-<!-- ── HOME PAGE ────────────────────────────────────────────────────────────── -->
+<!-- ── HOME PAGE ── -->
 <div class="page active" id="page-home">
-
-  <!-- Hero -->
   <section id="hero-section">
     <div class="hero-grain"></div>
     <div class="hero-reel"><div class="hero-reel-circle"></div></div>
@@ -333,7 +356,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
     </div>
   </section>
 
-  <!-- Stats -->
   <section class="section" style="padding-top:0">
     <div class="section-inner">
       <div class="stats-grid" id="stats-grid">
@@ -345,7 +367,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
     </div>
   </section>
 
-  <!-- About -->
   <section class="section">
     <div class="section-inner">
       <p class="section-label">About Us</p>
@@ -363,7 +384,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <!-- Achievements -->
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Milestones</p>
@@ -376,7 +396,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <!-- Events Preview -->
   <section class="section">
     <div class="section-inner">
       <p class="section-label">What's On</p>
@@ -392,7 +411,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <!-- Blog Preview -->
   <section class="section">
     <div class="section-inner">
       <p class="section-label">From the Lens</p>
@@ -408,7 +426,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <!-- Testimonials -->
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Voices</p>
@@ -421,11 +438,9 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
     </div>
   </section>
 
-  <!-- Footer -->
   <footer>
     <div>
       <div class="footer-logo">
-        <img src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
         <span>KIIT Film Society</span>
       </div>
       <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. All rights reserved.</p>
@@ -438,7 +453,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </footer>
 </div>
 
-<!-- ── EVENTS PAGE ───────────────────────────────────────────────────────────── -->
+<!-- ── EVENTS PAGE ── -->
 <div class="page" id="page-events">
   <section class="section">
     <div class="section-inner">
@@ -455,7 +470,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </section>
 </div>
 
-<!-- ── BLOG PAGE ─────────────────────────────────────────────────────────────── -->
+<!-- ── BLOG PAGE ── -->
 <div class="page" id="page-blog">
   <section class="section">
     <div class="section-inner">
@@ -479,7 +494,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- ── MEMBERS PAGE ──────────────────────────────────────────────────────────── -->
+<!-- ── MEMBERS PAGE ── -->
 <div class="page" id="page-members">
   <section class="section">
     <div class="section-inner">
@@ -492,7 +507,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </section>
 </div>
 
-<!-- ── ADMIN LOGIN ───────────────────────────────────────────────────────────── -->
+<!-- ── ADMIN LOGIN ── -->
 <div id="admin-login">
   <div class="login-box">
     <h2>Admin Access</h2>
@@ -506,91 +521,110 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- ── ADMIN PANEL ───────────────────────────────────────────────────────────── -->
+<!-- ── ADMIN PANEL ── -->
 <div id="admin-panel">
   <div class="admin-sidebar">
+    <div class="admin-sidebar-logo">KFS Admin</div>
+    <div class="admin-sidebar-group">Content</div>
     <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon">✍️</span> Blog Posts</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon">🎬</span> Events</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon">👥</span> Members</div>
+    <div class="admin-sidebar-group">Extras</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
+    <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon">⚙️</span> Settings</div>
-    <div class="admin-sidebar-item" onclick="adminLogout()" style="margin-top:auto;border-top:1px solid var(--border)"><span class="icon">→</span> Log Out</div>
+    <div class="admin-sidebar-bottom">
+      <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
+    </div>
   </div>
   <div class="admin-main">
 
     <!-- BLOGS -->
     <div class="admin-section active" id="section-blogs">
       <div class="admin-header">
-        <h2>Blog Posts</h2>
+        <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
         <button class="btn btn-primary" onclick="openBlogModal()">+ New Post</button>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
-        <tbody id="admin-blogs-tbody"></tbody>
-      </table>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+          <tbody id="admin-blogs-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- EVENTS -->
     <div class="admin-section" id="section-events">
       <div class="admin-header">
-        <h2>Events</h2>
+        <div><h2>Events</h2><p>Manage upcoming and past events</p></div>
         <button class="btn btn-primary" onclick="openEventModal()">+ New Event</button>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Actions</th></tr></thead>
-        <tbody id="admin-events-tbody"></tbody>
-      </table>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Actions</th></tr></thead>
+          <tbody id="admin-events-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- MEMBERS -->
     <div class="admin-section" id="section-members">
       <div class="admin-header">
-        <h2>Members</h2>
+        <div><h2>Members</h2><p>Add and manage society members</p></div>
         <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Actions</th></tr></thead>
-        <tbody id="admin-members-tbody"></tbody>
-      </table>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Actions</th></tr></thead>
+          <tbody id="admin-members-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- TESTIMONIALS -->
     <div class="admin-section" id="section-testimonials">
       <div class="admin-header">
-        <h2>Testimonials</h2>
+        <div><h2>Testimonials</h2><p>Member quotes shown on homepage</p></div>
         <button class="btn btn-primary" onclick="openTestimonialModal()">+ Add Testimonial</button>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Photo</th><th>Name</th><th>Quote</th><th>Actions</th></tr></thead>
-        <tbody id="admin-testimonials-tbody"></tbody>
-      </table>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Photo</th><th>Name</th><th>Quote</th><th>Actions</th></tr></thead>
+          <tbody id="admin-testimonials-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ACHIEVEMENTS -->
     <div class="admin-section" id="section-achievements">
       <div class="admin-header">
-        <h2>Achievements</h2>
+        <div><h2>Achievements</h2><p>Milestones and awards</p></div>
         <button class="btn btn-primary" onclick="openAchievementModal()">+ Add Achievement</button>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Icon</th><th>Title</th><th>Year</th><th>Actions</th></tr></thead>
-        <tbody id="admin-achievements-tbody"></tbody>
-      </table>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Icon</th><th>Title</th><th>Year</th><th>Actions</th></tr></thead>
+          <tbody id="admin-achievements-tbody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- SETTINGS -->
     <div class="admin-section" id="section-settings">
-      <div class="admin-header"><h2>Site Settings</h2></div>
-      <div style="max-width:600px">
+      <div class="admin-header">
+        <div><h2>Site Settings</h2><p>Edit homepage content and links</p></div>
+      </div>
+      <div style="max-width:560px">
         <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline"></div>
         <div class="form-group"><label>About Text</label><textarea id="set-about"></textarea></div>
         <div class="form-group"><label>Instagram URL</label><input type="text" id="set-instagram" placeholder="https://instagram.com/kfs"></div>
         <div class="form-group"><label>YouTube URL</label><input type="text" id="set-youtube" placeholder="https://youtube.com/@kfs"></div>
-        <div class="form-group"><label>Email</label><input type="text" id="set-email"></div>
+        <div class="form-group"><label>Contact Email</label><input type="text" id="set-email"></div>
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
         <div style="margin-top:48px;padding-top:32px;border-top:1px solid var(--border)">
-          <h3 style="font-size:18px;margin-bottom:24px">Change Password</h3>
+          <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">Change Password</h3>
+          <p style="font-size:13px;color:var(--grey);margin-bottom:24px">Update your admin login password</p>
           <div class="form-group"><label>New Password</label><input type="password" id="new-password"></div>
           <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
           <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
@@ -601,9 +635,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- ── MODALS ─────────────────────────────────────────────────────────────────── -->
-
-<!-- Blog Modal -->
+<!-- ── MODALS ── -->
 <div class="modal-overlay" id="blog-modal">
   <div class="modal">
     <h3 id="blog-modal-title">New Blog Post</h3>
@@ -636,7 +668,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- Event Modal -->
 <div class="modal-overlay" id="event-modal">
   <div class="modal">
     <h3 id="event-modal-title">New Event</h3>
@@ -658,7 +689,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- Member Modal -->
 <div class="modal-overlay" id="member-modal">
   <div class="modal">
     <h3 id="member-modal-title">Add Member</h3>
@@ -676,7 +706,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- Testimonial Modal -->
 <div class="modal-overlay" id="testimonial-modal">
   <div class="modal">
     <h3 id="testimonial-modal-title">Add Testimonial</h3>
@@ -693,7 +722,6 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
   </div>
 </div>
 
-<!-- Achievement Modal -->
 <div class="modal-overlay" id="achievement-modal">
   <div class="modal">
     <h3 id="achievement-modal-title">Add Achievement</h3>
@@ -711,12 +739,10 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 </div>
 
 <script>
-// ── STATE ─────────────────────────────────────────────────────────────────────
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
 let allEvents = [];
 
-// ── CURSOR ────────────────────────────────────────────────────────────────────
 const cursor = document.getElementById('cursor');
 const cursorRing = document.getElementById('cursor-ring');
 let mx=0,my=0,rx=0,ry=0;
@@ -731,52 +757,39 @@ document.addEventListener('mousemove', e=>{
   requestAnimationFrame(animRing);
 })();
 document.querySelectorAll('a,button,.btn,.admin-sidebar-item,.events-tab,.blog-card,.member-card,.nav-hamburger').forEach(el=>{
-  el.addEventListener('mouseenter',()=>{ cursor.style.transform+=` scale(2)`; cursorRing.style.width='60px';cursorRing.style.height='60px'; });
+  el.addEventListener('mouseenter',()=>{ cursorRing.style.width='60px';cursorRing.style.height='60px'; });
   el.addEventListener('mouseleave',()=>{ cursorRing.style.width='36px';cursorRing.style.height='36px'; });
 });
 
-// ── NAVIGATION ────────────────────────────────────────────────────────────────
 function navigate(page) {
-  // Hide everything
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.remove('active');
-  
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
     document.getElementById('admin-login').classList.add('active');
     return;
   }
-  
   const pageEl = document.getElementById('page-'+page);
   if (pageEl) { pageEl.classList.add('active'); currentPage = page; }
-  
-  // Update nav active
   document.querySelectorAll('.nav-links a').forEach(a=>{
     a.classList.toggle('active', a.dataset.page === page);
   });
-  
   window.scrollTo({top:0,behavior:'smooth'});
   loadPageData(page);
 }
 
 function loadPageData(page) {
-  if (page==='home') { loadHomeData(); }
-  else if (page==='events') { loadEvents(); }
-  else if (page==='blog') { loadBlog(); }
-  else if (page==='members') { loadMembers(); }
+  if (page==='home') loadHomeData();
+  else if (page==='events') loadEvents();
+  else if (page==='blog') loadBlog();
+  else if (page==='members') loadMembers();
 }
 
-// ── MENU ──────────────────────────────────────────────────────────────────────
-function toggleMenu() {
-  document.getElementById('nav-links').classList.toggle('open');
-}
-function closeMenu() {
-  document.getElementById('nav-links').classList.remove('open');
-}
+function toggleMenu() { document.getElementById('nav-links').classList.toggle('open'); }
+function closeMenu() { document.getElementById('nav-links').classList.remove('open'); }
 
-// ── COUNTER ANIMATION ─────────────────────────────────────────────────────────
 function animateCounters() {
   document.querySelectorAll('.counter').forEach(el=>{
     const target = parseInt(el.dataset.target);
@@ -790,15 +803,12 @@ function animateCounters() {
   });
 }
 
-// ── LOAD HOME DATA ────────────────────────────────────────────────────────────
 async function loadHomeData() {
-  // Settings
   const settings = await apiFetch('/api/settings');
   if (settings) {
     const tagEl = document.getElementById('hero-tagline');
     if (settings.site_tagline) tagEl.innerHTML = settings.site_tagline.replace(/\./g,'.<br>');
     document.getElementById('about-text').textContent = settings.about_text || '';
-    
     const ig = document.getElementById('footer-instagram');
     const yt = document.getElementById('footer-youtube');
     const em = document.getElementById('footer-email');
@@ -806,10 +816,8 @@ async function loadHomeData() {
     if (settings.youtube) { yt.href=settings.youtube; yt.style.display='block'; }
     if (settings.email) em.href='mailto:'+settings.email;
   }
-  
   document.getElementById('footer-year').textContent = new Date().getFullYear();
-  
-  // Achievements
+
   const achievements = await apiFetch('/api/achievements');
   const ag = document.getElementById('achievements-grid');
   if (achievements && achievements.length) {
@@ -819,13 +827,11 @@ async function loadHomeData() {
         <div class="achievement-title">${a.title}</div>
         <div class="achievement-year">${a.year||''}</div>
         <div class="achievement-desc">${a.description||''}</div>
-      </div>
-    `).join('');
+      </div>`).join('');
   } else {
     ag.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No achievements yet.</p></div>`;
   }
-  
-  // Events preview (upcoming only, max 3)
+
   const events = await apiFetch('/api/events');
   const homeEvents = document.getElementById('home-events');
   const upcoming = (events||[]).filter(e=>e.is_upcoming).slice(0,3);
@@ -834,8 +840,7 @@ async function loadHomeData() {
   } else {
     homeEvents.innerHTML = `<div class="empty-state"><p>No upcoming events. Check back soon.</p></div>`;
   }
-  
-  // Blog preview (max 3)
+
   const blogs = await apiFetch('/api/blogs');
   const hbg = document.getElementById('home-blog-grid');
   if (blogs && blogs.length) {
@@ -843,15 +848,12 @@ async function loadHomeData() {
   } else {
     hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.</p></div>`;
   }
-  
-  // Testimonials
+
   const testimonials = await apiFetch('/api/testimonials');
   renderTestimonials(testimonials||[]);
-  
   animateCounters();
 }
 
-// ── EVENTS ────────────────────────────────────────────────────────────────────
 async function loadEvents() {
   allEvents = await apiFetch('/api/events') || [];
   filterEvents('upcoming', document.querySelector('.events-tab'));
@@ -888,7 +890,6 @@ function renderEventItem(e, full=false) {
   </div>`;
 }
 
-// ── BLOG ──────────────────────────────────────────────────────────────────────
 async function loadBlog() {
   const blogs = await apiFetch('/api/blogs');
   const grid = document.getElementById('blog-grid');
@@ -915,14 +916,11 @@ function renderBlogCard(b) {
 async function openBlog(id) {
   const blog = await apiFetch('/api/blogs/'+id);
   if (!blog) return;
-  
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.add('active');
-  
   const img = document.getElementById('blog-detail-img');
   if (blog.cover_image) { img.src=blog.cover_image; img.style.display='block'; }
   else img.style.display='none';
-  
   document.getElementById('blog-detail-date').textContent = blog.created_at
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
@@ -930,7 +928,6 @@ async function openBlog(id) {
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// ── MEMBERS ───────────────────────────────────────────────────────────────────
 async function loadMembers() {
   const members = await apiFetch('/api/members');
   const grid = document.getElementById('members-grid');
@@ -945,21 +942,18 @@ async function loadMembers() {
           <div class="member-role">${m.role||''}</div>
           <div class="member-batch">${m.batch||''}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
   } else {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No members added yet.</p></div>`;
   }
 }
 
-// ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 function renderTestimonials(testimonials) {
   const inner = document.getElementById('testimonials-inner');
   if (!testimonials.length) {
     inner.innerHTML = `<div class="testimonial-card"><p style="color:var(--grey)">No testimonials yet.</p></div>`;
     return;
   }
-  // Duplicate for infinite scroll
   const cards = testimonials.map(t=>`
     <div class="testimonial-card">
       <p class="testimonial-quote">"${t.quote}"</p>
@@ -972,12 +966,10 @@ function renderTestimonials(testimonials) {
           <div class="testimonial-role">${t.role||''} ${t.batch?'· '+t.batch:''}</div>
         </div>
       </div>
-    </div>
-  `).join('');
-  inner.innerHTML = cards + cards; // duplicate for seamless loop
+    </div>`).join('');
+  inner.innerHTML = cards + cards;
 }
 
-// ── ADMIN AUTH ────────────────────────────────────────────────────────────────
 async function adminLogin() {
   const password = document.getElementById('admin-password').value;
   const err = document.getElementById('login-error');
@@ -1009,7 +1001,6 @@ function showAdminPanel() {
   loadAdminData('blogs');
 }
 
-// ── ADMIN SECTIONS ────────────────────────────────────────────────────────────
 function showAdminSection(name) {
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   document.getElementById('section-'+name).classList.add('active');
@@ -1022,69 +1013,74 @@ async function loadAdminData(name) {
   if (name==='blogs') {
     const blogs = await apiFetch('/api/blogs');
     const tbody = document.getElementById('admin-blogs-tbody');
-    tbody.innerHTML = (blogs||[]).map(b=>`<tr>
+    if (!blogs || !blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
+    tbody.innerHTML = blogs.map(b=>`<tr>
       <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}</td>
-      <td>${b.title}</td>
+      <td style="font-weight:500">${b.title}</td>
       <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}</span></td>
-      <td>${b.created_at?new Date(b.created_at).toLocaleDateString():''}</td>
-      <td style="display:flex;gap:8px">
+      <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}</td>
+      <td><div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('');
   }
   else if (name==='events') {
     const events = await apiFetch('/api/events');
     const tbody = document.getElementById('admin-events-tbody');
-    tbody.innerHTML = (events||[]).map(e=>`<tr>
-      <td>${e.title}</td>
-      <td>${e.event_date||'—'}</td>
+    if (!events || !events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`; return; }
+    tbody.innerHTML = events.map(e=>`<tr>
+      <td style="font-weight:500">${e.title}</td>
+      <td style="color:var(--grey)">${e.event_date||'—'}</td>
       <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}</span></td>
-      <td>${e.location||'—'}</td>
-      <td style="display:flex;gap:8px">
+      <td style="color:var(--grey)">${e.location||'—'}</td>
+      <td><div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('');
   }
   else if (name==='members') {
     const members = await apiFetch('/api/members');
     const tbody = document.getElementById('admin-members-tbody');
-    tbody.innerHTML = (members||[]).map(m=>`<tr>
+    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
+    tbody.innerHTML = members.map(m=>`<tr>
       <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
-      <td>${m.name}</td>
-      <td>${m.role||'—'}</td>
-      <td>${m.batch||'—'}</td>
-      <td style="display:flex;gap:8px">
+      <td style="font-weight:500">${m.name}</td>
+      <td style="color:var(--grey)">${m.role||'—'}</td>
+      <td style="color:var(--grey)">${m.batch||'—'}</td>
+      <td><div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('');
   }
   else if (name==='testimonials') {
     const testimonials = await apiFetch('/api/testimonials');
     const tbody = document.getElementById('admin-testimonials-tbody');
-    tbody.innerHTML = (testimonials||[]).map(t=>`<tr>
+    if (!testimonials || !testimonials.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No testimonials yet.</td></tr>`; return; }
+    tbody.innerHTML = testimonials.map(t=>`<tr>
       <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
-      <td>${t.name}</td>
-      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${t.quote}"</td>
-      <td style="display:flex;gap:8px">
+      <td style="font-weight:500">${t.name}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"</td>
+      <td><div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="editTestimonial(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteTestimonial('${t.id}')">Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('');
   }
   else if (name==='achievements') {
     const achievements = await apiFetch('/api/achievements');
     const tbody = document.getElementById('admin-achievements-tbody');
-    tbody.innerHTML = (achievements||[]).map(a=>`<tr>
+    if (!achievements || !achievements.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No achievements yet.</td></tr>`; return; }
+    tbody.innerHTML = achievements.map(a=>`<tr>
       <td style="font-size:24px">${a.icon||'🏆'}</td>
-      <td>${a.title}</td>
-      <td>${a.year||'—'}</td>
-      <td style="display:flex;gap:8px">
+      <td style="font-weight:500">${a.title}</td>
+      <td style="color:var(--grey)">${a.year||'—'}</td>
+      <td><div style="display:flex;gap:8px">
         <button class="btn-sm" onclick="editAchievement(${JSON.stringify(a).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteAchievement('${a.id}')">Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('');
   }
   else if (name==='settings') {
@@ -1099,7 +1095,6 @@ async function loadAdminData(name) {
   }
 }
 
-// ── BLOG CRUD ─────────────────────────────────────────────────────────────────
 function openBlogModal(blog=null) {
   document.getElementById('blog-modal').classList.add('open');
   document.getElementById('blog-modal-title').textContent = blog ? 'Edit Post' : 'New Blog Post';
@@ -1122,10 +1117,8 @@ async function saveBlog() {
   fd.append('published', document.getElementById('blog-published').value);
   const cover = document.getElementById('blog-cover').files[0];
   if (cover) fd.append('cover', cover);
-  
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
-  const method = id ? 'PUT' : 'POST';
-  const res = await fetch(url,{method, headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeBlogModal(); loadAdminData('blogs'); }
   else alert('Error saving post');
 }
@@ -1136,7 +1129,6 @@ async function deleteBlog(id) {
   loadAdminData('blogs');
 }
 
-// ── EVENT CRUD ────────────────────────────────────────────────────────────────
 function openEventModal(ev=null) {
   document.getElementById('event-modal').classList.add('open');
   document.getElementById('event-modal-title').textContent = ev ? 'Edit Event' : 'New Event';
@@ -1163,7 +1155,6 @@ async function saveEvent() {
   fd.append('is_upcoming', document.getElementById('event-upcoming').value);
   const cover = document.getElementById('event-cover').files[0];
   if (cover) fd.append('cover', cover);
-  
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeEventModal(); loadAdminData('events'); }
@@ -1176,7 +1167,6 @@ async function deleteEvent(id) {
   loadAdminData('events');
 }
 
-// ── MEMBER CRUD ───────────────────────────────────────────────────────────────
 function openMemberModal(m=null) {
   document.getElementById('member-modal').classList.add('open');
   document.getElementById('member-modal-title').textContent = m ? 'Edit Member' : 'Add Member';
@@ -1201,7 +1191,6 @@ async function saveMember() {
   fd.append('sort_order', document.getElementById('member-sort').value);
   const photo = document.getElementById('member-photo').files[0];
   if (photo) fd.append('photo', photo);
-  
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeMemberModal(); loadAdminData('members'); }
@@ -1214,7 +1203,6 @@ async function deleteMember(id) {
   loadAdminData('members');
 }
 
-// ── TESTIMONIAL CRUD ──────────────────────────────────────────────────────────
 function openTestimonialModal(t=null) {
   document.getElementById('testimonial-modal').classList.add('open');
   document.getElementById('testimonial-modal-title').textContent = t ? 'Edit Testimonial' : 'Add Testimonial';
@@ -1237,7 +1225,6 @@ async function saveTestimonial() {
   fd.append('quote', document.getElementById('testimonial-quote').value);
   const photo = document.getElementById('testimonial-photo').files[0];
   if (photo) fd.append('photo', photo);
-  
   const url = id ? '/api/admin/testimonials/'+id : '/api/admin/testimonials';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeTestimonialModal(); loadAdminData('testimonials'); }
@@ -1250,7 +1237,6 @@ async function deleteTestimonial(id) {
   loadAdminData('testimonials');
 }
 
-// ── ACHIEVEMENT CRUD ──────────────────────────────────────────────────────────
 function openAchievementModal(a=null) {
   document.getElementById('achievement-modal').classList.add('open');
   document.getElementById('achievement-modal-title').textContent = a ? 'Edit Achievement' : 'Add Achievement';
@@ -1287,7 +1273,6 @@ async function deleteAchievement(id) {
   loadAdminData('achievements');
 }
 
-// ── SETTINGS ──────────────────────────────────────────────────────────────────
 async function saveSettings() {
   const body = {
     site_tagline: document.getElementById('set-tagline').value,
@@ -1313,7 +1298,6 @@ async function changePassword() {
   if (res.ok) { alert('Password changed!'); document.getElementById('new-password').value=''; document.getElementById('confirm-password').value=''; }
 }
 
-// ── EDITOR ────────────────────────────────────────────────────────────────────
 function execCmd(cmd, val=null) {
   document.getElementById('blog-editor-content').focus();
   document.execCommand(cmd, false, val);
@@ -1323,7 +1307,6 @@ function insertLink() {
   if (url) execCmd('createLink', url);
 }
 
-// ── API HELPER ────────────────────────────────────────────────────────────────
 async function apiFetch(url, method='GET', body=null) {
   const opts = { method, headers:{} };
   if (adminToken) opts.headers['Authorization'] = 'Bearer '+adminToken;
@@ -1337,22 +1320,18 @@ async function apiFetch(url, method='GET', body=null) {
   } catch(e) { return null; }
 }
 
-// ── CHECK ADMIN ROUTE ─────────────────────────────────────────────────────────
-// Secret URL: /admin — handle hash routing
 function checkRoute() {
   const path = window.location.pathname;
   if (path === '/admin') navigate('admin');
   else navigate('home');
 }
 
-// Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
   overlay.addEventListener('click', e=>{
     if (e.target === overlay) overlay.classList.remove('open');
   });
 });
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
 checkRoute();
 </script>
 </body>
