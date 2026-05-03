@@ -1560,16 +1560,19 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <label>Domain</label>
       <select id="member-domain">
         <option value="">— Select domain —</option>
-        <option value="HR & PR">HR &amp; PR</option>
-        <option value="Cinematography">Cinematography</option>
         <option value="Direction">Direction</option>
-        <option value="Graphic Design">Graphic Design</option>
-        <option value="Sound Design">Sound Design</option>
+        <option value="Cinematography">Cinematography</option>
         <option value="Scriptwriting">Scriptwriting</option>
+        <option value="Video Editing">Video Editing</option>
+        <option value="Sound Design">Sound Design</option>
+        <option value="Graphic Design">Graphic Design</option>
+        <option value="Animation">Animation</option>
+        <option value="Acting">Acting</option>
+        <option value="Photography">Photography</option>
         <option value="Content Creation">Content Creation</option>
         <option value="Social Media">Social Media</option>
-        <option value="Acting">Acting</option>
-        <option value="Animation">Animation</option>
+        <option value="HR & PR">HR &amp; PR</option>
+        <option value="Production Management">Production Management</option>
       </select>
     </div>
     <div class="form-group"><label>Batch (Year)</label><input type="text" id="member-batch" placeholder="2024-25"></div>
@@ -2043,7 +2046,7 @@ function autoMemberSort() {
 function toggleDomainField() {
   const role = document.getElementById('member-role').value;
   const group = document.getElementById('domain-group');
-  if (group) group.style.display = role === 'Lead' ? 'block' : 'none';
+  if (group) group.style.display = (role === 'Lead' || role === 'Core Member') ? 'block' : 'none';
 }
 
 async function loadMovies() {
@@ -2579,7 +2582,8 @@ async function saveMember() {
   const fd = new FormData();
   fd.append('name', document.getElementById('member-name').value);
   fd.append('role', document.getElementById('member-role').value);
-  fd.append('domain', document.getElementById('member-role').value === 'Lead' ? (document.getElementById('member-domain').value||'') : '');
+  const _role = document.getElementById('member-role').value;
+  fd.append('domain', (_role === 'Lead' || _role === 'Core Member') ? (document.getElementById('member-domain').value||'') : '');
   fd.append('batch', document.getElementById('member-batch').value);
   fd.append('bio', document.getElementById('member-bio').value);
   fd.append('sort_order', document.getElementById('member-sort').value);
