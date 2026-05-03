@@ -369,6 +369,29 @@ app.get('/api/admin/analytics/reviews', authMiddleware, async (req, res) => {
   res.json({ total, overall_avg, cat_avgs, by_film, top_rated, most_reviewed });
 });
 
+// ── REVIEWS ───────────────────────────────────────────────────────────────────
+app.get('/api/reviews/:movieId', async (req, res) => {
+  const { data } = await supabase.from('reviews').select('*')
+    .eq('movie_id', req.params.movieId).order('created_at', { ascending: false });
+  res.json(data || []);
+});
+
+app.post('/api/reviews', async (req, res) => {
+  const { movie_id, reviewer_name, overall, direction, sound, cinematography, script, review_text } = req.body;
+  if (!movie_id || !overall) return res.status(400).json({ error: 'movie_id and overall are required' });
+  const { data, error } = await supabase.from('reviews').insert([{
+    movie_id, reviewer_name: reviewer_name || 'Anonymous',
+    overall: parseInt(overall),
+    direction: direction ? parseInt(direction) : null,
+    sound: sound ? parseInt(sound) : null,
+    cinematography: cinematography ? parseInt(cinematography) : null,
+    script: script ? parseInt(script) : null,
+    review_text: review_text || null,
+  }]).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

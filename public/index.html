@@ -581,6 +581,38 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .tag{display:inline-block;padding:3px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
   border:1px solid var(--border);color:var(--grey);margin-bottom:12px;border-radius:2px}
 .tag.upcoming{border-color:var(--white);color:var(--white)}
+
+/* ── REVIEWS ──────────────────────────────────────────────────────────── */
+.review-section{margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+.review-summary{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center;margin-bottom:32px;padding:24px;background:var(--card);border:1px solid var(--border)}
+.review-big-score{text-align:center}
+.review-big-num{font-size:3.5rem;font-weight:800;letter-spacing:-.04em;line-height:1}
+.review-big-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-top:4px}
+.review-cat-bars{flex:1}
+.review-cat-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.review-cat-name{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);width:90px;flex-shrink:0}
+.review-cat-bar{flex:1;height:2px;background:var(--border);border-radius:1px}
+.review-cat-fill{height:100%;background:var(--white);border-radius:1px;transition:width .6s}
+.review-cat-val{font-size:11px;color:var(--grey);width:24px;text-align:right}
+.star-picker{display:flex;gap:4px;margin-bottom:4px}
+.star-picker span{font-size:22px;cursor:pointer;opacity:.3;transition:opacity .15s,transform .15s;line-height:1;user-select:none}
+.star-picker span.active,.star-picker span:hover,.star-picker span.hover{opacity:1;transform:scale(1.15)}
+.review-form{margin-top:24px;padding:24px;background:var(--card);border:1px solid var(--border)}
+.review-form-title{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:20px}
+.star-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:600px){.star-row{grid-template-columns:1fr}}
+.star-field label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:6px;display:block}
+.review-card{padding:20px 0;border-bottom:1px solid var(--border)}
+.review-card:last-child{border-bottom:none}
+.review-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.review-card-name{font-size:13px;font-weight:600}
+.review-card-date{font-size:11px;color:var(--grey)}
+.review-stars-display{color:#f5f5f5;letter-spacing:2px;font-size:13px;margin-bottom:6px}
+.review-card-text{font-size:13px;color:var(--grey);line-height:1.6;margin-top:8px}
+.review-sub-scores{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px}
+.review-sub-score{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555}
+.review-sub-score span{color:#888}
+.reviews-list{margin-top:16px}
 </style>
 </head>
 <body>
@@ -906,6 +938,44 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div class="movie-detail-section-title">Support Crew</div>
         <div class="movie-cast-list" id="movie-detail-support"></div>
       </div>
+
+      <!-- REVIEWS SECTION -->
+      <div class="review-section" id="movie-reviews-section">
+        <div class="movie-detail-section-title">Reviews</div>
+        <!-- Summary (shown when reviews exist) -->
+        <div class="review-summary" id="review-summary" style="display:none">
+          <div class="review-big-score">
+            <div class="review-big-num" id="review-avg-score">—</div>
+            <div style="font-size:18px;margin:4px 0">★★★★★</div>
+            <div class="review-big-label"><span id="review-count">0</span> Reviews</div>
+          </div>
+          <div class="review-cat-bars" id="review-cat-bars"></div>
+        </div>
+        <!-- Review Form -->
+        <div class="review-form">
+          <div class="review-form-title">Leave a Review</div>
+          <div class="form-group"><label style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:6px">Your Name (optional)</label>
+            <input type="text" id="review-name" placeholder="Anonymous" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:10px 14px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s">
+          </div>
+          <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:12px">Overall Rating *</div>
+          <div class="star-picker" id="star-overall" data-cat="overall"></div>
+          <div class="star-row" style="margin-top:16px">
+            <div class="star-field"><label>Direction</label><div class="star-picker" id="star-direction" data-cat="direction"></div></div>
+            <div class="star-field"><label>Sound</label><div class="star-picker" id="star-sound" data-cat="sound"></div></div>
+            <div class="star-field"><label>Cinematography</label><div class="star-picker" id="star-cinematography" data-cat="cinematography"></div></div>
+            <div class="star-field"><label>Script</label><div class="star-picker" id="star-script" data-cat="script"></div></div>
+          </div>
+          <div class="form-group" style="margin-top:16px">
+            <label style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:6px">Write a Review (optional)</label>
+            <textarea id="review-text" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:10px 14px;font-size:13px;font-family:inherit;outline:none;min-height:80px;resize:vertical" placeholder="Share your thoughts..."></textarea>
+          </div>
+          <button onclick="submitReview()" class="btn btn-primary" style="margin-top:4px">Submit Review</button>
+          <p id="review-submit-msg" style="font-size:12px;margin-top:10px;color:var(--grey)"></p>
+        </div>
+        <!-- Reviews List -->
+        <div class="reviews-list" id="reviews-list"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1706,7 +1776,145 @@ async function openMovie(id) {
   } else supportSec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
   history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
+  // Load reviews for this movie
+  loadReviews(id);
+  resetReviewForm();
 }
+
+// ── STAR PICKERS ──
+const starRatings = {};
+function initStarPickers() {
+  ['overall','direction','sound','cinematography','script'].forEach(cat => {
+    starRatings[cat] = 0;
+    const el = document.getElementById('star-'+cat);
+    if (!el) return;
+    el.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const s = document.createElement('span');
+      s.textContent = '★';
+      s.dataset.val = i;
+      s.addEventListener('mouseover', () => highlightStars(el, i));
+      s.addEventListener('mouseout', () => highlightStars(el, starRatings[cat]));
+      s.addEventListener('click', () => {
+        starRatings[cat] = i;
+        highlightStars(el, i);
+      });
+      el.appendChild(s);
+    }
+  });
+}
+function highlightStars(el, val) {
+  el.querySelectorAll('span').forEach((s,i) => {
+    s.classList.toggle('active', i < val);
+  });
+}
+function resetReviewForm() {
+  initStarPickers();
+  const nameEl = document.getElementById('review-name');
+  const textEl = document.getElementById('review-text');
+  const msgEl = document.getElementById('review-submit-msg');
+  if (nameEl) nameEl.value = '';
+  if (textEl) textEl.value = '';
+  if (msgEl) msgEl.textContent = '';
+}
+
+let currentMovieId = null;
+async function loadReviews(movieId) {
+  currentMovieId = movieId;
+  try {
+    const res = await fetch('/api/reviews/'+movieId);
+    const reviews = await res.json();
+    renderReviews(reviews || []);
+  } catch(e) { renderReviews([]); }
+}
+
+function renderReviews(reviews) {
+  const summaryEl = document.getElementById('review-summary');
+  const listEl = document.getElementById('reviews-list');
+  const catBarsEl = document.getElementById('review-cat-bars');
+  if (!listEl) return;
+
+  if (!reviews.length) {
+    summaryEl.style.display = 'none';
+    listEl.innerHTML = '<p style="color:var(--grey);font-size:13px;padding:16px 0">No reviews yet. Be the first!</p>';
+    return;
+  }
+
+  // Summary
+  const avg = reviews.reduce((s,r)=>s+r.overall,0)/reviews.length;
+  document.getElementById('review-avg-score').textContent = avg.toFixed(1);
+  document.getElementById('review-count').textContent = reviews.length;
+  summaryEl.style.display = 'grid';
+
+  // Category bars
+  const cats = ['direction','sound','cinematography','script'];
+  const catLabels = {direction:'Direction',sound:'Sound',cinematography:'Cinemato.',script:'Script'};
+  catBarsEl.innerHTML = cats.map(c => {
+    const vals = reviews.map(r=>r[c]).filter(Boolean);
+    const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    return `<div class="review-cat-row">
+      <div class="review-cat-name">${catLabels[c]}</div>
+      <div class="review-cat-bar"><div class="review-cat-fill" style="width:${avg ? avg/5*100 : 0}%"></div></div>
+      <div class="review-cat-val">${avg ? avg.toFixed(1) : '—'}</div>
+    </div>`;
+  }).join('');
+
+  // Review cards
+  listEl.innerHTML = reviews.map(r => {
+    const stars = '★'.repeat(r.overall) + '☆'.repeat(5-r.overall);
+    const subs = ['direction','sound','cinematography','script']
+      .filter(c => r[c])
+      .map(c => `<span class="review-sub-score">${catLabels[c]}: <span>${r[c]}/5</span></span>`).join('');
+    const date = r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+    return `<div class="review-card">
+      <div class="review-card-header">
+        <div class="review-card-name">${r.reviewer_name||'Anonymous'}</div>
+        <div class="review-card-date">${date}</div>
+      </div>
+      <div class="review-stars-display">${stars}</div>
+      ${subs ? `<div class="review-sub-scores">${subs}</div>` : ''}
+      ${r.review_text ? `<div class="review-card-text">${r.review_text}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function submitReview() {
+  if (!currentMovieId) return;
+  if (!starRatings.overall) {
+    document.getElementById('review-submit-msg').textContent = 'Please give an overall star rating.';
+    return;
+  }
+  const body = {
+    movie_id: currentMovieId,
+    reviewer_name: document.getElementById('review-name').value.trim() || 'Anonymous',
+    overall: starRatings.overall,
+    direction: starRatings.direction || null,
+    sound: starRatings.sound || null,
+    cinematography: starRatings.cinematography || null,
+    script: starRatings.script || null,
+    review_text: document.getElementById('review-text').value.trim() || null,
+  };
+  try {
+    const res = await fetch('/api/reviews', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      document.getElementById('review-submit-msg').textContent = 'Thanks for your review!';
+      resetReviewForm();
+      loadReviews(currentMovieId);
+    } else {
+      document.getElementById('review-submit-msg').textContent = 'Error submitting review. Try again.';
+    }
+  } catch(e) {
+    document.getElementById('review-submit-msg').textContent = 'Network error. Try again.';
+  }
+}
+
+// Init star pickers on page load
+initStarPickers();
+
 
 function renderTestimonials(testimonials) {
   const track = document.getElementById('testimonials-track');
@@ -2188,9 +2396,10 @@ async function apiFetch(url, method='GET', body=null) {
 }
 
 function checkRoute() {
-  const path = window.location.pathname;
-  if (path === '/admin') navigate('admin');
-  else navigate('home');
+  const path = window.location.pathname.replace(/^\//, '');
+  if (path === 'admin') navigate('admin', false);
+  else if (!path || path === 'home') navigate('home', false);
+  // all other routes are handled by the init IIFE above
 }
 
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
@@ -2347,7 +2556,7 @@ function dismissNotifAndNext(el, nextIdx, page) {
 
 function openNotifModal(idx) {
   const modal = document.getElementById('notif-modal-overlay');
-  modal.style.display = 'flex';
+  modal.classList.add('open');
   if (idx !== undefined) {
     const n = allNotifications[idx];
     document.getElementById('notif-modal-title').textContent = 'Edit Notification';
@@ -2370,7 +2579,7 @@ function openNotifModal(idx) {
   }
 }
 function closeNotifModal() {
-  document.getElementById('notif-modal-overlay').style.display = 'none';
+  document.getElementById('notif-modal-overlay').classList.remove('open');
 }
 async function saveNotif() {
   const idx = document.getElementById('notif-id').value;
@@ -2474,7 +2683,7 @@ loadNotifications();
 </style>
 
 <!-- Notification Modal -->
-<div class="modal-overlay" id="notif-modal-overlay" onclick="if(event.target===this)closeNotifModal()" style="display:none">
+<div class="modal-overlay" id="notif-modal-overlay">
   <div class="modal">
     <div class="modal-header"><h3 id="notif-modal-title">New Notification</h3><button class="modal-close" onclick="closeNotifModal()">✕</button></div>
     <input type="hidden" id="notif-id">
@@ -2509,8 +2718,6 @@ loadNotifications();
     </div>
   </div>
 </div>
-</body>
-</html>
 <script>
 // ══════════════════════════════════════════════════════════
 // GLOBAL SEARCH
