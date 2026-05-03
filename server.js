@@ -174,18 +174,20 @@ app.get('/api/members', async (req, res) => {
 });
 
 app.post('/api/admin/members', authMiddleware, upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order } = req.body;
+  const { name, role, batch, bio, sort_order, is_past } = req.body;
   const photoUrl = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').insert([{
-    name, role, batch, bio, photo: photoUrl, sort_order: parseInt(sort_order) || 99
+    name, role, batch, bio, photo: photoUrl,
+    sort_order: parseInt(sort_order) || 99,
+    is_past: is_past === 'true',
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
 app.put('/api/admin/members/:id', authMiddleware, upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order } = req.body;
-  const updates = { name, role, batch, bio, sort_order: parseInt(sort_order) || 99 };
+  const { name, role, batch, bio, sort_order, is_past } = req.body;
+  const updates = { name, role, batch, bio, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
   if (req.file) updates.photo = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });

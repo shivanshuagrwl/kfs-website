@@ -433,6 +433,14 @@ body:has(#admin-panel.active) #main-nav{display:none}
   .hero-cta .btn{font-size:11px;padding:12px 16px}
 }
 
+/* ── MEMBER SECTIONS ──────────────────────────────────────────────────── */
+.members-section{margin-bottom:64px}
+.members-section-title{font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--grey);margin-bottom:28px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.members-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+@media(max-width:1024px){.members-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.members-grid{grid-template-columns:repeat(2,1fr)}}
+
 /* ── MOVIES ───────────────────────────────────────────────────────────── */
 .movies-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:60px}
 @media(max-width:1024px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
@@ -761,9 +769,11 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="section-inner">
       <p class="section-label">The Crew</p>
       <h2 class="section-title">Our Members</h2>
-      <div class="members-grid" id="members-grid" style="margin-top:60px">
-        <div class="loading" style="grid-column:1/-1">Loading members...</div>
+      <div class="events-tabs" style="margin-top:40px">
+        <div class="events-tab active" onclick="filterMembers('current',this)">Current</div>
+        <div class="events-tab" onclick="filterMembers('past',this)">Alumni</div>
       </div>
+      <div id="members-content" style="margin-top:48px"></div>
     </div>
   </section>
 </div>
@@ -875,7 +885,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="admin-members-tbody"></tbody>
         </table>
       </div>
@@ -933,6 +943,16 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <p class="settings-section-desc">Content shown on the homepage</p>
         <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline" placeholder="Lights. Camera. KFS."></div>
         <div class="form-group"><label>About Text</label><textarea id="set-about" style="min-height:120px"></textarea></div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Stats Counter</p>
+        <p class="settings-section-desc">Numbers shown on the homepage hero</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Total Members</label><input type="number" id="set-stat-members" placeholder="500"></div>
+          <div class="form-group"><label>Events Hosted</label><input type="number" id="set-stat-events" placeholder="50"></div>
+          <div class="form-group"><label>Films Screened</label><input type="number" id="set-stat-films" placeholder="30"></div>
+          <div class="form-group"><label>Years Active</label><input type="number" id="set-stat-years" placeholder="5"></div>
+        </div>
 
         <div class="settings-divider"></div>
         <p class="settings-section-title">Social Links</p>
@@ -1021,10 +1041,23 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <input type="hidden" id="member-edit-id">
     <div class="form-group"><label>Photo</label><input type="file" id="member-photo" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
-    <div class="form-group"><label>Role / Position</label><input type="text" id="member-role" placeholder="President, Director, etc."></div>
+    <div class="form-group">
+      <label>Role / Position</label>
+      <select id="member-role" onchange="autoMemberSort()">
+        <option value="President">President</option>
+        <option value="Vice President">Vice President</option>
+        <option value="Lead">Lead</option>
+        <option value="Core Member">Core Member</option>
+        <option value="Member">Member</option>
+      </select>
+    </div>
     <div class="form-group"><label>Batch (Year)</label><input type="text" id="member-batch" placeholder="2024-25"></div>
     <div class="form-group"><label>Bio (optional)</label><textarea id="member-bio" style="min-height:80px"></textarea></div>
-    <div class="form-group"><label>Sort Order</label><input type="number" id="member-sort" value="99"></div>
+    <input type="hidden" id="member-sort" value="5">
+    <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-top:8px">
+      <input type="checkbox" id="member-is-past" style="width:18px;height:18px;border:1px solid var(--border);background:var(--black);accent-color:var(--white);cursor:pointer">
+      <label for="member-is-past" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);cursor:pointer;margin-bottom:0">Past Member / Alumni</label>
+    </div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMemberModal()">Cancel</button>
       <button class="btn-sm btn-success" onclick="saveMember()">Save Member</button>
@@ -1154,6 +1187,11 @@ async function loadHomeData() {
     if (settings.instagram) { ig.href=settings.instagram; ig.style.display='block'; }
     if (settings.youtube) { yt.href=settings.youtube; yt.style.display='block'; }
     if (settings.email) em.href='mailto:'+settings.email;
+    // update stat counters from settings
+    if (settings.stat_members) document.querySelector('[data-target="500"]')?.setAttribute('data-target', settings.stat_members);
+    if (settings.stat_events) document.querySelector('[data-target="50"]')?.setAttribute('data-target', settings.stat_events);
+    if (settings.stat_films) document.querySelector('[data-target="30"]')?.setAttribute('data-target', settings.stat_films);
+    if (settings.stat_years) document.querySelector('[data-target="5"]')?.setAttribute('data-target', settings.stat_years);
   }
   document.getElementById('footer-year').textContent = new Date().getFullYear();
 
@@ -1276,24 +1314,68 @@ async function openBlog(id) {
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
+let allMembers = [];
+
 async function loadMembers() {
-  const members = await apiFetch('/api/members');
-  const grid = document.getElementById('members-grid');
-  if (members && members.length) {
-    grid.innerHTML = members.map(m=>`
-      <div class="member-card">
-        ${m.photo
-          ? `<img class="member-photo" src="${m.photo}" alt="${m.name}">`
-          : `<div class="member-photo-placeholder">👤</div>`}
-        <div class="member-info">
-          <div class="member-name">${m.name}</div>
-          <div class="member-role">${m.role||''}</div>
-          <div class="member-batch">${m.batch||''}</div>
-        </div>
-      </div>`).join('');
-  } else {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No members added yet.</p></div>`;
+  allMembers = await apiFetch('/api/members') || [];
+  filterMembers('current', document.querySelector('#page-members .events-tab'));
+}
+
+function filterMembers(type, tabEl) {
+  document.querySelectorAll('#page-members .events-tab').forEach(t=>t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+
+  const members = allMembers.filter(m => type === 'past' ? m.is_past : !m.is_past);
+  const container = document.getElementById('members-content');
+
+  if (!members.length) {
+    container.innerHTML = `<div class="empty-state"><p>No ${type === 'past' ? 'alumni' : 'current members'} yet.</p></div>`;
+    return;
   }
+
+  const roleOrder = ['President','Vice President','Lead','Core Member','Member'];
+  const sections = {};
+  roleOrder.forEach(r => sections[r] = []);
+  members.forEach(m => {
+    const key = roleOrder.includes(m.role) ? m.role : 'Member';
+    sections[key].push(m);
+  });
+
+  const sectionLabels = {
+    'President': 'President',
+    'Vice President': 'Vice Presidents',
+    'Lead': 'Leads',
+    'Core Member': 'Core Members',
+    'Member': 'Members'
+  };
+
+  let html = '';
+  roleOrder.forEach(role => {
+    const group = sections[role];
+    if (!group.length) return;
+    html += `<div class="members-section">
+      <div class="members-section-title">${sectionLabels[role]}</div>
+      <div class="members-grid">${group.map(m=>`
+        <div class="member-card">
+          ${m.photo
+            ? `<img class="member-photo" src="${m.photo}" alt="${m.name}">`
+            : `<div class="member-photo-placeholder">👤</div>`}
+          <div class="member-info">
+            <div class="member-name">${m.name}</div>
+            <div class="member-role">${m.role||''}</div>
+            <div class="member-batch">${m.batch||''}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function autoMemberSort() {
+  const role = document.getElementById('member-role').value;
+  const map = {'President':1,'Vice President':2,'Lead':3,'Core Member':3,'Member':5};
+  document.getElementById('member-sort').value = map[role] || 5;
 }
 
 async function loadMovies() {
@@ -1452,12 +1534,13 @@ async function loadAdminData(name) {
   else if (name==='members') {
     const members = await apiFetch('/api/members');
     const tbody = document.getElementById('admin-members-tbody');
-    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
+    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
     tbody.innerHTML = members.map(m=>`<tr>
       <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
       <td style="font-weight:500">${m.name}</td>
       <td style="color:var(--grey)">${m.role||'—'}</td>
       <td style="color:var(--grey)">${m.batch||'—'}</td>
+      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}</span></td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete</button>
@@ -1512,6 +1595,10 @@ async function loadAdminData(name) {
     if (settings) {
       document.getElementById('set-tagline').value = settings.site_tagline||'';
       document.getElementById('set-about').value = settings.about_text||'';
+      document.getElementById('set-stat-members').value = settings.stat_members||'';
+      document.getElementById('set-stat-events').value = settings.stat_events||'';
+      document.getElementById('set-stat-films').value = settings.stat_films||'';
+      document.getElementById('set-stat-years').value = settings.stat_years||'';
       document.getElementById('set-instagram').value = settings.instagram||'';
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
@@ -1596,10 +1683,11 @@ function openMemberModal(m=null) {
   document.getElementById('member-modal-title').textContent = m ? 'Edit Member' : 'Add Member';
   document.getElementById('member-edit-id').value = m?.id||'';
   document.getElementById('member-name').value = m?.name||'';
-  document.getElementById('member-role').value = m?.role||'';
+  document.getElementById('member-role').value = m?.role||'President';
   document.getElementById('member-batch').value = m?.batch||'';
   document.getElementById('member-bio').value = m?.bio||'';
-  document.getElementById('member-sort').value = m?.sort_order||99;
+  document.getElementById('member-is-past').checked = m?.is_past||false;
+  autoMemberSort();
   document.getElementById('member-photo').value='';
 }
 function editMember(m) { openMemberModal(m); }
@@ -1613,6 +1701,7 @@ async function saveMember() {
   fd.append('batch', document.getElementById('member-batch').value);
   fd.append('bio', document.getElementById('member-bio').value);
   fd.append('sort_order', document.getElementById('member-sort').value);
+  fd.append('is_past', document.getElementById('member-is-past').checked ? 'true' : 'false');
   const photo = document.getElementById('member-photo').files[0];
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
@@ -1743,6 +1832,10 @@ async function saveSettings() {
   const body = {
     site_tagline: document.getElementById('set-tagline').value,
     about_text: document.getElementById('set-about').value,
+    stat_members: document.getElementById('set-stat-members').value,
+    stat_events: document.getElementById('set-stat-events').value,
+    stat_films: document.getElementById('set-stat-films').value,
+    stat_years: document.getElementById('set-stat-years').value,
     instagram: document.getElementById('set-instagram').value,
     youtube: document.getElementById('set-youtube').value,
     email: document.getElementById('set-email').value,
