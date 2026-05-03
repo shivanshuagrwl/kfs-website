@@ -295,26 +295,78 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
-// ── REVIEWS ───────────────────────────────────────────────────────────────────
-app.get('/api/reviews/:movieId', async (req, res) => {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('*')
-    .eq('movie_id', req.params.movieId)
-    .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+// ── TRAFFIC TRACKING ──────────────────────────────────────────────────────────
+app.post('/api/track', async (req, res) => {
+  const { page, hour } = req.body;
+  const today = new Date().toISOString().slice(0,10);
+  await supabase.from('page_views').insert([{ page: page||'home', date: today, hour: hour||0 }]);
+  res.json({ ok: true });
 });
 
-app.post('/api/reviews', async (req, res) => {
-  const { movie_id, reviewer_name, overall, direction, sound, cinematography, script, review_text } = req.body;
-  if (!movie_id || !overall) return res.status(400).json({ error: 'movie_id and overall rating required' });
-  const { data, error } = await supabase
-    .from('reviews')
-    .insert([{ movie_id, reviewer_name: reviewer_name||'Anonymous', overall, direction, sound, cinematography, script, review_text }])
-    .select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+app.get('/api/admin/analytics/traffic', authMiddleware, async (req, res) => {
+  const range = req.query.range || '7d';
+  let fromDate = new Date();
+  if (range === '7d') fromDate.setDate(fromDate.getDate()-7);
+  else if (range === '30d') fromDate.setDate(fromDate.getDate()-30);
+  else fromDate = new Date('2020-01-01');
+  const from = fromDate.toISOString().slice(0,10);
+  const today = new Date().toISOString().slice(0,10);
+
+  const { data: rows } = await supabase.from('page_views').select('*').gte('date', from);
+  if (!rows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+
+  const total = rows.length;
+  const todayViews = rows.filter(r=>r.date===today).length;
+
+  // by date
+  const dateMap = {};
+  rows.forEach(r => { dateMap[r.date] = (dateMap[r.date]||0)+1; });
+  const by_date = Object.entries(dateMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,views])=>({date,views}));
+  const peak = by_date.reduce((a,b)=>b.views>a.views?b:a, {date:'—',views:0});
+
+  // by page
+  const pageMap = {};
+  rows.forEach(r => { pageMap[r.page] = (pageMap[r.page]||0)+1; });
+  const by_page = Object.entries(pageMap).sort((a,b)=>b[1]-a[1]).map(([page,views])=>({page,views}));
+
+  // by hour (today only)
+  const by_hour = Array(24).fill(0);
+  rows.filter(r=>r.date===today).forEach(r => { by_hour[r.hour] = (by_hour[r.hour]||0)+1; });
+
+  res.json({ total, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
+});
+
+// ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────
+app.get('/api/admin/analytics/reviews', authMiddleware, async (req, res) => {
+  const { data: reviews } = await supabase.from('reviews').select('*');
+  const { data: movies } = await supabase.from('movies').select('id,title');
+  if (!reviews || !movies) return res.json({ total:0 });
+
+  const total = reviews.length;
+  const overall_avg = total ? reviews.reduce((s,r)=>s+r.overall,0)/total : null;
+
+  const cats = ['direction','sound','cinematography','script'];
+  const cat_avgs = {};
+  cats.forEach(c => {
+    const vals = reviews.map(r=>r[c]).filter(Boolean);
+    cat_avgs[c] = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  });
+
+  const movieMap = {};
+  movies.forEach(m => { movieMap[m.id] = m.title; });
+
+  const byFilm = {};
+  reviews.forEach(r => {
+    if (!byFilm[r.movie_id]) byFilm[r.movie_id] = { title: movieMap[r.movie_id]||'Unknown', scores:[], count:0 };
+    byFilm[r.movie_id].scores.push(r.overall);
+    byFilm[r.movie_id].count++;
+  });
+  const by_film = Object.values(byFilm).map(f=>({ title:f.title, avg: f.scores.reduce((a,b)=>a+b,0)/f.scores.length, count:f.count })).sort((a,b)=>b.avg-a.avg);
+
+  const top_rated = by_film[0] || null;
+  const most_reviewed = [...by_film].sort((a,b)=>b.count-a.count)[0] || null;
+
+  res.json({ total, overall_avg, cat_avgs, by_film, top_rated, most_reviewed });
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────

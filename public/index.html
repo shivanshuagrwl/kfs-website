@@ -328,6 +328,52 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .admin-section{display:none}
 .admin-section.active{display:block;animation:fadeUp .4s var(--ease) both}
 
+/* ── GLOBAL SEARCH ── */
+#search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:flex-start;justify-content:center;padding-top:12vh;backdrop-filter:blur(6px)}
+#search-overlay.open{display:flex}
+#search-box{width:100%;max-width:640px;background:#111;border:1px solid #333;padding:0 20px;display:flex;align-items:center;gap:12px}
+#search-input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:18px;font-family:inherit;padding:20px 0;letter-spacing:-.01em}
+#search-input::placeholder{color:#444}
+#search-close{background:none;border:none;color:#666;font-size:22px;cursor:pointer;padding:0;line-height:1}
+#search-results{width:100%;max-width:640px;background:#111;border:1px solid #333;border-top:none;max-height:60vh;overflow-y:auto;margin-top:0}
+.search-result-group{padding:12px 20px 4px;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#555}
+.search-result-item{padding:14px 20px;cursor:pointer;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:14px;transition:background .15s}
+.search-result-item:hover{background:#1a1a1a}
+.search-result-item:last-child{border-bottom:none}
+.search-result-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.search-result-title{font-size:14px;font-weight:500}
+.search-result-sub{font-size:11px;color:#666;margin-top:2px}
+.search-empty{padding:40px 20px;text-align:center;color:#444;font-size:14px}
+.search-hint{position:fixed;top:12vh;right:calc(50% - 320px);transform:translateY(-100%);font-size:11px;color:#444;padding-bottom:8px;letter-spacing:.05em}
+/* ── ANALYTICS ── */
+.analytics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
+@media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,1fr)}}
+.analytics-card{background:var(--card);border:1px solid var(--border);padding:24px}
+.analytics-card-num{font-size:36px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.analytics-card-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-top:6px}
+.analytics-card-sub{font-size:12px;color:#666;margin-top:4px}
+.chart-wrap{background:var(--card);border:1px solid var(--border);padding:28px;margin-bottom:24px}
+.chart-wrap h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:140px}
+.bar-chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+.bar-chart-bar{width:100%;background:var(--white);border-radius:2px 2px 0 0;transition:height .6s var(--ease);min-height:2px}
+.bar-chart-label{font-size:9px;color:var(--grey);letter-spacing:.05em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.bar-chart-val{font-size:10px;color:var(--grey)}
+.line-chart-svg{width:100%;height:160px}
+.analytics-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+@media(max-width:900px){.analytics-row{grid-template-columns:1fr}}
+.leaderboard-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+.leaderboard-row:last-child{border-bottom:none}
+.leaderboard-rank{font-size:11px;color:var(--grey);width:20px}
+.leaderboard-bar-wrap{flex:1;margin:0 12px;height:3px;background:var(--border);border-radius:2px}
+.leaderboard-bar-fill{height:100%;background:var(--white);border-radius:2px;transition:width .8s var(--ease)}
+.leaderboard-score{font-size:12px;color:var(--grey);width:28px;text-align:right}
+.peak-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.peak-cell{aspect-ratio:1;border-radius:2px;background:var(--border);transition:background .3s}
+.peak-label{font-size:9px;color:var(--grey);text-align:center;margin-top:4px}
+.analytics-tabs{display:flex;gap:0;margin-bottom:28px;border-bottom:1px solid var(--border)}
+.analytics-tab{padding:10px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:var(--grey);border-bottom:2px solid transparent;margin-bottom:-1px}
+.analytics-tab.active{color:var(--white);border-bottom-color:var(--white)}
 .admin-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:40px;
   padding-bottom:24px;border-bottom:1px solid var(--border);gap:24px;flex-wrap:wrap}
 .admin-header h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
@@ -554,6 +600,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
     <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
   </ul>
+  <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
+  </button>
   <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
     <span></span><span></span><span></span>
   </div>
@@ -860,6 +910,19 @@ body:has(#admin-panel.active) #main-nav{display:none}
   </div>
 </div>
 
+<!-- ── GLOBAL SEARCH ── -->
+<div id="search-overlay">
+  <span class="search-hint">ESC to close</span>
+  <div style="width:100%;max-width:640px;margin:0 20px">
+    <div id="search-box">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input" placeholder="Search films, events, blog, members…" oninput="doSearch(this.value)" autocomplete="off">
+      <button id="search-close" onclick="closeSearch()">✕</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+</div>
+
 <!-- ── ADMIN LOGIN ── -->
 <div id="admin-login">
   <div class="login-box">
@@ -892,6 +955,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="admin-sidebar-group">Extras</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
+    <div class="admin-sidebar-group">Analytics</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon">📈</span> Traffic</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon">⭐</span> Reviews</div>
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon">🔔</span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon">⚙️</span> Settings</div>
@@ -1041,10 +1107,72 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </table>
     </div>
 
+    <!-- TRAFFIC ANALYTICS -->
+    <div class="admin-section" id="section-analytics">
+      <div class="admin-header"><div><h2>Traffic Analytics</h2><p>Visitor activity across all pages</p></div></div>
+      <div class="analytics-tabs">
+        <div class="analytics-tab active" onclick="switchAnalyticsTab('traffic','7d',this)">7 Days</div>
+        <div class="analytics-tab" onclick="switchAnalyticsTab('traffic','30d',this)">30 Days</div>
+        <div class="analytics-tab" onclick="switchAnalyticsTab('traffic','all',this)">All Time</div>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-total-views">—</div><div class="analytics-card-label">Total Views</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-today-views">—</div><div class="analytics-card-label">Today</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-peak-day">—</div><div class="analytics-card-label">Peak Day</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-top-page">—</div><div class="analytics-card-label">Top Page</div><div class="analytics-card-sub" id="stat-top-page-views"></div></div>
+      </div>
+      <div class="chart-wrap">
+        <h3>Views Over Time</h3>
+        <svg class="line-chart-svg" id="traffic-line-chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px" id="traffic-line-labels"></div>
+      </div>
+      <div class="analytics-row">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Views by Page</h3>
+          <div id="page-leaderboard"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Peak Hours (today)</h3>
+          <div class="bar-chart" id="hours-bar-chart" style="height:100px"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:9px;color:var(--grey)">12am</span>
+            <span style="font-size:9px;color:var(--grey)">6am</span>
+            <span style="font-size:9px;color:var(--grey)">12pm</span>
+            <span style="font-size:9px;color:var(--grey)">6pm</span>
+            <span style="font-size:9px;color:var(--grey)">11pm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REVIEW ANALYTICS -->
+    <div class="admin-section" id="section-review-analytics">
+      <div class="admin-header"><div><h2>Review Analytics</h2><p>Ratings and feedback across all films</p></div></div>
+      <div class="analytics-grid">
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-total">—</div><div class="analytics-card-label">Total Reviews</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-avg">—</div><div class="analytics-card-label">Overall Avg</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-top-film">—</div><div class="analytics-card-label">Top Rated Film</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-most-reviewed">—</div><div class="analytics-card-label">Most Reviewed</div></div>
+      </div>
+      <div class="analytics-row">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Average Score by Film</h3>
+          <div class="bar-chart" id="film-scores-chart"></div>
+          <div id="film-scores-labels" style="display:flex;gap:6px;margin-top:6px"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Category Averages</h3>
+          <div id="category-breakdown"></div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <h3>Film Leaderboard</h3>
+        <div id="film-leaderboard"></div>
+      </div>
+    </div>
+
   </div>
 </div>
-
-<!-- ── MODALS ── -->
 <div class="modal-overlay" id="blog-modal">
   <div class="modal">
     <h3 id="blog-modal-title">New Blog Post</h3>
@@ -2381,5 +2509,236 @@ loadNotifications();
     </div>
   </div>
 </div>
+</body>
+</html>
+<script>
+// ══════════════════════════════════════════════════════════
+// GLOBAL SEARCH
+// ══════════════════════════════════════════════════════════
+let searchData = { movies:[], blogs:[], events:[], members:[] };
+let searchLoaded = false;
+
+async function loadSearchData() {
+  if (searchLoaded) return;
+  const [movies, blogs, events, members] = await Promise.all([
+    apiFetch('/api/movies'), apiFetch('/api/blogs'),
+    apiFetch('/api/events'), apiFetch('/api/members')
+  ]);
+  searchData = { movies: movies||[], blogs: blogs||[], events: events||[], members: members||[] };
+  searchLoaded = true;
+}
+
+function openSearch() {
+  document.getElementById('search-overlay').classList.add('open');
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '';
+  document.getElementById('search-input').focus();
+  loadSearchData();
+}
+
+function closeSearch() {
+  document.getElementById('search-overlay').classList.remove('open');
+}
+
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  const out = document.getElementById('search-results');
+  if (!q) { out.innerHTML = ''; return; }
+
+  const results = [];
+
+  searchData.movies.filter(m => m.title?.toLowerCase().includes(q) || m.director?.toLowerCase().includes(q)).forEach(m =>
+    results.push({ type:'film', icon:'🎬', title: m.title, sub: m.director ? 'Dir. '+m.director : m.release_year||'', action: ()=>{ closeSearch(); openMovie(m.id); } })
+  );
+  searchData.blogs.filter(b => b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)).forEach(b =>
+    results.push({ type:'blog', icon:'✍️', title: b.title, sub: b.excerpt||'', action: ()=>{ closeSearch(); openBlog(b.id); } })
+  );
+  searchData.events.filter(e => e.title?.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q)).forEach(e =>
+    results.push({ type:'event', icon:'🎪', title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
+  );
+  searchData.members.filter(m => m.name?.toLowerCase().includes(q) || m.role?.toLowerCase().includes(q)).forEach(m =>
+    results.push({ type:'member', icon:'👤', title: m.name, sub: m.role||'', action: ()=>{ closeSearch(); navigate('members'); } })
+  );
+
+  if (!results.length) { out.innerHTML = '<div class="search-empty">No results for "'+q+'"</div>'; return; }
+
+  const groups = ['film','blog','event','member'];
+  const labels = { film:'Films', blog:'Blog', event:'Events', member:'Members' };
+  let html = '';
+  groups.forEach(g => {
+    const items = results.filter(r=>r.type===g);
+    if (!items.length) return;
+    html += `<div class="search-result-group">${labels[g]}</div>`;
+    items.slice(0,5).forEach((item,i) => {
+      html += `<div class="search-result-item" data-idx="${results.indexOf(item)}">
+        <span class="search-result-icon">${item.icon}</span>
+        <div><div class="search-result-title">${item.title}</div>${item.sub?`<div class="search-result-sub">${item.sub}</div>`:''}</div>
+      </div>`;
+    });
+  });
+  out.innerHTML = html;
+  out.querySelectorAll('.search-result-item').forEach(el => {
+    const idx = parseInt(el.dataset.idx);
+    el.addEventListener('click', () => results[idx].action());
+  });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+  if (e.key === 'Escape') closeSearch();
+});
+document.getElementById('search-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('search-overlay')) closeSearch();
+});
+// Show ⌘K hint on desktop
+if (!navigator.maxTouchPoints) document.getElementById('search-kbd').style.display = 'inline';
+
+
+// ══════════════════════════════════════════════════════════
+// TRAFFIC TRACKING — fire on every page view
+// ══════════════════════════════════════════════════════════
+(function trackPageView() {
+  const page = window.location.pathname.replace('/','') || 'home';
+  fetch('/api/track', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ page, hour: new Date().getHours() })
+  }).catch(()=>{});
+})();
+
+
+// ══════════════════════════════════════════════════════════
+// ANALYTICS — TRAFFIC
+// ══════════════════════════════════════════════════════════
+let currentAnalyticsRange = '7d';
+
+function switchAnalyticsTab(type, range, el) {
+  document.querySelectorAll('.analytics-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentAnalyticsRange = range;
+  loadTrafficAnalytics(range);
+}
+
+async function loadTrafficAnalytics(range='7d') {
+  const data = await apiFetch('/api/admin/analytics/traffic?range='+range);
+  if (!data) return;
+
+  document.getElementById('stat-total-views').textContent = fmtNum(data.total);
+  document.getElementById('stat-today-views').textContent = fmtNum(data.today);
+  document.getElementById('stat-peak-day').textContent = data.peak_day || '—';
+
+  const topPage = data.by_page?.[0];
+  document.getElementById('stat-top-page').textContent = topPage ? '/'+topPage.page : '—';
+  document.getElementById('stat-top-page-views').textContent = topPage ? fmtNum(topPage.views)+' views' : '';
+
+  // Line chart
+  renderLineChart('traffic-line-chart', 'traffic-line-labels', data.by_date || []);
+
+  // Page leaderboard
+  const maxViews = Math.max(...(data.by_page||[]).map(p=>p.views), 1);
+  document.getElementById('page-leaderboard').innerHTML = (data.by_page||[]).slice(0,8).map((p,i)=>`
+    <div class="leaderboard-row">
+      <span class="leaderboard-rank">${i+1}</span>
+      <span style="font-size:13px;flex:1">/${p.page||'home'}</span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${p.views/maxViews*100}%"></div></div>
+      <span class="leaderboard-score">${fmtNum(p.views)}</span>
+    </div>`).join('');
+
+  // Hours bar chart
+  const hoursEl = document.getElementById('hours-bar-chart');
+  const maxHour = Math.max(...(data.by_hour||Array(24).fill(0)), 1);
+  hoursEl.innerHTML = (data.by_hour||Array(24).fill(0)).map((v,h)=>`
+    <div class="bar-chart-col" style="flex:1">
+      <div class="bar-chart-bar" style="height:${Math.max(v/maxHour*90,2)}px;opacity:${h===new Date().getHours()?1:.5}"></div>
+    </div>`).join('');
+}
+
+function renderLineChart(svgId, labelsId, byDate) {
+  const svg = document.getElementById(svgId);
+  const labelsEl = document.getElementById(labelsId);
+  if (!byDate.length) { svg.innerHTML = ''; return; }
+  const W=600, H=160, pad=10;
+  const vals = byDate.map(d=>d.views);
+  const maxV = Math.max(...vals, 1);
+  const pts = byDate.map((d,i)=>{
+    const x = pad + (i/(byDate.length-1||1))*(W-pad*2);
+    const y = H - pad - (d.views/maxV)*(H-pad*2);
+    return `${x},${y}`;
+  });
+  svg.innerHTML = `
+    <polyline points="${pts.join(' ')}" fill="none" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+    ${byDate.map((d,i)=>{
+      const x=pad+(i/(byDate.length-1||1))*(W-pad*2);
+      const y=H-pad-(d.views/maxV)*(H-pad*2);
+      return `<circle cx="${x}" cy="${y}" r="3" fill="white"/>`;
+    }).join('')}
+    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="white" stop-opacity=".15"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="${pts.join(' ')} ${W-pad},${H} ${pad},${H}" fill="url(#fadeG)"/>`;
+  // Labels — show first, middle, last
+  const show = [0, Math.floor(byDate.length/2), byDate.length-1].filter((v,i,a)=>a.indexOf(v)===i);
+  labelsEl.innerHTML = byDate.map((d,i)=> show.includes(i)
+    ? `<span style="font-size:10px;color:var(--grey)">${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>`
+    : `<span></span>`).join('');
+}
+
+function fmtNum(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : (n||0).toString(); }
+
+
+// ══════════════════════════════════════════════════════════
+// ANALYTICS — REVIEWS
+// ══════════════════════════════════════════════════════════
+async function loadReviewAnalytics() {
+  const data = await apiFetch('/api/admin/analytics/reviews');
+  if (!data) return;
+
+  document.getElementById('ra-total').textContent = data.total || '0';
+  document.getElementById('ra-avg').textContent = data.overall_avg ? data.overall_avg.toFixed(1) : '—';
+  document.getElementById('ra-top-film').textContent = data.top_rated?.title || '—';
+  document.getElementById('ra-most-reviewed').textContent = data.most_reviewed?.title || '—';
+
+  // Film scores bar chart
+  const films = data.by_film || [];
+  const maxScore = 5;
+  const chartEl = document.getElementById('film-scores-chart');
+  const labelsEl = document.getElementById('film-scores-labels');
+  chartEl.style.height = '120px';
+  chartEl.innerHTML = films.map(f=>`
+    <div class="bar-chart-col">
+      <div class="bar-chart-val">${f.avg.toFixed(1)}</div>
+      <div class="bar-chart-bar" style="height:${f.avg/maxScore*100}px"></div>
+    </div>`).join('');
+  labelsEl.innerHTML = films.map(f=>`<span style="flex:1;font-size:9px;color:var(--grey);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.title}</span>`).join('');
+
+  // Category breakdown
+  const cats = ['direction','sound','cinematography','script'];
+  const catLabels = { direction:'Direction', sound:'Sound', cinematography:'Cinemato.', script:'Script' };
+  document.getElementById('category-breakdown').innerHTML = cats.map(c=>`
+    <div class="leaderboard-row">
+      <span style="font-size:12px;flex:1;color:var(--grey);text-transform:uppercase;letter-spacing:.08em;font-size:10px">${catLabels[c]}</span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${(data.cat_avgs?.[c]||0)/5*100}%"></div></div>
+      <span class="leaderboard-score">${data.cat_avgs?.[c]?.toFixed(1)||'—'}</span>
+    </div>`).join('');
+
+  // Film leaderboard
+  const maxR = Math.max(...films.map(f=>f.count),1);
+  document.getElementById('film-leaderboard').innerHTML = films.map((f,i)=>`
+    <div class="leaderboard-row">
+      <span class="leaderboard-rank">${i+1}</span>
+      <span style="font-size:13px;flex:1">${f.title}</span>
+      <span style="font-size:11px;color:var(--grey);margin-right:8px">${f.count} review${f.count!==1?'s':''}</span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${f.avg/5*100}%"></div></div>
+      <span class="leaderboard-score">${f.avg.toFixed(1)}</span>
+    </div>`).join('');
+}
+
+// Hook into showAdminSection
+const _origShowAdminSection = showAdminSection;
+function showAdminSection(name) {
+  _origShowAdminSection(name);
+  if (name === 'analytics') loadTrafficAnalytics(currentAnalyticsRange);
+  if (name === 'review-analytics') loadReviewAnalytics();
+}
+</script>
 </body>
 </html>
