@@ -235,6 +235,81 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .member-role{font-size:12px;letter-spacing:.06em;color:var(--grey)}
 .member-batch{font-size:11px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase;margin-top:2px}
 
+/* ── MEMBERS PHOTO CARDS ─────────────────────────────────────────────── */
+.members-grid-photo{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:20px;
+  margin-top:24px;
+}
+@media(max-width:1100px){.members-grid-photo{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:768px){.members-grid-photo{grid-template-columns:repeat(3,1fr);gap:14px}}
+@media(max-width:480px){.members-grid-photo{grid-template-columns:repeat(2,1fr);gap:10px}}
+
+.member-card-photo{
+  display:flex;flex-direction:column;
+  background:var(--card);
+  border:1px solid var(--border);
+  overflow:hidden;
+  transition:border-color .3s var(--ease),transform .3s var(--ease);
+  border-radius:4px;
+}
+.member-card-photo:hover{border-color:#333;transform:translateY(-3px)}
+
+.member-photo-sq{
+  width:100%;aspect-ratio:1/1;object-fit:cover;object-position:top center;
+  filter:grayscale(60%);
+  display:block;
+  transition:filter .4s var(--ease);
+}
+.member-card-photo:hover .member-photo-sq{filter:grayscale(0%)}
+
+.member-photo-sq-placeholder{
+  width:100%;aspect-ratio:1/1;background:#1a1a1a;
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;color:var(--grey);
+}
+
+.member-info-sq{
+  padding:12px 12px 14px;
+  flex:1;display:flex;flex-direction:column;gap:3px;
+}
+.member-name-sq{
+  font-size:13px;font-weight:600;color:var(--white);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.member-role-sq{
+  font-size:11px;letter-spacing:.07em;color:var(--grey);
+  text-transform:uppercase;
+}
+.member-batch-sq{
+  font-size:10px;letter-spacing:.08em;color:#555;
+  text-transform:uppercase;margin-top:1px;
+}
+
+/* Plain member list */
+.members-list-plain{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:0;
+  margin-top:16px;
+  border-top:1px solid var(--border);
+}
+@media(max-width:768px){.members-list-plain{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.members-list-plain{grid-template-columns:1fr}}
+
+.member-row{
+  display:flex;flex-direction:column;gap:3px;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  border-right:1px solid var(--border);
+  transition:background .2s;
+}
+.member-row:hover{background:var(--card)}
+.member-row-name{font-size:13px;font-weight:500;color:var(--white)}
+.member-row-meta{font-size:11px;color:var(--grey);letter-spacing:.05em}
+.member-row-batch{font-size:10px;color:#555;letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+
 /* ── TESTIMONIALS ────────────────────────────────────────────────────── */
 .testimonials-track{overflow:hidden;margin-top:60px;position:relative;
   cursor:grab;user-select:none;-webkit-user-select:none}
@@ -1915,7 +1990,7 @@ function renderMemberSections(type) {
   ];
 
   function photoCard(m) {
-    const subtitle = (m.role === 'Lead' && m.domain) ? m.domain : (m.role||'');
+    const subtitle = m.domain ? m.domain : (m.role||'');
     return `<div class="member-card-photo">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
