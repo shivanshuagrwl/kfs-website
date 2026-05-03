@@ -54,7 +54,7 @@ async function initDB() {
     const hash = await bcrypt.hash('kfs@admin2024', 10);
     await supabase.from('settings').insert([
       { key: 'admin_password', value: hash },
-      { key: 'site_tagline', value: 'Lights. Camera. KIIT.' },
+      { key: 'site_tagline', value: 'Lights. Camera. KFS.' },
       { key: 'about_text', value: 'KIIT Film Society is a student-run collective passionate about cinema — from production to appreciation. We screen films, host workshops, produce original content, and celebrate storytelling in every form.' },
       { key: 'instagram', value: '' },
       { key: 'youtube', value: '' },
@@ -253,6 +253,43 @@ app.put('/api/admin/achievements/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/admin/achievements/:id', authMiddleware, async (req, res) => {
   await supabase.from('achievements').delete().eq('id', req.params.id);
+  res.json({ success: true });
+});
+
+// ── MOVIES ────────────────────────────────────────────────────────────────────
+app.get('/api/movies', async (req, res) => {
+  const { data } = await supabase.from('movies').select('*').order('release_year', { ascending: false });
+  res.json(data || []);
+});
+
+app.get('/api/movies/:id', async (req, res) => {
+  const { data } = await supabase.from('movies').select('*').eq('id', req.params.id).single();
+  if (!data) return res.status(404).json({ error: 'Not found' });
+  res.json(data);
+});
+
+app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (req, res) => {
+  const { title, release_year, director, producer, dop, graphic_design, actors, support_crew } = req.body;
+  const posterUrl = await uploadImage(req.file, 'movies');
+  const { data, error } = await supabase.from('movies').insert([{
+    title, release_year, director, producer, dop, graphic_design, actors, support_crew,
+    poster_image: posterUrl,
+  }]).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async (req, res) => {
+  const { title, release_year, director, producer, dop, graphic_design, actors, support_crew } = req.body;
+  const updates = { title, release_year, director, producer, dop, graphic_design, actors, support_crew };
+  if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
+  const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
+  await supabase.from('movies').delete().eq('id', req.params.id);
   res.json({ success: true });
 });
 

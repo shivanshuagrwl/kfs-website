@@ -433,7 +433,53 @@ body:has(#admin-panel.active) #main-nav{display:none}
   .hero-cta .btn{font-size:11px;padding:12px 16px}
 }
 
-/* ── LOADING ──────────────────────────────────────────────────────────── */
+/* ── MOVIES ───────────────────────────────────────────────────────────── */
+.movies-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:60px}
+@media(max-width:1024px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.movies-grid{grid-template-columns:1fr}}
+.movie-card{background:var(--black);overflow:hidden;cursor:none;transition:background .3s var(--ease)}
+.movie-card:hover{background:var(--card)}
+.movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(100%);display:block;
+  transition:filter .4s var(--ease)}
+.movie-card:hover .movie-poster{filter:grayscale(0%)}
+.movie-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:56px;color:var(--grey)}
+.movie-info{padding:16px}
+.movie-title{font-size:15px;font-weight:600;margin-bottom:4px}
+.movie-year{font-size:11px;letter-spacing:.1em;color:var(--grey);text-transform:uppercase}
+.movie-director{font-size:12px;color:var(--grey);margin-top:2px}
+
+/* movie detail */
+#movie-detail{display:none;min-height:100vh;padding-top:72px}
+#movie-detail.active{display:block;animation:fadeUp .6s var(--ease) both}
+.movie-detail-layout{display:grid;grid-template-columns:320px 1fr;gap:60px;max-width:1100px;margin:0 auto;padding:60px 40px}
+@media(max-width:900px){.movie-detail-layout{grid-template-columns:1fr;gap:32px;padding:40px 20px}}
+.movie-detail-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(100%)}
+.movie-detail-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:72px;border:1px solid var(--border)}
+.movie-detail-back{display:inline-flex;align-items:center;gap:8px;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--grey);cursor:none;
+  transition:color .2s;margin-bottom:32px}
+.movie-detail-back:hover{color:var(--white)}
+.movie-detail-title{font-size:clamp(2rem,4vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-bottom:12px}
+.movie-detail-year{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:32px}
+.movie-detail-crew{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+@media(max-width:600px){.movie-detail-crew{grid-template-columns:1fr}}
+.movie-crew-item{}
+.movie-crew-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-bottom:4px}
+.movie-crew-value{font-size:14px;font-weight:500}
+.movie-detail-section{margin-bottom:28px}
+.movie-detail-section-title{font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--grey);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.movie-cast-list{display:flex;flex-wrap:wrap;gap:8px}
+.movie-cast-tag{padding:6px 14px;border:1px solid var(--border);font-size:12px;
+  letter-spacing:.04em;border-radius:20px;color:var(--grey)}
+
+/* home movies section */
+.movies-home-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:40px}
+@media(max-width:900px){.movies-home-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.movies-home-grid{grid-template-columns:repeat(2,1fr)}}
+
 .loading{text-align:center;padding:60px;color:var(--grey);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
 .empty-state{text-align:center;padding:60px 24px;color:var(--grey)}
 .empty-state p{font-size:14px;margin-top:8px}
@@ -457,6 +503,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <li><a onclick="navigate('events');closeMenu()" data-page="events">Events</a></li>
     <li><a onclick="navigate('blog');closeMenu()" data-page="blog">Blog</a></li>
     <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
+    <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
   </ul>
   <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
     <span></span><span></span><span></span>
@@ -627,6 +674,21 @@ body:has(#admin-panel.active) #main-nav{display:none}
 
   <section class="section">
     <div class="section-inner">
+      <p class="section-label">Our Work</p>
+      <h2 class="section-title">Films</h2>
+      <div class="movies-home-grid" id="home-movies-grid">
+        <div class="loading" style="grid-column:1/-1">Loading films...</div>
+      </div>
+      <div style="margin-top:40px">
+        <a class="btn btn-secondary" onclick="navigate('movies')">All Films →</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider" style="margin:0 80px"></div>
+
+  <section class="section">
+    <div class="section-inner">
       <p class="section-label">Voices</p>
       <h2 class="section-title">What our<br>members say</h2>
     </div>
@@ -706,6 +768,43 @@ body:has(#admin-panel.active) #main-nav{display:none}
   </section>
 </div>
 
+<!-- ── MOVIES PAGE ── -->
+<div class="page" id="page-movies">
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">Our Work</p>
+      <h2 class="section-title">Films</h2>
+      <div class="movies-grid" id="movies-grid" style="margin-top:60px">
+        <div class="loading" style="grid-column:1/-1">Loading films...</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Movie Detail -->
+<div id="movie-detail">
+  <div class="movie-detail-layout">
+    <div>
+      <img id="movie-detail-poster-img" class="movie-detail-poster" src="" alt="" style="display:none">
+      <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none">🎬</div>
+    </div>
+    <div>
+      <a class="movie-detail-back" onclick="navigate('movies')">← Back to Films</a>
+      <h1 class="movie-detail-title" id="movie-detail-title"></h1>
+      <p class="movie-detail-year" id="movie-detail-year"></p>
+      <div class="movie-detail-crew" id="movie-detail-crew"></div>
+      <div class="movie-detail-section" id="movie-detail-actors-section" style="display:none">
+        <div class="movie-detail-section-title">Cast</div>
+        <div class="movie-cast-list" id="movie-detail-actors"></div>
+      </div>
+      <div class="movie-detail-section" id="movie-detail-support-section" style="display:none">
+        <div class="movie-detail-section-title">Support Crew</div>
+        <div class="movie-cast-list" id="movie-detail-support"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── ADMIN LOGIN ── -->
 <div id="admin-login">
   <div class="login-box">
@@ -728,6 +827,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon">✍️</span> Blog Posts</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon">🎬</span> Events</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon">👥</span> Members</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('movies')" data-section="movies"><span class="icon">🎬</span> Films</div>
     <div class="admin-sidebar-group">Extras</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
@@ -777,6 +877,20 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <table class="admin-table">
           <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Actions</th></tr></thead>
           <tbody id="admin-members-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MOVIES -->
+    <div class="admin-section" id="section-movies">
+      <div class="admin-header">
+        <div><h2>Films</h2><p>Manage KFS film productions</p></div>
+        <button class="btn btn-primary" onclick="openMovieModal()">+ Add Film</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
+          <tbody id="admin-movies-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -934,6 +1048,26 @@ body:has(#admin-panel.active) #main-nav{display:none}
   </div>
 </div>
 
+<div class="modal-overlay" id="movie-modal">
+  <div class="modal">
+    <h3 id="movie-modal-title">Add Film</h3>
+    <input type="hidden" id="movie-edit-id">
+    <div class="form-group"><label>Movie Poster</label><input type="file" id="movie-poster" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group"><label>Title</label><input type="text" id="movie-title"></div>
+    <div class="form-group"><label>Release Year</label><input type="text" id="movie-year" placeholder="2024"></div>
+    <div class="form-group"><label>Director</label><input type="text" id="movie-director"></div>
+    <div class="form-group"><label>Producer</label><input type="text" id="movie-producer"></div>
+    <div class="form-group"><label>DOP (Director of Photography)</label><input type="text" id="movie-dop"></div>
+    <div class="form-group"><label>Graphic Design</label><input type="text" id="movie-gd"></div>
+    <div class="form-group"><label>Actors (comma separated)</label><input type="text" id="movie-actors" placeholder="Name 1, Name 2, Name 3"></div>
+    <div class="form-group"><label>Support Crew (comma separated)</label><input type="text" id="movie-support" placeholder="Name 1, Name 2"></div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
+      <button class="btn-sm btn-success" onclick="saveMovie()">Save Film</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="achievement-modal">
   <div class="modal">
     <h3 id="achievement-modal-title">Add Achievement</h3>
@@ -968,6 +1102,7 @@ document.addEventListener('mousemove', e=>{
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
+  document.getElementById('movie-detail').classList.remove('active');
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.remove('active');
   if (page === 'admin') {
@@ -988,7 +1123,7 @@ function loadPageData(page) {
   if (page==='home') loadHomeData();
   else if (page==='events') loadEvents();
   else if (page==='blog') loadBlog();
-  else if (page==='members') loadMembers();
+  else if (page==='movies') loadMovies();
 }
 
 function toggleMenu() { document.getElementById('nav-links').classList.toggle('open'); }
@@ -1055,6 +1190,15 @@ async function loadHomeData() {
 
   const testimonials = await apiFetch('/api/testimonials');
   renderTestimonials(testimonials||[]);
+
+  const movies = await apiFetch('/api/movies');
+  const hmg = document.getElementById('home-movies-grid');
+  if (movies && movies.length) {
+    hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m)).join('');
+  } else {
+    hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.</p></div>`;
+  }
+
   animateCounters();
 }
 
@@ -1150,6 +1294,66 @@ async function loadMembers() {
   } else {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No members added yet.</p></div>`;
   }
+}
+
+async function loadMovies() {
+  const movies = await apiFetch('/api/movies');
+  const grid = document.getElementById('movies-grid');
+  if (movies && movies.length) {
+    grid.innerHTML = movies.map(m=>renderMovieCard(m,true)).join('');
+  } else {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.</p></div>`;
+  }
+}
+
+function renderMovieCard(m, clickable=false) {
+  return `<div class="movie-card" ${clickable?`onclick="openMovie('${m.id}')"`:''}> 
+    ${m.poster_image
+      ? `<img class="movie-poster" src="${m.poster_image}" alt="${m.title}">`
+      : `<div class="movie-poster-placeholder">🎬</div>`}
+    <div class="movie-info">
+      <div class="movie-title">${m.title}</div>
+      <div class="movie-year">${m.release_year||''}</div>
+      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}</div>
+    </div>
+  </div>`;
+}
+
+async function openMovie(id) {
+  const m = await apiFetch('/api/movies/'+id);
+  if (!m) return;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('movie-detail').classList.add('active');
+  const img = document.getElementById('movie-detail-poster-img');
+  const ph = document.getElementById('movie-detail-poster-placeholder');
+  if (m.poster_image) { img.src=m.poster_image; img.style.display='block'; ph.style.display='none'; }
+  else { img.style.display='none'; ph.style.display='flex'; }
+  document.getElementById('movie-detail-title').textContent = m.title;
+  document.getElementById('movie-detail-year').textContent = m.release_year||'';
+  const crewFields = [
+    {label:'Director', val:m.director},
+    {label:'Producer', val:m.producer},
+    {label:'DOP', val:m.dop},
+    {label:'Graphic Design', val:m.graphic_design},
+  ].filter(f=>f.val);
+  document.getElementById('movie-detail-crew').innerHTML = crewFields.map(f=>`
+    <div class="movie-crew-item">
+      <div class="movie-crew-label">${f.label}</div>
+      <div class="movie-crew-value">${f.val}</div>
+    </div>`).join('');
+  const actorsSec = document.getElementById('movie-detail-actors-section');
+  const actorsEl = document.getElementById('movie-detail-actors');
+  if (m.actors) {
+    actorsSec.style.display='block';
+    actorsEl.innerHTML = m.actors.split(',').map(a=>`<span class="movie-cast-tag">${a.trim()}</span>`).join('');
+  } else actorsSec.style.display='none';
+  const supportSec = document.getElementById('movie-detail-support-section');
+  const supportEl = document.getElementById('movie-detail-support');
+  if (m.support_crew) {
+    supportSec.style.display='block';
+    supportEl.innerHTML = m.support_crew.split(',').map(s=>`<span class="movie-cast-tag">${s.trim()}</span>`).join('');
+  } else supportSec.style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function renderTestimonials(testimonials) {
@@ -1288,6 +1492,21 @@ async function loadAdminData(name) {
       </div></td>
     </tr>`).join('');
   }
+  else if (name==='movies') {
+    const movies = await apiFetch('/api/movies');
+    const tbody = document.getElementById('admin-movies-tbody');
+    if (!movies || !movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
+    tbody.innerHTML = movies.map(m=>`<tr>
+      <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'🎬'}</td>
+      <td style="font-weight:500">${m.title}</td>
+      <td style="color:var(--grey)">${m.release_year||'—'}</td>
+      <td style="color:var(--grey)">${m.director||'—'}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
+      </div></td>
+    </tr>`).join('');
+  }
   else if (name==='settings') {
     const settings = await apiFetch('/api/settings');
     if (settings) {
@@ -1406,6 +1625,48 @@ async function deleteMember(id) {
   if (!confirm('Delete this member?')) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
   loadAdminData('members');
+}
+
+function openMovieModal(m=null) {
+  document.getElementById('movie-modal').classList.add('open');
+  document.getElementById('movie-modal-title').textContent = m ? 'Edit Film' : 'Add Film';
+  document.getElementById('movie-edit-id').value = m?.id||'';
+  document.getElementById('movie-title').value = m?.title||'';
+  document.getElementById('movie-year').value = m?.release_year||'';
+  document.getElementById('movie-director').value = m?.director||'';
+  document.getElementById('movie-producer').value = m?.producer||'';
+  document.getElementById('movie-dop').value = m?.dop||'';
+  document.getElementById('movie-gd').value = m?.graphic_design||'';
+  document.getElementById('movie-actors').value = m?.actors||'';
+  document.getElementById('movie-support').value = m?.support_crew||'';
+  document.getElementById('movie-poster').value='';
+}
+function editMovie(m) { openMovieModal(m); }
+function closeMovieModal() { document.getElementById('movie-modal').classList.remove('open'); }
+
+async function saveMovie() {
+  const id = document.getElementById('movie-edit-id').value;
+  const fd = new FormData();
+  fd.append('title', document.getElementById('movie-title').value);
+  fd.append('release_year', document.getElementById('movie-year').value);
+  fd.append('director', document.getElementById('movie-director').value);
+  fd.append('producer', document.getElementById('movie-producer').value);
+  fd.append('dop', document.getElementById('movie-dop').value);
+  fd.append('graphic_design', document.getElementById('movie-gd').value);
+  fd.append('actors', document.getElementById('movie-actors').value);
+  fd.append('support_crew', document.getElementById('movie-support').value);
+  const poster = document.getElementById('movie-poster').files[0];
+  if (poster) fd.append('poster', poster);
+  const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
+  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+  if (res.ok) { closeMovieModal(); loadAdminData('movies'); }
+  else alert('Error saving film');
+}
+
+async function deleteMovie(id) {
+  if (!confirm('Delete this film?')) return;
+  await apiFetch('/api/admin/movies/'+id,'DELETE');
+  loadAdminData('movies');
 }
 
 function openTestimonialModal(t=null) {
