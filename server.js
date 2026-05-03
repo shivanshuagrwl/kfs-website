@@ -271,10 +271,10 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew } = req.body;
+  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
-    title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
+    title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url,
     poster_image: posterUrl,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -282,8 +282,8 @@ app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (re
 });
 
 app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew } = req.body;
-  const updates = { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew };
+  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const updates = { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -313,9 +313,8 @@ app.get('/api/admin/analytics/traffic', authMiddleware, async (req, res) => {
   const from = fromDate.toISOString().slice(0,10);
   const today = new Date().toISOString().slice(0,10);
 
-  const { data: allRows } = await supabase.from('page_views').select('*').gte('date', from);
-  if (!allRows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
-  const rows = allRows.filter(r => !r.page?.startsWith('admin'));
+  const { data: rows } = await supabase.from('page_views').select('*').gte('date', from);
+  if (!rows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
 
   const total = rows.length;
   const todayViews = rows.filter(r=>r.date===today).length;
