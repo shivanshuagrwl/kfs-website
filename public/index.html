@@ -665,35 +665,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
   0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}
   100%{transform:translateY(100vh) rotate(720deg) scale(.4);opacity:0}
 }
-
-/* ── MEMBER PHOTO CARD (Pres / VP / Core+Leads) ── */
-.member-card-photo{background:var(--black);overflow:hidden;transition:background .3s var(--ease)}
-.member-card-photo:hover{background:var(--card)}
-.member-photo-sq{width:100%;aspect-ratio:1/1;object-fit:cover;object-position:top;
-  filter:grayscale(100%);transition:filter .5s var(--ease);display:block}
-.member-card-photo:hover .member-photo-sq{filter:grayscale(0%)}
-.member-photo-sq-placeholder{width:100%;aspect-ratio:1/1;background:var(--card);
-  display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--grey)}
-.member-info-sq{padding:12px 14px}
-.member-name-sq{font-size:13px;font-weight:600;margin-bottom:2px}
-.member-role-sq{font-size:11px;letter-spacing:.06em;color:var(--grey)}
-.member-batch-sq{font-size:10px;letter-spacing:.08em;color:#555;text-transform:uppercase;margin-top:1px}
-
-/* Grid for photo members — more columns since cards are smaller */
-.members-grid-photo{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border)}
-@media(max-width:1024px){.members-grid-photo{grid-template-columns:repeat(4,1fr)}}
-@media(max-width:768px){.members-grid-photo{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:480px){.members-grid-photo{grid-template-columns:repeat(2,1fr)}}
-
-/* ── PLAIN MEMBER LIST (no photos) ── */
-.members-list-plain{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:0}
-@media(max-width:900px){.members-list-plain{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:480px){.members-list-plain{grid-template-columns:1fr}}
-.member-row{background:var(--black);padding:14px 18px;transition:background .2s;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.member-row:hover{background:var(--card)}
-.member-row-name{font-size:13px;font-weight:600}
-.member-row-meta{font-size:11px;color:var(--grey);text-align:right;flex-shrink:0}
-.member-row-batch{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
 </style>
 </head>
 <body>
@@ -1419,12 +1390,28 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
     <div class="form-group">
       <label>Role / Position</label>
-      <select id="member-role" onchange="autoMemberSort()">
+      <select id="member-role" onchange="autoMemberSort();toggleDomainField()">
         <option value="President">President</option>
         <option value="Vice President">Vice President</option>
         <option value="Lead">Lead</option>
         <option value="Core Member">Core Member</option>
         <option value="Member">Member</option>
+      </select>
+    </div>
+    <div class="form-group" id="domain-group" style="display:none">
+      <label>Domain</label>
+      <select id="member-domain">
+        <option value="">— Select domain —</option>
+        <option value="HR & PR">HR &amp; PR</option>
+        <option value="Cinematography">Cinematography</option>
+        <option value="Direction">Direction</option>
+        <option value="Graphic Design">Graphic Design</option>
+        <option value="Sound Design">Sound Design</option>
+        <option value="Scriptwriting">Scriptwriting</option>
+        <option value="Content Creation">Content Creation</option>
+        <option value="Social Media">Social Media</option>
+        <option value="Acting">Acting</option>
+        <option value="Animation">Animation</option>
       </select>
     </div>
     <div class="form-group"><label>Batch (Year)</label><input type="text" id="member-batch" placeholder="2024-25"></div>
@@ -1833,43 +1820,41 @@ function renderMemberSections(type) {
 
   // Photo groups: square cards with image
   const photoGroups = [
-    { label: 'President',    roles: ['President'] },
+    { label: 'President',     roles: ['President'] },
     { label: 'Vice Presidents', roles: ['Vice President'] },
-    { label: 'Core & Leads', roles: ['Lead', 'Core Member'] },
+    { label: 'Core & Leads',  roles: ['Lead', 'Core Member'] },
   ];
-
-  // Plain list group: name + role only, no photo
+  // Plain list: name + role only
   const plainGroups = [
     { label: 'Members', roles: ['Member'] },
   ];
 
   function photoCard(m) {
+    const subtitle = (m.role === 'Lead' && m.domain) ? m.domain : (m.role||'');
     return `<div class="member-card-photo">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
         : `<div class="member-photo-sq-placeholder">👤</div>`}
       <div class="member-info-sq">
         <div class="member-name-sq">${m.name}</div>
-        <div class="member-role-sq">${m.role||''}</div>
+        <div class="member-role-sq">${subtitle}</div>
         ${m.batch ? `<div class="member-batch-sq">${m.batch}</div>` : ''}
       </div>
     </div>`;
   }
 
   function plainRow(m) {
+    const roleLabel = (m.role === 'Lead' && m.domain) ? m.domain + ' Lead' : (m.role||'');
     return `<div class="member-row">
-      <div>
-        <div class="member-row-name">${m.name}</div>
-      </div>
+      <div><div class="member-row-name">${m.name}</div></div>
       <div class="member-row-meta">
-        <div>${m.role||''}</div>
+        <div>${roleLabel}</div>
         ${m.batch ? `<div class="member-row-batch">${m.batch}</div>` : ''}
       </div>
     </div>`;
   }
 
   let html = '';
-
   photoGroups.forEach(group => {
     const combined = group.roles.flatMap(r => sections[r] || []);
     if (!combined.length) return;
@@ -1878,7 +1863,6 @@ function renderMemberSections(type) {
       <div class="members-grid-photo">${combined.map(photoCard).join('')}</div>
     </div>`;
   });
-
   plainGroups.forEach(group => {
     const combined = group.roles.flatMap(r => sections[r] || []);
     if (!combined.length) return;
@@ -1895,6 +1879,11 @@ function autoMemberSort() {
   const role = document.getElementById('member-role').value;
   const map = {'President':1,'Vice President':2,'Lead':3,'Core Member':3,'Member':5};
   document.getElementById('member-sort').value = map[role] || 5;
+}
+function toggleDomainField() {
+  const role = document.getElementById('member-role').value;
+  const group = document.getElementById('domain-group');
+  if (group) group.style.display = role === 'Lead' ? 'block' : 'none';
 }
 
 async function loadMovies() {
@@ -2393,7 +2382,9 @@ function openMemberModal(m=null) {
   document.getElementById('member-batch').value = m?.batch||'';
   document.getElementById('member-bio').value = m?.bio||'';
   document.getElementById('member-is-past').checked = m?.is_past||false;
+  document.getElementById('member-domain').value = m?.domain||'';
   autoMemberSort();
+  toggleDomainField();
   document.getElementById('member-photo').value='';
 }
 function editMember(m) { openMemberModal(m); }
@@ -2404,6 +2395,7 @@ async function saveMember() {
   const fd = new FormData();
   fd.append('name', document.getElementById('member-name').value);
   fd.append('role', document.getElementById('member-role').value);
+  fd.append('domain', document.getElementById('member-role').value === 'Lead' ? (document.getElementById('member-domain').value||'') : '');
   fd.append('batch', document.getElementById('member-batch').value);
   fd.append('bio', document.getElementById('member-bio').value);
   fd.append('sort_order', document.getElementById('member-sort').value);

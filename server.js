@@ -174,10 +174,10 @@ app.get('/api/members', async (req, res) => {
 });
 
 app.post('/api/admin/members', authMiddleware, upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order, is_past } = req.body;
+  const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
   const photoUrl = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').insert([{
-    name, role, batch, bio, photo: photoUrl,
+    name, role, batch, bio, domain: domain||null, photo: photoUrl,
     sort_order: parseInt(sort_order) || 99,
     is_past: is_past === 'true',
   }]).select().single();
@@ -186,8 +186,8 @@ app.post('/api/admin/members', authMiddleware, upload.single('photo'), async (re
 });
 
 app.put('/api/admin/members/:id', authMiddleware, upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order, is_past } = req.body;
-  const updates = { name, role, batch, bio, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
+  const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
+  const updates = { name, role, batch, bio, domain: domain||null, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
   if (req.file) updates.photo = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -271,10 +271,10 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew } = req.body;
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
-    title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url,
+    title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     poster_image: posterUrl,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -282,8 +282,8 @@ app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (re
 });
 
 app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
-  const updates = { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url };
+  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew } = req.body;
+  const updates = { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -298,9 +298,8 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
 // ── TRAFFIC TRACKING ──────────────────────────────────────────────────────────
 app.post('/api/track', async (req, res) => {
   const { page, hour } = req.body;
-  if (!page || page === 'admin' || page.startsWith('admin')) return res.json({ ok: true });
   const today = new Date().toISOString().slice(0,10);
-  await supabase.from('page_views').insert([{ page, date: today, hour: hour||0 }]);
+  await supabase.from('page_views').insert([{ page: page||'home', date: today, hour: hour||0 }]);
   res.json({ ok: true });
 });
 
