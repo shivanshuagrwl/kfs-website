@@ -613,8 +613,8 @@ body:has(#admin-panel.active) #main-nav{display:none}
     </div>
     <h1 class="hero-tagline" id="hero-tagline">
       <span class="glow-word" id="glow-lights">Lights.</span><br>
-      <em><span class="glow-word" id="glow-camera">Camera.</span></em>
-      <span class="glow-word" id="glow-kfs"> KFS.</span>
+      <em><span class="glow-word" id="glow-camera">Camera.</span></em><br>
+      <span class="glow-word" id="glow-kfs">KFS.</span>
     </h1>
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
@@ -1219,8 +1219,8 @@ async function loadHomeData() {
       if (parts) {
         tagEl.innerHTML =
           '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'</span><br>'+
-          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em>'+
-          ' <span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
+          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em><br>'+
+          '<span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
       } else {
         tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'</span>';
       }
