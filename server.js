@@ -303,8 +303,6 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
 // ── TRAFFIC TRACKING ──────────────────────────────────────────────────────────
 app.post('/api/track', async (req, res) => {
   const { page, hour } = req.body;
-  // Never track admin visits
-  if (!page || page === 'admin' || page.startsWith('admin')) return res.json({ ok: true });
   const today = new Date().toISOString().slice(0,10);
   await supabase.from('page_views').insert([{ page: page||'home', date: today, hour: hour||0 }]);
   res.json({ ok: true });
