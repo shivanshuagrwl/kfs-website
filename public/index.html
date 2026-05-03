@@ -1621,6 +1621,9 @@ function showAdminPanel() {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
+  // Remove any visitor popups that may have appeared
+  document.getElementById('event-popup-overlay')?.remove();
+  document.querySelectorAll('.notif-popup-overlay').forEach(el=>el.remove());
   loadAdminData('blogs');
 }
 
@@ -2028,7 +2031,7 @@ checkRoute();
 // ── EVENT COUNTDOWN POPUP ──
 async function checkUpcomingEventPopup() {
   // Don't show on admin page
-  if (window.location.pathname === '/admin') return;
+  if (document.getElementById('admin-panel')?.classList.contains('active')) return;
 
   const events = await apiFetch('/api/events');
   if (!events || !events.length) return;
