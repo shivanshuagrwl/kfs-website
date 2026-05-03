@@ -56,7 +56,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 /* ── HERO ─────────────────────────────────────────────────────────────── */
 #hero-section{position:relative;height:calc(100vh - 72px);display:flex;align-items:center;
   justify-content:center;flex-direction:column;overflow:hidden;text-align:center;
-  padding-bottom:90px;padding-left:20px;padding-right:20px}
+  padding-bottom:140px;padding-left:20px;padding-right:20px}
 .hero-grain{position:absolute;inset:0;opacity:.03;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-size:256px;pointer-events:none}
@@ -613,8 +613,8 @@ body:has(#admin-panel.active) #main-nav{display:none}
     </div>
     <h1 class="hero-tagline" id="hero-tagline">
       <span class="glow-word" id="glow-lights">Lights.</span><br>
-      <em><span class="glow-word" id="glow-camera">Camera.</span></em><br>
-      <span class="glow-word" id="glow-kfs">KFS.</span>
+      <em><span class="glow-word" id="glow-camera">Camera.</span></em>
+      <span class="glow-word" id="glow-kfs"> KFS.</span>
     </h1>
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
@@ -1219,8 +1219,8 @@ async function loadHomeData() {
       if (parts) {
         tagEl.innerHTML =
           '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'</span><br>'+
-          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em><br>'+
-          '<span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
+          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em>'+
+          ' <span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
       } else {
         tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'</span>';
       }
