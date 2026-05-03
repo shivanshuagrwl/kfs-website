@@ -280,13 +280,15 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .admin-table tr:hover td{background:rgba(255,255,255,.02)}
 .admin-table img{width:44px;height:44px;object-fit:cover;filter:grayscale(100%);border-radius:2px}
 
-.btn-sm{padding:7px 16px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);
+.btn-sm{padding:7px 18px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);
   cursor:none;background:transparent;color:var(--grey);transition:all .2s;font-family:inherit;
-  text-transform:uppercase;border-radius:3px}
+  text-transform:uppercase;border-radius:20px;white-space:nowrap}
 .btn-sm:hover{border-color:var(--white);color:var(--white)}
 .btn-sm.danger:hover{border-color:#e74c3c;color:#e74c3c}
-.btn-success{background:var(--white);color:var(--black);border-color:var(--white)}
+.btn-success{background:var(--white);color:var(--black);border-color:var(--white);border-radius:20px}
 .btn-success:hover{background:transparent;color:var(--white)}
+.admin-table td:last-child{white-space:nowrap;width:1%;min-width:140px}
+.admin-table .action-btns{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
 
 .admin-empty{text-align:center;padding:60px 24px;color:var(--grey)}
 .admin-empty p{font-size:14px;margin-top:8px}
@@ -1113,7 +1115,7 @@ async function loadAdminData(name) {
       <td style="font-weight:500">${b.title}</td>
       <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}</span></td>
       <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}</td>
-      <td><div style="display:flex;gap:8px">
+      <td><div class="action-btns">
         <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete</button>
       </div></td>
@@ -1128,7 +1130,7 @@ async function loadAdminData(name) {
       <td style="color:var(--grey)">${e.event_date||'—'}</td>
       <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}</span></td>
       <td style="color:var(--grey)">${e.location||'—'}</td>
-      <td><div style="display:flex;gap:8px">
+      <td><div class="action-btns">
         <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete</button>
       </div></td>
@@ -1143,7 +1145,7 @@ async function loadAdminData(name) {
       <td style="font-weight:500">${m.name}</td>
       <td style="color:var(--grey)">${m.role||'—'}</td>
       <td style="color:var(--grey)">${m.batch||'—'}</td>
-      <td><div style="display:flex;gap:8px">
+      <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete</button>
       </div></td>
@@ -1157,7 +1159,7 @@ async function loadAdminData(name) {
       <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
       <td style="font-weight:500">${t.name}</td>
       <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"</td>
-      <td><div style="display:flex;gap:8px">
+      <td><div class="action-btns">
         <button class="btn-sm" onclick="editTestimonial(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteTestimonial('${t.id}')">Delete</button>
       </div></td>
@@ -1171,7 +1173,7 @@ async function loadAdminData(name) {
       <td style="font-size:24px">${a.icon||'🏆'}</td>
       <td style="font-weight:500">${a.title}</td>
       <td style="color:var(--grey)">${a.year||'—'}</td>
-      <td><div style="display:flex;gap:8px">
+      <td><div class="action-btns">
         <button class="btn-sm" onclick="editAchievement(${JSON.stringify(a).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteAchievement('${a.id}')">Delete</button>
       </div></td>
