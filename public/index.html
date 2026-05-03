@@ -37,14 +37,31 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 
 /* ── MOBILE NAV ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
-  .nav-links{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--black);
-    flex-direction:column;align-items:center;justify-content:center;gap:40px;
-    transform:translateY(-100%);transition:transform .5s var(--ease);z-index:150;
-    visibility:hidden}
-  .nav-links.open{transform:translateY(0);visibility:visible}
-  .nav-links a{font-size:28px;letter-spacing:.1em}
-  .nav-hamburger{display:flex;z-index:200;position:relative}
-  nav{padding:16px 24px;z-index:160}
+  nav{padding:16px 24px;z-index:1000;background:rgba(10,10,10,.98)}
+  .nav-links{
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:#0a0a0a;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+    list-style:none;
+    opacity:0;pointer-events:none;visibility:hidden;
+    transition:opacity .3s ease;
+    z-index:999}
+  .nav-links.open{opacity:1;pointer-events:all;visibility:visible}
+  .nav-links li{opacity:0;transform:translateY(12px);
+    transition:opacity .25s ease,transform .25s ease}
+  .nav-links.open li:nth-child(1){opacity:1;transform:none;transition-delay:.05s}
+  .nav-links.open li:nth-child(2){opacity:1;transform:none;transition-delay:.1s}
+  .nav-links.open li:nth-child(3){opacity:1;transform:none;transition-delay:.15s}
+  .nav-links.open li:nth-child(4){opacity:1;transform:none;transition-delay:.2s}
+  .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.25s}
+  .nav-links a{font-size:22px;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--grey);text-decoration:none;transition:color .2s}
+  .nav-links a:hover,.nav-links a.active{color:var(--white)}
+  .nav-hamburger{display:flex;z-index:1001;position:relative}
+  .nav-hamburger span{transition:transform .3s ease,opacity .3s ease}
+  .nav-hamburger.open span:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
+  .nav-hamburger.open span:nth-child(2){opacity:0}
+  .nav-hamburger.open span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
 }
 
 /* ── PAGE SYSTEM ─────────────────────────────────────────────────────── */
@@ -622,7 +639,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <a class="btn btn-secondary" onclick="navigate('blog')">Read Our Blog</a>
     </div>
     <div class="hero-scroll">
-      <span>Scroll</span>
       <div class="scroll-line"></div>
     </div>
   </section>
@@ -1194,8 +1210,14 @@ function loadPageData(page) {
   else if (page==='movies') loadMovies();
 }
 
-function toggleMenu() { document.getElementById('nav-links').classList.toggle('open'); }
-function closeMenu() { document.getElementById('nav-links').classList.remove('open'); }
+function toggleMenu() {
+  document.getElementById('nav-links').classList.toggle('open');
+  document.getElementById('hamburger').classList.toggle('open');
+}
+function closeMenu() {
+  document.getElementById('nav-links').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+}
 
 function animateCounters() {
   document.querySelectorAll('.counter').forEach(el=>{
