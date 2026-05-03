@@ -1555,7 +1555,7 @@ async function loadHomeData() {
   const movies = await apiFetch('/api/movies');
   const hmg = document.getElementById('home-movies-grid');
   if (movies && movies.length) {
-    hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m)).join('');
+    hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m,true)).join('');
   } else {
     hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.</p></div>`;
   }
@@ -2097,6 +2097,15 @@ async function loadAdminData(name) {
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
       </div></td>
     </tr>`).join('');
+  }
+  else if (name==='analytics') {
+    loadTrafficAnalytics(currentAnalyticsRange);
+  }
+  else if (name==='review-analytics') {
+    loadReviewAnalytics();
+  }
+  else if (name==='notifications') {
+    renderNotifTable();
   }
   else if (name==='settings') {
     const settings = await apiFetch('/api/settings');
@@ -2939,13 +2948,7 @@ async function loadReviewAnalytics() {
     </div>`).join('');
 }
 
-// Hook into showAdminSection
-const _origShowAdminSection = showAdminSection;
-function showAdminSection(name) {
-  _origShowAdminSection(name);
-  if (name === 'analytics') loadTrafficAnalytics(currentAnalyticsRange);
-  if (name === 'review-analytics') loadReviewAnalytics();
-}
+// Analytics auto-load is handled inside loadAdminData()
 </script>
 </body>
 </html>
