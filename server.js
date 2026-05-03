@@ -295,6 +295,28 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+// ── REVIEWS ───────────────────────────────────────────────────────────────────
+app.get('/api/reviews/:movieId', async (req, res) => {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('*')
+    .eq('movie_id', req.params.movieId)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/reviews', async (req, res) => {
+  const { movie_id, reviewer_name, overall, direction, sound, cinematography, script, review_text } = req.body;
+  if (!movie_id || !overall) return res.status(400).json({ error: 'movie_id and overall rating required' });
+  const { data, error } = await supabase
+    .from('reviews')
+    .insert([{ movie_id, reviewer_name: reviewer_name||'Anonymous', overall, direction, sound, cinematography, script, review_text }])
+    .select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
