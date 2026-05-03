@@ -867,7 +867,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <p>KFS Content Management</p>
     <div class="form-group">
       <label>Password</label>
-      <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()">
+      <div style="position:relative">
+        <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()" style="padding-right:40px;width:100%;box-sizing:border-box">
+        <button type="button" onclick="(function(){var i=document.getElementById('admin-password');var b=document.getElementById('pw-eye');i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'👁':'🙈'})()" id="pw-eye" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:0;line-height:1">👁</button>
+      </div>
     </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="adminLogin()">Sign In</button>
     <p class="login-error" id="login-error"></p>
@@ -1151,9 +1154,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="form-group"><label>Script Writer</label><input type="text" id="movie-screenwriter"></div>
     <div class="form-group"><label>Video Editor</label><input type="text" id="movie-editor"></div>
     <div class="form-group"><label>Sound Design</label><input type="text" id="movie-sound"></div>
+    <div class="form-group"><label>Actors (comma separated)</label><input type="text" id="movie-actors" placeholder="Name 1, Name 2, Name 3"></div>
     <div class="form-group"><label>Management</label><input type="text" id="movie-management"></div>
     <div class="form-group"><label>Graphic Design</label><input type="text" id="movie-gd"></div>
-    <div class="form-group"><label>Actors (comma separated)</label><input type="text" id="movie-actors" placeholder="Name 1, Name 2, Name 3"></div>
     <div class="form-group"><label>Support Crew (comma separated)</label><input type="text" id="movie-support" placeholder="Name 1, Name 2"></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
