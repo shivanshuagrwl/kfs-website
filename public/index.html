@@ -42,40 +42,29 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   .nav-links{
     position:fixed;top:0;right:0;bottom:0;
     width:72vw;max-width:280px;
-    background:#111;
-    border-left:1px solid #222;
+    background:#111;border-left:1px solid #222;
     display:flex;flex-direction:column;
     align-items:flex-start;justify-content:flex-start;
     gap:0;list-style:none;
     padding:80px 32px 40px;
     transform:translateX(110%);
     transition:transform .35s cubic-bezier(.4,0,.2,1);
-    z-index:1001;
-    visibility:hidden;overflow-y:auto;
-  }
+    z-index:1001;visibility:hidden;overflow-y:auto}
   .nav-links.open{transform:translateX(0);visibility:visible}
-  .nav-links li{
-    width:100%;border-bottom:1px solid #222;
+  .nav-links li{width:100%;border-bottom:1px solid #222;
     opacity:0;transform:translateX(14px);
-    transition:opacity .25s ease,transform .25s ease;
-  }
+    transition:opacity .25s ease,transform .25s ease}
   .nav-links li:first-child{border-top:1px solid #222}
   .nav-links.open li:nth-child(1){opacity:1;transform:none;transition-delay:.06s}
   .nav-links.open li:nth-child(2){opacity:1;transform:none;transition-delay:.11s}
   .nav-links.open li:nth-child(3){opacity:1;transform:none;transition-delay:.16s}
   .nav-links.open li:nth-child(4){opacity:1;transform:none;transition-delay:.21s}
   .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
-  .nav-links a{
-    display:block;padding:18px 0;
-    font-size:13px;font-weight:600;letter-spacing:.12em;
-    text-transform:uppercase;color:#888;
-    text-decoration:none;transition:color .2s;width:100%;
-  }
+  .nav-links a{display:block;padding:18px 0;font-size:13px;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;color:#888;
+    text-decoration:none;transition:color .2s;width:100%}
   .nav-links a.active,.nav-links a:hover{color:#f5f5f5}
-  .nav-backdrop{
-    display:none;position:fixed;inset:0;
-    background:rgba(0,0,0,.6);z-index:1000;
-  }
+  .nav-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000}
   .nav-backdrop.open{display:block}
 }
 
@@ -562,7 +551,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <span></span><span></span><span></span>
   </div>
 </nav>
-<div class="nav-backdrop" id="nav-backdrop" onclick="closeMenu()"></div>
 
 <!-- ── HOME PAGE ── -->
 <div class="page active" id="page-home">
@@ -891,6 +879,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
     <div class="admin-sidebar-group">System</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon">🔔</span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon">⚙️</span> Settings</div>
     <div class="admin-sidebar-bottom">
       <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
@@ -1025,6 +1014,17 @@ body:has(#admin-panel.active) #main-nav{display:none}
         </div>
         <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
       </div>
+    </div>
+
+    <div class="admin-section" id="section-notifications">
+      <div class="admin-header">
+        <div><h2>Notifications</h2><p>Manage popups shown to site visitors</p></div>
+        <button class="btn btn-primary" onclick="openNotifModal()">+ New Notification</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Title</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="notif-tbody"><tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr></tbody>
+      </table>
     </div>
 
   </div>
@@ -1228,13 +1228,11 @@ function loadPageData(page) {
 
 function toggleMenu() {
   document.getElementById('nav-links').classList.toggle('open');
-  var bd = document.getElementById('nav-backdrop');
-  if(bd) bd.classList.toggle('open');
+  var bd=document.getElementById('nav-backdrop'); if(bd) bd.classList.toggle('open');
 }
 function closeMenu() {
   document.getElementById('nav-links').classList.remove('open');
-  var bd = document.getElementById('nav-backdrop');
-  if(bd) bd.classList.remove('open');
+  var bd=document.getElementById('nav-backdrop'); if(bd) bd.classList.remove('open');
 }
 
 function animateCounters() {
@@ -1614,6 +1612,7 @@ function showAdminPanel() {
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
   loadAdminData('blogs');
+  loadNotifications();
 }
 
 function showAdminSection(name) {
@@ -2083,6 +2082,136 @@ function closeEventPopup() {
 }
 
 checkUpcomingEventPopup();
+checkUpcomingEventPopup();
+
+// ── NOTIFICATIONS ────────────────────────────────────────────────────────
+let allNotifications = [];
+
+async function loadNotifications() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    const raw = data.find ? data.find(s => s.key === 'notifications') : null;
+    allNotifications = raw ? JSON.parse(raw.value || '[]') : [];
+  } catch(e) { allNotifications = []; }
+  renderNotifTable();
+  renderNotifPopups();
+}
+
+function renderNotifTable() {
+  const tbody = document.getElementById('notif-tbody');
+  if (!tbody) return;
+  if (!allNotifications.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr>';
+    return;
+  }
+  const typeLabels = {announcement:'📢 Announcement', achievement:'🏆 Achievement', film:'🎬 Film', event:'🎪 Event'};
+  tbody.innerHTML = allNotifications.map((n,i) => `
+    <tr>
+      <td style="font-weight:600">${n.title}</td>
+      <td>${typeLabels[n.type]||n.type}</td>
+      <td style="color:var(--grey);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.message||''}</td>
+      <td><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.06em;background:${n.active?'rgba(255,255,255,.12)':'rgba(255,255,255,.04)'};color:${n.active?'#f5f5f5':'#888'}">${n.active?'ACTIVE':'OFF'}</span></td>
+      <td><div class="action-btns">
+        <button class="btn-edit" onclick="openNotifModal(${i})">Edit</button>
+        <button class="btn-delete" onclick="deleteNotif(${i})">Delete</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function openNotifModal(idx) {
+  document.getElementById('notif-modal-overlay').style.display='flex';
+  if (idx !== undefined) {
+    const n = allNotifications[idx];
+    document.getElementById('notif-modal-title').textContent = 'Edit Notification';
+    document.getElementById('notif-id').value = idx;
+    document.getElementById('notif-title').value = n.title||'';
+    document.getElementById('notif-type').value = n.type||'announcement';
+    document.getElementById('notif-message').value = n.message||'';
+    document.getElementById('notif-btn-text').value = n.btnText||'';
+    document.getElementById('notif-btn-page').value = n.btnPage||'';
+    document.getElementById('notif-active').checked = !!n.active;
+  } else {
+    document.getElementById('notif-modal-title').textContent = 'New Notification';
+    document.getElementById('notif-id').value = '';
+    document.getElementById('notif-title').value = '';
+    document.getElementById('notif-type').value = 'announcement';
+    document.getElementById('notif-message').value = '';
+    document.getElementById('notif-btn-text').value = '';
+    document.getElementById('notif-btn-page').value = '';
+    document.getElementById('notif-active').checked = true;
+  }
+}
+function closeNotifModal() {
+  document.getElementById('notif-modal-overlay').style.display='none';
+}
+
+async function saveNotif() {
+  const idx = document.getElementById('notif-id').value;
+  const notif = {
+    title: document.getElementById('notif-title').value.trim(),
+    type: document.getElementById('notif-type').value,
+    message: document.getElementById('notif-message').value.trim(),
+    btnText: document.getElementById('notif-btn-text').value.trim(),
+    btnPage: document.getElementById('notif-btn-page').value,
+    active: document.getElementById('notif-active').checked,
+  };
+  if (!notif.title) { alert('Title is required'); return; }
+  if (idx !== '') { allNotifications[parseInt(idx)] = notif; }
+  else { allNotifications.push(notif); }
+  await saveNotifToServer();
+  closeNotifModal();
+  renderNotifTable();
+}
+
+async function deleteNotif(idx) {
+  if (!confirm('Delete this notification?')) return;
+  allNotifications.splice(idx, 1);
+  await saveNotifToServer();
+  renderNotifTable();
+}
+
+async function saveNotifToServer() {
+  await fetch('/api/admin/settings', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-admin-token': localStorage.getItem('kfs_admin_token')||''},
+    body: JSON.stringify({ key:'notifications', value: JSON.stringify(allNotifications) })
+  });
+}
+
+// Show active notification popups on page load (not on admin)
+function renderNotifPopups() {
+  const isAdmin = document.getElementById('admin-panel')?.classList.contains('active');
+  if (isAdmin) return;
+  const active = allNotifications.filter(n => n.active);
+  if (!active.length) return;
+  const n = active[0]; // show most recent active one
+  const typeIcons = {announcement:'📢', achievement:'🏆', film:'🎬', event:'🎪'};
+  const overlay = document.createElement('div');
+  overlay.id = 'notif-popup-overlay';
+  overlay.innerHTML = `
+    <div id="notif-popup">
+      <div class="ep-label">${typeIcons[n.type]||'📢'} ${(n.type||'').charAt(0).toUpperCase()+(n.type||'').slice(1)}</div>
+      <div class="ep-title" style="font-size:22px;margin-bottom:12px">${n.title}</div>
+      ${n.message ? `<div style="font-size:14px;color:#888;line-height:1.6;margin-bottom:24px">${n.message}</div>` : ''}
+      <div class="ep-actions">
+        ${n.btnText && n.btnPage ? `<button class="ep-btn-primary" onclick="closeNotifPopup();navigate('${n.btnPage}')">${n.btnText}</button>` : ''}
+        <button class="ep-btn-close" onclick="closeNotifPopup()">Dismiss</button>
+      </div>
+      <button class="ep-x" onclick="closeNotifPopup()">✕</button>
+    </div>`;
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .4s ease;backdrop-filter:blur(6px)';
+  overlay.addEventListener('click', e => { if(e.target===overlay) closeNotifPopup(); });
+  document.body.appendChild(overlay);
+  setTimeout(() => { overlay.style.opacity='1'; overlay.style.pointerEvents='all'; }, 2500);
+}
+function closeNotifPopup() {
+  const el = document.getElementById('notif-popup-overlay');
+  if (el) { el.style.opacity='0'; el.style.pointerEvents='none'; setTimeout(()=>el.remove(),400); }
+}
+
+loadNotifications();
+
 </script>
 
 <style>
@@ -2119,5 +2248,42 @@ checkUpcomingEventPopup();
   .ep-actions{flex-direction:column}
 }
 </style>
+
+<!-- Notification Modal -->
+<div class="modal-overlay" id="notif-modal-overlay" onclick="if(event.target===this)closeNotifModal()">
+  <div class="modal">
+    <div class="modal-header"><h3 id="notif-modal-title">New Notification</h3><button class="modal-close" onclick="closeNotifModal()">✕</button></div>
+    <input type="hidden" id="notif-id">
+    <div class="form-group"><label>Title</label><input type="text" id="notif-title" placeholder="e.g. New Film Released!"></div>
+    <div class="form-group"><label>Type</label>
+      <select id="notif-type">
+        <option value="announcement">📢 General Announcement</option>
+        <option value="achievement">🏆 Achievement</option>
+        <option value="film">🎬 New Film</option>
+        <option value="event">🎪 Event</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Message</label><textarea id="notif-message" style="min-height:80px" placeholder="Short description shown in the popup"></textarea></div>
+    <div class="form-group"><label>Button Text</label><input type="text" id="notif-btn-text" placeholder="e.g. Watch Now, View Details"></div>
+    <div class="form-group"><label>Button Links To</label>
+      <select id="notif-btn-page">
+        <option value="">No button</option>
+        <option value="home">Home</option>
+        <option value="events">Events</option>
+        <option value="movies">Films</option>
+        <option value="members">Members</option>
+        <option value="blog">Blog</option>
+      </select>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:12px">
+      <input type="checkbox" id="notif-active" style="width:16px;height:16px;accent-color:var(--white)">
+      <label for="notif-active" style="margin:0;cursor:pointer">Active (show to visitors)</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveNotif()">Save</button>
+      <button class="btn btn-secondary" onclick="closeNotifModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
