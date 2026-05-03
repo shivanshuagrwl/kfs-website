@@ -1325,7 +1325,7 @@ function filterMembers(type, tabEl) {
   document.querySelectorAll('#page-members .events-tab').forEach(t=>t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
 
-  const members = allMembers.filter(m => type === 'past' ? m.is_past : !m.is_past);
+  const members = allMembers.filter(m => type === 'past' ? m.is_past === true : !m.is_past);
   const container = document.getElementById('members-content');
 
   if (!members.length) {
