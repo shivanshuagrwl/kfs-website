@@ -528,6 +528,36 @@ body:has(#admin-panel.active) #main-nav{display:none}
 @media(max-width:1024px){.members-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:768px){.members-grid{grid-template-columns:repeat(2,1fr)}}
 
+/* Photo grid for President / VP / Core & Leads */
+.members-grid-photo{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border)}
+@media(max-width:1100px){.members-grid-photo{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:768px){.members-grid-photo{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:480px){.members-grid-photo{grid-template-columns:repeat(2,1fr)}}
+
+.member-card-photo{background:var(--black);overflow:hidden;transition:background .3s var(--ease)}
+.member-card-photo:hover{background:var(--card)}
+.member-photo-sq{width:100%;aspect-ratio:1/1;object-fit:cover;object-position:top;
+  filter:grayscale(100%);display:block;transition:filter .4s var(--ease)}
+.member-card-photo:hover .member-photo-sq{filter:grayscale(0%)}
+.member-photo-sq-placeholder{width:100%;aspect-ratio:1/1;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--grey)}
+.member-info-sq{padding:12px 14px}
+.member-name-sq{font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3}
+.member-role-sq{font-size:11px;letter-spacing:.06em;color:var(--grey)}
+.member-batch-sq{font-size:10px;letter-spacing:.08em;color:#555;text-transform:uppercase;margin-top:2px}
+
+/* Plain list for Members */
+.members-list-plain{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+@media(max-width:900px){.members-list-plain{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.members-list-plain{grid-template-columns:1fr}}
+.member-row{background:var(--black);padding:16px 20px;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;transition:background .2s var(--ease)}
+.member-row:hover{background:var(--card)}
+.member-row-name{font-size:13px;font-weight:600}
+.member-row-meta{text-align:right;flex-shrink:0}
+.member-row-meta div:first-child{font-size:12px;color:var(--grey)}
+.member-row-batch{font-size:10px;letter-spacing:.08em;color:#555;text-transform:uppercase;margin-top:2px}
+
 /* ── MOVIES ───────────────────────────────────────────────────────────── */
 .movies-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:60px}
 @media(max-width:1024px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
@@ -665,84 +695,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
   0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}
   100%{transform:translateY(100vh) rotate(720deg) scale(.4);opacity:0}
 }
-
-/* ── FILM POSTER HOVER ZOOM ─────────────────────────────────────────── */
-.movie-card{transition:background .3s var(--ease),transform .3s var(--ease)}
-.movie-card:hover .movie-poster{filter:grayscale(0%);transform:scale(1.04)}
-.movie-poster{transition:filter .4s var(--ease),transform .4s var(--ease)}
-.movie-card:hover{background:var(--card)}
-
-/* ── TRAILER MODAL ──────────────────────────────────────────────────── */
-#trailer-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9000;
-  display:none;align-items:center;justify-content:center;padding:24px}
-#trailer-modal-overlay.open{display:flex}
-#trailer-modal-inner{width:100%;max-width:900px;position:relative}
-#trailer-iframe{width:100%;aspect-ratio:16/9;border:none;display:block}
-#trailer-close{position:absolute;top:-40px;right:0;background:none;border:none;
-  color:#fff;font-size:28px;cursor:pointer;opacity:.7;line-height:1;padding:4px 8px}
-#trailer-close:hover{opacity:1}
-.movie-poster-wrap{position:relative;overflow:hidden}
-.movie-play-btn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  opacity:0;transition:opacity .3s;cursor:pointer;background:rgba(0,0,0,.3)}
-.movie-card:hover .movie-play-btn{opacity:1}
-.movie-play-icon{width:56px;height:56px;background:rgba(255,255,255,.15);border-radius:50%;
-  display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.6);
-  backdrop-filter:blur(4px)}
-.movie-play-icon svg{margin-left:4px}
-
-/* ── WATCH / TRAILER BUTTONS ────────────────────────────────────────── */
-.movie-action-btns{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
-.movie-watch-btn,.movie-trailer-btn{display:inline-flex;align-items:center;gap:7px;
-  padding:10px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
-  font-weight:600;border:1px solid var(--white);cursor:pointer;font-family:inherit;
-  transition:all .2s;border-radius:20px;text-decoration:none}
-.movie-watch-btn{background:var(--white);color:var(--black)}
-.movie-watch-btn:hover{background:transparent;color:var(--white)}
-.movie-trailer-btn{background:transparent;color:var(--white)}
-.movie-trailer-btn:hover{background:var(--white);color:var(--black)}
-
-/* ── TOAST NOTIFICATIONS ────────────────────────────────────────────── */
-#toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;
-  display:flex;flex-direction:column;gap:10px;pointer-events:none}
-.toast{background:#1a1a1a;border:1px solid #2a2a2a;color:var(--white);
-  padding:14px 20px;font-size:13px;letter-spacing:.02em;border-radius:4px;
-  min-width:240px;max-width:340px;pointer-events:all;
-  transform:translateX(120%);transition:transform .3s var(--ease),opacity .3s;
-  display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
-.toast.show{transform:translateX(0)}
-.toast.success{border-left:3px solid #4caf50}
-.toast.error{border-left:3px solid #e74c3c}
-.toast.info{border-left:3px solid #888}
-.toast-icon{font-size:15px;flex-shrink:0}
-.toast-msg{flex:1;line-height:1.4}
-
-/* ── SKELETON LOADERS ───────────────────────────────────────────────── */
-@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
-.skeleton{background:linear-gradient(90deg,#111 25%,#1a1a1a 50%,#111 75%);
-  background-size:800px 100%;animation:shimmer 1.8s infinite linear;border-radius:2px}
-.skeleton-card{background:var(--card);border:1px solid var(--border);overflow:hidden}
-.skeleton-poster{width:100%;aspect-ratio:2/3;background:linear-gradient(90deg,#111 25%,#1a1a1a 50%,#111 75%);
-  background-size:800px 100%;animation:shimmer 1.8s infinite linear}
-.skeleton-blog-img{width:100%;aspect-ratio:16/9;background:linear-gradient(90deg,#111 25%,#1a1a1a 50%,#111 75%);
-  background-size:800px 100%;animation:shimmer 1.8s infinite linear}
-.skeleton-body{padding:16px}
-.skeleton-line{height:12px;border-radius:2px;margin-bottom:10px;
-  background:linear-gradient(90deg,#111 25%,#1a1a1a 50%,#111 75%);
-  background-size:800px 100%;animation:shimmer 1.8s infinite linear}
-
-/* ── BULK DELETE BAR ────────────────────────────────────────────────── */
-.bulk-bar{display:none;align-items:center;gap:16px;padding:12px 20px;
-  background:#1a0a0a;border:1px solid #3a1a1a;border-radius:4px;margin-bottom:16px}
-.bulk-bar.visible{display:flex}
-.bulk-bar-count{font-size:13px;color:#e74c3c;font-weight:600;flex:1}
-.bulk-delete-btn{padding:8px 18px;background:#e74c3c;color:#fff;border:none;
-  font-size:12px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
-  font-family:inherit;border-radius:20px;font-weight:600;transition:background .2s}
-.bulk-delete-btn:hover{background:#c0392b}
-.admin-table th input[type=checkbox],.admin-table td input[type=checkbox]{
-  width:16px;height:16px;accent-color:var(--white);cursor:pointer}
-.admin-table th:first-child{width:40px}
-
 </style>
 </head>
 <body>
@@ -751,15 +703,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="scroll-progress"></div>
 <div id="cursor"></div>
 <div id="cursor-ring"></div>
-<div id="toast-container"></div>
-
-<!-- TRAILER MODAL -->
-<div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
-  <div id="trailer-modal-inner">
-    <button id="trailer-close" onclick="closeTrailer()">✕</button>
-    <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay"></iframe>
-  </div>
-</div>
 
 <!-- NAV -->
 <nav id="main-nav">
@@ -1079,15 +1022,8 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="movie-detail">
   <div class="movie-detail-layout">
     <div>
-      <div class="movie-poster-wrap" id="movie-poster-wrap">
-        <img id="movie-detail-poster-img" class="movie-detail-poster" src="" alt="" style="display:none">
-        <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none">🎬</div>
-        <div class="movie-play-btn" id="movie-play-btn" style="display:none" onclick="openTrailer()">
-          <div class="movie-play-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
-          </div>
-        </div>
-      </div>
+      <img id="movie-detail-poster-img" class="movie-detail-poster" src="" alt="" style="display:none">
+      <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none">🎬</div>
     </div>
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:32px">
@@ -1099,7 +1035,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
-      <div class="movie-action-btns" id="movie-action-btns"></div>
       <div class="movie-detail-crew" id="movie-detail-crew"></div>
       <div class="movie-detail-section" id="movie-detail-actors-section" style="display:none">
         <div class="movie-detail-section-title">Cast</div>
@@ -1214,13 +1149,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
         <button class="btn btn-primary" onclick="openBlogModal()">+ New Post</button>
       </div>
-      <div class="bulk-bar" id="blogs-bulk-bar">
-        <span class="bulk-bar-count" id="blogs-bulk-count">0 selected</span>
-        <button class="bulk-delete-btn" onclick="bulkDelete('blogs')">Delete Selected</button>
-      </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="blogs-check-all" onchange="toggleAllChecks('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
           <tbody id="admin-blogs-tbody"></tbody>
         </table>
       </div>
@@ -1260,13 +1191,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <div><h2>Films</h2><p>Manage KFS film productions</p></div>
         <button class="btn btn-primary" onclick="openMovieModal()">+ Add Film</button>
       </div>
-      <div class="bulk-bar" id="movies-bulk-bar">
-        <span class="bulk-bar-count" id="movies-bulk-count">0 selected</span>
-        <button class="bulk-delete-btn" onclick="bulkDelete('movies')">Delete Selected</button>
-      </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="movies-check-all" onchange="toggleAllChecks('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
           <tbody id="admin-movies-tbody"></tbody>
         </table>
       </div>
@@ -1515,7 +1442,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <option value="Social Media">Social Media</option>
         <option value="Acting">Acting</option>
         <option value="Animation">Animation</option>
-        <option value="Video Editing">Video Editing</option>
       </select>
     </div>
     <div class="form-group"><label>Batch (Year)</label><input type="text" id="member-batch" placeholder="2024-25"></div>
@@ -1565,8 +1491,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="form-group"><label>Graphic Design</label><input type="text" id="movie-gd"></div>
     <div class="form-group"><label>Actors (comma separated)</label><input type="text" id="movie-actors" placeholder="Name 1, Name 2, Name 3"></div>
     <div class="form-group"><label>Support Crew (comma separated)</label><input type="text" id="movie-support" placeholder="Name 1, Name 2"></div>
-    <div class="form-group"><label>Trailer URL (YouTube link)</label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=..."></div>
-    <div class="form-group"><label>Watch Now URL (full film link)</label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..."></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
       <button class="btn-sm btn-success" onclick="saveMovie()">Save Film</button>
@@ -1936,7 +1860,10 @@ function renderMemberSections(type) {
   ];
 
   function photoCard(m) {
-    const subtitle = (m.role === 'Lead' && m.domain) ? m.domain : (m.role||'');
+    // For Leads: show domain (e.g. "Cinematography"). For Core Members: show "Core". For others: show role.
+    let subtitle = m.role || '';
+    if (m.role === 'Lead') subtitle = m.domain ? m.domain : 'Lead';
+    else if (m.role === 'Core Member') subtitle = m.domain ? m.domain : 'Core';
     return `<div class="member-card-photo">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
@@ -2026,25 +1953,6 @@ async function openMovie(id) {
   else { img.style.display='none'; ph.style.display='flex'; }
   document.getElementById('movie-detail-title').textContent = m.title;
   document.getElementById('movie-detail-year').textContent = m.release_year||'';
-
-  // Watch / Trailer action buttons
-  window._currentTrailerUrl = m.trailer_url || null;
-  const playBtn = document.getElementById('movie-play-btn');
-  const actionBtns = document.getElementById('movie-action-btns');
-  if (m.trailer_url || m.watch_url) {
-    actionBtns.innerHTML = [
-      m.watch_url ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now</a>` : '',
-      m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()">🎬 Trailer</button>` : '',
-    ].join('');
-  } else {
-    actionBtns.innerHTML = '';
-  }
-  // Play overlay on poster
-  if (m.trailer_url) {
-    playBtn.style.display = 'flex';
-  } else {
-    playBtn.style.display = 'none';
-  }
   const crewFields = [
     {label:'Director', val:m.director},
     {label:'Producer', val:m.producer},
@@ -2313,8 +2221,7 @@ async function loadAdminData(name) {
     const tbody = document.getElementById('admin-blogs-tbody');
     if (!blogs || !blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
     tbody.innerHTML = blogs.map(b=>`<tr>
-      <td><input type="checkbox" class="blogs-row-check" data-id="${b.id}" onchange="updateBulkBar('blogs')"></td>
-      <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:' —'}</td>
+      <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}</td>
       <td style="font-weight:500">${b.title}</td>
       <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}</span></td>
       <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}</td>
@@ -2388,7 +2295,6 @@ async function loadAdminData(name) {
     const tbody = document.getElementById('admin-movies-tbody');
     if (!movies || !movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
     tbody.innerHTML = movies.map(m=>`<tr>
-      <td><input type="checkbox" class="movies-row-check" data-id="${m.id}" onchange="updateBulkBar('movies')"></td>
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'🎬'}</td>
       <td style="font-weight:500">${m.title}</td>
       <td style="color:var(--grey)">${m.release_year||'—'}</td>
@@ -2453,7 +2359,7 @@ async function saveBlog() {
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeBlogModal(); loadAdminData('blogs'); }
-  else showToast('Error saving post','error');
+  else alert('Error saving post');
 }
 
 async function deleteBlog(id) {
@@ -2491,7 +2397,7 @@ async function saveEvent() {
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeEventModal(); loadAdminData('events'); }
-  else showToast('Error saving event','error');
+  else alert('Error saving event');
 }
 
 async function deleteEvent(id) {
@@ -2532,7 +2438,7 @@ async function saveMember() {
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeMemberModal(); loadAdminData('members'); }
-  else showToast('Error saving member','error');
+  else alert('Error saving member');
 }
 
 async function deleteMember(id) {
@@ -2557,8 +2463,6 @@ function openMovieModal(m=null) {
   document.getElementById('movie-gd').value = m?.graphic_design||'';
   document.getElementById('movie-actors').value = m?.actors||'';
   document.getElementById('movie-support').value = m?.support_crew||'';
-  document.getElementById('movie-trailer').value = m?.trailer_url||'';
-  document.getElementById('movie-watch').value = m?.watch_url||'';
   document.getElementById('movie-poster').value='';
 }
 function editMovie(m) { openMovieModal(m); }
@@ -2579,14 +2483,12 @@ async function saveMovie() {
   fd.append('graphic_design', document.getElementById('movie-gd').value);
   fd.append('actors', document.getElementById('movie-actors').value);
   fd.append('support_crew', document.getElementById('movie-support').value);
-  fd.append('trailer_url', document.getElementById('movie-trailer').value);
-  fd.append('watch_url', document.getElementById('movie-watch').value);
   const poster = document.getElementById('movie-poster').files[0];
   if (poster) fd.append('poster', poster);
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeMovieModal(); loadAdminData('movies'); showToast('Film saved!','success'); }
-  else showToast('Error saving film','error');
+  if (res.ok) { closeMovieModal(); loadAdminData('movies'); }
+  else alert('Error saving film');
 }
 
 async function deleteMovie(id) {
@@ -2620,7 +2522,7 @@ async function saveTestimonial() {
   const url = id ? '/api/admin/testimonials/'+id : '/api/admin/testimonials';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeTestimonialModal(); loadAdminData('testimonials'); }
-  else showToast('Error saving testimonial','error');
+  else alert('Error saving testimonial');
 }
 
 async function deleteTestimonial(id) {
@@ -2656,7 +2558,7 @@ async function saveAchievement() {
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
     body:JSON.stringify(body)});
   if (res.ok) { closeAchievementModal(); loadAdminData('achievements'); }
-  else showToast('Error saving achievement','error');
+  else alert('Error saving achievement');
 }
 
 async function deleteAchievement(id) {
@@ -2684,18 +2586,18 @@ async function saveSettings() {
   const res = await fetch('/api/admin/settings',{method:'POST',
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
     body:JSON.stringify(body)});
-  if (res.ok) showToast('Settings saved!','success');
+  if (res.ok) alert('Settings saved!');
 }
 
 async function changePassword() {
   const np = document.getElementById('new-password').value;
   const cp = document.getElementById('confirm-password').value;
-  if (np !== cp) { showToast('Passwords do not match','error'); return; }
-  if (np.length < 6) { showToast('Password must be at least 6 characters','error'); return; }
+  if (np !== cp) { alert('Passwords do not match'); return; }
+  if (np.length < 6) { alert('Password must be at least 6 characters'); return; }
   const res = await fetch('/api/admin/change-password',{method:'POST',
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
     body:JSON.stringify({newPassword:np})});
-  if (res.ok) { showToast('Password changed!','success'); document.getElementById('new-password').value=''; document.getElementById('confirm-password').value=''; }
+  if (res.ok) { alert('Password changed!'); document.getElementById('new-password').value=''; document.getElementById('confirm-password').value=''; }
 }
 
 function execCmd(cmd, val=null) {
@@ -2917,7 +2819,7 @@ async function saveNotif() {
     btnPage: document.getElementById('notif-btn-page').value,
     active: document.getElementById('notif-active').checked,
   };
-  if (!notif.title) { showToast('Title is required','error'); return; }
+  if (!notif.title) { alert('Title is required'); return; }
   if (idx !== '') allNotifications[parseInt(idx)] = notif;
   else allNotifications.push(notif);
   await saveNotifToServer();
@@ -3028,74 +2930,6 @@ function launchKonfetti() {
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
   }
-}
-
-// ── TOAST NOTIFICATIONS ──────────────────────────────────────────────
-function showToast(msg, type='info') {
-  const icons = {success:'✓', error:'✕', info:'ℹ'};
-  const container = document.getElementById('toast-container');
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ'}</span><span class="toast-msg">${msg}</span>`;
-  container.appendChild(toast);
-  requestAnimationFrame(() => { requestAnimationFrame(() => toast.classList.add('show')); });
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 350);
-  }, 3500);
-}
-
-// ── TRAILER ──────────────────────────────────────────────────────────
-function openTrailer() {
-  const url = window._currentTrailerUrl;
-  if (!url) return;
-  let embedUrl = url;
-  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
-  document.getElementById('trailer-iframe').src = embedUrl;
-  document.getElementById('trailer-modal-overlay').classList.add('open');
-}
-function closeTrailer() {
-  document.getElementById('trailer-modal-overlay').classList.remove('open');
-  document.getElementById('trailer-iframe').src = '';
-}
-
-// ── SKELETON LOADERS ─────────────────────────────────────────────────
-function movieSkeletons(n) {
-  return Array(n).fill(`<div class="skeleton-card"><div class="skeleton-poster"></div><div class="skeleton-body"><div class="skeleton-line" style="width:70%"></div><div class="skeleton-line" style="width:40%"></div></div></div>`).join('');
-}
-function blogSkeletons(n) {
-  return Array(n).fill(`<div class="skeleton-card"><div class="skeleton-blog-img"></div><div class="skeleton-body"><div class="skeleton-line" style="width:30%"></div><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:60%"></div></div></div>`).join('');
-}
-
-// ── BULK DELETE ──────────────────────────────────────────────────────
-function updateBulkBar(type) {
-  const checks = document.querySelectorAll(`.${type}-row-check:checked`);
-  const bar = document.getElementById(`${type}-bulk-bar`);
-  const count = document.getElementById(`${type}-bulk-count`);
-  if (checks.length > 0) {
-    bar.classList.add('visible');
-    count.textContent = `${checks.length} selected`;
-  } else {
-    bar.classList.remove('visible');
-  }
-}
-function toggleAllChecks(type, checked) {
-  document.querySelectorAll(`.${type}-row-check`).forEach(c => c.checked = checked);
-  updateBulkBar(type);
-}
-async function bulkDelete(type) {
-  const checks = [...document.querySelectorAll(`.${type}-row-check:checked`)];
-  if (!checks.length) return;
-  if (!confirm(`Delete ${checks.length} item${checks.length>1?'s':''}?`)) return;
-  const ids = checks.map(c => c.dataset.id);
-  const endpoint = type === 'blogs' ? '/api/admin/blogs/' : '/api/admin/movies/';
-  await Promise.all(ids.map(id => apiFetch(endpoint + id, 'DELETE')));
-  document.getElementById(`${type}-bulk-bar`).classList.remove('visible');
-  const allCheck = document.getElementById(`${type}-check-all`);
-  if (allCheck) allCheck.checked = false;
-  loadAdminData(type);
-  showToast(`Deleted ${ids.length} item${ids.length>1?'s':''}`, 'success');
 }
 </script>
 
@@ -3270,8 +3104,6 @@ if (!navigator.maxTouchPoints) document.getElementById('search-kbd').style.displ
 // ══════════════════════════════════════════════════════════
 (function trackPageView() {
   const page = window.location.pathname.replace('/','') || 'home';
-  // Do not track admin visits — they would dominate the analytics
-  if (page === 'admin' || page.startsWith('admin')) return;
   fetch('/api/track', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
