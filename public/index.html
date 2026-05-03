@@ -2364,7 +2364,7 @@ function showAdminSection(name) {
 
 async function loadAdminData(name) {
   if (name==='blogs') {
-    const blogs = await apiFetch('/api/blogs');
+    const blogs = await apiFetch('/api/admin/blogs');
     const tbody = document.getElementById('admin-blogs-tbody');
     if (!blogs || !blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
     tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">

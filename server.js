@@ -103,6 +103,11 @@ app.get('/api/blogs', async (req, res) => {
   res.json(data || []);
 });
 
+app.get('/api/admin/blogs', authMiddleware, async (req, res) => {
+  const { data } = await supabase.from('blogs').select('*').order('created_at', { ascending: false });
+  res.json(data || []);
+});
+
 app.get('/api/blogs/:id', async (req, res) => {
   const { data } = await supabase.from('blogs').select('*').eq('id', req.params.id).single();
   if (!data) return res.status(404).json({ error: 'Not found' });
