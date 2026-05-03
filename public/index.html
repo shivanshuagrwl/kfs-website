@@ -11,9 +11,9 @@
   --black:#0a0a0a;--white:#f5f5f5;--grey:#888;--mid:#333;--border:#1e1e1e;
   --accent:#f5f5f5;--card:#111;--ease:cubic-bezier(.4,0,.2,1);
 }
-html{scroll-behavior:smooth;font-size:16px}
+html{scroll-behavior:smooth;font-size:16px;overflow-x:hidden;max-width:100vw}
 body{background:var(--black);color:var(--white);font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;overflow-x:hidden;cursor:none}
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;cursor:none;width:100%;max-width:100vw}
 
 /* ── CURSOR ──────────────────────────────────────────────────────────── */
 #cursor{position:fixed;width:8px;height:8px;background:var(--white);border-radius:50%;pointer-events:none;
@@ -55,7 +55,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 
 /* ── HERO ─────────────────────────────────────────────────────────────── */
 #hero-section{position:relative;height:calc(100vh - 72px);display:flex;align-items:center;
-  justify-content:center;flex-direction:column;overflow:hidden;text-align:center}
+  justify-content:center;flex-direction:column;overflow:hidden;text-align:center;
+  padding-bottom:90px;padding-left:20px;padding-right:20px}
 .hero-grain{position:absolute;inset:0;opacity:.03;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-size:256px;pointer-events:none}
@@ -78,16 +79,13 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(4rem,11.5vw,10.5rem);font-weight:900;letter-spacing:-.05em;
   line-height:.9;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
-  width:min(96vw,1400px);text-align:center;word-spacing:-.02em}
+  width:min(96vw,1400px);text-align:center}
 .hero-tagline em{font-style:normal;color:var(--grey)}
-.glow-word{display:inline;transition:text-shadow .6s ease,color .6s ease}
+.glow-word{display:inline;transition:text-shadow .7s ease,color .7s ease}
 .glow-word.lit{
   color:#fff;
-  text-shadow:
-    0 0 20px rgba(255,255,255,.95),
-    0 0 40px rgba(255,255,255,.7),
-    0 0 80px rgba(255,255,255,.45),
-    0 0 140px rgba(255,255,255,.2)
+  text-shadow:0 0 18px rgba(255,255,255,.98),0 0 40px rgba(255,255,255,.75),
+    0 0 80px rgba(255,255,255,.45),0 0 150px rgba(255,255,255,.2)
 }
 .hero-sub{margin-top:24px;font-size:14px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--grey);opacity:0;animation:fadeUp .8s .6s var(--ease) forwards}
@@ -210,16 +208,15 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .member-batch{font-size:11px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase;margin-top:2px}
 
 /* ── TESTIMONIALS ────────────────────────────────────────────────────── */
-.testimonials-track{
-  overflow:hidden;margin-top:60px;position:relative;
+.testimonials-track{overflow:hidden;margin-top:60px;position:relative;
   cursor:grab;user-select:none;-webkit-user-select:none}
 .testimonials-track:active{cursor:grabbing}
 .testimonials-track::before,.testimonials-track::after{
-  content:'';position:absolute;top:0;bottom:0;width:100px;z-index:2;pointer-events:none}
+  content:'';position:absolute;top:0;bottom:0;width:80px;z-index:2;pointer-events:none}
 .testimonials-track::before{left:0;background:linear-gradient(to right,var(--black),transparent)}
 .testimonials-track::after{right:0;background:linear-gradient(to left,var(--black),transparent)}
 .testimonials-inner{display:flex;gap:20px;width:max-content;will-change:transform}
-.testimonial-card{background:var(--card);padding:36px 40px;min-width:360px;max-width:360px;
+.testimonial-card{background:var(--card);padding:36px 40px;min-width:340px;max-width:340px;
   border:1px solid var(--border);flex-shrink:0}
 .testimonial-quote{font-size:15px;line-height:1.75;color:rgba(245,245,245,.8);margin-bottom:24px;font-style:italic}
 .testimonial-author{display:flex;align-items:center;gap:12px}
@@ -367,20 +364,20 @@ body:has(#admin-panel.active) #main-nav{display:none}
   body{cursor:auto}
 
   /* hero */
-  #hero-section{height:100svh;padding:0 20px}
+  #hero-section{height:100svh;padding:0 20px 80px;overflow:hidden}
   .hero-logo{width:60px;height:60px}
-  .hero-logo-wrap{margin-bottom:20px}
-  .hero-tagline{font-size:clamp(3.2rem,16vw,5rem);line-height:.92;text-align:center}
-  .hero-sub{font-size:11px;margin-top:14px;text-align:center}
-  .hero-cta{flex-direction:column;align-items:stretch;gap:10px;margin-top:28px;width:100%;max-width:300px}
-  .hero-cta .btn{width:100%;justify-content:center;padding:14px 20px;font-size:12px}
-  .hero-scroll{bottom:20px}
-  .hero-reel-circle{width:320px;height:320px}
-  .hero-reel-circle::before{width:200px;height:200px}
-  .cam-1{width:160px;bottom:-20px;left:-40px}
-  .cam-2{width:120px;top:8%;right:-20px}
-  .cam-3{width:100px;bottom:12%;right:4%}
-  .cam-4{width:110px;top:4%;left:4%}
+  .hero-logo-wrap{margin-bottom:16px}
+  .hero-tagline{font-size:clamp(3rem,15vw,4.5rem);line-height:.92;text-align:center;width:100%}
+  .hero-sub{font-size:11px;margin-top:12px;text-align:center}
+  .hero-cta{flex-direction:column;align-items:stretch;gap:10px;margin-top:24px;width:100%;max-width:280px}
+  .hero-cta .btn{width:100%;justify-content:center;padding:13px 20px;font-size:12px}
+  .hero-scroll{bottom:16px}
+  .hero-reel{display:none}
+  .hero-reel-circle{display:none}
+  .cam-1{width:140px;bottom:-20px;left:-40px}
+  .cam-2{width:110px;top:8%;right:-10px}
+  .cam-3{width:90px;bottom:12%;right:3%}
+  .cam-4{width:100px;top:4%;left:3%}
 
   /* sections */
   .section{padding:56px 20px}
@@ -1152,33 +1149,21 @@ document.addEventListener('mousemove', e=>{
 });
 
 // ── HERO WORD GLOW ON SCROLL ──
-(function initHeroGlow() {
-  const words = [
-    document.getElementById('glow-lights'),
-    document.getElementById('glow-camera'),
-    document.getElementById('glow-kfs')
-  ];
-  // Thresholds: scroll % of viewport height at which each word glows
-  const thresholds = [0.08, 0.22, 0.38];
-  let glowState = [false, false, false];
-
-  function onScroll() {
-    const scrollY = window.scrollY;
-    const vh = window.innerHeight;
-    words.forEach((w, i) => {
-      if (!w) return;
-      const shouldGlow = scrollY >= thresholds[i] * vh;
-      if (shouldGlow !== glowState[i]) {
-        glowState[i] = shouldGlow;
-        if (shouldGlow) w.classList.add('lit');
-        else w.classList.remove('lit');
-      }
+(function(){
+  var ids=['glow-lights','glow-camera','glow-kfs'];
+  var thresh=[0.06,0.18,0.32];
+  function update(){
+    var sy=window.scrollY, vh=window.innerHeight;
+    ids.forEach(function(id,i){
+      var el=document.getElementById(id);
+      if(!el)return;
+      if(sy>=thresh[i]*vh) el.classList.add('lit');
+      else el.classList.remove('lit');
     });
   }
-  window.addEventListener('scroll', onScroll, {passive: true});
-  onScroll(); // run once on load
+  window.addEventListener('scroll',update,{passive:true});
+  window.glowUpdate=update;
 })();
-
 
 // ── NAVIGATION ──
 function navigate(page) {
@@ -1229,7 +1214,18 @@ async function loadHomeData() {
   const settings = await apiFetch('/api/settings');
   if (settings) {
     const tagEl = document.getElementById('hero-tagline');
-    if (settings.site_tagline) tagEl.innerHTML = settings.site_tagline.replace(/\./g,'.<br>');
+    if (settings.site_tagline) {
+      var parts = settings.site_tagline.match(/([^.]+\.)[\s]*([^.]+\.)[\s]*(.+)/);
+      if (parts) {
+        tagEl.innerHTML =
+          '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'</span><br>'+
+          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em>'+
+          ' <span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
+      } else {
+        tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'</span>';
+      }
+      if(window.glowUpdate) window.glowUpdate();
+    }
     document.getElementById('about-text').textContent = settings.about_text || '';
     const ig = document.getElementById('footer-instagram');
     const yt = document.getElementById('footer-youtube');
@@ -1506,124 +1502,46 @@ function renderTestimonials(testimonials) {
     inner.innerHTML = `<div class="testimonial-card"><p style="color:var(--grey)">No testimonials yet.</p></div>`;
     return;
   }
-
-  function makeCard(t) {
-    const d = document.createElement('div');
-    d.className = 'testimonial-card';
-    d.innerHTML = `
+  function cardHTML(t) {
+    return `<div class="testimonial-card">
       <p class="testimonial-quote">"${t.quote}"</p>
       <div class="testimonial-author">
-        ${t.photo
-          ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">`
-          : `<div class="testimonial-avatar-placeholder">👤</div>`}
+        ${t.photo ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">` : `<div class="testimonial-avatar-placeholder">👤</div>`}
         <div>
           <div class="testimonial-name">${t.name}</div>
           <div class="testimonial-role">${t.role||''} ${t.batch?'· '+t.batch:''}</div>
         </div>
-      </div>`;
-    return d;
+      </div>
+    </div>`;
   }
-
-  // Build original cards, then clone set for seamless infinite loop
-  inner.innerHTML = '';
-  testimonials.forEach(t => inner.appendChild(makeCard(t)));
-  // Clone all cards for infinite loop
-  testimonials.forEach(t => {
-    const clone = makeCard(t);
-    clone.setAttribute('aria-hidden','true');
-    inner.appendChild(clone);
-  });
-
-  // ── JS scroller ──
-  let pos = 0;
-  let autoSpeed = 0.7;   // px per frame auto-scroll
-  let paused = false;
-  let isDragging = false;
-  let dragStartX = 0;
-  let dragStartPos = 0;
-  let momentum = 0;
-  let raf;
-
-  function halfWidth() {
-    // half of inner = width of original (non-cloned) set
-    return inner.scrollWidth / 2;
-  }
-
-  function clamp(v) {
-    const max = halfWidth();
-    // infinite: wrap when we scroll past the clone set
-    if (v >= max) v -= max;
-    if (v < 0)   v += max;
-    return v;
-  }
-
-  function tick() {
-    if (!isDragging) {
-      if (!paused) pos += autoSpeed;
-      // momentum decay when not auto-scrolling and dragged
-      if (Math.abs(momentum) > 0.1) {
-        pos += momentum;
-        momentum *= 0.92;
-      }
-      pos = clamp(pos);
+  inner.innerHTML = testimonials.map(cardHTML).join('') + testimonials.map(cardHTML).join('');
+  let pos=0, autoSpeed=0.8, paused=false, isDragging=false;
+  let dragStartX=0, dragStartPos=0, momentum=0;
+  function loopW(){ return inner.scrollWidth/2; }
+  function wrap(v){ var lw=loopW(); if(lw<=0)return v; if(v>=lw)v-=lw; if(v<0)v+=lw; return v; }
+  function frame(){
+    if(!isDragging){
+      if(!paused) pos+=autoSpeed;
+      if(Math.abs(momentum)>0.05){pos+=momentum;momentum*=0.9;}
+      pos=wrap(pos);
     }
-    inner.style.transform = `translateX(${-pos}px)`;
-    raf = requestAnimationFrame(tick);
+    inner.style.transform=`translateX(${-pos}px)`;
+    requestAnimationFrame(frame);
   }
-  raf = requestAnimationFrame(tick);
-
-  // Pause on hover (desktop)
-  track.addEventListener('mouseenter', () => { paused = true; });
-  track.addEventListener('mouseleave', () => { paused = false; momentum = 0; });
-
-  // Mouse wheel — horizontal scroll
-  track.addEventListener('wheel', e => {
-    e.preventDefault();
-    paused = true;
-    pos = clamp(pos + e.deltaY * 0.6 + e.deltaX * 0.6);
-    clearTimeout(track._wheelTimer);
-    track._wheelTimer = setTimeout(() => { paused = false; }, 800);
-  }, {passive: false});
-
-  // Mouse drag
-  track.addEventListener('mousedown', e => {
-    isDragging = true;
-    paused = true;
-    dragStartX = e.clientX;
-    dragStartPos = pos;
-    momentum = 0;
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const dx = dragStartX - e.clientX;
-    momentum = dx * 0.05;
-    pos = clamp(dragStartPos + dx);
-  });
-  window.addEventListener('mouseup', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    setTimeout(() => { paused = false; }, 600);
-  });
-
-  // Touch drag
-  track.addEventListener('touchstart', e => {
-    isDragging = true;
-    paused = true;
-    dragStartX = e.touches[0].clientX;
-    dragStartPos = pos;
-    momentum = 0;
-  }, {passive: true});
-  track.addEventListener('touchmove', e => {
-    if (!isDragging) return;
-    const dx = dragStartX - e.touches[0].clientX;
-    momentum = dx * 0.04;
-    pos = clamp(dragStartPos + dx);
-  }, {passive: true});
-  track.addEventListener('touchend', () => {
-    isDragging = false;
-    setTimeout(() => { paused = false; }, 600);
-  });
+  requestAnimationFrame(frame);
+  track.addEventListener('mouseenter',()=>paused=true);
+  track.addEventListener('mouseleave',()=>{paused=false;momentum=0;});
+  track.addEventListener('wheel',e=>{
+    e.preventDefault(); paused=true;
+    pos=wrap(pos+e.deltaY*0.7+e.deltaX*0.7);
+    clearTimeout(track._wt); track._wt=setTimeout(()=>paused=false,900);
+  },{passive:false});
+  track.addEventListener('mousedown',e=>{isDragging=true;paused=true;dragStartX=e.clientX;dragStartPos=pos;momentum=0;e.preventDefault();});
+  window.addEventListener('mousemove',e=>{if(!isDragging)return;var dx=dragStartX-e.clientX;momentum=(pos-(dragStartPos+dx))*0.3;pos=wrap(dragStartPos+dx);});
+  window.addEventListener('mouseup',()=>{if(!isDragging)return;isDragging=false;setTimeout(()=>paused=false,700);});
+  track.addEventListener('touchstart',e=>{isDragging=true;paused=true;dragStartX=e.touches[0].clientX;dragStartPos=pos;momentum=0;},{passive:true});
+  track.addEventListener('touchmove',e=>{if(!isDragging)return;var dx=dragStartX-e.touches[0].clientX;momentum=(pos-(dragStartPos+dx))*0.2;pos=wrap(dragStartPos+dx);},{passive:true});
+  track.addEventListener('touchend',()=>{isDragging=false;setTimeout(()=>paused=false,700);});
 }
 
 // ── ADMIN ──
