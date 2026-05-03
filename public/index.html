@@ -1148,6 +1148,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="form-group"><label>Director</label><input type="text" id="movie-director"></div>
     <div class="form-group"><label>Producer</label><input type="text" id="movie-producer"></div>
     <div class="form-group"><label>DOP (Director of Photography)</label><input type="text" id="movie-dop"></div>
+    <div class="form-group"><label>Screenwriter</label><input type="text" id="movie-screenwriter"></div>
+    <div class="form-group"><label>Video Editor</label><input type="text" id="movie-editor"></div>
+    <div class="form-group"><label>Sound Design</label><input type="text" id="movie-sound"></div>
+    <div class="form-group"><label>Management</label><input type="text" id="movie-management"></div>
     <div class="form-group"><label>Graphic Design</label><input type="text" id="movie-gd"></div>
     <div class="form-group"><label>Actors (comma separated)</label><input type="text" id="movie-actors" placeholder="Name 1, Name 2, Name 3"></div>
     <div class="form-group"><label>Support Crew (comma separated)</label><input type="text" id="movie-support" placeholder="Name 1, Name 2"></div>
@@ -1206,7 +1210,7 @@ document.addEventListener('mousemove', e=>{
 })();
 
 // ── NAVIGATION ──
-function navigate(page) {
+function navigate(page, pushState=true) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
   document.getElementById('movie-detail').classList.remove('active');
@@ -1215,6 +1219,7 @@ function navigate(page) {
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
     document.getElementById('admin-login').classList.add('active');
+    if (pushState) history.pushState({page}, '', '#admin');
     return;
   }
   const pageEl = document.getElementById('page-'+page);
@@ -1223,8 +1228,27 @@ function navigate(page) {
     a.classList.toggle('active', a.dataset.page === page);
   });
   window.scrollTo({top:0,behavior:'smooth'});
+  if (pushState) history.pushState({page}, '', '#'+page);
   loadPageData(page);
 }
+
+window.addEventListener('popstate', e => {
+  const state = e.state;
+  if (!state) { navigate('home', false); return; }
+  if (state.page === 'blog-detail') { openBlog(state.id); return; }
+  if (state.page === 'movie-detail') { openMovie(state.id); return; }
+  navigate(state.page || 'home', false);
+});
+
+// init from URL hash
+(function(){
+  const hash = location.hash.replace('#','');
+  if (hash && hash !== 'home') {
+    if (hash.startsWith('blog-')) openBlog(hash.replace('blog-',''));
+    else if (hash.startsWith('movie-')) openMovie(hash.replace('movie-',''));
+    else navigate(hash, false);
+  }
+})();
 
 function loadPageData(page) {
   if (page==='home') loadHomeData();
@@ -1406,6 +1430,7 @@ async function openBlog(id) {
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
   window.scrollTo({top:0,behavior:'smooth'});
+  history.pushState({page:'blog-detail', id}, '', '#blog-'+id);
 }
 
 let allMembers = [];
@@ -1521,6 +1546,10 @@ async function openMovie(id) {
     {label:'Director', val:m.director},
     {label:'Producer', val:m.producer},
     {label:'DOP', val:m.dop},
+    {label:'Screenwriter', val:m.screenwriter},
+    {label:'Video Editor', val:m.video_editor},
+    {label:'Sound Design', val:m.sound_design},
+    {label:'Management', val:m.management},
     {label:'Graphic Design', val:m.graphic_design},
   ].filter(f=>f.val);
   document.getElementById('movie-detail-crew').innerHTML = crewFields.map(f=>`
@@ -1541,6 +1570,7 @@ async function openMovie(id) {
     supportEl.innerHTML = m.support_crew.split(',').map(s=>`<span class="movie-cast-tag">${s.trim()}</span>`).join('');
   } else supportSec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
+  history.pushState({page:'movie-detail', id}, '', '#movie-'+id);
 }
 
 function renderTestimonials(testimonials) {
@@ -1860,6 +1890,10 @@ function openMovieModal(m=null) {
   document.getElementById('movie-director').value = m?.director||'';
   document.getElementById('movie-producer').value = m?.producer||'';
   document.getElementById('movie-dop').value = m?.dop||'';
+  document.getElementById('movie-screenwriter').value = m?.screenwriter||'';
+  document.getElementById('movie-editor').value = m?.video_editor||'';
+  document.getElementById('movie-sound').value = m?.sound_design||'';
+  document.getElementById('movie-management').value = m?.management||'';
   document.getElementById('movie-gd').value = m?.graphic_design||'';
   document.getElementById('movie-actors').value = m?.actors||'';
   document.getElementById('movie-support').value = m?.support_crew||'';
@@ -1876,6 +1910,10 @@ async function saveMovie() {
   fd.append('director', document.getElementById('movie-director').value);
   fd.append('producer', document.getElementById('movie-producer').value);
   fd.append('dop', document.getElementById('movie-dop').value);
+  fd.append('screenwriter', document.getElementById('movie-screenwriter').value);
+  fd.append('video_editor', document.getElementById('movie-editor').value);
+  fd.append('sound_design', document.getElementById('movie-sound').value);
+  fd.append('management', document.getElementById('movie-management').value);
   fd.append('graphic_design', document.getElementById('movie-gd').value);
   fd.append('actors', document.getElementById('movie-actors').value);
   fd.append('support_crew', document.getElementById('movie-support').value);
