@@ -1353,18 +1353,21 @@ function renderMemberSections(type) {
     sections[key].push(m);
   });
 
-  const sectionLabels = {
-    'President':'President','Vice President':'Vice Presidents',
-    'Lead':'Leads','Core Member':'Core Members','Member':'Members'
-  };
+  // Display groups: merge Lead + Core Member into one section
+  const displayGroups = [
+    { label: 'President',       roles: ['President'] },
+    { label: 'Vice Presidents', roles: ['Vice President'] },
+    { label: 'Core & Leads',    roles: ['Lead', 'Core Member'] },
+    { label: 'Members',         roles: ['Member'] },
+  ];
 
   let html = '';
-  roleOrder.forEach(role => {
-    const group = sections[role];
-    if (!group.length) return;
+  displayGroups.forEach(group => {
+    const combined = group.roles.flatMap(r => sections[r] || []);
+    if (!combined.length) return;
     html += `<div class="members-section">
-      <div class="members-section-title">${sectionLabels[role]}</div>
-      <div class="members-grid">${group.map(m=>`
+      <div class="members-section-title">${group.label}</div>
+      <div class="members-grid">${combined.map(m=>`
         <div class="member-card">
           ${m.photo
             ? `<img class="member-photo" src="${m.photo}" alt="${m.name}">`
