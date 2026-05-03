@@ -62,6 +62,14 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-reel-circle::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:400px;height:400px;border:1px solid var(--white);border-radius:50%}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── BG CAMERAS ───────────────────────────────────────────────────────── */
+.hero-cameras{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.bg-camera{position:absolute;opacity:.04}
+.cam-1{width:340px;bottom:-40px;left:-60px;transform:rotate(-15deg)}
+.cam-2{width:240px;top:10%;right:-30px;transform:rotate(12deg)}
+.cam-3{width:180px;bottom:10%;right:8%;transform:rotate(-8deg)}
+.cam-4{width:200px;top:5%;left:8%;transform:rotate(20deg)}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
 .hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
   box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
@@ -348,6 +356,78 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 <div class="page active" id="page-home">
   <section id="hero-section">
     <div class="hero-grain"></div>
+
+    <!-- Cinema cameras background -->
+    <div class="hero-cameras" aria-hidden="true">
+      <!-- Camera 1: large, left -->
+      <svg class="bg-camera cam-1" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
+        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 2: medium, right -->
+      <svg class="bg-camera cam-2" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
+        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 3: small, bottom right -->
+      <svg class="bg-camera cam-3" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
+        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 4: top right, rotated -->
+      <svg class="bg-camera cam-4" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
+        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+    </div>
+
     <div class="hero-reel"><div class="hero-reel-circle"></div></div>
     <div class="hero-logo-wrap">
       <img class="hero-logo" src="/images/kfs-logo.png" alt="KFS" onerror="this.parentElement.style.display='none'">
