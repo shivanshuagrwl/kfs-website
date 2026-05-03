@@ -66,7 +66,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   width:400px;height:400px;border:1px solid var(--white);border-radius:50%}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
-.hero-logo{width:80px;height:80px;object-fit:contain;filter:invert(1)}
+.hero-logo{width:80px;height:80px;object-fit:contain;filter:invert(1);border-radius:50%;box-shadow:0 0 40px rgba(255,255,255,0.25),0 0 80px rgba(255,255,255,0.1)}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(2.5rem,8vw,7rem);font-weight:700;letter-spacing:-.03em;
   line-height:.95;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards}
@@ -321,7 +321,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
     <div class="hero-logo-wrap">
       <img class="hero-logo" src="/images/kfs-logo.png" alt="KFS" onerror="this.parentElement.style.display='none'">
     </div>
-    <h1 class="hero-tagline" id="hero-tagline">Lights.<br><em>Camera.</em> KIIT.</h1>
+    <h1 class="hero-tagline" id="hero-tagline">Lights.<br><em>Camera.</em> KFS.</h1>
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
       <a class="btn btn-primary" onclick="navigate('events')">Upcoming Events</a>
