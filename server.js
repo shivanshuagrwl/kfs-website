@@ -298,8 +298,9 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
 // ── TRAFFIC TRACKING ──────────────────────────────────────────────────────────
 app.post('/api/track', async (req, res) => {
   const { page, hour } = req.body;
+  if (!page || page === 'admin' || page.startsWith('admin')) return res.json({ ok: true });
   const today = new Date().toISOString().slice(0,10);
-  await supabase.from('page_views').insert([{ page: page||'home', date: today, hour: hour||0 }]);
+  await supabase.from('page_views').insert([{ page, date: today, hour: hour||0 }]);
   res.json({ ok: true });
 });
 
@@ -312,8 +313,9 @@ app.get('/api/admin/analytics/traffic', authMiddleware, async (req, res) => {
   const from = fromDate.toISOString().slice(0,10);
   const today = new Date().toISOString().slice(0,10);
 
-  const { data: rows } = await supabase.from('page_views').select('*').gte('date', from);
-  if (!rows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  const { data: allRows } = await supabase.from('page_views').select('*').gte('date', from);
+  if (!allRows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  const rows = allRows.filter(r => !r.page?.startsWith('admin'));
 
   const total = rows.length;
   const todayViews = rows.filter(r=>r.date===today).length;

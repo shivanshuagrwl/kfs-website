@@ -401,6 +401,14 @@ body:has(#admin-panel.active) #main-nav{display:none}
 
 .admin-empty{text-align:center;padding:60px 24px;color:var(--grey)}
 .admin-empty p{font-size:14px;margin-top:8px}
+.btn-edit{padding:7px 18px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--grey);transition:all .2s;font-family:inherit;text-transform:uppercase;border-radius:20px;white-space:nowrap}
+.btn-edit:hover{border-color:var(--white);color:var(--white)}
+.btn-delete{padding:7px 18px;font-size:11px;letter-spacing:.06em;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--grey);transition:all .2s;font-family:inherit;text-transform:uppercase;border-radius:20px;white-space:nowrap}
+.btn-delete:hover{border-color:#e74c3c;color:#e74c3c}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.modal-header h3{margin-bottom:0}
+.modal-close{background:none;border:none;color:var(--grey);font-size:18px;cursor:pointer;padding:4px 8px;line-height:1;transition:color .2s}
+.modal-close:hover{color:var(--white)}
 
 /* ── SETTINGS FORM ────────────────────────────────────────────────────── */
 .settings-form{max-width:860px}
@@ -613,10 +621,64 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .review-sub-score{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555}
 .review-sub-score span{color:#888}
 .reviews-list{margin-top:16px}
+
+/* ── PAGE WIPE TRANSITION ──────────────────────────────────────────── */
+#page-wipe{position:fixed;inset:0;background:#0a0a0a;z-index:8000;
+  transform:translateY(-100%);pointer-events:none}
+#page-wipe.wipe-in{animation:wipeIn .38s cubic-bezier(.76,0,.24,1) forwards}
+#page-wipe.wipe-out{animation:wipeOut .38s cubic-bezier(.76,0,.24,1) forwards}
+@keyframes wipeIn{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+@keyframes wipeOut{from{transform:translateY(0)}to{transform:translateY(100%)}}
+
+/* ── SCROLL PROGRESS BAR ───────────────────────────────────────────── */
+#scroll-progress{position:fixed;top:0;left:0;height:2px;width:0%;
+  background:var(--white);z-index:9000;transition:width .05s linear;
+  opacity:0;transition:opacity .3s,width .05s linear}
+#scroll-progress.visible{opacity:1}
+
+/* ── SHARE BUTTON ──────────────────────────────────────────────────── */
+.share-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;
+  font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+  border:1px solid var(--border);color:var(--grey);background:transparent;
+  cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;
+  margin-top:16px}
+.share-btn:hover{border-color:var(--white);color:var(--white)}
+.share-btn svg{flex-shrink:0}
+
+/* ── MEMBER SPOTLIGHT ──────────────────────────────────────────────── */
+.spotlight-wrap{margin-top:80px;display:grid;grid-template-columns:200px 1fr;
+  gap:48px;align-items:center;padding:48px;border:1px solid var(--border);
+  background:var(--card);position:relative;overflow:hidden}
+@media(max-width:768px){.spotlight-wrap{grid-template-columns:1fr;gap:24px;padding:28px;margin-top:40px}}
+.spotlight-wrap::before{content:'SPOTLIGHT';position:absolute;top:16px;right:24px;
+  font-size:9px;letter-spacing:.25em;color:#2a2a2a;text-transform:uppercase;font-weight:700}
+.spotlight-photo{width:200px;height:200px;object-fit:cover;filter:grayscale(100%);
+  border:1px solid var(--border);display:block}
+@media(max-width:768px){.spotlight-photo{width:100%;height:220px;object-fit:cover;object-position:top}}
+.spotlight-photo-placeholder{width:200px;height:200px;background:var(--black);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:56px;color:var(--grey)}
+.spotlight-quote{font-size:clamp(1rem,2.2vw,1.4rem);line-height:1.65;
+  font-style:italic;color:rgba(245,245,245,.85);margin-bottom:20px}
+.spotlight-quote::before{content:'"';font-size:3rem;line-height:0;vertical-align:-.4em;
+  color:#333;margin-right:4px}
+.spotlight-name{font-size:14px;font-weight:700;letter-spacing:.04em;margin-bottom:4px}
+.spotlight-role{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.spotlight-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
+
+/* ── KONFETTI ──────────────────────────────────────────────────────── */
+.konfetti-particle{position:fixed;pointer-events:none;z-index:9999;
+  width:8px;height:8px;border-radius:1px;animation:konfettiFall linear forwards}
+@keyframes konfettiFall{
+  0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}
+  100%{transform:translateY(100vh) rotate(720deg) scale(.4);opacity:0}
+}
 </style>
 </head>
 <body>
 
+<div id="page-wipe"></div>
+<div id="scroll-progress"></div>
 <div id="cursor"></div>
 <div id="cursor-ring"></div>
 
@@ -822,6 +884,16 @@ body:has(#admin-panel.active) #main-nav{display:none}
 
   <div class="section-divider" style="margin:0 80px"></div>
 
+  <section class="section" id="spotlight-section" style="display:none">
+    <div class="section-inner">
+      <p class="section-label">Member Spotlight</p>
+      <h2 class="section-title">Featured<br>this month</h2>
+      <div class="spotlight-wrap" id="spotlight-wrap"></div>
+    </div>
+  </section>
+
+  <div class="section-divider" id="spotlight-divider" style="margin:0 80px;display:none"></div>
+
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Voices</p>
@@ -883,7 +955,13 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="blog-detail">
   <img class="blog-detail-hero" id="blog-detail-img" src="" alt="" style="display:none">
   <div class="blog-detail-content">
-    <a class="blog-detail-back" onclick="navigate('blog')">← Back to Blog</a>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:40px">
+      <a class="blog-detail-back" onclick="navigate('blog')" style="margin-bottom:0">← Back to Blog</a>
+      <button class="share-btn" onclick="shareContent('blog')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share
+      </button>
+    </div>
     <p class="blog-detail-date" id="blog-detail-date"></p>
     <h1 class="blog-detail-title" id="blog-detail-title"></h1>
     <div class="blog-detail-body" id="blog-detail-body"></div>
@@ -926,7 +1004,13 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none">🎬</div>
     </div>
     <div>
-      <a class="movie-detail-back" onclick="navigate('movies')">← Back to Films</a>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:32px">
+        <a class="movie-detail-back" onclick="navigate('movies')" style="margin-bottom:0">← Back to Films</a>
+        <button class="share-btn" onclick="shareContent('movie')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share
+        </button>
+      </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
       <div class="movie-detail-crew" id="movie-detail-crew"></div>
@@ -1141,6 +1225,16 @@ body:has(#admin-panel.active) #main-nav{display:none}
           <div class="form-group"><label>Films Screened</label><input type="number" id="set-stat-films" placeholder="30"></div>
           <div class="form-group"><label>Years Active</label><input type="number" id="set-stat-years" placeholder="5"></div>
         </div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Member Spotlight</p>
+        <p class="settings-section-desc">Featured member shown on the homepage</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Featured Member Name</label><input type="text" id="set-spotlight-name" placeholder="Leave blank to hide"></div>
+          <div class="form-group"><label>Featured Member Role</label><input type="text" id="set-spotlight-role" placeholder="President, 2024-25"></div>
+        </div>
+        <div class="form-group"><label>Quote / Highlight</label><textarea id="set-spotlight-quote" style="min-height:80px" placeholder="A quote or achievement to feature..."></textarea></div>
+        <div class="form-group"><label>Photo URL (optional — paste a member's uploaded photo URL)</label><input type="text" id="set-spotlight-photo" placeholder="https://..."></div>
 
         <div class="settings-divider"></div>
         <p class="settings-section-title">Social Links</p>
@@ -1414,12 +1508,13 @@ document.addEventListener('mousemove', e=>{
 })();
 
 // ── NAVIGATION ──
-function navigate(page, pushState=true) {
+function _doNavigate(page, pushState=true) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
   document.getElementById('movie-detail').classList.remove('active');
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.remove('active');
+  hideScrollProgress();
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
     document.getElementById('admin-login').classList.add('active');
@@ -1431,9 +1526,26 @@ function navigate(page, pushState=true) {
   document.querySelectorAll('.nav-links a').forEach(a=>{
     a.classList.toggle('active', a.dataset.page === page);
   });
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
   loadPageData(page);
+}
+
+let _wipeInProgress = false;
+function navigate(page, pushState=true) {
+  // No wipe for first load or same page
+  if (!_wipeInProgress && document.body.classList.contains('loaded')) {
+    _wipeInProgress = true;
+    const wipe = document.getElementById('page-wipe');
+    wipe.className = 'wipe-in';
+    setTimeout(() => {
+      _doNavigate(page, pushState);
+      wipe.className = 'wipe-out';
+      setTimeout(() => { wipe.className = ''; _wipeInProgress = false; }, 400);
+    }, 380);
+  } else {
+    _doNavigate(page, pushState);
+  }
 }
 
 window.addEventListener('popstate', e => {
@@ -1444,16 +1556,7 @@ window.addEventListener('popstate', e => {
   navigate(state.page || 'home', false);
 });
 
-// init from URL path
-(function(){
-  const path = location.pathname.replace(/^\//, '');
-  if (!path || path === 'home') return;
-  const blogMatch = path.match(/^blog\/(.+)/);
-  const movieMatch = path.match(/^movies\/(.+)/);
-  if (blogMatch) openBlog(blogMatch[1]);
-  else if (movieMatch) openMovie(movieMatch[1]);
-  else navigate(path, false);
-})();
+// URL routing handled by initPage() below
 
 function loadPageData(page) {
   if (page==='home') loadHomeData();
@@ -1517,6 +1620,27 @@ async function loadHomeData() {
     if (settings.stat_years) document.querySelector('[data-target="5"]')?.setAttribute('data-target', settings.stat_years);
   }
   document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+  // Member Spotlight
+  if (settings && settings.spotlight_name) {
+    const sec = document.getElementById('spotlight-section');
+    const div = document.getElementById('spotlight-divider');
+    const wrap = document.getElementById('spotlight-wrap');
+    sec.style.display = 'block';
+    div.style.display = 'block';
+    wrap.innerHTML = `
+      <div>
+        ${settings.spotlight_photo
+          ? `<img class="spotlight-photo" src="${settings.spotlight_photo}" alt="${settings.spotlight_name}">`
+          : `<div class="spotlight-photo-placeholder">👤</div>`}
+      </div>
+      <div>
+        <div class="spotlight-label">Member Spotlight</div>
+        <p class="spotlight-quote">${settings.spotlight_quote || ''}</p>
+        <div class="spotlight-name">${settings.spotlight_name}</div>
+        <div class="spotlight-role">${settings.spotlight_role || ''}</div>
+      </div>`;
+  }
 
   const achievements = await apiFetch('/api/achievements');
   const ag = document.getElementById('achievements-grid');
@@ -1634,8 +1758,10 @@ async function openBlog(id) {
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior:'instant'});
   history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
+  hideScrollProgress();
+  setTimeout(updateScrollProgress, 100);
 }
 
 let allMembers = [];
@@ -1901,9 +2027,10 @@ async function submitReview() {
       body: JSON.stringify(body)
     });
     if (res.ok) {
-      document.getElementById('review-submit-msg').textContent = 'Thanks for your review!';
+      document.getElementById('review-submit-msg').textContent = '🎬 Thanks for your review!';
       resetReviewForm();
       loadReviews(currentMovieId);
+      launchKonfetti();
     } else {
       document.getElementById('review-submit-msg').textContent = 'Error submitting review. Try again.';
     }
@@ -2116,6 +2243,10 @@ async function loadAdminData(name) {
       document.getElementById('set-stat-events').value = settings.stat_events||'';
       document.getElementById('set-stat-films').value = settings.stat_films||'';
       document.getElementById('set-stat-years').value = settings.stat_years||'';
+      document.getElementById('set-spotlight-name').value = settings.spotlight_name||'';
+      document.getElementById('set-spotlight-role').value = settings.spotlight_role||'';
+      document.getElementById('set-spotlight-quote').value = settings.spotlight_quote||'';
+      document.getElementById('set-spotlight-photo').value = settings.spotlight_photo||'';
       document.getElementById('set-instagram').value = settings.instagram||'';
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
@@ -2361,6 +2492,10 @@ async function saveSettings() {
     stat_events: document.getElementById('set-stat-events').value,
     stat_films: document.getElementById('set-stat-films').value,
     stat_years: document.getElementById('set-stat-years').value,
+    spotlight_name: document.getElementById('set-spotlight-name').value,
+    spotlight_role: document.getElementById('set-spotlight-role').value,
+    spotlight_quote: document.getElementById('set-spotlight-quote').value,
+    spotlight_photo: document.getElementById('set-spotlight-photo').value,
     instagram: document.getElementById('set-instagram').value,
     youtube: document.getElementById('set-youtube').value,
     email: document.getElementById('set-email').value,
@@ -2404,20 +2539,32 @@ async function apiFetch(url, method='GET', body=null) {
   } catch(e) { return null; }
 }
 
-function checkRoute() {
-  const path = window.location.pathname.replace(/^\//, '');
-  if (path === 'admin') navigate('admin', false);
-  else if (!path || path === 'home') navigate('home', false);
-  // all other routes are handled by the init IIFE above
-}
-
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
   overlay.addEventListener('click', e=>{
     if (e.target === overlay) overlay.classList.remove('open');
   });
 });
 
-checkRoute();
+// ── ROBUST INIT ──
+// Determine what to show based on URL path, with fallback to home
+(function initPage() {
+  const path = window.location.pathname.replace(/^\//, '') || 'home';
+  if (path === 'admin') {
+    if (adminToken) showAdminPanel();
+    else { document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById('admin-login').classList.add('active'); }
+    return;
+  }
+  const blogMatch = path.match(/^blog\/(.+)/);
+  const movieMatch = path.match(/^movies\/(.+)/);
+  if (blogMatch) { openBlog(blogMatch[1]); return; }
+  if (movieMatch) { openMovie(movieMatch[1]); return; }
+  // For all named pages or root, navigate there
+  const validPages = ['home','events','blog','members','movies'];
+  const target = validPages.includes(path) ? path : 'home';
+  _doNavigate(target, false);
+})();
+
+setTimeout(() => document.body.classList.add('loaded'), 600);
 
 // ── EVENT COUNTDOWN POPUP ──
 async function checkUpcomingEventPopup() {
@@ -2643,6 +2790,75 @@ async function saveNotifToServer() {
 }
 
 loadNotifications();
+
+// ── SCROLL PROGRESS BAR ──────────────────────────────────────────────
+let _currentBlogId = null;
+let _currentMovieShareId = null;
+
+function updateScrollProgress() {
+  const el = document.getElementById('scroll-progress');
+  const blogDetail = document.getElementById('blog-detail');
+  if (!blogDetail.classList.contains('active')) { hideScrollProgress(); return; }
+  const scrollTop = window.scrollY;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+  el.style.width = pct + '%';
+  el.classList.add('visible');
+}
+function hideScrollProgress() {
+  const el = document.getElementById('scroll-progress');
+  el.classList.remove('visible');
+  el.style.width = '0%';
+}
+window.addEventListener('scroll', updateScrollProgress, { passive: true });
+
+// ── SHARE BUTTON ─────────────────────────────────────────────────────
+function shareContent(type) {
+  let title, url, text;
+  if (type === 'blog') {
+    title = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
+    url = window.location.href;
+    text = 'Check out this post from KFS — ' + title;
+  } else {
+    title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
+    url = window.location.href;
+    text = 'Check out this film by KFS — ' + title;
+  }
+  if (navigator.share) {
+    navigator.share({ title, text, url }).catch(() => {});
+  } else {
+    // Fallback: copy to clipboard
+    navigator.clipboard?.writeText(url).then(() => {
+      const btn = document.querySelector('.share-btn');
+      if (btn) { const orig = btn.innerHTML; btn.innerHTML = '✓ Copied!'; setTimeout(() => btn.innerHTML = orig, 2000); }
+    }).catch(() => {
+      prompt('Copy this link:', url);
+    });
+  }
+}
+
+// ── KONFETTI ─────────────────────────────────────────────────────────
+function launchKonfetti() {
+  const colors = ['#ffffff','#cccccc','#888888','#f5f5f5','#444444','#aaaaaa'];
+  const count = 80;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'konfetti-particle';
+    const size = 6 + Math.random() * 8;
+    el.style.cssText = [
+      'left:' + (Math.random() * 100) + 'vw',
+      'top:-20px',
+      'width:' + size + 'px',
+      'height:' + (size * (Math.random() < 0.5 ? 1 : 2.5)) + 'px',
+      'background:' + colors[Math.floor(Math.random() * colors.length)],
+      'border-radius:' + (Math.random() < 0.4 ? '50%' : '1px'),
+      'animation-duration:' + (1.2 + Math.random() * 1.8) + 's',
+      'animation-delay:' + (Math.random() * 0.5) + 's',
+    ].join(';');
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+}
 </script>
 
 <style>
@@ -2815,11 +3031,13 @@ if (!navigator.maxTouchPoints) document.getElementById('search-kbd').style.displ
 // TRAFFIC TRACKING — fire on every page view
 // ══════════════════════════════════════════════════════════
 (function trackPageView() {
-  const page = window.location.pathname.replace('/','') || 'home';
+  const rawPath = window.location.pathname.replace(/^\//, '') || 'home';
+  if (rawPath === 'admin' || rawPath.startsWith('admin')) return;
+  if (document.getElementById('admin-panel')?.classList.contains('active')) return;
   fetch('/api/track', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ page, hour: new Date().getHours() })
+    body: JSON.stringify({ page: rawPath, hour: new Date().getHours() })
   }).catch(()=>{});
 })();
 
