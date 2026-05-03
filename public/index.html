@@ -521,47 +521,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .movie-detail-section-title{font-size:11px;letter-spacing:.15em;text-transform:uppercase;
   color:var(--grey);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .movie-cast-list{display:flex;flex-wrap:wrap;gap:8px}
-/* ── REVIEWS ── */
-.reviews-section{margin-top:60px;padding-top:40px;border-top:1px solid var(--border);grid-column:1/-1}
-.reviews-summary{display:flex;align-items:center;gap:40px;margin-bottom:40px;flex-wrap:wrap}
-.reviews-big-score{text-align:center}
-.reviews-big-num{font-size:64px;font-weight:800;line-height:1;letter-spacing:-.04em}
-.reviews-big-label{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-top:4px}
-.reviews-big-stars{font-size:22px;letter-spacing:2px;margin-top:6px}
-.reviews-breakdown{flex:1;min-width:200px}
-.reviews-breakdown-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}
-.reviews-breakdown-label{width:100px;color:var(--grey);text-transform:uppercase;letter-spacing:.08em;font-size:10px}
-.reviews-breakdown-bar{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
-.reviews-breakdown-fill{height:100%;background:var(--white);border-radius:2px;transition:width .6s var(--ease)}
-.reviews-breakdown-num{width:24px;text-align:right;font-size:11px;color:var(--grey)}
-.reviews-count{font-size:12px;color:var(--grey);margin-top:8px}
-.review-form{background:var(--card);border:1px solid var(--border);padding:28px;margin-bottom:40px}
-.review-form h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:24px}
-.star-rating-row{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap}
-.star-rating-row label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);width:120px}
-.star-picker{display:flex;gap:4px}
-.star-picker span{font-size:22px;cursor:pointer;transition:transform .15s;color:#555;user-select:none}
-.star-picker span.lit{color:#fff}
-.star-picker span:hover,.star-picker span:hover~span{transform:scale(1.2)}
-.review-form textarea{width:100%;background:transparent;border:1px solid var(--border);color:var(--white);
-  font-family:inherit;font-size:13px;padding:12px;resize:vertical;min-height:90px;box-sizing:border-box;margin-top:4px}
-.review-form textarea:focus{outline:none;border-color:var(--white)}
-.review-form input[type=text]{width:100%;background:transparent;border:1px solid var(--border);color:var(--white);
-  font-family:inherit;font-size:13px;padding:10px 12px;box-sizing:border-box}
-.review-form input[type=text]:focus{outline:none;border-color:var(--white)}
-.review-form-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:16px;flex-wrap:gap}
-.review-msg{font-size:12px;color:var(--grey)}
-.review-card{border-bottom:1px solid var(--border);padding:24px 0}
-.review-card:last-child{border-bottom:none}
-.review-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
-.review-card-name{font-size:13px;font-weight:600;letter-spacing:.05em}
-.review-card-stars{font-size:15px;letter-spacing:1px}
-.review-card-date{font-size:11px;color:var(--grey)}
-.review-card-text{font-size:13px;color:#ccc;line-height:1.6;margin-bottom:10px}
-.review-card-breakdown{display:flex;gap:16px;flex-wrap:wrap}
-.review-card-sub{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
-.review-card-sub span{color:var(--white);font-size:12px}
-.reviews-empty{font-size:13px;color:var(--grey);padding:20px 0}
 .movie-cast-tag{padding:6px 14px;border:1px solid var(--border);font-size:12px;
   letter-spacing:.04em;border-radius:20px;color:var(--grey)}
 
@@ -798,7 +757,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <div class="footer-logo">
         <span>KIIT Film Society</span>
       </div>
-      <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. All rights reserved.</p>
+      <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer;color:var(--grey)">All rights reserved.</span></p>
     </div>
     <div class="footer-links">
       <a id="footer-instagram" style="display:none">Instagram</a>
@@ -899,54 +858,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
     </div>
   </div>
-
-  <!-- REVIEWS -->
-  <div class="movie-detail-layout" style="padding-top:0">
-    <div class="reviews-section" style="grid-column:1/-1">
-      <div class="section-label">Reviews</div>
-
-      <!-- Summary -->
-      <div class="reviews-summary" id="reviews-summary" style="display:none">
-        <div class="reviews-big-score">
-          <div class="reviews-big-num" id="reviews-avg">—</div>
-          <div class="reviews-big-stars" id="reviews-avg-stars"></div>
-          <div class="reviews-big-label">Overall</div>
-        </div>
-        <div class="reviews-breakdown">
-          <div class="reviews-breakdown-row"><span class="reviews-breakdown-label">Direction</span><div class="reviews-breakdown-bar"><div class="reviews-breakdown-fill" id="bar-direction" style="width:0%"></div></div><span class="reviews-breakdown-num" id="avg-direction">—</span></div>
-          <div class="reviews-breakdown-row"><span class="reviews-breakdown-label">Sound</span><div class="reviews-breakdown-bar"><div class="reviews-breakdown-fill" id="bar-sound" style="width:0%"></div></div><span class="reviews-breakdown-num" id="avg-sound">—</span></div>
-          <div class="reviews-breakdown-row"><span class="reviews-breakdown-label">Cinemato.</span><div class="reviews-breakdown-bar"><div class="reviews-breakdown-fill" id="bar-cinematography" style="width:0%"></div></div><span class="reviews-breakdown-num" id="avg-cinematography">—</span></div>
-          <div class="reviews-breakdown-row"><span class="reviews-breakdown-label">Script</span><div class="reviews-breakdown-bar"><div class="reviews-breakdown-fill" id="bar-script" style="width:0%"></div></div><span class="reviews-breakdown-num" id="avg-script">—</span></div>
-          <div class="reviews-count" id="reviews-count"></div>
-        </div>
-      </div>
-
-      <!-- Form -->
-      <div class="review-form">
-        <h3>Leave a Review</h3>
-        <div class="form-group" style="margin-bottom:16px">
-          <label style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:8px">Your Name</label>
-          <input type="text" id="review-name" placeholder="Name or Anonymous">
-        </div>
-        <div class="star-rating-row"><label>Overall</label><div class="star-picker" id="stars-overall" data-cat="overall"></div></div>
-        <div class="star-rating-row"><label>Direction</label><div class="star-picker" id="stars-direction" data-cat="direction"></div></div>
-        <div class="star-rating-row"><label>Sound</label><div class="star-picker" id="stars-sound" data-cat="sound"></div></div>
-        <div class="star-rating-row"><label>Cinematography</label><div class="star-picker" id="stars-cinematography" data-cat="cinematography"></div></div>
-        <div class="star-rating-row"><label>Script</label><div class="star-picker" id="stars-script" data-cat="script"></div></div>
-        <div class="form-group" style="margin-top:16px">
-          <label style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:8px">Review (optional)</label>
-          <textarea id="review-text" placeholder="Share your thoughts about the film..."></textarea>
-        </div>
-        <div class="review-form-bottom">
-          <button class="btn btn-primary" onclick="submitReview()" style="cursor:pointer">Submit Review</button>
-          <span class="review-msg" id="review-msg"></span>
-        </div>
-      </div>
-
-      <!-- List -->
-      <div id="reviews-list"></div>
-    </div>
-  </div>
 </div>
 
 <!-- ── ADMIN LOGIN ── -->
@@ -956,7 +867,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <p>KFS Content Management</p>
     <div class="form-group">
       <label>Password</label>
-      <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()">
+      <div style="position:relative">
+        <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()" style="padding-right:40px;width:100%;box-sizing:border-box">
+        <button type="button" onclick="(function(){var i=document.getElementById('admin-password');var b=document.getElementById('pw-eye');i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'👁':'🙈'})()" id="pw-eye" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:0;line-height:1">👁</button>
+      </div>
     </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="adminLogin()">Sign In</button>
     <p class="login-error" id="login-error"></p>
@@ -1661,117 +1575,6 @@ async function openMovie(id) {
   } else supportSec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
   history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
-  initStarPickers();
-  loadReviews(id);
-  window._currentMovieId = id;
-}
-
-// ── STAR PICKERS ──────────────────────────────────────────────────────────────
-function initStarPickers() {
-  document.querySelectorAll('.star-picker').forEach(picker => {
-    picker.innerHTML = '';
-    picker._val = 0;
-    for (let i = 1; i <= 5; i++) {
-      const s = document.createElement('span');
-      s.textContent = '★';
-      s.dataset.val = i;
-      s.addEventListener('mouseenter', () => {
-        picker.querySelectorAll('span').forEach(x => x.classList.toggle('lit', x.dataset.val <= i));
-      });
-      s.addEventListener('mouseleave', () => {
-        picker.querySelectorAll('span').forEach(x => x.classList.toggle('lit', x.dataset.val <= picker._val));
-      });
-      s.addEventListener('click', () => {
-        picker._val = i;
-        picker.querySelectorAll('span').forEach(x => x.classList.toggle('lit', x.dataset.val <= i));
-      });
-      picker.appendChild(s);
-    }
-  });
-}
-
-function getStarVal(id) {
-  const p = document.getElementById(id);
-  return p ? p._val : 0;
-}
-
-// ── SUBMIT REVIEW ─────────────────────────────────────────────────────────────
-async function submitReview() {
-  const movieId = window._currentMovieId;
-  if (!movieId) return;
-  const overall = getStarVal('stars-overall');
-  if (!overall) { document.getElementById('review-msg').textContent = 'Please rate the film overall.'; return; }
-  const payload = {
-    movie_id: movieId,
-    reviewer_name: document.getElementById('review-name').value.trim() || 'Anonymous',
-    overall,
-    direction: getStarVal('stars-direction') || null,
-    sound: getStarVal('stars-sound') || null,
-    cinematography: getStarVal('stars-cinematography') || null,
-    script: getStarVal('stars-script') || null,
-    review_text: document.getElementById('review-text').value.trim() || null,
-  };
-  const msg = document.getElementById('review-msg');
-  msg.textContent = 'Submitting...';
-  try {
-    const res = await fetch('/api/reviews', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error();
-    msg.textContent = '✓ Review submitted!';
-    document.getElementById('review-name').value = '';
-    document.getElementById('review-text').value = '';
-    document.querySelectorAll('.star-picker').forEach(p => { p._val=0; p.querySelectorAll('span').forEach(s=>s.classList.remove('lit')); });
-    loadReviews(movieId);
-  } catch { msg.textContent = 'Failed to submit. Please try again.'; }
-}
-
-// ── LOAD REVIEWS ──────────────────────────────────────────────────────────────
-function starsHtml(n) {
-  if (!n) return '';
-  return '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
-}
-
-async function loadReviews(movieId) {
-  const list = document.getElementById('reviews-list');
-  const summary = document.getElementById('reviews-summary');
-  list.innerHTML = '<div class="reviews-empty">Loading reviews...</div>';
-  try {
-    const reviews = await apiFetch('/api/reviews/'+movieId);
-    if (!reviews || !reviews.length) {
-      list.innerHTML = '<div class="reviews-empty">No reviews yet. Be the first!</div>';
-      summary.style.display = 'none';
-      return;
-    }
-    // compute averages
-    const avg = f => { const vals = reviews.map(r=>r[f]).filter(Boolean); return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length) : null; };
-    const overallAvg = avg('overall');
-    document.getElementById('reviews-avg').textContent = overallAvg.toFixed(1);
-    document.getElementById('reviews-avg-stars').textContent = starsHtml(overallAvg);
-    document.getElementById('reviews-count').textContent = reviews.length + ' review' + (reviews.length>1?'s':'');
-    ['direction','sound','cinematography','script'].forEach(cat => {
-      const a = avg(cat);
-      document.getElementById('avg-'+cat).textContent = a ? a.toFixed(1) : '—';
-      document.getElementById('bar-'+cat).style.width = a ? (a/5*100)+'%' : '0%';
-    });
-    summary.style.display = 'flex';
-
-    list.innerHTML = reviews.map(r => `
-      <div class="review-card">
-        <div class="review-card-header">
-          <div>
-            <div class="review-card-name">${r.reviewer_name}</div>
-            <div class="review-card-stars">${starsHtml(r.overall)} <span style="font-size:11px;color:var(--grey)">${r.overall}/5 overall</span></div>
-          </div>
-          <div class="review-card-date">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
-        </div>
-        ${r.review_text ? `<div class="review-card-text">${r.review_text}</div>` : ''}
-        <div class="review-card-breakdown">
-          ${r.direction ? `<div class="review-card-sub">Direction <span>${starsHtml(r.direction)}</span></div>` : ''}
-          ${r.sound ? `<div class="review-card-sub">Sound <span>${starsHtml(r.sound)}</span></div>` : ''}
-          ${r.cinematography ? `<div class="review-card-sub">Cinemato. <span>${starsHtml(r.cinematography)}</span></div>` : ''}
-          ${r.script ? `<div class="review-card-sub">Script <span>${starsHtml(r.script)}</span></div>` : ''}
-        </div>
-      </div>`).join('');
-  } catch { list.innerHTML = '<div class="reviews-empty">Could not load reviews.</div>'; }
 }
 
 function renderTestimonials(testimonials) {
