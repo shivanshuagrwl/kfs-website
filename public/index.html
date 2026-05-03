@@ -243,11 +243,13 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .login-error{color:#e74c3c;font-size:13px;margin-top:16px}
 
 /* ── ADMIN PANEL ────────────────────────────────────────────────────────── */
-#admin-panel{display:none;min-height:100vh;padding-top:72px}
+#admin-panel.active ~ * #main-nav,
+body:has(#admin-panel.active) #main-nav{display:none}
+#admin-panel{display:none;min-height:100vh;padding-top:0}
 #admin-panel.active{display:flex;min-height:100vh}
 @media(max-width:768px){#admin-panel.active{flex-direction:column}}
 
-.admin-sidebar{position:fixed;top:72px;left:0;width:220px;bottom:0;overflow-y:auto;
+.admin-sidebar{position:fixed;top:0;left:0;width:220px;bottom:0;overflow-y:auto;
   border-right:1px solid var(--border);padding:20px 12px;background:#0d0d0d;
   display:flex;flex-direction:column;flex-shrink:0}
 .admin-sidebar-logo{padding:8px 12px 24px;font-size:11px;letter-spacing:.15em;
@@ -262,7 +264,7 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 .admin-sidebar-item .icon{font-size:15px;width:20px;text-align:center}
 .admin-sidebar-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
 
-.admin-main{margin-left:220px;padding:48px 64px;min-height:calc(100vh - 72px);background:var(--black);flex:1;width:calc(100% - 220px)}
+.admin-main{margin-left:220px;padding:48px 64px;min-height:100vh;background:var(--black);flex:1;width:calc(100% - 220px)}
 @media(max-width:768px){
   #admin-panel.active{flex-direction:column}
   .admin-sidebar{
