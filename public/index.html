@@ -1148,7 +1148,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="form-group"><label>Director</label><input type="text" id="movie-director"></div>
     <div class="form-group"><label>Producer</label><input type="text" id="movie-producer"></div>
     <div class="form-group"><label>DOP (Director of Photography)</label><input type="text" id="movie-dop"></div>
-    <div class="form-group"><label>Screenwriter</label><input type="text" id="movie-screenwriter"></div>
+    <div class="form-group"><label>Script Writer</label><input type="text" id="movie-screenwriter"></div>
     <div class="form-group"><label>Video Editor</label><input type="text" id="movie-editor"></div>
     <div class="form-group"><label>Sound Design</label><input type="text" id="movie-sound"></div>
     <div class="form-group"><label>Management</label><input type="text" id="movie-management"></div>
@@ -1219,7 +1219,7 @@ function navigate(page, pushState=true) {
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
     document.getElementById('admin-login').classList.add('active');
-    if (pushState) history.pushState({page}, '', '#admin');
+    if (pushState) history.pushState({page}, '', '/admin');
     return;
   }
   const pageEl = document.getElementById('page-'+page);
@@ -1228,7 +1228,7 @@ function navigate(page, pushState=true) {
     a.classList.toggle('active', a.dataset.page === page);
   });
   window.scrollTo({top:0,behavior:'smooth'});
-  if (pushState) history.pushState({page}, '', '#'+page);
+  if (pushState) history.pushState({page}, '', '/'+page);
   loadPageData(page);
 }
 
@@ -1240,14 +1240,15 @@ window.addEventListener('popstate', e => {
   navigate(state.page || 'home', false);
 });
 
-// init from URL hash
+// init from URL path
 (function(){
-  const hash = location.hash.replace('#','');
-  if (hash && hash !== 'home') {
-    if (hash.startsWith('blog-')) openBlog(hash.replace('blog-',''));
-    else if (hash.startsWith('movie-')) openMovie(hash.replace('movie-',''));
-    else navigate(hash, false);
-  }
+  const path = location.pathname.replace(/^\//, '');
+  if (!path || path === 'home') return;
+  const blogMatch = path.match(/^blog\/(.+)/);
+  const movieMatch = path.match(/^movies\/(.+)/);
+  if (blogMatch) openBlog(blogMatch[1]);
+  else if (movieMatch) openMovie(movieMatch[1]);
+  else navigate(path, false);
 })();
 
 function loadPageData(page) {
@@ -1430,7 +1431,7 @@ async function openBlog(id) {
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
   window.scrollTo({top:0,behavior:'smooth'});
-  history.pushState({page:'blog-detail', id}, '', '#blog-'+id);
+  history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
 }
 
 let allMembers = [];
@@ -1546,7 +1547,7 @@ async function openMovie(id) {
     {label:'Director', val:m.director},
     {label:'Producer', val:m.producer},
     {label:'DOP', val:m.dop},
-    {label:'Screenwriter', val:m.screenwriter},
+    {label:'Script Writer', val:m.screenwriter},
     {label:'Video Editor', val:m.video_editor},
     {label:'Sound Design', val:m.sound_design},
     {label:'Management', val:m.management},
@@ -1570,7 +1571,7 @@ async function openMovie(id) {
     supportEl.innerHTML = m.support_crew.split(',').map(s=>`<span class="movie-cast-tag">${s.trim()}</span>`).join('');
   } else supportSec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
-  history.pushState({page:'movie-detail', id}, '', '#movie-'+id);
+  history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
 }
 
 function renderTestimonials(testimonials) {
