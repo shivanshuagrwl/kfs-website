@@ -1317,16 +1317,27 @@ async function openBlog(id) {
 let allMembers = [];
 
 async function loadMembers() {
-  allMembers = await apiFetch('/api/members') || [];
-  filterMembers('current', document.querySelector('#page-members .events-tab'));
+  const container = document.getElementById('members-content');
+  container.innerHTML = '<div class="loading">Loading members...</div>';
+  const data = await apiFetch('/api/members');
+  allMembers = data || [];
+  // reset tabs
+  document.querySelectorAll('#page-members .events-tab').forEach((t,i)=>{
+    t.classList.toggle('active', i===0);
+  });
+  renderMemberSections('current');
 }
 
 function filterMembers(type, tabEl) {
   document.querySelectorAll('#page-members .events-tab').forEach(t=>t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
+  renderMemberSections(type);
+}
 
-  const members = allMembers.filter(m => type === 'past' ? m.is_past === true : !m.is_past);
+function renderMemberSections(type) {
   const container = document.getElementById('members-content');
+  // treat null/undefined/false all as current
+  const members = allMembers.filter(m => type === 'past' ? m.is_past === true : m.is_past !== true);
 
   if (!members.length) {
     container.innerHTML = `<div class="empty-state"><p>No ${type === 'past' ? 'alumni' : 'current members'} yet.</p></div>`;
@@ -1342,11 +1353,8 @@ function filterMembers(type, tabEl) {
   });
 
   const sectionLabels = {
-    'President': 'President',
-    'Vice President': 'Vice Presidents',
-    'Lead': 'Leads',
-    'Core Member': 'Core Members',
-    'Member': 'Members'
+    'President':'President','Vice President':'Vice Presidents',
+    'Lead':'Leads','Core Member':'Core Members','Member':'Members'
   };
 
   let html = '';
@@ -1369,7 +1377,7 @@ function filterMembers(type, tabEl) {
       </div>
     </div>`;
   });
-  container.innerHTML = html;
+  container.innerHTML = html || `<div class="empty-state"><p>No members yet.</p></div>`;
 }
 
 function autoMemberSort() {
