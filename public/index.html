@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KFS — KIIT Film Society</title>
+  <link rel="icon" type="image/png" href="/images/kfs-logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a;
+      --white: #f5f5f5;
+      --grey-100: #e8e8e8;
+      --grey-200: #c8c8c8;
+      --grey-400: #888888;
+      --grey-600: #444444;
+      --grey-800: #1f1f1f;
+      --accent: #1a1a2e;
+      --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --nav-h: 72px;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: var(--font);
+      background: var(--black);
+      color: var(--white);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    button { font-family: var(--font); cursor: pointer; border: none; background: none; }
+
+    /* ── Scrollbar ─────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--black); }
+    ::-webkit-scrollbar-thumb { background: var(--grey-600); border-radius: 2px; }
+
+    /* ── Page transitions ──────────────────────────────────────────── */
+    .page { display: none; opacity: 0; transform: translateY(20px); transition: opacity 0.5s var(--ease), transform 0.5s var(--ease); }
+    .page.active { display: block; opacity: 1; transform: translateY(0); }
+
+    /* ── Loader ────────────────────────────────────────────────────── */
+    #loader {
+      position: fixed; inset: 0; background: var(--black); z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.6s var(--ease);
+    }
+    #loader img { width: 80px; animation: spin 2s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+
+    /* ── Navigation ────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--nav-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px;
+      background: rgba(10,10,10,0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.3s var(--ease);
+    }
+    nav.scrolled { background: rgba(10,10,10,0.95); }
+    .nav-logo { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .nav-logo img { width: 40px; height: 40px; filter: invert(1); border-radius: 50%; }
+    .nav-logo span { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--white); }
+    .nav-links { display: flex; gap: 36px; align-items: center; }
+    .nav-links a {
+      font-size: 0.8rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--grey-200); transition: color 0.2s; position: relative;
+    }
+    .nav-links a::after {
+      content: ''; position: absolute; bottom: -4px; left: 0; right: 100%;
+      height: 1px; background: var(--white); transition: right 0.3s var(--ease);
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--white); }
+    .nav-links a:hover::after, .nav-links a.active::after { right: 0; }
+    .nav-hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; }
+    .nav-hamburger span { width: 24px; height: 1.5px; background: var(--white); transition: all 0.3s; }
+
+    /* ── Hero ──────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden; text-align: center; padding: 0 24px;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 60%, rgba(255,255,255,0.04) 0%, transparent 70%);
+    }
+    .hero-grain {
+      position: absolute; inset: 0; opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      pointer-events: none;
+    }
+    .hero-content { position: relative; z-index: 2; max-width: 800px; }
+    .hero-logo {
+      width: 120px; height: 120px; margin: 0 auto 40px;
+      filter: invert(1); border-radius: 50%;
+      animation: heroFadeIn 1s var(--ease) both;
+    }
+    .hero-eyebrow {
+      font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--grey-400); margin-bottom: 20px;
+      animation: heroFadeIn 1s 0.1s var(--ease) both;
+    }
+    .hero-title {
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      font-weight: 900; line-height: 1; letter-spacing: -0.03em;
+      margin-bottom: 24px;
+      animation: heroFadeIn 1s 0.2s var(--ease) both;
+    }
+    .hero-subtitle {
+      font-size: 1.05rem; color: var(--grey-200); font-weight: 300; max-width: 560px;
+      margin: 0 auto 48px; line-height: 1.7;
+      animation: heroFadeIn 1s 0.3s var(--ease) both;
+    }
+    .hero-cta {
+      display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+      animation: heroFadeIn 1s 0.4s var(--ease) both;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 32px; font-size: 0.8rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      border-radius: 2px; transition: all 0.25s var(--ease);
+    }
+    .btn-primary { background: var(--white); color: var(--black); }
+    .btn-primary:hover { background: var(--grey-100); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(255,255,255,0.15); }
+    .btn-outline { border: 1px solid rgba(255,255,255,0.3); color: var(--white); }
+    .btn-outline:hover { border-color: var(--white); transform: translateY(-2px); }
+    .hero-scroll {
+      position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      color: var(--grey-400); font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+      animation: heroFadeIn 1s 0.6s var(--ease) both;
+    }
+    .hero-scroll-line {
+      width: 1px; height: 40px; background: linear-gradient(to bottom, var(--grey-400), transparent);
+      animation: scrollLine 2s ease-in-out infinite;
+    }
+    @keyframes scrollLine { 0%,100% { opacity:1; transform: scaleY(1); } 50% { opacity:0.3; transform: scaleY(0.5); } }
+    @keyframes heroFadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Section Layout ────────────────────────────────────────────── */
+    section { padding: 100px 40px; }
+    .section-label {
+      font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--grey-400); margin-bottom: 16px;
+    }
+    .section-title { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+    .section-header { max-width: 1200px; margin: 0 auto 60px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* ── Stats Bar ─────────────────────────────────────────────────── */
+    #stats {
+      padding: 60px 40px;
+      background: var(--grey-800);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; max-width: 1000px; margin: 0 auto; text-align: center; }
+    .stat-num { font-size: 3rem; font-weight: 900; letter-spacing: -0.03em; }
+    .stat-label { font-size: 0.75rem; color: var(--grey-400); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+
+    /* ── About ─────────────────────────────────────────────────────── */
+    #about { background: var(--black); }
+    .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; max-width: 1200px; margin: 0 auto; }
+    .about-text { font-size: 1.1rem; color: var(--grey-200); line-height: 1.8; font-weight: 300; }
+    .about-image-wrap { position: relative; }
+    .about-image-wrap::before {
+      content: ''; position: absolute; inset: -1px;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; z-index: 1; pointer-events: none;
+    }
+    .about-image-wrap img { width: 100%; filter: grayscale(100%) contrast(1.1); border-radius: 2px; }
+    .about-tagline { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 24px; }
+
+    /* ── Achievements ──────────────────────────────────────────────── */
+    #achievements { background: var(--grey-800); }
+    .achieve-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2px; max-width: 1200px; margin: 0 auto; }
+    .achieve-card {
+      background: var(--black); padding: 40px 32px;
+      transition: background 0.3s var(--ease);
+      position: relative; overflow: hidden;
+    }
+    .achieve-card::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 100%;
+      height: 2px; background: var(--white); transition: right 0.4s var(--ease);
+    }
+    .achieve-card:hover::after { right: 0; }
+    .achieve-card:hover { background: var(--grey-800); }
+    .achieve-icon { font-size: 2.5rem; margin-bottom: 16px; }
+    .achieve-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .achieve-desc { font-size: 0.85rem; color: var(--grey-400); line-height: 1.6; }
+    .achieve-year { font-size: 0.7rem; letter-spacing: 0.15em; color: var(--grey-600); margin-top: 12px; text-transform: uppercase; }
+
+    /* ── Events (Home teaser) ──────────────────────────────────────── */
+    #events-home { background: var(--black); }
+    .events-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2px; max-width: 1200px; margin: 0 auto 48px; }
+    .event-card {
+      background: var(--grey-800); padding: 32px; position: relative;
+      transition: transform 0.3s var(--ease);
+    }
+    .event-card:hover { transform: translateY(-4px); }
+    .event-date-badge {
+      font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--grey-400); margin-bottom: 12px;
+    }
+    .event-card-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+    .event-card-loc { font-size: 0.8rem; color: var(--grey-400); }
+    .event-card-img { width: 100%; height: 160px; object-fit: cover; margin-bottom: 20px; filter: grayscale(60%); }
+    .event-upcoming-tag {
+      display: inline-block; padding: 4px 10px;
+      font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.3); color: var(--grey-200);
+      margin-bottom: 12px;
+    }
+
+    /* ── Blog Grid ─────────────────────────────────────────────────── */
+    #blogs-home { background: var(--grey-800); }
+    .blog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 2px; max-width: 1200px; margin: 0 auto 48px; }
+    .blog-card {
+      background: var(--black); cursor: pointer;
+      transition: transform 0.3s var(--ease);
+    }
+    .blog-card:hover { transform: translateY(-4px); }
+    .blog-card-img { width: 100%; height: 200px; object-fit: cover; filter: grayscale(50%); transition: filter 0.4s; }
+    .blog-card:hover .blog-card-img { filter: grayscale(0%); }
+    .blog-card-body { padding: 24px; }
+    .blog-meta { font-size: 0.7rem; color: var(--grey-400); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+    .blog-card-title { font-size: 1.15rem; font-weight: 700; line-height: 1.3; margin-bottom: 10px; }
+    .blog-card-excerpt { font-size: 0.85rem; color: var(--grey-200); line-height: 1.6; }
+
+    /* ── Testimonials ──────────────────────────────────────────────── */
+    #testimonials-home { background: var(--black); overflow: hidden; }
+    .testimonials-track { display: flex; gap: 2px; overflow-x: auto; padding-bottom: 20px; scrollbar-width: none; max-width: 1200px; margin: 0 auto; }
+    .testimonials-track::-webkit-scrollbar { display: none; }
+    .testimonial-card {
+      flex-shrink: 0; width: 380px; background: var(--grey-800); padding: 40px 36px;
+      position: relative;
+    }
+    .testimonial-card::before { content: '"'; font-size: 6rem; line-height: 0.6; color: rgba(255,255,255,0.06); position: absolute; top: 32px; left: 28px; font-family: Georgia, serif; }
+    .testimonial-quote { font-size: 1rem; line-height: 1.7; color: var(--grey-200); margin-bottom: 28px; position: relative; z-index: 1; }
+    .testimonial-author { display: flex; align-items: center; gap: 14px; }
+    .testimonial-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; filter: grayscale(80%);
+      background: var(--grey-600); flex-shrink: 0;
+    }
+    .testimonial-avatar-placeholder {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--grey-600); display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; color: var(--grey-200); flex-shrink: 0;
+    }
+    .testimonial-name { font-weight: 700; font-size: 0.9rem; }
+    .testimonial-role { font-size: 0.75rem; color: var(--grey-400); }
+
+    /* ── Members ───────────────────────────────────────────────────── */
+    #members-page { padding-top: calc(var(--nav-h) + 60px); }
+    .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px; max-width: 1200px; margin: 0 auto; }
+    .member-card {
+      background: var(--grey-800); overflow: hidden;
+      transition: transform 0.3s var(--ease);
+    }
+    .member-card:hover { transform: translateY(-6px); }
+    .member-photo {
+      width: 100%; height: 240px; object-fit: cover; object-position: top;
+      filter: grayscale(80%) contrast(1.1); transition: filter 0.4s;
+    }
+    .member-card:hover .member-photo { filter: grayscale(0%); }
+    .member-photo-placeholder {
+      width: 100%; height: 240px; background: var(--grey-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 3rem; color: var(--grey-400);
+    }
+    .member-info { padding: 20px; }
+    .member-name { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+    .member-role { font-size: 0.78rem; color: var(--grey-400); text-transform: uppercase; letter-spacing: 0.08em; }
+    .member-batch { font-size: 0.72rem; color: var(--grey-600); margin-top: 4px; }
+
+    /* ── Events Page ───────────────────────────────────────────────── */
+    #events-page { padding-top: calc(var(--nav-h) + 60px); }
+    .events-section-title { font-size: 1rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--grey-400); margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+    /* ── Blog Page ─────────────────────────────────────────────────── */
+    #blogs-page { padding-top: calc(var(--nav-h) + 60px); }
+
+    /* ── Single Blog ───────────────────────────────────────────────── */
+    #blog-single { padding-top: calc(var(--nav-h) + 60px); }
+    .blog-single-header { max-width: 760px; margin: 0 auto 40px; }
+    .blog-single-cover { width: 100%; max-width: 1000px; margin: 0 auto 48px; aspect-ratio: 16/7; object-fit: cover; filter: grayscale(30%); }
+    .blog-single-content { max-width: 760px; margin: 0 auto; font-size: 1.05rem; line-height: 1.85; color: var(--grey-100); }
+    .blog-single-content h1, .blog-single-content h2, .blog-single-content h3 { margin: 2em 0 0.5em; font-weight: 800; }
+    .blog-single-content p { margin-bottom: 1.4em; }
+    .blog-single-content img { margin: 2em auto; border-radius: 2px; }
+    .blog-single-content blockquote { border-left: 3px solid var(--grey-400); padding-left: 20px; color: var(--grey-400); font-style: italic; margin: 1.5em 0; }
+    .blog-single-title { font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 20px; }
+    .blog-single-meta { font-size: 0.8rem; color: var(--grey-400); letter-spacing: 0.1em; text-transform: uppercase; }
+    .back-btn { display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--grey-400); margin-bottom: 40px; transition: color 0.2s; cursor: pointer; }
+    .back-btn:hover { color: var(--white); }
+
+    /* ── Contact / Footer ──────────────────────────────────────────── */
+    footer {
+      background: var(--grey-800); border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 60px 40px 32px;
+    }
+    .footer-inner { max-width: 1200px; margin: 0 auto; }
+    .footer-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; flex-wrap: wrap; margin-bottom: 48px; }
+    .footer-brand { display: flex; align-items: center; gap: 14px; }
+    .footer-brand img { width: 48px; filter: invert(1); }
+    .footer-brand-text strong { display: block; font-size: 1rem; font-weight: 700; letter-spacing: 0.1em; }
+    .footer-brand-text span { font-size: 0.75rem; color: var(--grey-400); }
+    .footer-links h4 { font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--grey-400); margin-bottom: 16px; }
+    .footer-links ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .footer-links ul a { font-size: 0.85rem; color: var(--grey-200); transition: color 0.2s; }
+    .footer-links ul a:hover { color: var(--white); }
+    .footer-social { display: flex; gap: 16px; margin-top: 8px; }
+    .footer-social a { width: 36px; height: 36px; border: 1px solid rgba(255,255,255,0.15); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; transition: all 0.2s; }
+    .footer-social a:hover { border-color: var(--white); background: rgba(255,255,255,0.05); }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 24px; font-size: 0.75rem; color: var(--grey-600); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+    /* ── Admin CTA ─────────────────────────────────────────────────── */
+    /* Hidden — only accessible at /admin route */
+
+    /* ── Admin ─────────────────────────────────────────────────────── */
+    #admin-page { padding-top: var(--nav-h); min-height: 100vh; background: var(--black); }
+    #admin-login-screen {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 40px 20px; background: var(--black);
+    }
+    .login-box { width: 100%; max-width: 380px; }
+    .login-logo { width: 64px; margin: 0 auto 32px; filter: invert(1); }
+    .login-title { font-size: 1.8rem; font-weight: 900; letter-spacing: -0.02em; text-align: center; margin-bottom: 8px; }
+    .login-sub { font-size: 0.8rem; color: var(--grey-400); text-align: center; margin-bottom: 36px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--grey-400); margin-bottom: 8px; }
+    .form-control {
+      width: 100%; background: var(--grey-800); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--white); padding: 12px 16px; font-size: 0.9rem; font-family: var(--font);
+      border-radius: 2px; transition: border-color 0.2s; outline: none;
+    }
+    .form-control:focus { border-color: rgba(255,255,255,0.3); }
+    textarea.form-control { min-height: 120px; resize: vertical; }
+    select.form-control option { background: var(--grey-800); }
+    .btn-submit {
+      width: 100%; padding: 14px; background: var(--white); color: var(--black);
+      font-size: 0.8rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+      border-radius: 2px; cursor: pointer; transition: all 0.25s; margin-top: 8px;
+    }
+    .btn-submit:hover { background: var(--grey-100); }
+    .error-msg { color: #ff6b6b; font-size: 0.8rem; margin-top: 8px; }
+
+    /* Admin Dashboard */
+    .admin-layout { display: flex; min-height: calc(100vh - var(--nav-h)); }
+    .admin-sidebar {
+      width: 220px; background: var(--grey-800); border-right: 1px solid rgba(255,255,255,0.06);
+      padding: 32px 0; flex-shrink: 0;
+    }
+    .admin-sidebar h3 { font-size: 0.65rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--grey-600); padding: 0 20px; margin-bottom: 12px; }
+    .sidebar-btn {
+      display: block; width: 100%; text-align: left; padding: 12px 20px;
+      font-size: 0.85rem; color: var(--grey-200); background: none; border: none;
+      cursor: pointer; transition: all 0.2s; border-left: 2px solid transparent;
+    }
+    .sidebar-btn:hover, .sidebar-btn.active { color: var(--white); background: rgba(255,255,255,0.04); border-left-color: var(--white); }
+    .admin-main { flex: 1; padding: 40px; overflow-y: auto; }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+    .admin-section-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 28px; }
+    .admin-table { width: 100%; border-collapse: collapse; }
+    .admin-table th { font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--grey-400); padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+    .admin-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.85rem; vertical-align: middle; }
+    .admin-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .action-btn { padding: 6px 12px; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px; cursor: pointer; transition: all 0.2s; font-family: var(--font); }
+    .action-edit { background: rgba(255,255,255,0.1); color: var(--white); border: none; margin-right: 4px; }
+    .action-edit:hover { background: rgba(255,255,255,0.2); }
+    .action-delete { background: transparent; color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); }
+    .action-delete:hover { background: rgba(255,107,107,0.1); }
+    .btn-add {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; background: var(--white); color: var(--black);
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      border-radius: 2px; cursor: pointer; margin-bottom: 24px; transition: all 0.2s;
+    }
+    .btn-add:hover { background: var(--grey-100); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--grey-800); width: 100%; max-width: 600px; max-height: 90vh;
+      overflow-y: auto; border-radius: 2px; border: 1px solid rgba(255,255,255,0.1);
+      animation: modalIn 0.3s var(--ease);
+    }
+    @keyframes modalIn { from { opacity:0; transform: scale(0.95) translateY(10px); } }
+    .modal-header { padding: 24px 28px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 1.1rem; font-weight: 700; }
+    .modal-close { font-size: 1.4rem; color: var(--grey-400); cursor: pointer; transition: color 0.2s; }
+    .modal-close:hover { color: var(--white); }
+    .modal-body { padding: 28px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .upload-zone {
+      border: 1px dashed rgba(255,255,255,0.2); border-radius: 2px; padding: 20px;
+      text-align: center; cursor: pointer; transition: all 0.2s; margin-top: 4px;
+    }
+    .upload-zone:hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.02); }
+    .upload-zone-text { font-size: 0.8rem; color: var(--grey-400); }
+    .upload-preview { width: 80px; height: 80px; object-fit: cover; border-radius: 2px; margin: 0 auto 8px; display: none; }
+    .img-preview-url { font-size: 0.7rem; color: var(--grey-600); margin-top: 8px; word-break: break-all; }
+    .rich-editor { background: var(--black); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; }
+    .rich-editor-toolbar { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; }
+    .rich-btn { padding: 4px 10px; font-size: 0.75rem; color: var(--grey-200); background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; cursor: pointer; transition: all 0.2s; }
+    .rich-btn:hover { background: rgba(255,255,255,0.08); color: var(--white); }
+    .rich-editor-area { min-height: 200px; padding: 16px; outline: none; font-family: var(--font); font-size: 0.9rem; line-height: 1.6; color: var(--grey-100); }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 32px; right: 32px; z-index: 9998;
+      background: var(--white); color: var(--black);
+      padding: 12px 20px; border-radius: 2px; font-size: 0.85rem; font-weight: 600;
+      transform: translateY(20px); opacity: 0; transition: all 0.3s var(--ease);
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ── Page Header ───────────────────────────────────────────────── */
+    .page-header {
+      padding: calc(var(--nav-h) + 80px) 40px 60px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: var(--black);
+    }
+    .page-header-inner { max-width: 1200px; margin: 0 auto; }
+    .page-header-eyebrow { font-size: 0.65rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--grey-400); margin-bottom: 16px; }
+    .page-header-title { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 900; letter-spacing: -0.02em; line-height: 1; }
+
+    /* ── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .nav-hamburger { display: flex; }
+      section { padding: 60px 20px; }
+      .about-grid { grid-template-columns: 1fr; gap: 40px; }
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .form-row { grid-template-columns: 1fr; }
+      .admin-layout { flex-direction: column; }
+      .admin-sidebar { width: 100%; padding: 16px 0; }
+      footer { padding: 40px 20px 24px; }
+      .footer-top { flex-direction: column; }
+      .page-header { padding: calc(var(--nav-h) + 40px) 20px 40px; }
+    }
+
+    /* ── Reveal animation ──────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+
+    /* ── Mobile Nav Drawer ──────────────────────────────────────────── */
+    .mobile-nav {
+      position: fixed; inset: 0; background: var(--black); z-index: 99;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
+      transform: translateX(100%); transition: transform 0.4s var(--ease);
+    }
+    .mobile-nav.open { transform: translateX(0); }
+    .mobile-nav a { font-size: 2rem; font-weight: 800; letter-spacing: 0.05em; color: var(--white); }
+
+    /* ── Divider line ───────────────────────────────────────────────── */
+    .divider { height: 1px; background: rgba(255,255,255,0.06); }
+    .view-all { display: flex; justify-content: center; margin-top: 0; }
+    .view-all a { display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--grey-400); transition: color 0.2s; }
+    .view-all a:hover { color: var(--white); }
+    .view-all a span { font-size: 1.1rem; transition: transform 0.2s; }
+    .view-all a:hover span { transform: translateX(4px); }
+  </style>
+</head>
+<body>
+
+<!-- Loader -->
+<div id="loader">
+  <img src="/images/kfs-logo.png" alt="KFS" />
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Mobile Nav -->
+<div class="mobile-nav" id="mobileNav">
+  <a href="#" onclick="navigate('home');closeMobileNav()">Home</a>
+  <a href="#" onclick="navigate('events');closeMobileNav()">Events</a>
+  <a href="#" onclick="navigate('blogs');closeMobileNav()">Blog</a>
+  <a href="#" onclick="navigate('members');closeMobileNav()">Members</a>
+</div>
+
+<!-- Nav -->
+<nav id="navbar">
+  <div class="nav-logo" onclick="navigate('home')">
+    <img src="/images/kfs-logo.png" alt="KFS Logo" />
+    <span>KFS</span>
+  </div>
+  <div class="nav-links" id="navLinks">
+    <a href="#" onclick="navigate('home')" data-page="home">Home</a>
+    <a href="#" onclick="navigate('events')" data-page="events">Events</a>
+    <a href="#" onclick="navigate('blogs')" data-page="blogs">Blog</a>
+    <a href="#" onclick="navigate('members')" data-page="members">Members</a>
+  </div>
+  <div class="nav-hamburger" id="hamburger" onclick="toggleMobileNav()">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- HOME PAGE                                                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-home" class="page active">
+
+  <!-- Hero -->
+  <section id="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-grain"></div>
+    <div class="hero-content">
+      <img src="/images/kfs-logo.png" alt="KFS" class="hero-logo" />
+      <p class="hero-eyebrow">KIIT Film Society</p>
+      <h1 class="hero-title" id="heroTitle">Where Stories<br>Come to Life</h1>
+      <p class="hero-subtitle" id="heroSubtitle">KIIT's premier film society — celebrating cinema, storytelling, and the art of moving images.</p>
+      <div class="hero-cta">
+        <button class="btn btn-primary" onclick="navigate('events')">Upcoming Events</button>
+        <button class="btn btn-outline" onclick="navigate('blogs')">Read Blog</button>
+      </div>
+    </div>
+    <div class="hero-scroll">
+      <div class="hero-scroll-line"></div>
+      <span>Scroll</span>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section id="stats">
+    <div class="stats-grid">
+      <div class="reveal">
+        <div class="stat-num" data-target="500">0</div>
+        <div class="stat-label">Screenings</div>
+      </div>
+      <div class="reveal reveal-delay-1">
+        <div class="stat-num" data-target="6">0</div>
+        <div class="stat-label">Years Active</div>
+      </div>
+      <div class="reveal reveal-delay-2">
+        <div class="stat-num" data-target="50">0</div>
+        <div class="stat-label">Members</div>
+      </div>
+      <div class="reveal reveal-delay-3">
+        <div class="stat-num" data-target="12">0</div>
+        <div class="stat-label">Awards Won</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section id="about">
+    <div class="about-grid">
+      <div>
+        <p class="section-label reveal">About Us</p>
+        <h2 class="about-tagline reveal reveal-delay-1" id="aboutTagline">Cinema is our language.</h2>
+        <p class="about-text reveal reveal-delay-2" id="aboutText">KFS is a student-run organization dedicated to the appreciation, discussion, and creation of cinema.</p>
+      </div>
+      <div class="about-image-wrap reveal reveal-delay-1">
+        <img src="/images/kfs-logo.png" alt="KFS" style="filter:invert(0);width:100%;padding:60px;background:#111;border-radius:2px;" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Achievements -->
+  <section id="achievements">
+    <div class="section-header container">
+      <p class="section-label reveal">Recognition</p>
+      <h2 class="section-title reveal reveal-delay-1">Our Achievements</h2>
+    </div>
+    <div class="achieve-grid" id="achieveGrid"></div>
+  </section>
+
+  <!-- Upcoming Events -->
+  <section id="events-home">
+    <div class="section-header container" style="margin-bottom:40px;">
+      <p class="section-label reveal">What's On</p>
+      <h2 class="section-title reveal reveal-delay-1">Upcoming Events</h2>
+    </div>
+    <div class="events-grid" id="homeEventsGrid"></div>
+    <div class="view-all"><a href="#" onclick="navigate('events')">View all events <span>→</span></a></div>
+  </section>
+
+  <!-- Blog -->
+  <section id="blogs-home">
+    <div class="section-header container" style="margin-bottom:40px;">
+      <p class="section-label reveal">From the Edit Room</p>
+      <h2 class="section-title reveal reveal-delay-1">Latest Posts</h2>
+    </div>
+    <div class="blog-grid" id="homeBlogGrid"></div>
+    <div class="view-all" style="margin-top:40px;"><a href="#" onclick="navigate('blogs')">View all posts <span>→</span></a></div>
+  </section>
+
+  <!-- Testimonials -->
+  <section id="testimonials-home">
+    <div class="section-header container" style="margin-bottom:40px;">
+      <p class="section-label reveal">Voices</p>
+      <h2 class="section-title reveal reveal-delay-1">What Our Members Say</h2>
+    </div>
+    <div class="testimonials-track" id="testimonialTrack"></div>
+  </section>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <div class="footer-brand">
+            <img src="/images/kfs-logo.png" alt="KFS" />
+            <div class="footer-brand-text">
+              <strong>KFS</strong>
+              <span>KIIT Film Society</span>
+            </div>
+          </div>
+          <div class="footer-social" style="margin-top:24px;" id="footerSocial"></div>
+        </div>
+        <div class="footer-links">
+          <h4>Navigate</h4>
+          <ul>
+            <li><a href="#" onclick="navigate('home')">Home</a></li>
+            <li><a href="#" onclick="navigate('events')">Events</a></li>
+            <li><a href="#" onclick="navigate('blogs')">Blog</a></li>
+            <li><a href="#" onclick="navigate('members')">Members</a></li>
+          </ul>
+        </div>
+        <div class="footer-links">
+          <h4>Contact</h4>
+          <ul id="footerContact"></ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2024 KIIT Film Society. All rights reserved.</span>
+        <span style="color:var(--grey-800);font-size:0.6rem;">&#9632;</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- EVENTS PAGE                                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-events" class="page">
+  <div class="page-header">
+    <div class="page-header-inner">
+      <p class="page-header-eyebrow">KIIT Film Society</p>
+      <h1 class="page-header-title">Events</h1>
+    </div>
+  </div>
+  <section>
+    <div class="container">
+      <p class="events-section-title">Upcoming</p>
+      <div class="events-grid" id="upcomingEventsGrid" style="margin-bottom:64px;"></div>
+      <p class="events-section-title">Past Events</p>
+      <div class="events-grid" id="pastEventsGrid"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- BLOG LIST PAGE                                                              -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-blogs" class="page">
+  <div class="page-header">
+    <div class="page-header-inner">
+      <p class="page-header-eyebrow">KIIT Film Society</p>
+      <h1 class="page-header-title">Blog</h1>
+    </div>
+  </div>
+  <section>
+    <div class="blog-grid container" id="allBlogsGrid"></div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- SINGLE BLOG PAGE                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-blog-single" class="page">
+  <section id="blog-single" style="padding:0 40px 100px;">
+    <div class="container">
+      <div class="back-btn" onclick="navigate('blogs')">← Back to Blog</div>
+      <img id="blogSingleCover" class="blog-single-cover" src="" alt="" style="display:none;" />
+      <div class="blog-single-header">
+        <p class="blog-single-meta" id="blogSingleMeta"></p>
+        <h1 class="blog-single-title" id="blogSingleTitle"></h1>
+      </div>
+      <div class="blog-single-content" id="blogSingleContent"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- MEMBERS PAGE                                                                -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-members" class="page">
+  <div class="page-header">
+    <div class="page-header-inner">
+      <p class="page-header-eyebrow">KIIT Film Society</p>
+      <h1 class="page-header-title">The Team</h1>
+    </div>
+  </div>
+  <section>
+    <div class="members-grid" id="membersGrid"></div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- ADMIN PAGE                                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-admin" class="page">
+
+  <!-- Login -->
+  <div id="admin-login-screen">
+    <div class="login-box">
+      <img src="/images/kfs-logo.png" alt="KFS" class="login-logo" />
+      <h2 class="login-title">Admin Portal</h2>
+      <p class="login-sub">KFS — Restricted Access</p>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" class="form-control" id="loginUser" placeholder="admin" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" class="form-control" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+      <div class="error-msg" id="loginErr"></div>
+      <button class="btn-submit" onclick="doLogin()">Sign In</button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="admin-dashboard" style="display:none;">
+    <div class="admin-layout">
+      <aside class="admin-sidebar">
+        <h3 style="margin-bottom:8px;">Content</h3>
+        <button class="sidebar-btn active" onclick="showAdminSection('blogs')">✍️ Blogs</button>
+        <button class="sidebar-btn" onclick="showAdminSection('events')">🎬 Events</button>
+        <button class="sidebar-btn" onclick="showAdminSection('members')">👥 Members</button>
+        <button class="sidebar-btn" onclick="showAdminSection('testimonials')">💬 Testimonials</button>
+        <button class="sidebar-btn" onclick="showAdminSection('achievements')">🏆 Achievements</button>
+        <h3 style="margin-top:24px;margin-bottom:8px;">Settings</h3>
+        <button class="sidebar-btn" onclick="showAdminSection('settings')">⚙️ Site Settings</button>
+        <button class="sidebar-btn" onclick="showAdminSection('password')">🔐 Password</button>
+        <button class="sidebar-btn" onclick="adminLogout()" style="color:#ff6b6b;margin-top:24px;">↩ Logout</button>
+      </aside>
+
+      <main class="admin-main">
+
+        <!-- Blogs Section -->
+        <div class="admin-section active" id="admin-blogs">
+          <h2 class="admin-section-title">Blog Posts</h2>
+          <button class="btn-add" onclick="openBlogModal()">+ New Post</button>
+          <table class="admin-table">
+            <thead><tr><th>Title</th><th>Author</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+            <tbody id="blogTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Events Section -->
+        <div class="admin-section" id="admin-events">
+          <h2 class="admin-section-title">Events</h2>
+          <button class="btn-add" onclick="openEventModal()">+ New Event</button>
+          <table class="admin-table">
+            <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="eventTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Members Section -->
+        <div class="admin-section" id="admin-members">
+          <h2 class="admin-section-title">Members</h2>
+          <button class="btn-add" onclick="openMemberModal()">+ Add Member</button>
+          <table class="admin-table">
+            <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Actions</th></tr></thead>
+            <tbody id="memberTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Testimonials Section -->
+        <div class="admin-section" id="admin-testimonials">
+          <h2 class="admin-section-title">Testimonials</h2>
+          <button class="btn-add" onclick="openTestimonialModal()">+ Add Testimonial</button>
+          <table class="admin-table">
+            <thead><tr><th>Name</th><th>Role</th><th>Quote</th><th>Actions</th></tr></thead>
+            <tbody id="testimonialTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Achievements Section -->
+        <div class="admin-section" id="admin-achievements">
+          <h2 class="admin-section-title">Achievements</h2>
+          <button class="btn-add" onclick="openAchievementModal()">+ Add Achievement</button>
+          <table class="admin-table">
+            <thead><tr><th>Icon</th><th>Title</th><th>Year</th><th>Actions</th></tr></thead>
+            <tbody id="achievementTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="admin-section" id="admin-settings">
+          <h2 class="admin-section-title">Site Settings</h2>
+          <div style="max-width:560px;">
+            <div class="form-group"><label>Hero Tagline</label><input type="text" class="form-control" id="set_hero_tagline" /></div>
+            <div class="form-group"><label>Hero Subtitle</label><textarea class="form-control" id="set_hero_subtitle" rows="3"></textarea></div>
+            <div class="form-group"><label>About Text</label><textarea class="form-control" id="set_about_text" rows="4"></textarea></div>
+            <div class="form-group"><label>Instagram URL</label><input type="text" class="form-control" id="set_instagram" /></div>
+            <div class="form-group"><label>YouTube URL</label><input type="text" class="form-control" id="set_youtube" /></div>
+            <div class="form-group"><label>Email Address</label><input type="text" class="form-control" id="set_email" /></div>
+            <button class="btn-submit" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </div>
+
+        <!-- Password Section -->
+        <div class="admin-section" id="admin-password">
+          <h2 class="admin-section-title">Change Password</h2>
+          <div style="max-width:360px;">
+            <div class="form-group"><label>Current Password</label><input type="password" class="form-control" id="oldPass" /></div>
+            <div class="form-group"><label>New Password</label><input type="password" class="form-control" id="newPass" /></div>
+            <div class="form-group"><label>Confirm New Password</label><input type="password" class="form-control" id="confPass" /></div>
+            <div class="error-msg" id="passErr"></div>
+            <button class="btn-submit" onclick="changePassword()">Update Password</button>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- MODALS                                                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<!-- Blog Modal -->
+<div class="modal-overlay" id="blogModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="blogModalTitle">New Post</span>
+      <span class="modal-close" onclick="closeModal('blogModal')">×</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="blogId" />
+      <div class="form-group"><label>Title</label><input type="text" class="form-control" id="blogTitle" /></div>
+      <div class="form-group"><label>Author</label><input type="text" class="form-control" id="blogAuthor" value="KFS Team" /></div>
+      <div class="form-group"><label>Excerpt (short summary)</label><textarea class="form-control" id="blogExcerpt" rows="2"></textarea></div>
+      <div class="form-group"><label>Cover Image</label><div class="upload-zone" onclick="triggerUpload('blogCoverFile','blogCoverUrl','blogCoverPreview')"><img id="blogCoverPreview" class="upload-preview" /><p class="upload-zone-text">Click to upload image</p></div><input type="file" id="blogCoverFile" accept="image/*" style="display:none;" /><p class="img-preview-url" id="blogCoverUrl"></p></div>
+      <div class="form-group">
+        <label>Content</label>
+        <div class="rich-editor">
+          <div class="rich-editor-toolbar">
+            <button class="rich-btn" onclick="fmt('bold')"><b>B</b></button>
+            <button class="rich-btn" onclick="fmt('italic')"><i>I</i></button>
+            <button class="rich-btn" onclick="fmt('underline')"><u>U</u></button>
+            <button class="rich-btn" onclick="fmtBlock('h2')">H2</button>
+            <button class="rich-btn" onclick="fmtBlock('h3')">H3</button>
+            <button class="rich-btn" onclick="fmt('insertUnorderedList')">• List</button>
+            <button class="rich-btn" onclick="fmtBlock('blockquote')">" Quote</button>
+            <button class="rich-btn" onclick="insertLink()">🔗</button>
+          </div>
+          <div class="rich-editor-area" id="blogContent" contenteditable="true"></div>
+        </div>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+        <input type="checkbox" id="blogPublished" checked style="width:16px;height:16px;" />
+        <label for="blogPublished" style="text-transform:none;font-size:0.85rem;color:var(--grey-200);">Published (visible to public)</label>
+      </div>
+      <button class="btn-submit" onclick="saveBlog()">Save Post</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event Modal -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="eventModalTitle">New Event</span>
+      <span class="modal-close" onclick="closeModal('eventModal')">×</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eventId" />
+      <div class="form-group"><label>Title</label><input type="text" class="form-control" id="eventTitle" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" class="form-control" id="eventDate" /></div>
+        <div class="form-group"><label>Time</label><input type="time" class="form-control" id="eventTime" /></div>
+      </div>
+      <div class="form-group"><label>Location</label><input type="text" class="form-control" id="eventLocation" /></div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="eventDesc" rows="3"></textarea></div>
+      <div class="form-group"><label>Cover Image</label><div class="upload-zone" onclick="triggerUpload('eventCoverFile','eventCoverUrl','eventCoverPreview')"><img id="eventCoverPreview" class="upload-preview" /><p class="upload-zone-text">Click to upload image</p></div><input type="file" id="eventCoverFile" accept="image/*" style="display:none;" /><p class="img-preview-url" id="eventCoverUrl"></p></div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+        <input type="checkbox" id="eventUpcoming" checked style="width:16px;height:16px;" />
+        <label for="eventUpcoming" style="text-transform:none;font-size:0.85rem;color:var(--grey-200);">Mark as Upcoming</label>
+      </div>
+      <button class="btn-submit" onclick="saveEvent()">Save Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- Member Modal -->
+<div class="modal-overlay" id="memberModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="memberModalTitle">Add Member</span>
+      <span class="modal-close" onclick="closeModal('memberModal')">×</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="memberId" />
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input type="text" class="form-control" id="memberName" /></div>
+        <div class="form-group"><label>Role / Position</label><input type="text" class="form-control" id="memberRole" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Batch / Year</label><input type="text" class="form-control" id="memberBatch" placeholder="e.g. 2022-26" /></div>
+        <div class="form-group"><label>Sort Order</label><input type="number" class="form-control" id="memberSort" value="0" /></div>
+      </div>
+      <div class="form-group"><label>Photo</label><div class="upload-zone" onclick="triggerUpload('memberPhotoFile','memberPhotoUrl','memberPhotoPreview')"><img id="memberPhotoPreview" class="upload-preview" /><p class="upload-zone-text">Click to upload photo</p></div><input type="file" id="memberPhotoFile" accept="image/*" style="display:none;" /><p class="img-preview-url" id="memberPhotoUrl"></p></div>
+      <div class="form-group"><label>Bio (optional)</label><textarea class="form-control" id="memberBio" rows="2"></textarea></div>
+      <button class="btn-submit" onclick="saveMember()">Save Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- Testimonial Modal -->
+<div class="modal-overlay" id="testimonialModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="testimonialModalTitle">Add Testimonial</span>
+      <span class="modal-close" onclick="closeModal('testimonialModal')">×</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="testimonialId" />
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input type="text" class="form-control" id="testimonialName" /></div>
+        <div class="form-group"><label>Role</label><input type="text" class="form-control" id="testimonialRole" /></div>
+      </div>
+      <div class="form-group"><label>Batch</label><input type="text" class="form-control" id="testimonialBatch" /></div>
+      <div class="form-group"><label>Quote</label><textarea class="form-control" id="testimonialQuote" rows="4"></textarea></div>
+      <div class="form-group"><label>Photo (optional)</label><div class="upload-zone" onclick="triggerUpload('testimonialPhotoFile','testimonialPhotoUrl','testimonialPhotoPreview')"><img id="testimonialPhotoPreview" class="upload-preview" /><p class="upload-zone-text">Click to upload photo</p></div><input type="file" id="testimonialPhotoFile" accept="image/*" style="display:none;" /><p class="img-preview-url" id="testimonialPhotoUrl"></p></div>
+      <button class="btn-submit" onclick="saveTestimonial()">Save Testimonial</button>
+    </div>
+  </div>
+</div>
+
+<!-- Achievement Modal -->
+<div class="modal-overlay" id="achievementModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="achievementModalTitle">Add Achievement</span>
+      <span class="modal-close" onclick="closeModal('achievementModal')">×</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="achievementId" />
+      <div class="form-row">
+        <div class="form-group"><label>Title</label><input type="text" class="form-control" id="achievementTitle" /></div>
+        <div class="form-group"><label>Year</label><input type="text" class="form-control" id="achievementYear" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Icon (emoji)</label><input type="text" class="form-control" id="achievementIcon" placeholder="🏆" /></div>
+        <div class="form-group"><label>Sort Order</label><input type="number" class="form-control" id="achievementSort" value="0" /></div>
+      </div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="achievementDesc" rows="2"></textarea></div>
+      <button class="btn-submit" onclick="saveAchievement()">Save Achievement</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+let token = localStorage.getItem('kfs_token') || '';
+let settings = {};
+let currentPage = 'home';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROUTER
+// ══════════════════════════════════════════════════════════════════════════════
+function navigate(page, data) {
+  document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); });
+  const el = document.getElementById('page-' + page);
+  if (!el) return;
+
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Small delay for scroll then show
+  setTimeout(() => {
+    document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; });
+    el.style.display = 'block';
+    requestAnimationFrame(() => el.classList.add('active'));
+  }, 100);
+
+  currentPage = page;
+  updateNavActive(page);
+
+  // Page-specific loads
+  if (page === 'home') loadHome();
+  if (page === 'events') loadEventsPage();
+  if (page === 'blogs') loadBlogsPage();
+  if (page === 'members') loadMembersPage();
+  if (page === 'admin') initAdmin();
+  if (page === 'blog-single' && data) loadBlogSingle(data);
+
+  history.pushState({ page, data }, '', page === 'home' ? '/' : '/' + page);
+}
+
+function updateNavActive(page) {
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === page);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// API HELPER
+// ══════════════════════════════════════════════════════════════════════════════
+async function api(method, url, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════════════════
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = isErr ? '#ff6b6b' : 'var(--white)';
+  t.style.color = isErr ? '#fff' : 'var(--black)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LOADER
+// ══════════════════════════════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  settings = await api('GET', '/api/settings');
+  applySettings();
+  loadHome();
+  setTimeout(() => document.getElementById('loader').classList.add('hidden'), 800);
+  initReveal();
+  initNavScroll();
+
+  // Handle direct URL access
+  const path = location.pathname.replace('/', '');
+  if (path === 'admin') {
+    document.querySelectorAll('.page').forEach(p => p.style.display='none');
+    document.getElementById('page-admin').style.display='block';
+    document.getElementById('page-admin').classList.add('active');
+    initAdmin();
+  }
+});
+
+function applySettings() {
+  if (settings.hero_tagline) document.getElementById('heroTitle').innerHTML = settings.hero_tagline.replace(/\n/g,'<br>');
+  if (settings.hero_subtitle) document.getElementById('heroSubtitle').textContent = settings.hero_subtitle;
+  if (settings.about_text) document.getElementById('aboutText').textContent = settings.about_text;
+
+  // Footer social
+  const social = document.getElementById('footerSocial');
+  social.innerHTML = '';
+  if (settings.instagram) social.innerHTML += `<a href="${settings.instagram}" target="_blank">IG</a>`;
+  if (settings.youtube) social.innerHTML += `<a href="${settings.youtube}" target="_blank">YT</a>`;
+
+  // Footer contact
+  const contact = document.getElementById('footerContact');
+  contact.innerHTML = '';
+  if (settings.email) contact.innerHTML += `<li><a href="mailto:${settings.email}">${settings.email}</a></li>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HOME LOAD
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadHome() {
+  const [achievements, events, blogs, testimonials] = await Promise.all([
+    api('GET', '/api/achievements'),
+    api('GET', '/api/events?type=upcoming'),
+    api('GET', '/api/blogs'),
+    api('GET', '/api/testimonials'),
+  ]);
+
+  // Achievements
+  const ag = document.getElementById('achieveGrid');
+  ag.innerHTML = (achievements || []).map(a => `
+    <div class="achieve-card reveal">
+      <div class="achieve-icon">${a.icon}</div>
+      <div class="achieve-title">${a.title}</div>
+      <div class="achieve-desc">${a.description || ''}</div>
+      ${a.year ? `<div class="achieve-year">${a.year}</div>` : ''}
+    </div>
+  `).join('') || '<div class="achieve-card"><p style="color:var(--grey-400)">No achievements yet.</p></div>';
+
+  // Events (max 3)
+  const eg = document.getElementById('homeEventsGrid');
+  eg.innerHTML = (events || []).slice(0,3).map(e => renderEventCard(e)).join('') || '<p style="color:var(--grey-400);padding:20px 0;">No upcoming events.</p>';
+
+  // Blogs (max 3)
+  const bg = document.getElementById('homeBlogGrid');
+  bg.innerHTML = (blogs || []).slice(0,3).map(b => renderBlogCard(b)).join('') || '<p style="color:var(--grey-400);padding:20px 0;">No posts yet.</p>';
+
+  // Testimonials
+  const tt = document.getElementById('testimonialTrack');
+  tt.innerHTML = (testimonials || []).map(t => renderTestimonial(t)).join('') || '<p style="color:var(--grey-400);padding:20px;">No testimonials yet.</p>';
+
+  initReveal();
+  animateCounters();
+}
+
+function renderEventCard(e) {
+  const d = new Date(e.date);
+  const dateStr = isNaN(d) ? e.date : d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  return `<div class="event-card reveal" onclick="navigate('events')">
+    ${e.cover_image ? `<img class="event-card-img" src="${e.cover_image}" alt="${e.title}" />` : ''}
+    ${e.is_upcoming ? '<span class="event-upcoming-tag">Upcoming</span>' : ''}
+    <div class="event-date-badge">${dateStr}${e.time ? ' · ' + e.time : ''}${e.location ? ' · ' + e.location : ''}</div>
+    <div class="event-card-title">${e.title}</div>
+    ${e.description ? `<div class="event-card-loc" style="margin-top:8px;">${e.description.slice(0,80)}${e.description.length>80?'…':''}</div>` : ''}
+  </div>`;
+}
+
+function renderBlogCard(b) {
+  const d = new Date(b.created_at);
+  const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  return `<div class="blog-card reveal" onclick="navigate('blog-single','${b.slug}')">
+    ${b.cover_image ? `<img class="blog-card-img" src="${b.cover_image}" alt="${b.title}" />` : `<div style="height:200px;background:var(--grey-600);display:flex;align-items:center;justify-content:center;font-size:3rem;color:var(--grey-400);">🎬</div>`}
+    <div class="blog-card-body">
+      <div class="blog-meta">${dateStr}${b.author ? ' · ' + b.author : ''}</div>
+      <div class="blog-card-title">${b.title}</div>
+      <div class="blog-card-excerpt">${b.excerpt || ''}</div>
+    </div>
+  </div>`;
+}
+
+function renderTestimonial(t) {
+  const avatar = t.photo
+    ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}" />`
+    : `<div class="testimonial-avatar-placeholder">👤</div>`;
+  return `<div class="testimonial-card">
+    <p class="testimonial-quote">${t.quote}</p>
+    <div class="testimonial-author">
+      ${avatar}
+      <div>
+        <div class="testimonial-name">${t.name}</div>
+        <div class="testimonial-role">${[t.role, t.batch].filter(Boolean).join(' · ')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVENTS PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadEventsPage() {
+  const [upcoming, past] = await Promise.all([
+    api('GET', '/api/events?type=upcoming'),
+    api('GET', '/api/events?type=past'),
+  ]);
+  document.getElementById('upcomingEventsGrid').innerHTML = (upcoming||[]).map(e=>renderEventCard(e)).join('') || '<p style="color:var(--grey-400)">No upcoming events.</p>';
+  document.getElementById('pastEventsGrid').innerHTML = (past||[]).map(e=>renderEventCard(e)).join('') || '<p style="color:var(--grey-400)">No past events recorded.</p>';
+  initReveal();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLOGS PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadBlogsPage() {
+  const blogs = await api('GET', '/api/blogs');
+  document.getElementById('allBlogsGrid').innerHTML = (blogs||[]).map(b=>renderBlogCard(b)).join('') || '<p style="color:var(--grey-400)">No posts yet.</p>';
+  initReveal();
+}
+
+async function loadBlogSingle(slug) {
+  const blog = await api('GET', '/api/blogs/' + slug);
+  if (!blog || blog.error) { navigate('blogs'); return; }
+
+  const cover = document.getElementById('blogSingleCover');
+  if (blog.cover_image) { cover.src = blog.cover_image; cover.style.display='block'; }
+  else { cover.style.display='none'; }
+
+  const d = new Date(blog.created_at);
+  const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+  document.getElementById('blogSingleMeta').textContent = [dateStr, blog.author].filter(Boolean).join(' · ');
+  document.getElementById('blogSingleTitle').textContent = blog.title;
+  document.getElementById('blogSingleContent').innerHTML = blog.content || '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MEMBERS PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadMembersPage() {
+  const members = await api('GET', '/api/members');
+  const mg = document.getElementById('membersGrid');
+  mg.innerHTML = (members||[]).map(m => `
+    <div class="member-card reveal">
+      ${m.photo
+        ? `<img class="member-photo" src="${m.photo}" alt="${m.name}" />`
+        : `<div class="member-photo-placeholder">👤</div>`}
+      <div class="member-info">
+        <div class="member-name">${m.name}</div>
+        <div class="member-role">${m.role}</div>
+        ${m.batch ? `<div class="member-batch">${m.batch}</div>` : ''}
+      </div>
+    </div>
+  `).join('') || '<p style="color:var(--grey-400);padding:20px;">No members added yet.</p>';
+  initReveal();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ANIMATIONS
+// ══════════════════════════════════════════════════════════════════════════════
+function initReveal() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal:not(.visible)').forEach(el => obs.observe(el));
+}
+
+function initNavScroll() {
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 40);
+  });
+}
+
+function animateCounters() {
+  document.querySelectorAll('[data-target]').forEach(el => {
+    const target = parseInt(el.dataset.target);
+    let current = 0;
+    const step = Math.ceil(target / 60);
+    const timer = setInterval(() => {
+      current = Math.min(current + step, target);
+      el.textContent = current + '+';
+      if (current >= target) clearInterval(timer);
+    }, 25);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MOBILE NAV
+// ══════════════════════════════════════════════════════════════════════════════
+function toggleMobileNav() { document.getElementById('mobileNav').classList.toggle('open'); }
+function closeMobileNav() { document.getElementById('mobileNav').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN AUTH
+// ══════════════════════════════════════════════════════════════════════════════
+function initAdmin() {
+  if (token) {
+    document.getElementById('admin-login-screen').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'flex';
+    loadAdminData();
+  } else {
+    document.getElementById('admin-login-screen').style.display = 'flex';
+    document.getElementById('admin-dashboard').style.display = 'none';
+  }
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const res = await api('POST', '/api/auth/login', { username, password });
+  if (res.token) {
+    token = res.token;
+    localStorage.setItem('kfs_token', token);
+    initAdmin();
+    toast('Welcome back!');
+  } else {
+    document.getElementById('loginErr').textContent = res.error || 'Login failed';
+  }
+}
+
+function adminLogout() {
+  token = '';
+  localStorage.removeItem('kfs_token');
+  navigate('home');
+}
+
+async function loadAdminData() {
+  loadAdminBlogs();
+  loadAdminEvents();
+  loadAdminMembers();
+  loadAdminTestimonials();
+  loadAdminAchievements();
+  const s = await api('GET', '/api/settings');
+  document.getElementById('set_hero_tagline').value = s.hero_tagline || '';
+  document.getElementById('set_hero_subtitle').value = s.hero_subtitle || '';
+  document.getElementById('set_about_text').value = s.about_text || '';
+  document.getElementById('set_instagram').value = s.instagram || '';
+  document.getElementById('set_youtube').value = s.youtube || '';
+  document.getElementById('set_email').value = s.email || '';
+}
+
+function showAdminSection(name) {
+  document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('admin-' + name).classList.add('active');
+  document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — BLOGS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAdminBlogs() {
+  const blogs = await api('GET', '/api/admin/blogs');
+  document.getElementById('blogTableBody').innerHTML = (blogs||[]).map(b => `
+    <tr>
+      <td>${b.title}</td>
+      <td>${b.author}</td>
+      <td>${b.published ? '✅ Live' : '⏸ Draft'}</td>
+      <td>${new Date(b.created_at).toLocaleDateString()}</td>
+      <td>
+        <button class="action-btn action-edit" onclick='editBlog(${JSON.stringify(b)})'>Edit</button>
+        <button class="action-btn action-delete" onclick="deleteBlog('${b.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openBlogModal(blog) {
+  document.getElementById('blogModalTitle').textContent = 'New Post';
+  document.getElementById('blogId').value = '';
+  document.getElementById('blogTitle').value = '';
+  document.getElementById('blogAuthor').value = 'KFS Team';
+  document.getElementById('blogExcerpt').value = '';
+  document.getElementById('blogContent').innerHTML = '';
+  document.getElementById('blogPublished').checked = true;
+  document.getElementById('blogCoverUrl').textContent = '';
+  document.getElementById('blogCoverPreview').style.display = 'none';
+  document.getElementById('blogModal').classList.add('open');
+}
+
+function editBlog(b) {
+  document.getElementById('blogModalTitle').textContent = 'Edit Post';
+  document.getElementById('blogId').value = b.id;
+  document.getElementById('blogTitle').value = b.title;
+  document.getElementById('blogAuthor').value = b.author || 'KFS Team';
+  document.getElementById('blogExcerpt').value = b.excerpt || '';
+  document.getElementById('blogContent').innerHTML = b.content || '';
+  document.getElementById('blogPublished').checked = !!b.published;
+  if (b.cover_image) {
+    document.getElementById('blogCoverUrl').textContent = b.cover_image;
+    const prev = document.getElementById('blogCoverPreview');
+    prev.src = b.cover_image; prev.style.display = 'block';
+  }
+  document.getElementById('blogModal').classList.add('open');
+}
+
+async function saveBlog() {
+  const id = document.getElementById('blogId').value;
+  const body = {
+    title: document.getElementById('blogTitle').value,
+    author: document.getElementById('blogAuthor').value,
+    excerpt: document.getElementById('blogExcerpt').value,
+    content: document.getElementById('blogContent').innerHTML,
+    cover_image: document.getElementById('blogCoverUrl').textContent,
+    published: document.getElementById('blogPublished').checked,
+  };
+  if (!body.title) { toast('Title required', true); return; }
+  const res = id ? await api('PUT', '/api/admin/blogs/' + id, body) : await api('POST', '/api/admin/blogs', body);
+  if (res.success || res.id) { toast('Post saved!'); closeModal('blogModal'); loadAdminBlogs(); }
+  else toast(res.error || 'Error', true);
+}
+
+async function deleteBlog(id) {
+  if (!confirm('Delete this post?')) return;
+  await api('DELETE', '/api/admin/blogs/' + id);
+  toast('Post deleted'); loadAdminBlogs();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — EVENTS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAdminEvents() {
+  const events = await api('GET', '/api/admin/events');
+  document.getElementById('eventTableBody').innerHTML = (events||[]).map(e => `
+    <tr>
+      <td>${e.title}</td>
+      <td>${e.date}</td>
+      <td>${e.is_upcoming ? '📅 Upcoming' : '✔ Past'}</td>
+      <td>
+        <button class="action-btn action-edit" onclick='editEvent(${JSON.stringify(e)})'>Edit</button>
+        <button class="action-btn action-delete" onclick="deleteEvent('${e.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openEventModal() {
+  document.getElementById('eventModalTitle').textContent = 'New Event';
+  document.getElementById('eventId').value = '';
+  document.getElementById('eventTitle').value = '';
+  document.getElementById('eventDate').value = '';
+  document.getElementById('eventTime').value = '';
+  document.getElementById('eventLocation').value = '';
+  document.getElementById('eventDesc').value = '';
+  document.getElementById('eventUpcoming').checked = true;
+  document.getElementById('eventCoverUrl').textContent = '';
+  document.getElementById('eventCoverPreview').style.display = 'none';
+  document.getElementById('eventModal').classList.add('open');
+}
+
+function editEvent(e) {
+  document.getElementById('eventModalTitle').textContent = 'Edit Event';
+  document.getElementById('eventId').value = e.id;
+  document.getElementById('eventTitle').value = e.title;
+  document.getElementById('eventDate').value = e.date;
+  document.getElementById('eventTime').value = e.time || '';
+  document.getElementById('eventLocation').value = e.location || '';
+  document.getElementById('eventDesc').value = e.description || '';
+  document.getElementById('eventUpcoming').checked = !!e.is_upcoming;
+  if (e.cover_image) {
+    document.getElementById('eventCoverUrl').textContent = e.cover_image;
+    const p = document.getElementById('eventCoverPreview'); p.src = e.cover_image; p.style.display='block';
+  }
+  document.getElementById('eventModal').classList.add('open');
+}
+
+async function saveEvent() {
+  const id = document.getElementById('eventId').value;
+  const body = {
+    title: document.getElementById('eventTitle').value,
+    date: document.getElementById('eventDate').value,
+    time: document.getElementById('eventTime').value,
+    location: document.getElementById('eventLocation').value,
+    description: document.getElementById('eventDesc').value,
+    cover_image: document.getElementById('eventCoverUrl').textContent,
+    is_upcoming: document.getElementById('eventUpcoming').checked,
+  };
+  if (!body.title || !body.date) { toast('Title and date required', true); return; }
+  const res = id ? await api('PUT', '/api/admin/events/' + id, body) : await api('POST', '/api/admin/events', body);
+  if (res.success || res.id) { toast('Event saved!'); closeModal('eventModal'); loadAdminEvents(); }
+  else toast(res.error || 'Error', true);
+}
+
+async function deleteEvent(id) {
+  if (!confirm('Delete this event?')) return;
+  await api('DELETE', '/api/admin/events/' + id);
+  toast('Event deleted'); loadAdminEvents();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — MEMBERS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAdminMembers() {
+  const members = await api('GET', '/api/admin/members');
+  document.getElementById('memberTableBody').innerHTML = (members||[]).map(m => `
+    <tr>
+      <td>${m.photo ? `<img src="${m.photo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;filter:grayscale(50%);" />` : '—'}</td>
+      <td>${m.name}</td>
+      <td>${m.role}</td>
+      <td>${m.batch || '—'}</td>
+      <td>
+        <button class="action-btn action-edit" onclick='editMember(${JSON.stringify(m)})'>Edit</button>
+        <button class="action-btn action-delete" onclick="deleteMember('${m.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openMemberModal() {
+  document.getElementById('memberModalTitle').textContent = 'Add Member';
+  document.getElementById('memberId').value = '';
+  document.getElementById('memberName').value = '';
+  document.getElementById('memberRole').value = '';
+  document.getElementById('memberBatch').value = '';
+  document.getElementById('memberBio').value = '';
+  document.getElementById('memberSort').value = '0';
+  document.getElementById('memberPhotoUrl').textContent = '';
+  document.getElementById('memberPhotoPreview').style.display = 'none';
+  document.getElementById('memberModal').classList.add('open');
+}
+
+function editMember(m) {
+  document.getElementById('memberModalTitle').textContent = 'Edit Member';
+  document.getElementById('memberId').value = m.id;
+  document.getElementById('memberName').value = m.name;
+  document.getElementById('memberRole').value = m.role;
+  document.getElementById('memberBatch').value = m.batch || '';
+  document.getElementById('memberBio').value = m.bio || '';
+  document.getElementById('memberSort').value = m.sort_order || 0;
+  if (m.photo) {
+    document.getElementById('memberPhotoUrl').textContent = m.photo;
+    const p = document.getElementById('memberPhotoPreview'); p.src = m.photo; p.style.display='block';
+  }
+  document.getElementById('memberModal').classList.add('open');
+}
+
+async function saveMember() {
+  const id = document.getElementById('memberId').value;
+  const body = {
+    name: document.getElementById('memberName').value,
+    role: document.getElementById('memberRole').value,
+    batch: document.getElementById('memberBatch').value,
+    bio: document.getElementById('memberBio').value,
+    sort_order: parseInt(document.getElementById('memberSort').value) || 0,
+    photo: document.getElementById('memberPhotoUrl').textContent,
+  };
+  if (!body.name || !body.role) { toast('Name and role required', true); return; }
+  const res = id ? await api('PUT', '/api/admin/members/' + id, body) : await api('POST', '/api/admin/members', body);
+  if (res.success || res.id) { toast('Member saved!'); closeModal('memberModal'); loadAdminMembers(); }
+  else toast(res.error || 'Error', true);
+}
+
+async function deleteMember(id) {
+  if (!confirm('Remove this member?')) return;
+  await api('DELETE', '/api/admin/members/' + id);
+  toast('Member removed'); loadAdminMembers();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — TESTIMONIALS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAdminTestimonials() {
+  const items = await api('GET', '/api/admin/testimonials');
+  document.getElementById('testimonialTableBody').innerHTML = (items||[]).map(t => `
+    <tr>
+      <td>${t.name}</td>
+      <td>${t.role || '—'}</td>
+      <td>${t.quote.slice(0,60)}…</td>
+      <td>
+        <button class="action-btn action-edit" onclick='editTestimonial(${JSON.stringify(t)})'>Edit</button>
+        <button class="action-btn action-delete" onclick="deleteTestimonial('${t.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openTestimonialModal() {
+  document.getElementById('testimonialId').value = '';
+  document.getElementById('testimonialName').value = '';
+  document.getElementById('testimonialRole').value = '';
+  document.getElementById('testimonialBatch').value = '';
+  document.getElementById('testimonialQuote').value = '';
+  document.getElementById('testimonialPhotoUrl').textContent = '';
+  document.getElementById('testimonialPhotoPreview').style.display='none';
+  document.getElementById('testimonialModal').classList.add('open');
+}
+
+function editTestimonial(t) {
+  document.getElementById('testimonialId').value = t.id;
+  document.getElementById('testimonialName').value = t.name;
+  document.getElementById('testimonialRole').value = t.role || '';
+  document.getElementById('testimonialBatch').value = t.batch || '';
+  document.getElementById('testimonialQuote').value = t.quote;
+  if (t.photo) {
+    document.getElementById('testimonialPhotoUrl').textContent = t.photo;
+    const p = document.getElementById('testimonialPhotoPreview'); p.src=t.photo; p.style.display='block';
+  }
+  document.getElementById('testimonialModal').classList.add('open');
+}
+
+async function saveTestimonial() {
+  const id = document.getElementById('testimonialId').value;
+  const body = {
+    name: document.getElementById('testimonialName').value,
+    role: document.getElementById('testimonialRole').value,
+    batch: document.getElementById('testimonialBatch').value,
+    quote: document.getElementById('testimonialQuote').value,
+    photo: document.getElementById('testimonialPhotoUrl').textContent,
+  };
+  if (!body.name || !body.quote) { toast('Name and quote required', true); return; }
+  const res = id ? await api('PUT', '/api/admin/testimonials/' + id, body) : await api('POST', '/api/admin/testimonials', body);
+  if (res.success || res.id) { toast('Testimonial saved!'); closeModal('testimonialModal'); loadAdminTestimonials(); }
+  else toast(res.error || 'Error', true);
+}
+
+async function deleteTestimonial(id) {
+  if (!confirm('Delete?')) return;
+  await api('DELETE', '/api/admin/testimonials/' + id);
+  toast('Deleted'); loadAdminTestimonials();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — ACHIEVEMENTS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadAdminAchievements() {
+  const items = await api('GET', '/api/admin/achievements');
+  document.getElementById('achievementTableBody').innerHTML = (items||[]).map(a => `
+    <tr>
+      <td style="font-size:1.4rem;">${a.icon}</td>
+      <td>${a.title}</td>
+      <td>${a.year || '—'}</td>
+      <td>
+        <button class="action-btn action-edit" onclick='editAchievement(${JSON.stringify(a)})'>Edit</button>
+        <button class="action-btn action-delete" onclick="deleteAchievement('${a.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openAchievementModal() {
+  document.getElementById('achievementId').value = '';
+  document.getElementById('achievementTitle').value = '';
+  document.getElementById('achievementYear').value = '';
+  document.getElementById('achievementIcon').value = '🏆';
+  document.getElementById('achievementDesc').value = '';
+  document.getElementById('achievementSort').value = '0';
+  document.getElementById('achievementModal').classList.add('open');
+}
+
+function editAchievement(a) {
+  document.getElementById('achievementId').value = a.id;
+  document.getElementById('achievementTitle').value = a.title;
+  document.getElementById('achievementYear').value = a.year || '';
+  document.getElementById('achievementIcon').value = a.icon || '🏆';
+  document.getElementById('achievementDesc').value = a.description || '';
+  document.getElementById('achievementSort').value = a.sort_order || 0;
+  document.getElementById('achievementModal').classList.add('open');
+}
+
+async function saveAchievement() {
+  const id = document.getElementById('achievementId').value;
+  const body = {
+    title: document.getElementById('achievementTitle').value,
+    year: document.getElementById('achievementYear').value,
+    icon: document.getElementById('achievementIcon').value || '🏆',
+    description: document.getElementById('achievementDesc').value,
+    sort_order: parseInt(document.getElementById('achievementSort').value) || 0,
+  };
+  if (!body.title) { toast('Title required', true); return; }
+  const res = id ? await api('PUT', '/api/admin/achievements/' + id, body) : await api('POST', '/api/admin/achievements', body);
+  if (res.success || res.id) { toast('Achievement saved!'); closeModal('achievementModal'); loadAdminAchievements(); }
+  else toast(res.error || 'Error', true);
+}
+
+async function deleteAchievement(id) {
+  if (!confirm('Delete?')) return;
+  await api('DELETE', '/api/admin/achievements/' + id);
+  toast('Deleted'); loadAdminAchievements();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SETTINGS & PASSWORD
+// ══════════════════════════════════════════════════════════════════════════════
+async function saveSettings() {
+  const body = {
+    hero_tagline: document.getElementById('set_hero_tagline').value,
+    hero_subtitle: document.getElementById('set_hero_subtitle').value,
+    about_text: document.getElementById('set_about_text').value,
+    instagram: document.getElementById('set_instagram').value,
+    youtube: document.getElementById('set_youtube').value,
+    email: document.getElementById('set_email').value,
+  };
+  const res = await api('PUT', '/api/admin/settings', body);
+  if (res.success) { settings = await api('GET', '/api/settings'); applySettings(); toast('Settings saved!'); }
+  else toast('Error saving', true);
+}
+
+async function changePassword() {
+  const oldPassword = document.getElementById('oldPass').value;
+  const newPassword = document.getElementById('newPass').value;
+  const conf = document.getElementById('confPass').value;
+  if (newPassword !== conf) { document.getElementById('passErr').textContent = 'Passwords do not match'; return; }
+  const res = await api('POST', '/api/auth/change-password', { oldPassword, newPassword });
+  if (res.success) { toast('Password changed!'); document.getElementById('passErr').textContent = ''; }
+  else document.getElementById('passErr').textContent = res.error || 'Error';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IMAGE UPLOAD
+// ══════════════════════════════════════════════════════════════════════════════
+function triggerUpload(inputId, urlId, previewId) {
+  const inp = document.getElementById(inputId);
+  inp.click();
+  inp.onchange = async () => {
+    const file = inp.files[0]; if (!file) return;
+    const fd = new FormData(); fd.append('image', file);
+    const res = await fetch('/api/admin/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd
+    });
+    const data = await res.json();
+    if (data.url) {
+      document.getElementById(urlId).textContent = data.url;
+      const prev = document.getElementById(previewId);
+      prev.src = data.url; prev.style.display = 'block';
+      toast('Image uploaded!');
+    } else toast('Upload failed', true);
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RICH TEXT EDITOR
+// ══════════════════════════════════════════════════════════════════════════════
+function fmt(cmd) { document.getElementById('blogContent').focus(); document.execCommand(cmd, false, null); }
+function fmtBlock(tag) { document.getElementById('blogContent').focus(); document.execCommand('formatBlock', false, tag); }
+function insertLink() {
+  const url = prompt('Enter URL:');
+  if (url) { document.getElementById('blogContent').focus(); document.execCommand('createLink', false, url); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BROWSER BACK
+// ══════════════════════════════════════════════════════════════════════════════
+window.addEventListener('popstate', e => {
+  if (e.state) navigate(e.state.page, e.state.data);
+});
+</script>
+</body>
+</html>
