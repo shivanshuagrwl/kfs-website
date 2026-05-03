@@ -39,11 +39,12 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 @media(max-width:768px){
   .nav-links{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--black);
     flex-direction:column;align-items:center;justify-content:center;gap:40px;
-    transform:translateY(-100%);transition:transform .5s var(--ease);z-index:99}
-  .nav-links.open{transform:translateY(0)}
-  .nav-links a{font-size:24px;letter-spacing:.1em}
-  .nav-hamburger{display:flex}
-  nav{padding:16px 24px}
+    transform:translateY(-100%);transition:transform .5s var(--ease);z-index:150;
+    visibility:hidden}
+  .nav-links.open{transform:translateY(0);visibility:visible}
+  .nav-links a{font-size:28px;letter-spacing:.1em}
+  .nav-hamburger{display:flex;z-index:200;position:relative}
+  nav{padding:16px 24px;z-index:160}
 }
 
 /* ── PAGE SYSTEM ─────────────────────────────────────────────────────── */
@@ -345,80 +346,89 @@ footer{border-top:1px solid var(--border);padding:60px 80px;
 
 /* ── MOBILE GENERAL ──────────────────────────────────────────────────── */
 @media(max-width:768px){
-  /* body */
   body{cursor:auto}
 
   /* hero */
-  #hero-section{height:calc(100svh - 60px);padding:0 24px}
-  .hero-logo{width:64px;height:64px}
-  .hero-logo-wrap{margin-bottom:24px}
-  .hero-tagline{font-size:clamp(2.8rem,14vw,5rem);line-height:.92}
-  .hero-sub{font-size:12px;margin-top:16px}
-  .hero-cta{flex-direction:column;align-items:center;gap:12px;margin-top:32px}
-  .hero-cta .btn{width:100%;max-width:280px;justify-content:center}
-  .hero-scroll{bottom:24px}
-  .cam-1{width:180px}
-  .cam-2{width:140px}
-  .cam-3{width:110px}
-  .cam-4{width:120px}
+  #hero-section{height:100svh;padding:0 20px}
+  .hero-logo{width:60px;height:60px}
+  .hero-logo-wrap{margin-bottom:20px}
+  .hero-tagline{font-size:clamp(3rem,15vw,4.5rem);line-height:.92;text-align:center}
+  .hero-sub{font-size:11px;margin-top:14px;text-align:center}
+  .hero-cta{flex-direction:column;align-items:stretch;gap:10px;margin-top:28px;width:100%;max-width:300px}
+  .hero-cta .btn{width:100%;justify-content:center;padding:14px 20px;font-size:12px}
+  .hero-scroll{bottom:20px}
+  .hero-reel-circle{width:320px;height:320px}
+  .hero-reel-circle::before{width:200px;height:200px}
+  .cam-1{width:160px;bottom:-20px;left:-40px}
+  .cam-2{width:120px;top:8%;right:-20px}
+  .cam-3{width:100px;bottom:12%;right:4%}
+  .cam-4{width:110px;top:4%;left:4%}
 
   /* sections */
-  .section{padding:60px 20px}
+  .section{padding:56px 20px}
   .section-divider{margin:0 20px}
-  .section-title{font-size:clamp(1.8rem,8vw,3rem)}
+  .section-title{font-size:clamp(1.8rem,8vw,2.8rem)}
+  .section-label{margin-bottom:16px}
 
   /* stats */
   .stats-grid{margin-top:40px}
-  .stat-item{padding:24px 20px}
+  .stat-item{padding:24px 16px}
+  .stat-num{font-size:2.2rem}
 
   /* about */
-  .about-layout{margin-top:40px;gap:32px}
+  .about-layout{margin-top:32px;gap:28px;grid-template-columns:1fr}
   .about-visual{display:none}
-  .about-text{font-size:1rem}
+  .about-text{font-size:1rem;line-height:1.7}
 
   /* achievements */
-  .achievements-grid{margin-top:32px}
-  .achievement-card{padding:28px 20px}
+  .achievements-grid{margin-top:28px;grid-template-columns:1fr}
+  .achievement-card{padding:24px 20px}
 
   /* events */
-  .events-tabs{margin-top:32px}
-  .event-item{padding:24px 0;gap:8px}
-  .event-date-block{display:flex;align-items:baseline;gap:6px}
-  .event-day{font-size:1.4rem}
+  .events-tabs{margin-top:28px}
+  .events-tab{padding:10px 16px;font-size:12px}
+  .event-item{padding:20px 0;gap:16px;grid-template-columns:60px 1fr}
+  .event-location{display:none}
   .event-cover{height:160px}
+  .event-day{font-size:1.6rem}
 
   /* blog */
-  .blog-grid{margin-top:32px}
+  .blog-grid{margin-top:28px;grid-template-columns:1fr}
   .blog-card-body{padding:16px}
   .blog-card-title{font-size:16px}
-  .blog-detail-content{padding:32px 20px}
-  .blog-detail-title{font-size:clamp(1.6rem,7vw,2.5rem)}
+  .blog-detail-content{padding:28px 20px}
+  .blog-detail-title{font-size:clamp(1.6rem,7vw,2.4rem)}
   .blog-detail-body{font-size:15px}
 
   /* members */
-  .members-grid{margin-top:32px}
+  .members-grid{margin-top:28px;grid-template-columns:repeat(2,1fr)}
 
   /* testimonials */
-  .testimonials-track{margin-top:32px}
-  .testimonial-card{min-width:280px;padding:24px}
-  .testimonial-quote{font-size:14px}
+  .testimonials-track{margin-top:28px}
+  .testimonial-card{min-width:260px;padding:20px}
+  .testimonial-quote{font-size:13px}
 
   /* footer */
-  footer{padding:40px 20px;gap:24px}
-  .footer-links{flex-wrap:wrap;gap:16px;margin-top:16px}
+  footer{padding:36px 20px;gap:20px;grid-template-columns:1fr}
+  .footer-links{flex-wrap:wrap;gap:16px;margin-top:12px}
 
-  /* login box */
-  .login-box{width:100%;max-width:360px;padding:40px 24px;margin:0 20px}
+  /* login */
+  .login-box{width:calc(100% - 40px);max-width:360px;padding:36px 24px}
 
   /* modals */
-  .modal{padding:24px 20px;max-height:95vh}
+  .modal{padding:24px 20px;max-height:92vh;border-radius:8px}
   .modal-actions{flex-direction:column-reverse;gap:8px}
-  .modal-actions .btn-sm{width:100%;text-align:center;padding:12px}
+  .modal-actions .btn-sm{width:100%;text-align:center;padding:12px;border-radius:20px}
+
+  /* admin */
+  .admin-header h2{font-size:20px}
+  .settings-grid{grid-template-columns:1fr}
+  .admin-table{font-size:12px}
+  .admin-table th,.admin-table td{padding:10px 12px}
 }
-@media(max-width:480px){
-  .hero-tagline{font-size:clamp(2.4rem,13vw,4rem)}
-  .members-grid{grid-template-columns:repeat(2,1fr)}
-  .blog-grid{grid-template-columns:1fr}
+@media(max-width:400px){
+  .hero-tagline{font-size:clamp(2.6rem,13vw,3.8rem)}
+  .hero-cta .btn{font-size:11px;padding:12px 16px}
 }
 
 /* ── LOADING ──────────────────────────────────────────────────────────── */
@@ -1526,6 +1536,108 @@ document.querySelectorAll('.modal-overlay').forEach(overlay=>{
 });
 
 checkRoute();
+
+// ── EVENT COUNTDOWN POPUP ──
+async function checkUpcomingEventPopup() {
+  // Don't show on admin page
+  if (window.location.pathname === '/admin') return;
+
+  const events = await apiFetch('/api/events');
+  if (!events || !events.length) return;
+
+  const now = new Date();
+  now.setHours(0,0,0,0);
+
+  // Find upcoming events within 10 days
+  const soon = events
+    .filter(e => e.is_upcoming && e.event_date)
+    .map(e => ({ ...e, _date: new Date(e.event_date) }))
+    .filter(e => {
+      const diff = Math.ceil((e._date - now) / (1000*60*60*24));
+      return diff >= 0 && diff <= 10;
+    })
+    .sort((a,b) => a._date - b._date);
+
+  if (!soon.length) return;
+
+  const ev = soon[0];
+  const diff = Math.ceil((ev._date - now) / (1000*60*60*24));
+  const daysText = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow!' : `In ${diff} days`;
+  const dateStr = ev._date.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
+  // Build popup
+  const overlay = document.createElement('div');
+  overlay.id = 'event-popup-overlay';
+  overlay.innerHTML = `
+    <div id="event-popup">
+      <div class="ep-label">Upcoming Event</div>
+      <div class="ep-days">${daysText}</div>
+      <div class="ep-title">${ev.title}</div>
+      <div class="ep-meta">
+        <span>📅 ${dateStr}</span>
+        ${ev.event_time ? `<span>🕐 ${ev.event_time}</span>` : ''}
+        ${ev.location ? `<span>📍 ${ev.location}</span>` : ''}
+      </div>
+      <div class="ep-actions">
+        <button class="ep-btn-primary" onclick="closeEventPopup();navigate('events')">View Event</button>
+        <button class="ep-btn-close" onclick="closeEventPopup()">Maybe Later</button>
+      </div>
+      <button class="ep-x" onclick="closeEventPopup()">✕</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Animate in after 1.5s
+  setTimeout(() => overlay.classList.add('visible'), 1500);
+
+  // Close on overlay click
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeEventPopup(); });
+}
+
+function closeEventPopup() {
+  const overlay = document.getElementById('event-popup-overlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => overlay.remove(), 400);
+  }
+}
+
+checkUpcomingEventPopup();
 </script>
+
+<style>
+#event-popup-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity .4s var(--ease);backdrop-filter:blur(6px)}
+#event-popup-overlay.visible{opacity:1;pointer-events:all}
+#event-popup{
+  background:#111;border:1px solid #2a2a2a;max-width:440px;width:100%;
+  padding:40px;position:relative;
+  transform:translateY(32px);transition:transform .4s var(--ease);
+  border-radius:4px}
+#event-popup-overlay.visible #event-popup{transform:translateY(0)}
+.ep-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:16px}
+.ep-days{font-size:clamp(2rem,8vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1;margin-bottom:12px;color:var(--white)}
+.ep-title{font-size:20px;font-weight:600;margin-bottom:20px;line-height:1.3}
+.ep-meta{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}
+.ep-meta span{font-size:13px;color:var(--grey);display:flex;align-items:center;gap:8px}
+.ep-actions{display:flex;gap:12px;flex-wrap:wrap}
+.ep-btn-primary{padding:12px 24px;background:var(--white);color:var(--black);
+  border:none;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;font-family:inherit;border-radius:20px;flex:1}
+.ep-btn-primary:hover{background:#ddd}
+.ep-btn-close{padding:12px 24px;background:transparent;color:var(--grey);
+  border:1px solid #2a2a2a;font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;font-family:inherit;border-radius:20px;flex:1}
+.ep-btn-close:hover{border-color:var(--grey);color:var(--white)}
+.ep-x{position:absolute;top:16px;right:16px;background:transparent;border:none;
+  color:var(--grey);font-size:16px;cursor:pointer;padding:4px 8px;transition:color .2s;line-height:1}
+.ep-x:hover{color:var(--white)}
+@media(max-width:480px){
+  #event-popup{padding:28px 20px}
+  .ep-actions{flex-direction:column}
+}
+</style>
 </body>
 </html>
