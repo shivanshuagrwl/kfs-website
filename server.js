@@ -198,6 +198,8 @@ app.post('/api/admin/upload-team-photo', authMiddleware, upload.single('photo'),
 app.post('/api/admin/settings', authMiddleware, async (req, res) => {
   const entries = Object.entries(req.body);
   for (const [key, value] of entries) {
+    // Skip empty strings so they don't overwrite existing values (e.g. team_photo)
+    if (value === '' || value === null || value === undefined) continue;
     await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
   }
   await logActivity(req.admin.id, req.admin.name, 'update', 'settings', 'Site Settings');
