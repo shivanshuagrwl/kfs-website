@@ -67,6 +67,7 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
+body.light-mode #movie-watch-status-btn{border-color:#111 !important;color:#111 !important}
 body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
@@ -1391,7 +1392,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--grey);cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
+        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;border:1px solid var(--white);background:transparent;color:var(--white);cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
           <span id="movie-watch-status-icon">☐</span> Mark as Watched
         </button>
       </div>
@@ -4348,8 +4349,9 @@ function updateDetailWatchBtn(id) {
   btn.innerHTML = watched
     ? '<span>✓</span> Watched'
     : '<span>☐</span> Mark as Watched';
-  btn.style.borderColor = watched ? 'rgba(255,255,255,.5)' : '';
-  btn.style.color = watched ? 'var(--white)' : '';
+  btn.style.background = watched ? 'var(--white)' : 'transparent';
+  btn.style.color = watched ? 'var(--black)' : 'var(--white)';
+  btn.style.borderColor = 'var(--white)';
 }
 
 function toggleWatchStatusCard(id, cardEl) {
