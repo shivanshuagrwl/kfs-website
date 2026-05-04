@@ -51,6 +51,9 @@ body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
 body.light-mode .blog-detail-content{color:#111}
+body.light-mode .chart-line{stroke:#111 !important}
+body.light-mode .chart-dot{fill:#111 !important}
+body.light-mode .chart-grad-stop{stop-color:#111 !important}
 body.light-mode .bar-chart-bar{background:#111}
 body.light-mode .leaderboard-bar-fill{background:#111}
 body.light-mode .review-cat-fill{background:#333}
@@ -3719,17 +3722,19 @@ function renderLineChart(svgId, labelsId, byDate) {
     const y = H - pad - (d.views/maxV)*(H-pad*2);
     return `${x},${y}`;
   });
-  const isLight = document.body.classList.contains('light-mode');
-  const lineColor = isLight ? '#111' : 'white';
-  const gradColor = isLight ? '#111' : 'white';
   svg.innerHTML = `
-    <polyline points="${pts.join(' ')}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round"/>
+    <style>
+      .chart-line { stroke: var(--white); }
+      .chart-dot  { fill:   var(--white); }
+      .chart-grad-stop { stop-color: var(--white); }
+    </style>
+    <polyline class="chart-line" points="${pts.join(' ')}" fill="none" stroke-width="1.5" stroke-linejoin="round"/>
     ${byDate.map((d,i)=>{
       const x=pad+(i/(byDate.length-1||1))*(W-pad*2);
       const y=H-pad-(d.views/maxV)*(H-pad*2);
-      return `<circle cx="${x}" cy="${y}" r="3" fill="${lineColor}"/>`;
+      return `<circle class="chart-dot" cx="${x}" cy="${y}" r="3"/>`;
     }).join('')}
-    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${gradColor}" stop-opacity=".15"/><stop offset="100%" stop-color="${gradColor}" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop class="chart-grad-stop" offset="0%" stop-opacity=".15"/><stop class="chart-grad-stop" offset="100%" stop-opacity="0"/></linearGradient></defs>
     <polygon points="${pts.join(' ')} ${W-pad},${H} ${pad},${H}" fill="url(#fadeG)"/>`;
   // Labels — show first, middle, last
   const show = [0, Math.floor(byDate.length/2), byDate.length-1].filter((v,i,a)=>a.indexOf(v)===i);
