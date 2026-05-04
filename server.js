@@ -411,10 +411,11 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
-    title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
+    title, release_year, genre: genre||null, description: description||null,
+    director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -423,8 +424,9 @@ app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (re
 });
 
 app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async (req, res) => {
-  const { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
-  const updates = { title, release_year, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const updates = { title, release_year, genre: genre||null, description: description||null,
+    director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     trailer_url: trailer_url || null, watch_url: watch_url || null };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
