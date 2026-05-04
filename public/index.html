@@ -34,37 +34,24 @@ body.light-mode .nav-hamburger span{background:#111}
 body.light-mode .glow-word{color:#0a0a0a !important;transition:text-shadow .8s ease,color .4s ease}
 body.light-mode .glow-word.lit{
   color:#000 !important;
-  text-shadow:
-    0 0 8px  rgba(0,0,0,.55),
-    0 0 20px rgba(0,0,0,.35),
-    0 0 45px rgba(0,0,0,.18),
-    0 0 90px rgba(0,0,0,.08)
+  text-shadow:0 0 8px rgba(0,0,0,.55),0 0 20px rgba(0,0,0,.35),0 0 45px rgba(0,0,0,.18),0 0 90px rgba(0,0,0,.08)
 }
 body.light-mode .hero-tagline em{color:#888}
 body.light-mode .hero-sub{color:#555 !important}
-/* pulsing ambient glow orb behind the text in light mode */
 body.light-mode #hero-section::after{
-  content:'';
-  position:absolute;
-  left:50%;top:42%;
+  content:'';position:absolute;left:50%;top:42%;
   transform:translate(-50%,-50%);
-  width:min(70vw,700px);
-  height:min(40vw,380px);
+  width:min(70vw,700px);height:min(40vw,380px);
   border-radius:50%;
   background:radial-gradient(ellipse at center,rgba(0,0,0,.13) 0%,rgba(0,0,0,.06) 40%,transparent 70%);
-  pointer-events:none;
-  animation:lightGlowPulse 4s ease-in-out infinite;
-  z-index:0
+  pointer-events:none;animation:lightGlowPulse 4s ease-in-out infinite;z-index:0
 }
 @keyframes lightGlowPulse{
   0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}
   50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}
 }
-/* make tagline sit above the orb */
-body.light-mode .hero-tagline,
-body.light-mode .hero-sub,
-body.light-mode .hero-cta,
-body.light-mode .hero-scroll{position:relative;z-index:1}
+body.light-mode .hero-tagline,body.light-mode .hero-sub,
+body.light-mode .hero-cta,body.light-mode .hero-scroll{position:relative;z-index:1}
 body.light-mode .hero-scroll span{color:#888}
 body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
 /* testimonials */
@@ -232,8 +219,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
   box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
-.hero-tagline{font-size:clamp(4rem,11.5vw,10.5rem);font-weight:900;letter-spacing:-.05em;
-  line-height:.9;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
+.hero-tagline{font-size:clamp(3.2rem,8.5vw,7.8rem);font-weight:900;letter-spacing:-.05em;
+  line-height:.92;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
   width:min(96vw,1400px);text-align:center}
 .hero-tagline em{font-style:normal;color:var(--grey)}
 .glow-word{display:inline;transition:text-shadow .7s ease,color .7s ease}
