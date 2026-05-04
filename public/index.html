@@ -1701,23 +1701,19 @@ body:has(#admin-panel.active) #main-nav{display:none}
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
 
-// Decode JWT to get the real role baked into the token (not just localStorage cache)
+// Decode JWT payload to get the real role baked in at login time
 (function syncRoleFromToken() {
   if (!adminToken) return;
   try {
     const payload = JSON.parse(atob(adminToken.split('.')[1]));
-    // If token is expired, clear it
     if (payload.exp && payload.exp * 1000 < Date.now()) {
       adminToken = null;
-      localStorage.removeItem('kfs_token');
-      localStorage.removeItem('kfs_role');
-      localStorage.removeItem('kfs_admin_name');
+      ['kfs_token','kfs_role','kfs_admin_name'].forEach(k => localStorage.removeItem(k));
       return;
     }
-    // Sync role and name from the actual JWT payload
     if (payload.role) localStorage.setItem('kfs_role', payload.role);
     if (payload.name) localStorage.setItem('kfs_admin_name', payload.name);
-  } catch(e) { /* malformed token */ }
+  } catch(e) {}
 })();
 
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
@@ -2428,18 +2424,12 @@ function adminLogout() {
 
 function showAdminPanel() {
   // Always re-read from localStorage so refresh works correctly
-  if (!currentAdminRole || currentAdminRole === 'admin') {
-    currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
-  }
-  if (!currentAdminName) {
-    currentAdminName = localStorage.getItem('kfs_admin_name') || '';
-  }
+  currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
+  currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
-  document.getElementById('event-popup-overlay')?.remove();
-  document.querySelectorAll('.notif-popup-overlay').forEach(el=>el.remove());
 
   // Show logged-in admin name and role
   const nameEl = document.getElementById('sidebar-admin-name');
@@ -2912,11 +2902,16 @@ async function apiFetch(url, method='GET', body=null) {
   }
   try {
     const res = await fetch(url, opts);
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      console.error('apiFetch: non-JSON response for', method, url, res.status);
+      return null;
+    }
     const data = await res.json().catch(() => null);
-    if (!res.ok) console.warn('apiFetch', method, url, res.status, data);
+    if (!res.ok) console.warn('apiFetch error:', method, url, res.status, data?.error || data);
     return data;
   } catch(e) {
-    console.error('apiFetch network error:', e);
+    console.error('apiFetch network error:', url, e);
     return null;
   }
 }
@@ -2938,71 +2933,7 @@ checkRoute();
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
 // ── EVENT COUNTDOWN POPUP ──
-async function checkUpcomingEventPopup() {
-  // Don't show on admin page
-  if (document.getElementById('admin-panel')?.classList.contains('active')) return;
 
-  const events = await apiFetch('/api/events');
-  if (!events || !events.length) return;
-
-  const now = new Date();
-  now.setHours(0,0,0,0);
-
-  // Find upcoming events within 10 days
-  const soon = events
-    .filter(e => e.is_upcoming && e.event_date)
-    .map(e => ({ ...e, _date: new Date(e.event_date) }))
-    .filter(e => {
-      const diff = Math.ceil((e._date - now) / (1000*60*60*24));
-      return diff >= 0 && diff <= 10;
-    })
-    .sort((a,b) => a._date - b._date);
-
-  if (!soon.length) return;
-
-  const ev = soon[0];
-  const diff = Math.ceil((ev._date - now) / (1000*60*60*24));
-  const daysText = diff === 0 ? 'Today!' : diff === 1 ? 'Tomorrow!' : `In ${diff} days`;
-  const dateStr = ev._date.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-
-  // Build popup
-  const overlay = document.createElement('div');
-  overlay.id = 'event-popup-overlay';
-  overlay.innerHTML = `
-    <div id="event-popup">
-      <div class="ep-label">Upcoming Event</div>
-      <div class="ep-days">${daysText}</div>
-      <div class="ep-title">${ev.title}</div>
-      <div class="ep-meta">
-        <span>📅 ${dateStr}</span>
-        ${ev.event_time ? `<span>🕐 ${ev.event_time}</span>` : ''}
-        ${ev.location ? `<span>📍 ${ev.location}</span>` : ''}
-      </div>
-      <div class="ep-actions">
-        <button class="ep-btn-primary" onclick="closeEventPopup();navigate('events')">View Event</button>
-        <button class="ep-btn-close" onclick="closeEventPopup()">Maybe Later</button>
-      </div>
-      <button class="ep-x" onclick="closeEventPopup()">✕</button>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  // Animate in after 1.5s
-  setTimeout(() => overlay.classList.add('visible'), 1500);
-
-  // Close on overlay click
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeEventPopup(); });
-}
-
-function closeEventPopup() {
-  const overlay = document.getElementById('event-popup-overlay');
-  if (overlay) {
-    overlay.classList.remove('visible');
-    setTimeout(() => overlay.remove(), 400);
-  }
-}
-
-checkUpcomingEventPopup();
 
 // ── NOTIFICATIONS ──────────────────────────────────────────────────────
 let allNotifications = [];
@@ -3016,10 +2947,7 @@ async function loadNotifications() {
     allNotifications = raw ? JSON.parse(raw) : [];
   } catch(e) { allNotifications = []; }
   renderNotifTable();
-  // show popups only if not in admin
-  if (!document.getElementById('admin-panel')?.classList.contains('active')) {
-    showNextNotifPopup(0);
-  }
+
 }
 
 function renderNotifTable() {
@@ -3043,42 +2971,7 @@ function renderNotifTable() {
     </tr>`).join('');
 }
 
-// Show popups one by one - each appears after previous is dismissed
-function showNextNotifPopup(idx) {
-  const active = allNotifications.filter(n => n.active);
-  if (idx >= active.length) return;
-  const n = active[idx];
-  const typeIcons = {announcement:'📢',achievement:'🏆',film:'🎬',event:'🎪'};
-  const overlay = document.createElement('div');
-  overlay.className = 'notif-popup-overlay';
-  overlay.innerHTML = `
-    <div class="notif-popup-box">
-      <div class="ep-label">${typeIcons[n.type]||'📢'} ${(n.type||'').charAt(0).toUpperCase()+(n.type||'').slice(1)}</div>
-      <div class="ep-title" style="font-size:20px;margin-bottom:10px;line-height:1.3">${n.title}</div>
-      ${n.message ? `<div style="font-size:13px;color:#888;line-height:1.6;margin-bottom:20px">${n.message}</div>` : ''}
-      <div class="ep-actions">
-        ${n.btnText && n.btnPage ? `<button class="ep-btn-primary" onclick="dismissNotifAndNext(this,${idx+1},'${n.btnPage}')">${n.btnText}</button>` : ''}
-        <button class="ep-btn-close" onclick="dismissNotifAndNext(this,${idx+1},null)">Dismiss</button>
-      </div>
-      <button class="ep-x" onclick="dismissNotifAndNext(this,${idx+1},null)">✕</button>
-    </div>`;
-  overlay.addEventListener('click', e => { if(e.target===overlay) dismissNotifAndNext(overlay,idx+1,null); });
-  document.body.appendChild(overlay);
-  // fade in after delay: first popup at 2s, subsequent immediately
-  const delay = idx === 0 ? 2000 : 100;
-  setTimeout(() => overlay.classList.add('visible'), delay);
-}
 
-function dismissNotifAndNext(el, nextIdx, page) {
-  const overlay = el.closest ? el.closest('.notif-popup-overlay') : el;
-  if (overlay) {
-    overlay.classList.remove('visible');
-    setTimeout(() => {
-      overlay.remove();
-      if (page) navigate(page);
-      showNextNotifPopup(nextIdx);
-    }, 400);
-  }
 }
 
 function openNotifModal(idx) {
@@ -3311,7 +3204,7 @@ async function saveNewAdmin() {
       loadAdminData('admins');
       if (typeof showToast === 'function') showToast('Admin "' + name + '" created', 'success');
     } else {
-      errEl.textContent = (res && res.error) ? res.error : 'Failed to create admin. Check console for details.';
+      errEl.textContent = (res && res.error) ? res.error : 'Failed to create admin. Are you logged in as master?';
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Create Admin'; }
@@ -3372,49 +3265,10 @@ async function bulkDelete(section) {
 </script>
 
 <style>
-#event-popup-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;
-  display:flex;align-items:center;justify-content:center;padding:24px;
-  opacity:0;pointer-events:none;transition:opacity .4s var(--ease);backdrop-filter:blur(6px)}
-#event-popup-overlay.visible{opacity:1;pointer-events:all}
-#event-popup{
-  background:#111;border:1px solid #2a2a2a;max-width:440px;width:100%;
-  padding:40px;position:relative;
-  transform:translateY(32px);transition:transform .4s var(--ease);
-  border-radius:4px}
-#event-popup-overlay.visible #event-popup{transform:translateY(0)}
-.ep-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:16px}
-.ep-days{font-size:clamp(2rem,8vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1;margin-bottom:12px;color:var(--white)}
-.ep-title{font-size:20px;font-weight:600;margin-bottom:20px;line-height:1.3}
-.ep-meta{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}
-.ep-meta span{font-size:13px;color:var(--grey);display:flex;align-items:center;gap:8px}
-.ep-actions{display:flex;gap:12px;flex-wrap:wrap}
-.ep-btn-primary{padding:12px 24px;background:var(--white);color:var(--black);
-  border:none;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-  cursor:pointer;transition:all .2s;font-family:inherit;border-radius:20px;flex:1}
-.ep-btn-primary:hover{background:#ddd}
-.ep-btn-close{padding:12px 24px;background:transparent;color:var(--grey);
-  border:1px solid #2a2a2a;font-size:13px;letter-spacing:.06em;text-transform:uppercase;
-  cursor:pointer;transition:all .2s;font-family:inherit;border-radius:20px;flex:1}
-.ep-btn-close:hover{border-color:var(--grey);color:var(--white)}
-.ep-x{position:absolute;top:16px;right:16px;background:transparent;border:none;
-  color:var(--grey);font-size:16px;cursor:pointer;padding:4px 8px;transition:color .2s;line-height:1}
-.ep-x:hover{color:var(--white)}
-@media(max-width:480px){
-  #event-popup{padding:28px 20px}
+
   .ep-actions{flex-direction:column}
 }
-.notif-popup-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;
-  display:flex;align-items:center;justify-content:center;padding:24px;
-  opacity:0;pointer-events:none;transition:opacity .4s ease;backdrop-filter:blur(6px)}
-.notif-popup-overlay.visible{opacity:1;pointer-events:all}
-.notif-popup-box{
-  background:#111;border:1px solid #2a2a2a;max-width:420px;width:100%;
-  padding:36px;position:relative;border-radius:4px;
-  transform:translateY(24px);transition:transform .4s ease}
-.notif-popup-overlay.visible .notif-popup-box{transform:translateY(0)}
-@media(max-width:480px){.notif-popup-box{padding:24px 20px}}
+
 </style>
 
 <!-- Notification Modal -->
