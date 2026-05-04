@@ -53,10 +53,11 @@ function masterMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('masterMiddleware decoded role:', decoded.role, 'username:', decoded.username);
     if (decoded.role !== 'master') return res.status(403).json({ error: 'Master access only' });
     req.admin = decoded;
     next();
-  } catch { res.status(401).json({ error: 'Invalid token' }); }
+  } catch(e) { res.status(401).json({ error: 'Invalid token' }); }
 }
 
 // ── Activity logger ───────────────────────────────────────────────────────────
@@ -157,7 +158,9 @@ app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
 // ── MASTER: Activity log ──────────────────────────────────────────────────────
 app.get('/api/master/activity', masterMiddleware, async (req, res) => {
   const { data } = await supabase.from('admin_activity')
-    .select('*').order('created_at', { ascending: false }).limit(200);
+    .select('*')
+    .neq('admin_id', req.admin.id)
+    .order('created_at', { ascending: false }).limit(200);
   res.json(data || []);
 });
 
