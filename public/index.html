@@ -12,74 +12,79 @@
   --accent:#f5f5f5;--card:#111;--ease:cubic-bezier(.4,0,.2,1);
 }
 
-/* ── LIGHT MODE ─────────────────────────────────────────────────────── */
+/* ══ LIGHT MODE ═══════════════════════════════════════════════════════════ */
 body.light-mode{
-  --black:#f2f2f2;--white:#111;--grey:#666;--mid:#ccc;--border:#ddd;
-  --accent:#111;--card:#fff;
+  --black:#f0f0f0;--white:#111;--grey:#666;--mid:#bbb;--border:#ddd;--accent:#111;--card:#fff;
 }
-body.light-mode nav{background:rgba(242,242,242,.95);border-bottom:1px solid rgba(0,0,0,.1)}
+/* nav */
+body.light-mode nav{background:rgba(240,240,240,.96);border-bottom:1px solid rgba(0,0,0,.1)}
 body.light-mode .nav-logo-text{color:#111}
 body.light-mode .nav-links a{color:#666}
 body.light-mode .nav-links a:hover,body.light-mode .nav-links a.active{color:#111}
 body.light-mode .nav-hamburger span{background:#111}
-/* mobile nav full-screen overlay */
+/* mobile nav full-screen */
 @media(max-width:768px){
-  body.light-mode .nav-links{background:#f2f2f2}
-  body.light-mode .nav-links li{background:#e8e8e8}
+  body.light-mode nav{background:rgba(240,240,240,.99)}
+  body.light-mode .nav-links{background:#f0f0f0}
+  body.light-mode .nav-links li{background:#e6e6e6}
   body.light-mode .nav-links a{color:#333}
-  body.light-mode .nav-links a.active,body.light-mode .nav-links a:hover{color:#111;background:rgba(0,0,0,.06)}
+  body.light-mode .nav-links a.active,body.light-mode .nav-links a:hover{color:#111;background:rgba(0,0,0,.05)}
 }
 /* hero */
-body.light-mode .glow-word{color:#111}
-body.light-mode .glow-word.lit{color:#111;text-shadow:0 0 20px rgba(0,0,0,.15),0 0 40px rgba(0,0,0,.06)}
+body.light-mode .glow-word{color:#111 !important}
+body.light-mode .glow-word.lit{color:#111 !important;text-shadow:0 0 20px rgba(0,0,0,.12),0 0 40px rgba(0,0,0,.05)}
 body.light-mode .hero-tagline em{color:#999}
-body.light-mode .hero-scroll span{color:#666}
-body.light-mode .scroll-line{background:linear-gradient(to bottom,#999,transparent)}
+body.light-mode .hero-scroll span{color:#888}
+body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
 /* testimonials */
-body.light-mode .testimonials-track::before{background:linear-gradient(to right,#f2f2f2,transparent)}
-body.light-mode .testimonials-track::after{background:linear-gradient(to left,#f2f2f2,transparent)}
+body.light-mode .testimonials-track::before{background:linear-gradient(to right,#f0f0f0,transparent)}
+body.light-mode .testimonials-track::after{background:linear-gradient(to left,#f0f0f0,transparent)}
 body.light-mode .testimonial-card{background:#fff;border:1px solid #e0e0e0}
-body.light-mode .testimonial-quote{color:rgba(17,17,17,.8)}
+body.light-mode .testimonial-quote{color:rgba(17,17,17,.85)}
 body.light-mode .testimonial-name{color:#111}
 body.light-mode .testimonial-role{color:#666}
-body.light-mode .testimonial-avatar-placeholder{background:#ccc;color:#666}
-/* cards + sections */
+body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
+/* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card{background:#fff;border-color:#e0e0e0}
 body.light-mode .section-divider{background:#ddd}
-body.light-mode .stats-grid{background:#ddd}
-body.light-mode .stat-item{background:#f2f2f2}
+/* blog detail */
+body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
+body.light-mode .blog-detail-content{color:#111}
 /* admin sidebar */
 body.light-mode .admin-sidebar{background:#fff;border-right:1px solid #e0e0e0}
-body.light-mode .admin-sidebar-group{color:#aaa}
-body.light-mode .admin-sidebar-item{color:#444}
+body.light-mode .admin-sidebar-group{color:#bbb}
+body.light-mode .admin-sidebar-item{color:#555}
 body.light-mode .admin-sidebar-item:hover,body.light-mode .admin-sidebar-item.active{background:#f0f0f0;color:#111}
 body.light-mode .admin-sidebar-bottom{border-top:1px solid #e8e8e8}
 /* admin main */
-body.light-mode .admin-main,body.light-mode .admin-content{background:#f4f4f4}
+body.light-mode .admin-main{background:#f4f4f4}
 body.light-mode .admin-card{background:#fff;border-color:#e0e0e0;color:#111}
 body.light-mode .admin-header h2{color:#111}
 body.light-mode .admin-header p{color:#666}
 body.light-mode .admin-table th{background:#f0f0f0;color:#666;border-color:#e0e0e0}
-body.light-mode .admin-table td{border-color:#ebebeb;color:#111}
+body.light-mode .admin-table td{border-color:#eaeaea;color:#111}
 body.light-mode .admin-table tr:hover td{background:#fafafa}
-/* forms + modals */
-body.light-mode input,body.light-mode textarea,body.light-mode select{
+/* forms */
+body.light-mode input:not([type=checkbox]),body.light-mode textarea,body.light-mode select{
   background:#fff;color:#111;border-color:#ccc}
-body.light-mode input::placeholder,body.light-mode textarea::placeholder{color:#aaa}
+body.light-mode input::placeholder,body.light-mode textarea::placeholder{color:#bbb}
 body.light-mode label{color:#555}
-body.light-mode .modal-box{background:#fff;color:#111}
+/* modals */
+body.light-mode .modal-box,body.light-mode .modal{background:#fff;color:#111}
 body.light-mode .modal-header,body.light-mode .modal-footer{border-color:#e0e0e0}
-body.light-mode .modal-header h3{color:#111}
+body.light-mode .modal-header h3,body.light-mode h3{color:#111}
+/* buttons */
 body.light-mode .btn-primary{background:#111;color:#f5f5f5;border-color:#111}
 body.light-mode .btn-secondary{background:#e8e8e8;color:#111;border-color:#ccc}
+body.light-mode .btn-sm{background:#e8e8e8;color:#111;border-color:#ccc}
 /* search overlay */
-body.light-mode #search-overlay{background:rgba(242,242,242,.98)}
+body.light-mode #search-overlay{background:rgba(240,240,240,.98)}
 body.light-mode #search-input{background:#fff;color:#111;border-color:#ccc}
-body.light-mode .search-result-item{border-bottom-color:#e8e8e8;color:#111}
-body.light-mode .search-result-item:hover{background:#f0f0f0}
+body.light-mode .search-result-item{border-color:#eee;color:#111}
+body.light-mode .search-result-item:hover{background:#f5f5f5}
 /* smooth transitions */
-nav,body,.admin-sidebar,.admin-main,.admin-card,.modal-box,
+body,nav,.admin-sidebar,.admin-main,.admin-card,.modal,.modal-box,
 input,textarea,select,.ep-card,.film-card,.blog-card,.movie-card,
 .testimonial-card,.admin-table td,.admin-table th{
   transition:background-color .2s ease,border-color .2s ease,color .1s ease}
@@ -442,7 +447,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
   text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border);margin-bottom:12px}
 .admin-sidebar-group{font-size:10px;letter-spacing:.15em;text-transform:uppercase;
   color:#444;padding:16px 12px 6px}
-.admin-sidebar-item{padding:10px 14px;font-size:13px;letter-spacing:.04em;
+.admin-sidebar-item{padding:10px 14px;font-size:13px;letter-spacing:.04em;cursor:pointer;
   transition:all .2s;display:flex;align-items:center;gap:10px;color:var(--grey);
   border-radius:6px;margin-bottom:2px}
 .admin-sidebar-item:hover{color:var(--white);background:rgba(255,255,255,.06)}
@@ -677,7 +682,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .movies-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:60px}
 @media(max-width:1024px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.movies-grid{grid-template-columns:1fr}}
-.movie-card{background:var(--black);overflow:hidden;cursor:pointer;transition:background .3s var(--ease)}
+.movie-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease)}
 .movie-card:hover{background:var(--card)}
 .movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(100%);display:block;
   transition:filter .4s var(--ease)}
@@ -864,7 +869,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="page-wipe"></div>
 <div id="scroll-progress"></div>
 
-
 <!-- TRAILER MODAL -->
 <div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
   <div id="trailer-modal-inner">
@@ -901,8 +905,8 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
   </button>
-  <button id="nav-theme-btn" onclick="toggleTheme()" title="Toggle light / dark mode"
-    style="background:none;border:none;cursor:pointer;padding:6px;color:var(--grey);display:flex;align-items:center;transition:color .2s;flex-shrink:0">
+  <button onclick="toggleTheme()" id="nav-theme-btn" title="Toggle light / dark"
+    style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);flex-shrink:0">
     <svg id="nav-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
     </svg>
@@ -1350,9 +1354,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon">🔐</span> Manage Admins</div>
     <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon">📋</span> Activity Log</div>
     <div class="admin-sidebar-bottom">
-      <div class="admin-sidebar-item" onclick="toggleTheme()" style="justify-content:space-between;cursor:pointer">
+      <div class="admin-sidebar-item" onclick="toggleTheme()" style="justify-content:space-between">
         <span>Light Mode</span>
-        <span id="admin-theme-label" style="font-size:11px;opacity:.5;letter-spacing:.04em">OFF</span>
+        <span id="admin-theme-label" style="font-size:11px;opacity:.45;letter-spacing:.04em">OFF</span>
       </div>
       <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
     </div>
@@ -1802,18 +1806,22 @@ let adminToken = localStorage.getItem('kfs_token');
   } catch(e) {}
 })();
 
-// ── AUTO REFRESH TOKEN ────────────────────────────────────────────────────────
-// Fetches a fresh JWT from the DB on every page load.
-// This is the definitive fix for "add admin not working":
-// the old token may have role:'admin' baked in even after the DB row was fixed to 'master'.
-// The refresh endpoint re-issues a token with the CURRENT role from the DB.
+let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
+let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
+let allEvents = [];
+
+// ── AUTO-REFRESH TOKEN ────────────────────────────────────────────────────────
+// The stored JWT may have role:'admin' baked in from before the DB was corrected.
+// This hits /api/admin/refresh on every page load and re-issues a token with
+// the LIVE role from the DB — so master features (Add Admin etc.) work immediately
+// without needing to log out and back in.
 (function autoRefreshToken() {
   if (!adminToken) return;
   fetch('/api/admin/refresh', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + adminToken }
-  }).then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(data){
+  }).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
       if (!data || !data.token) return;
       adminToken = data.token;
       currentAdminRole = data.role || 'admin';
@@ -1821,17 +1829,12 @@ let adminToken = localStorage.getItem('kfs_token');
       localStorage.setItem('kfs_token', data.token);
       localStorage.setItem('kfs_role', data.role);
       localStorage.setItem('kfs_admin_name', data.name || '');
-      // If admin panel is already showing, re-render sidebar with correct role
-      if (document.getElementById('admin-panel') &&
-          document.getElementById('admin-panel').classList.contains('active')) {
-        showAdminPanel();
-      }
-    }).catch(function(){});
+      // Re-render admin sidebar if panel is already open
+      var panel = document.getElementById('admin-panel');
+      if (panel && panel.classList.contains('active')) { showAdminPanel(); }
+    }).catch(function() {});
 })();
 
-let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
-let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
-let allEvents = [];
 
 // ── HERO WORD GLOW ON SCROLL ──
 (function(){
@@ -1929,7 +1932,7 @@ function closeMenu() {
   if (hb) hb.classList.remove('open');
 }
 
-function _updateThemeUI(isLight) {
+function _setThemeUI(isLight) {
   const moon = document.getElementById('nav-icon-moon');
   const sun  = document.getElementById('nav-icon-sun');
   const lbl  = document.getElementById('admin-theme-label');
@@ -1940,13 +1943,12 @@ function _updateThemeUI(isLight) {
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light-mode');
   localStorage.setItem('kfs_theme', isLight ? 'light' : 'dark');
-  _updateThemeUI(isLight);
+  _setThemeUI(isLight);
 }
-// Restore saved theme immediately
 (function initTheme(){
   const isLight = localStorage.getItem('kfs_theme') === 'light';
   if (isLight) document.body.classList.add('light-mode');
-  setTimeout(() => _updateThemeUI(isLight), 0);
+  setTimeout(function(){ _setThemeUI(isLight); }, 0);
 })();
 
 function animateCounters() {
