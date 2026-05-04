@@ -282,6 +282,40 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .event-location{font-size:12px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase}
 .event-cover{width:100%;height:220px;object-fit:cover;margin-top:16px;filter:grayscale(100%)}
 
+/* ── CHITRA VICHITRA SECTION ─────────────────────────────────────────── */
+.cv-section{margin-bottom:60px;padding-bottom:40px;border-bottom:1px solid var(--border)}
+.cv-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:10px;font-weight:600}
+.cv-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+.cv-section-subtitle{font-size:13px;color:var(--grey);margin-bottom:32px}
+.cv-cards-row{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border)}
+@media(max-width:600px){.cv-cards-row{grid-template-columns:1fr}}
+.cv-year-card{position:relative;overflow:hidden;cursor:pointer;background:var(--card);aspect-ratio:3/2;display:flex;align-items:flex-end}
+.cv-year-card:hover .cv-year-card-img{transform:scale(1.04);filter:grayscale(0%)}
+.cv-year-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(60%);transition:transform .5s var(--ease),filter .4s var(--ease)}
+.cv-year-card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.2) 60%,transparent 100%)}
+.cv-year-card-placeholder{position:absolute;inset:0;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.15}
+.cv-year-card-info{position:relative;z-index:2;padding:24px;width:100%}
+.cv-year-badge{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:6px}
+.cv-year-num{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;letter-spacing:-.04em;color:#fff;line-height:1}
+.cv-year-meta{font-size:12px;color:rgba(255,255,255,.55);margin-top:6px;letter-spacing:.04em}
+.cv-year-arrow{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6);transition:color .2s}
+.cv-year-card:hover .cv-year-arrow{color:#fff}
+body.light-mode .cv-year-card{background:#e8e8e8}
+body.light-mode .cv-year-card-img{filter:grayscale(40%)}
+body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
+
+/* CV Detail view */
+.cv-detail-back{display:inline-flex;align-items:center;gap:8px;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--grey);
+  cursor:pointer;transition:color .2s;margin-bottom:36px}
+.cv-detail-back:hover{color:var(--white)}
+.cv-detail-header{margin-bottom:40px}
+.cv-detail-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
+.cv-detail-title{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;letter-spacing:-.04em;line-height:1}
+.cv-movies-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:40px}
+@media(max-width:900px){.cv-movies-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.cv-movies-grid{grid-template-columns:1fr}}
+
 /* ── BLOG GRID ────────────────────────────────────────────────────────── */
 .blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:60px}
 @media(max-width:768px){.blog-grid{grid-template-columns:1fr}}
@@ -1200,15 +1234,41 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <!-- ── EVENTS PAGE ── -->
 <div class="page" id="page-events">
   <section class="section">
-    <div class="section-inner">
+    <div class="section-inner" id="events-main-view">
       <p class="section-label">Program</p>
       <h2 class="section-title">Events</h2>
       <div class="events-tabs">
         <div class="events-tab active" onclick="filterEvents('upcoming',this)">Upcoming</div>
         <div class="events-tab" onclick="filterEvents('past',this)">Past</div>
       </div>
+      <!-- CV section — shown only in past tab -->
+      <div id="cv-section-wrap" style="display:none">
+        <div class="cv-section" style="margin-top:48px">
+          <p class="cv-section-label">Flagship Event</p>
+          <h3 class="cv-section-title">Chitra Vichitra</h3>
+          <p class="cv-section-subtitle">Our annual film screening festival — celebrating cinema one frame at a time.</p>
+          <div class="cv-cards-row" id="cv-cards-row">
+            <div class="loading" style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card)">Loading...</div>
+          </div>
+        </div>
+        <div style="margin-bottom:48px;border-bottom:1px solid var(--border);padding-bottom:48px">
+          <p class="section-label" style="margin-bottom:8px">Other Past Events</p>
+        </div>
+      </div>
       <div class="events-list" id="events-list">
         <div class="loading">Loading events...</div>
+      </div>
+    </div>
+
+    <!-- CV Detail view -->
+    <div class="section-inner" id="cv-detail-view" style="display:none">
+      <a class="cv-detail-back" onclick="closeCVDetail()">← Back to Events</a>
+      <div class="cv-detail-header">
+        <p class="cv-detail-label">Chitra Vichitra</p>
+        <h2 class="cv-detail-title" id="cv-detail-year-title">CV 2026</h2>
+      </div>
+      <div class="cv-movies-grid" id="cv-movies-grid">
+        <div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading films...</div>
       </div>
     </div>
   </section>
@@ -1398,6 +1458,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon">🎬</span> Events</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon">👥</span> Members</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('movies')" data-section="movies"><span class="icon">🎬</span> Films</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('chitra-vichitra')" data-section="chitra-vichitra"><span class="icon">🎞️</span> Chitra Vichitra</div>
     <div class="admin-sidebar-group">Extras</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
@@ -1492,6 +1553,17 @@ body:has(#admin-panel.active) #main-nav{display:none}
           <thead><tr><th><input type="checkbox" id="bulk-select-all-movies" onchange="selectAllBulk('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
           <tbody id="admin-movies-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- CHITRA VICHITRA -->
+    <div class="admin-section" id="section-chitra-vichitra">
+      <div class="admin-header">
+        <div><h2>Chitra Vichitra</h2><p>Manage flagship event editions and screened films</p></div>
+        <button class="btn btn-primary" onclick="openCVModal()">+ Add Edition</button>
+      </div>
+      <div id="cv-admin-list">
+        <div class="loading" style="padding:40px;text-align:center">Loading...</div>
       </div>
     </div>
 
@@ -1857,6 +1929,44 @@ body:has(#admin-panel.active) #main-nav{display:none}
   </div>
 </div>
 
+<!-- CHITRA VICHITRA MODAL -->
+<div class="modal-overlay" id="cv-modal">
+  <div class="modal">
+    <h3 id="cv-modal-title">Add CV Edition</h3>
+    <input type="hidden" id="cv-edit-id">
+    <div class="form-group"><label>Year (e.g. 2026)</label><input type="text" id="cv-year" placeholder="2026"></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="cv-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group" id="cv-cover-preview-wrap" style="display:none">
+      <img id="cv-cover-preview" src="" alt="" style="width:100%;max-width:280px;aspect-ratio:3/2;object-fit:cover;border:1px solid var(--border);border-radius:4px">
+    </div>
+    <div class="form-group"><label>Sort Order <span style="font-weight:400;color:var(--grey)">(lower = shown first)</span></label><input type="number" id="cv-sort" value="99"></div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeCVModal()">Cancel</button>
+      <button class="btn-sm btn-success" onclick="saveCV()">Save Edition</button>
+    </div>
+  </div>
+</div>
+
+<!-- CV MOVIES MODAL -->
+<div class="modal-overlay" id="cv-movies-modal">
+  <div class="modal" style="max-width:600px">
+    <h3>Manage Films — CV <span id="cv-movies-modal-year"></span></h3>
+    <p style="font-size:13px;color:var(--grey);margin-bottom:20px">Add movies from your Films database to this edition.</p>
+    <div class="form-group">
+      <label>Add a Film</label>
+      <select id="cv-movie-dropdown" style="width:100%">
+        <option value="">— Select a film —</option>
+      </select>
+    </div>
+    <button class="btn-sm btn-success" onclick="addMovieToCV()" style="margin-bottom:24px">+ Add to CV</button>
+    <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:10px">Current Films in this Edition</div>
+    <div id="cv-current-movies-list" style="display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:24px">
+      <button class="btn-sm" onclick="closeCVMoviesModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
@@ -2151,7 +2261,7 @@ async function loadEvents() {
 }
 
 function filterEvents(type, tabEl) {
-  document.querySelectorAll('.events-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#page-events .events-tab').forEach(t=>t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
   const filtered = allEvents.filter(e=> type==='upcoming' ? e.is_upcoming : !e.is_upcoming);
   const list = document.getElementById('events-list');
@@ -2159,6 +2269,14 @@ function filterEvents(type, tabEl) {
     list.innerHTML = filtered.map(e=>renderEventItem(e,true)).join('');
   } else {
     list.innerHTML = `<div class="empty-state"><p>No ${type} events.</p></div>`;
+  }
+  // Show Chitra Vichitra section only in Past tab
+  const cvWrap = document.getElementById('cv-section-wrap');
+  if (type === 'past') {
+    cvWrap.style.display = 'block';
+    loadCVCards();
+  } else {
+    cvWrap.style.display = 'none';
   }
 }
 
@@ -2828,6 +2946,9 @@ async function loadAdminData(name) {
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
       </div></td>
     </tr>`).join('');
+  }
+  else if (name==='chitra-vichitra') {
+    loadAdminCV();
   }
   else if (name==='analytics') {
     loadTrafficAnalytics(currentAnalyticsRange);
@@ -3780,7 +3901,196 @@ function doSearch(q) {
   });
 }
 
+// ══════════════════════════════════════════════════════════
+// CHITRA VICHITRA — PUBLIC
+// ══════════════════════════════════════════════════════════
+let _cvData = [];
+
+async function loadCVCards() {
+  _cvData = await apiFetch('/api/chitra-vichitra') || [];
+  const row = document.getElementById('cv-cards-row');
+  if (!row) return;
+  if (!_cvData.length) {
+    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.</div>`;
+    return;
+  }
+  row.innerHTML = _cvData.map(cv => {
+    const movieCount = cv.movie_count || 0;
+    return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
+      ${cv.cover_image
+        ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
+        : `<div class="cv-year-card-placeholder">🎞️</div>`}
+      <div class="cv-year-card-overlay"></div>
+      <div class="cv-year-card-info">
+        <div class="cv-year-badge">Chitra Vichitra</div>
+        <div class="cv-year-num">${cv.year}</div>
+        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened</div>
+        <div class="cv-year-arrow">View Films →</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openCVDetail(cvId, year) {
+  const mainView = document.getElementById('events-main-view');
+  const detailView = document.getElementById('cv-detail-view');
+  mainView.style.display = 'none';
+  detailView.style.display = 'block';
+  document.getElementById('cv-detail-year-title').textContent = `Chitra Vichitra ${year}`;
+  const grid = document.getElementById('cv-movies-grid');
+  grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading...</div>`;
+  const data = await apiFetch(`/api/chitra-vichitra/${cvId}/movies`);
+  if (!data || !data.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films added to CV ${year} yet.</p></div>`;
+    return;
+  }
+  grid.innerHTML = data.map(m => renderMovieCard(m, true)).join('');
+}
+
+function closeCVDetail() {
+  document.getElementById('events-main-view').style.display = 'block';
+  document.getElementById('cv-detail-view').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+// CHITRA VICHITRA — ADMIN
+// ══════════════════════════════════════════════════════════
+let _cvEditId = null;
+let _cvMoviesEditId = null;
+let _cvMoviesEditYear = null;
+let _allMoviesForDropdown = [];
+
+async function loadAdminCV() {
+  const list = document.getElementById('cv-admin-list');
+  const editions = await apiFetch('/api/chitra-vichitra') || [];
+  if (!editions.length) {
+    list.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center"><p>No CV editions yet. Add one to get started.</p></div>`;
+    return;
+  }
+  list.innerHTML = editions.map(cv => `
+    <div class="admin-card" style="margin-bottom:12px;display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;padding:16px 20px">
+      <div>
+        ${cv.cover_image
+          ? `<img src="${cv.cover_image}" alt="${cv.year}" style="width:80px;height:52px;object-fit:cover;border-radius:3px;border:1px solid var(--border)">`
+          : `<div style="width:80px;height:52px;background:var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px">🎞️</div>`}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:16px">Chitra Vichitra ${cv.year}</div>
+        <div style="font-size:12px;color:var(--grey);margin-top:3px">${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')">🎬 Manage Films</button>
+        <button class="btn-sm" onclick="editCV(${JSON.stringify(cv).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteCV('${cv.id}','${cv.year}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function openCVModal(cv=null) {
+  _cvEditId = cv ? cv.id : null;
+  document.getElementById('cv-modal-title').textContent = cv ? `Edit CV ${cv.year}` : 'Add CV Edition';
+  document.getElementById('cv-edit-id').value = cv ? cv.id : '';
+  document.getElementById('cv-year').value = cv ? cv.year : '';
+  document.getElementById('cv-sort').value = cv ? cv.sort_order : 99;
+  const prev = document.getElementById('cv-cover-preview');
+  const wrap = document.getElementById('cv-cover-preview-wrap');
+  if (cv && cv.cover_image) { prev.src=cv.cover_image; wrap.style.display='block'; }
+  else { prev.src=''; wrap.style.display='none'; }
+  document.getElementById('cv-cover').value = '';
+  document.getElementById('cv-modal').style.display = 'flex';
+}
+
+function editCV(cv) { openCVModal(cv); }
+function closeCVModal() { document.getElementById('cv-modal').style.display = 'none'; }
+
+async function saveCV() {
+  const year = document.getElementById('cv-year').value.trim();
+  const sort = document.getElementById('cv-sort').value;
+  const file = document.getElementById('cv-cover').files[0];
+  if (!year) { alert('Year is required'); return; }
+
+  const fd = new FormData();
+  fd.append('year', year);
+  fd.append('sort_order', sort);
+  if (file) fd.append('cover', file);
+
+  const method = _cvEditId ? 'PUT' : 'POST';
+  const url = _cvEditId ? `/api/admin/chitra-vichitra/${_cvEditId}` : '/api/admin/chitra-vichitra';
+  const res = await fetch(url, { method, headers:{'Authorization':'Bearer '+adminToken}, body:fd });
+  if (!res.ok) { const e=await res.json(); alert(e.error||'Error'); return; }
+  closeCVModal();
+  loadAdminCV();
+}
+
+async function deleteCV(id, year) {
+  if (!confirm(`Delete Chitra Vichitra ${year}? This will also remove all film associations.`)) return;
+  await apiFetch(`/api/admin/chitra-vichitra/${id}`, 'DELETE');
+  loadAdminCV();
+}
+
+async function openCVMoviesModal(cvId, year) {
+  _cvMoviesEditId = cvId;
+  _cvMoviesEditYear = year;
+  document.getElementById('cv-movies-modal-year').textContent = year;
+  document.getElementById('cv-movies-modal').style.display = 'flex';
+
+  // Load all movies for dropdown
+  _allMoviesForDropdown = await apiFetch('/api/movies') || [];
+  const sel = document.getElementById('cv-movie-dropdown');
+  sel.innerHTML = '<option value="">— Select a film —</option>' +
+    _allMoviesForDropdown.map(m=>`<option value="${m.id}">${m.title}${m.release_year?' ('+m.release_year+')':''}</option>`).join('');
+
+  await refreshCVMoviesList();
+}
+
+async function refreshCVMoviesList() {
+  const container = document.getElementById('cv-current-movies-list');
+  const data = await apiFetch(`/api/chitra-vichitra/${_cvMoviesEditId}/movies`);
+  if (!data || !data.length) {
+    container.innerHTML = `<div style="font-size:13px;color:var(--grey);padding:16px">No films added yet.</div>`;
+    return;
+  }
+  container.innerHTML = data.map(m => `
+    <div style="display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:1px solid var(--border)">
+      ${m.poster_image
+        ? `<img src="${m.poster_image}" alt="${m.title}" style="width:44px;height:60px;object-fit:cover;border-radius:2px">`
+        : `<div style="width:44px;height:60px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:18px">🎬</div>`}
+      <div>
+        <div style="font-size:13px;font-weight:600">${m.title}</div>
+        <div style="font-size:11px;color:var(--grey)">${m.release_year||''}</div>
+      </div>
+      <button class="btn-sm danger" style="font-size:11px;padding:4px 10px" onclick="removeMovieFromCV('${m.cv_movie_id}')">Remove</button>
+    </div>`).join('');
+}
+
+async function addMovieToCV() {
+  const movieId = document.getElementById('cv-movie-dropdown').value;
+  if (!movieId) { alert('Select a film first'); return; }
+  const res = await apiFetch(`/api/admin/chitra-vichitra/${_cvMoviesEditId}/movies`, 'POST', { movie_id: movieId });
+  if (res && res.error) { alert(res.error); return; }
+  await refreshCVMoviesList();
+  loadAdminCV();
+}
+
+async function removeMovieFromCV(cvMovieId) {
+  await apiFetch(`/api/admin/chitra-vichitra/movies/${cvMovieId}`, 'DELETE');
+  await refreshCVMoviesList();
+  loadAdminCV();
+}
+
+function closeCVMoviesModal() { document.getElementById('cv-movies-modal').style.display = 'none'; }
+
+// Hook cv cover preview
+document.getElementById('cv-cover').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const url = URL.createObjectURL(f);
+  document.getElementById('cv-cover-preview').src = url;
+  document.getElementById('cv-cover-preview-wrap').style.display = 'block';
+});
+
+// ══════════════════════════════════════════════════════════
 // Keyboard shortcuts
+// ══════════════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
   if (e.key === 'Escape') closeSearch();
