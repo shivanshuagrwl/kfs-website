@@ -52,8 +52,8 @@ body.light-mode #hero-section::after{
 }
 body.light-mode .hero-tagline,body.light-mode .hero-sub,
 body.light-mode .hero-cta,body.light-mode .hero-scroll{position:relative;z-index:1}
-body.light-mode .hero-scroll span{color:#888}
-body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
+body.light-mode .hero-scroll span{color:#333;font-weight:600}
+body.light-mode .scroll-line{background:linear-gradient(to bottom,#333,transparent)}
 /* testimonials */
 body.light-mode .testimonials-track::before{background:linear-gradient(to right,#f0f0f0,transparent)}
 body.light-mode .testimonials-track::after{background:linear-gradient(to left,#f0f0f0,transparent)}
@@ -256,7 +256,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 @media(max-width:768px){.section{padding:80px 24px}}
 
 /* ── STATS ────────────────────────────────────────────────────────────── */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:80px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:0}
 @media(max-width:768px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
 .stat-item{background:var(--black);padding:40px 32px;position:relative;overflow:hidden}
 .stat-item::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--border)}
@@ -1136,7 +1136,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
     </div>
   </section>
 
-  <section class="section" style="padding-top:0">
+  <section class="section" style="padding-top:0;padding-bottom:0">
     <div class="section-inner">
       <div class="stats-grid" id="stats-grid">
         <div class="stat-item"><span class="stat-num counter" data-target="500">0</span><span class="stat-label">Members</span></div>
