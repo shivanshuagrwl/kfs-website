@@ -102,6 +102,12 @@ body.light-mode #search-overlay{background:rgba(240,240,240,.98)}
 body.light-mode #search-input{background:#fff;color:#111;border-color:#ccc}
 body.light-mode .search-result-item{border-color:#eee;color:#111}
 body.light-mode .search-result-item:hover{background:#f5f5f5}
+body.light-mode .movie-watch-badge{background:rgba(0,0,0,.75);color:#fff}
+body.light-mode .movie-watch-badge--done{background:rgba(0,0,0,.85);color:#fff}
+body.light-mode #movie-watch-status-btn{border-color:#999;color:#333}
+body.light-mode #movie-watch-status-btn:hover{border-color:#111;color:#111}
+#movie-watch-status-btn.watched-active{border-color:var(--white);color:var(--white);background:rgba(255,255,255,.08)}
+body.light-mode #movie-watch-status-btn.watched-active{border-color:#111;color:#111;background:rgba(0,0,0,.06)}
 /* smooth transitions */
 body,nav,.admin-sidebar,.admin-main,.admin-card,.modal,.modal-box,
 input,textarea,select,.ep-card,.film-card,.blog-card,.movie-card,
@@ -1113,10 +1119,12 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <a class="btn btn-secondary" onclick="navigate('blog')">Read Our Blog</a>
     </div>
     <div class="hero-scroll">
+      <span>Scroll</span>
       <div class="scroll-line"></div>
     </div>
     <!-- Light mode confetti canvas -->
     <canvas id="hero-confetti" style="position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s"></canvas>
+  </section>
 
   <section class="section" style="padding-top:0">
     <div class="section-inner">
@@ -2282,11 +2290,12 @@ async function loadHomeData() {
 
 async function loadEvents() {
   allEvents = await apiFetch('/api/events') || [];
-  filterEvents('upcoming', document.querySelector('.events-tab'));
+  filterEvents('upcoming', document.querySelector('#page-events .events-tab'));
 }
 
 function filterEvents(type, tabEl) {
-  document.querySelectorAll('.events-tab').forEach(t=>t.classList.remove('active'));
+  // Only toggle tabs inside the events page (not members page tabs)
+  document.querySelectorAll('#page-events .events-tab').forEach(t=>t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
   const filtered = allEvents.filter(e=> type==='upcoming' ? e.is_upcoming : !e.is_upcoming);
   const list = document.getElementById('events-list');
@@ -2294,6 +2303,16 @@ function filterEvents(type, tabEl) {
     list.innerHTML = filtered.map(e=>renderEventItem(e,true)).join('');
   } else {
     list.innerHTML = `<div class="empty-state"><p>No ${type} events.</p></div>`;
+  }
+  // Show/hide Chitra Vichitra section in past tab
+  const cvWrap = document.getElementById('cv-section-wrap');
+  if (cvWrap) {
+    if (type === 'past') {
+      cvWrap.style.display = 'block';
+      loadCVCards();
+    } else {
+      cvWrap.style.display = 'none';
+    }
   }
 }
 
@@ -2988,6 +3007,9 @@ async function loadAdminData(name) {
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
       </div></td>
     </tr>`).join('');
+  }
+  else if (name==='chitra-vichitra') {
+    loadAdminCV();
   }
   else if (name==='analytics') {
     loadTrafficAnalytics(currentAnalyticsRange);
@@ -3830,10 +3852,7 @@ async function bulkDelete(section) {
 </script>
 
 <style>
-
-  .ep-actions{flex-direction:column}
-}
-
+  .ep-actions{flex-direction:column;}
 </style>
 
 <!-- Notification Modal -->
@@ -4323,8 +4342,7 @@ function updateDetailWatchBtn(id) {
   btn.innerHTML = watched
     ? '<span>✓</span> Watched'
     : '<span>☐</span> Mark as Watched';
-  btn.style.borderColor = watched ? 'rgba(255,255,255,.5)' : '';
-  btn.style.color = watched ? 'var(--white)' : '';
+  btn.classList.toggle('watched-active', watched);
 }
 
 function toggleWatchStatusCard(id, cardEl) {
