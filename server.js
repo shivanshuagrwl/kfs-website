@@ -74,27 +74,6 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
-  // Create admins table if missing
-  await supabase.rpc('exec_sql', { sql: `
-    CREATE TABLE IF NOT EXISTS admins (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      name text NOT NULL,
-      username text UNIQUE NOT NULL,
-      password_hash text NOT NULL,
-      role text NOT NULL DEFAULT 'admin',
-      created_at timestamptz DEFAULT now()
-    );
-    CREATE TABLE IF NOT EXISTS admin_activity (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      admin_id uuid,
-      admin_name text,
-      action text,
-      entity text,
-      entity_name text,
-      created_at timestamptz DEFAULT now()
-    );
-  ` }).catch(() => {}); // rpc may not exist, handled below
-
   // Ensure master admin exists
   const { data: master } = await supabase.from('admins').select('id').eq('role', 'master').single();
   if (!master) {
