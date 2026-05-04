@@ -2457,7 +2457,8 @@ async function loadAdminData(name) {
   if (name==='blogs') {
     const blogs = await apiFetch('/api/admin/blogs');
     const tbody = document.getElementById('admin-blogs-tbody');
-    if (!blogs || !blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
+    if (blogs === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load. Check error bar above.</td></tr>`; return; }
+    if (!blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
     tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"></td>
       <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}</td>
@@ -2473,7 +2474,8 @@ async function loadAdminData(name) {
   else if (name==='events') {
     const events = await apiFetch('/api/events');
     const tbody = document.getElementById('admin-events-tbody');
-    if (!events || !events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`; return; }
+    if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load. Check error bar above.</td></tr>`; return; }
+    if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`; return; }
     tbody.innerHTML = events.map(e=>`<tr>
       <td style="font-weight:500">${e.title}</td>
       <td style="color:var(--grey)">${e.event_date||'—'}</td>
@@ -2492,7 +2494,8 @@ async function loadAdminData(name) {
     if (searchEl) searchEl.value = '';
     const clearBtn = document.getElementById('member-search-clear-btn');
     if (clearBtn) clearBtn.classList.remove('visible');
-    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
+    if (members === null) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#e74c3c">Failed to load. Check error bar above.</td></tr>`; return; }
+    if (!members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
     tbody.innerHTML = members.map(m=>`<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"></td>
       <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
@@ -2537,7 +2540,8 @@ async function loadAdminData(name) {
   else if (name==='movies') {
     const movies = await apiFetch('/api/movies');
     const tbody = document.getElementById('admin-movies-tbody');
-    if (!movies || !movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
+    if (movies === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load. Check error bar above.</td></tr>`; return; }
+    if (!movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
     tbody.innerHTML = movies.map(m=>`<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"></td>
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'🎬'}</td>
@@ -2904,16 +2908,44 @@ async function apiFetch(url, method='GET', body=null) {
     const res = await fetch(url, opts);
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) {
-      console.error('apiFetch: non-JSON response for', method, url, res.status);
+      console.error('apiFetch: server returned HTML for', method, url, res.status, '— server may need redeploy');
+      showAdminError('Server error: route ' + url + ' returned non-JSON (status ' + res.status + '). Try redeploying.');
       return null;
     }
     const data = await res.json().catch(() => null);
-    if (!res.ok) console.warn('apiFetch error:', method, url, res.status, data?.error || data);
+    if (!res.ok) {
+      console.warn('apiFetch error:', method, url, res.status, data?.error || data);
+      if (res.status === 401) showAdminError('Session expired. Please log out and log back in.');
+      else if (res.status === 403) showAdminError('Access denied: ' + (data?.error || 'insufficient permissions'));
+    }
     return data;
   } catch(e) {
     console.error('apiFetch network error:', url, e);
+    showAdminError('Network error reaching ' + url + '. Check your connection.');
     return null;
   }
+}
+
+function showAdminError(msg) {
+  // Only show in admin context
+  if (!document.getElementById('admin-panel')?.classList.contains('active')) return;
+  let bar = document.getElementById('admin-error-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'admin-error-bar';
+    bar.style.cssText = 'position:fixed;top:0;left:220px;right:0;z-index:9999;background:#c0392b;color:#fff;padding:10px 20px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:16px';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'x';
+    closeBtn.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:16px;opacity:.7;font-family:inherit';
+    closeBtn.onclick = () => bar.remove();
+    bar.appendChild(closeBtn);
+    document.body.appendChild(bar);
+  }
+  bar.childNodes[0].textContent = msg;
+  // Move close button to end
+  bar.insertBefore(bar.childNodes[0], bar.lastChild.nextSibling);
+  clearTimeout(bar._t);
+  bar._t = setTimeout(() => bar?.remove(), 8000);
 }
 
 function checkRoute() {
@@ -3263,13 +3295,6 @@ async function bulkDelete(section) {
   if (typeof showToast === 'function') showToast(`${ids.length} item(s) deleted`, 'success');
 }
 </script>
-
-<style>
-
-  .ep-actions{flex-direction:column}
-}
-
-</style>
 
 <!-- Notification Modal -->
 <div class="modal-overlay" id="notif-modal-overlay">
