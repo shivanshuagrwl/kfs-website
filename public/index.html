@@ -298,12 +298,12 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .blog-card-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:10px}
 .blog-card-title{font-size:18px;font-weight:600;line-height:1.3;margin-bottom:10px}
 .blog-card-excerpt{font-size:13px;color:var(--grey);line-height:1.6}
-.blog-read-badge{position:absolute;top:10px;left:10px;font-size:9px;letter-spacing:.1em;
-  text-transform:uppercase;padding:3px 8px;font-weight:700;pointer-events:none;border-radius:2px}
-.blog-card.unread .blog-read-badge{background:rgba(245,245,245,.18);color:#fff;backdrop-filter:blur(6px)}
-.blog-card.read .blog-read-badge{background:rgba(80,80,80,.28);color:var(--grey);backdrop-filter:blur(6px)}
-body.light-mode .blog-card.unread .blog-read-badge{background:rgba(0,0,0,.10);color:#111}
-body.light-mode .blog-card.read .blog-read-badge{background:rgba(0,0,0,.06);color:#888}
+.blog-read-badge{position:absolute;top:10px;left:10px;font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;padding:4px 10px;font-weight:700;pointer-events:none;border-radius:2px;transition:all .3s}
+.blog-card.unread .blog-read-badge{background:rgba(255,255,255,.95);color:#0a0a0a;box-shadow:0 1px 8px rgba(0,0,0,.35)}
+.blog-card.read .blog-read-badge{background:rgba(40,40,40,.55);color:rgba(255,255,255,.35);backdrop-filter:blur(4px)}
+body.light-mode .blog-card.unread .blog-read-badge{background:rgba(10,10,10,.9);color:#fff;box-shadow:0 1px 8px rgba(0,0,0,.2)}
+body.light-mode .blog-card.read .blog-read-badge{background:rgba(0,0,0,.07);color:#aaa}
 .recently-viewed{margin-top:52px;padding-top:36px;border-top:1px solid var(--border)}
 .recently-viewed-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--grey);margin-bottom:18px;font-weight:600}
@@ -2117,7 +2117,13 @@ async function loadHomeData() {
   const blogs = await apiFetch('/api/blogs');
   const hbg = document.getElementById('home-blog-grid');
   if (blogs && blogs.length) {
-    hbg.innerHTML = blogs.slice(0,3).map(b=>renderBlogCard(b)).join('');
+    window._allBlogs = blogs;
+    const _hrs = getBlogReadState();
+    const _hsorted = [...blogs].sort((a,b)=>{
+      const ar=!!_hrs[a.id], br=!!_hrs[b.id];
+      if(ar===br) return 0; return ar?1:-1;
+    });
+    hbg.innerHTML = _hsorted.slice(0,3).map(b=>renderBlogCard(b)).join('');
   } else {
     hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.</p></div>`;
   }
@@ -2176,7 +2182,13 @@ async function loadBlog() {
   const blogs = await apiFetch('/api/blogs');
   const grid = document.getElementById('blog-grid');
   if (blogs && blogs.length) {
-    grid.innerHTML = blogs.map(b=>renderBlogCard(b)).join('');
+    window._allBlogs = blogs;
+    const _rs = getBlogReadState();
+    const _sorted = [...blogs].sort((a,b)=>{
+      const ar=!!_rs[a.id], br=!!_rs[b.id];
+      if(ar===br) return 0; return ar?1:-1;
+    });
+    grid.innerHTML = _sorted.map(b=>renderBlogCard(b)).join('');
   } else {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.</p></div>`;
   }
@@ -2199,7 +2211,7 @@ function renderBlogCard(b) {
   const readState = getBlogReadState();
   const isRead = !!readState[b.id];
   const cls = isRead ? 'read' : 'unread';
-  const badge = isRead ? 'Read' : 'Unread';
+  const badge = isRead ? 'Read' : 'Unseen';
   return `<div class="blog-card ${cls}" onclick="openBlog('${b.id}')" data-blog-id="${b.id}">
     <span class="blog-read-badge">${badge}</span>
     ${b.cover_image
@@ -2216,6 +2228,14 @@ function renderBlogCard(b) {
 async function openBlog(id) {
   const blog = await apiFetch('/api/blogs/'+id);
   if (!blog) return;
+  // Mark as read and update card live
+  markBlogRead(id);
+  const card = document.querySelector('[data-blog-id="'+id+'"]');
+  if (card) {
+    card.classList.remove('unread'); card.classList.add('read');
+    const badge = card.querySelector('.blog-read-badge');
+    if (badge) badge.textContent = 'Read';
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.add('active');
   const img = document.getElementById('blog-detail-img');
@@ -2225,10 +2245,42 @@ async function openBlog(id) {
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
+  // Inject Recently Viewed below content
+  renderRecentlyViewed(id);
   window.scrollTo({top:0,behavior:'instant'});
   history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
   hideScrollProgress();
   setTimeout(updateScrollProgress, 100);
+}
+
+function renderRecentlyViewed(currentId) {
+  // Remove any existing section
+  const existing = document.getElementById('recently-viewed-section');
+  if (existing) existing.remove();
+  const history = getBlogHistory().filter(h => String(h.id) !== String(currentId)).slice(0, 5);
+  if (!history.length) return;
+  const allBlogs = window._allBlogs || [];
+  const items = history.map(h => allBlogs.find(b => String(b.id) === String(h.id))).filter(Boolean);
+  if (!items.length) return;
+  const section = document.createElement('div');
+  section.id = 'recently-viewed-section';
+  section.className = 'recently-viewed';
+  section.innerHTML = '<div class="recently-viewed-label">Recently Viewed</div>'
+    + '<div class="recently-viewed-list">'
+    + items.map(b => `
+      <div class="rv-item" onclick="openBlog('${b.id}')">
+        <div class="rv-thumb-wrap">
+          ${b.cover_image
+            ? `<img src="${b.cover_image}" alt="${b.title}">`
+            : `<div class="rv-thumb-placeholder">🎬</div>`}
+        </div>
+        <div class="rv-item-info">
+          <div class="rv-item-title">${b.title}</div>
+          <div class="rv-item-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+        </div>
+      </div>`).join('')
+    + '</div>';
+  document.getElementById('blog-detail-body').after(section);
 }
 
 let allMembers = [];
@@ -3508,14 +3560,48 @@ async function saveNewAdmin() {
   errEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
   try {
-    const res = await apiFetch('/api/master/admins', 'POST', { name, username, password });
-    if (res && res.id) {
+    // Use a direct fetch so we always get the response body even on 4xx
+    const rawRes = await fetch('/api/master/admins', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, username, password })
+    });
+    const data = await rawRes.json().catch(() => ({}));
+    if (rawRes.ok && data.id) {
       closeAddAdminModal();
       loadAdminData('admins');
-      if (typeof showToast === 'function') showToast('Admin "' + name + '" created', 'success');
+    } else if (rawRes.status === 403) {
+      // Token may be stale — refresh and retry once
+      const refreshRes = await fetch('/api/admin/refresh', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken }
+      });
+      const refreshData = await refreshRes.json().catch(() => ({}));
+      if (refreshData.token && refreshData.role === 'master') {
+        adminToken = refreshData.token;
+        currentAdminRole = 'master';
+        localStorage.setItem('kfs_token', refreshData.token);
+        localStorage.setItem('kfs_role', 'master');
+        // Retry
+        const retry = await fetch('/api/master/admins', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, username, password })
+        });
+        const retryData = await retry.json().catch(() => ({}));
+        if (retry.ok && retryData.id) {
+          closeAddAdminModal();
+          loadAdminData('admins');
+        } else {
+          errEl.textContent = retryData.error || 'Failed to create admin after token refresh.';
+        }
+      } else {
+        errEl.textContent = 'Access denied. Your account does not have master privileges.';
+      }
     } else {
-      errEl.textContent = (res && res.error) ? res.error : 'Failed to create admin. Are you logged in as master?';
+      errEl.textContent = data.error || 'Failed to create admin.';
     }
+  } catch(e) {
+    errEl.textContent = 'Network error: ' + e.message;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Create Admin'; }
   }
