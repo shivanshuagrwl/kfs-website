@@ -869,10 +869,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="page-wipe"></div>
 <div id="scroll-progress"></div>
 
-<!-- TRAILER MODAL -->
-<div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
-  <div id="trailer-modal-inner">
-
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
   <div class="modal" style="max-width:440px">
@@ -884,6 +880,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewAdmin()">Create Admin</button></div>
   </div>
 </div>
+
+<!-- TRAILER MODAL -->
+<div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
+  <div id="trailer-modal-inner">
     <button id="trailer-close" onclick="closeTrailer()">✕</button>
     <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
