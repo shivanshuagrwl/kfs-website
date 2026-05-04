@@ -98,21 +98,23 @@ body{background:var(--black);color:var(--white);font-family:'Helvetica Neue',Hel
 
 /* ── NAV ─────────────────────────────────────────────────────────────── */
 nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
-  display:flex;align-items:center;justify-content:space-between;
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
   background:rgba(10,10,10,.85);backdrop-filter:blur(20px);
   border-bottom:1px solid rgba(255,255,255,.04);transition:all .3s var(--ease)}
-.nav-logo{display:flex;align-items:center;text-decoration:none}
+.nav-logo{display:flex;align-items:center;text-decoration:none;justify-self:start}
 .nav-logo-text{font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--white)}
-.nav-links{display:flex;gap:32px;list-style:none}
+.nav-links{display:flex;gap:32px;list-style:none;justify-self:center}
 .nav-links a{color:var(--grey);text-decoration:none;font-size:13px;letter-spacing:.06em;
   text-transform:uppercase;font-weight:500;transition:color .2s}
 .nav-links a:hover,.nav-links a.active{color:var(--white)}
+.nav-right{display:flex;align-items:center;gap:4px;justify-self:end}
 .nav-hamburger{display:none;flex-direction:column;gap:5px;padding:4px}
 .nav-hamburger span{width:22px;height:1.5px;background:var(--white);transition:all .3s var(--ease)}
 
 /* ── MOBILE NAV ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
-  nav{padding:16px 24px;z-index:1000;background:rgba(10,10,10,.98)}
+  nav{padding:16px 24px;z-index:1000;background:rgba(10,10,10,.98);display:flex;justify-content:space-between}
+  .nav-right{gap:2px}
   .nav-hamburger{display:flex;z-index:1005 !important;position:relative}
   .nav-links{
     position:fixed;inset:0;
@@ -901,25 +903,27 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
     <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
   </ul>
-  <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
-  </button>
-  <button onclick="toggleTheme()" id="nav-theme-btn" title="Toggle light / dark"
-    style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);flex-shrink:0">
-    <svg id="nav-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-    </svg>
-    <svg id="nav-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
-      <circle cx="12" cy="12" r="5"/>
-      <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
-  </button>
-  <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
-    <span></span><span></span><span></span>
+  <div class="nav-right">
+    <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
+    </button>
+    <button onclick="toggleTheme()" id="nav-theme-btn" title="Toggle light / dark"
+      style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);flex-shrink:0">
+      <svg id="nav-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg id="nav-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+    <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
+      <span></span><span></span><span></span>
+    </div>
   </div>
 </nav>
 <div class="nav-backdrop" id="nav-backdrop" onclick="closeMenu()"></div>
@@ -1038,8 +1042,9 @@ body:has(#admin-panel.active) #main-nav{display:none}
           <h2 class="section-title">We are the<br><em style="color:var(--grey);font-style:normal">cinephiles</em><br>of KIIT.</h2>
           <p class="about-text" style="margin-top:32px" id="about-text">Loading...</p>
         </div>
-        <div class="about-visual">
-          <img class="about-logo-large" src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
+        <div class="about-visual" id="about-visual-box">
+          <img id="about-team-photo" src="" alt="KFS Team" style="width:100%;height:100%;object-fit:cover;border-radius:4px;display:none">
+          <img class="about-logo-large" id="about-logo-fallback" src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
         </div>
       </div>
     </div>
@@ -1477,6 +1482,20 @@ body:has(#admin-panel.active) #main-nav{display:none}
         <p class="settings-section-desc">Content shown on the homepage</p>
         <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline" placeholder="Lights. Camera. KFS."></div>
         <div class="form-group"><label>About Text</label><textarea id="set-about" style="min-height:120px"></textarea></div>
+
+        <div class="form-group">
+          <label>Team Group Photo</label>
+          <div id="team-photo-preview" style="margin-bottom:10px;display:none">
+            <img id="team-photo-img" src="" alt="Team photo" style="width:100%;max-width:320px;border-radius:6px;border:1px solid var(--border);object-fit:cover;aspect-ratio:4/3">
+          </div>
+          <input type="file" id="set-team-photo-file" accept="image/*" style="display:none" onchange="previewTeamPhoto(this)">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('set-team-photo-file').click()">Choose Photo</button>
+            <span id="team-photo-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
+            <button type="button" class="btn btn-secondary" id="team-photo-clear-btn" onclick="clearTeamPhoto()" style="display:none">Remove</button>
+          </div>
+          <input type="hidden" id="set-team-photo-url" value="">
+        </div>
 
         <div class="settings-divider"></div>
         <p class="settings-section-title">Stats Counter</p>
@@ -1981,6 +2000,12 @@ async function loadHomeData() {
       if(window.glowUpdate) window.glowUpdate();
     }
     document.getElementById('about-text').textContent = settings.about_text || '';
+    if (settings.team_photo) {
+      const tp = document.getElementById('about-team-photo');
+      const lb = document.getElementById('about-logo-fallback');
+      if (tp) { tp.src = settings.team_photo; tp.style.display = 'block'; }
+      if (lb) lb.style.display = 'none';
+    }
     const ig = document.getElementById('footer-instagram');
     const yt = document.getElementById('footer-youtube');
     const em = document.getElementById('footer-email');
@@ -2693,6 +2718,13 @@ async function loadAdminData(name) {
     if (settings) {
       document.getElementById('set-tagline').value = settings.site_tagline||'';
       document.getElementById('set-about').value = settings.about_text||'';
+      if (settings.team_photo) {
+        document.getElementById('set-team-photo-url').value = settings.team_photo;
+        document.getElementById('team-photo-img').src = settings.team_photo;
+        document.getElementById('team-photo-preview').style.display = 'block';
+        document.getElementById('team-photo-clear-btn').style.display = 'inline-flex';
+        document.getElementById('team-photo-filename').textContent = 'Current photo';
+      }
       document.getElementById('set-stat-members').value = settings.stat_members||'';
       document.getElementById('set-stat-events').value = settings.stat_events||'';
       document.getElementById('set-stat-films').value = settings.stat_films||'';
@@ -2974,9 +3006,27 @@ async function deleteAchievement(id) {
 }
 
 async function saveSettings() {
+  // Upload team photo if a new file was selected
+  const photoFile = document.getElementById('set-team-photo-file').files[0];
+  if (photoFile) {
+    const fd = new FormData();
+    fd.append('photo', photoFile);
+    try {
+      const r = await fetch('/api/admin/upload-team-photo', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + adminToken },
+        body: fd
+      });
+      if (r.ok) {
+        const d = await r.json();
+        document.getElementById('set-team-photo-url').value = d.url;
+      }
+    } catch(e) { console.error('Team photo upload failed', e); }
+  }
   const body = {
     site_tagline: document.getElementById('set-tagline').value,
     about_text: document.getElementById('set-about').value,
+    team_photo: document.getElementById('set-team-photo-url').value,
     stat_members: document.getElementById('set-stat-members').value,
     stat_events: document.getElementById('set-stat-events').value,
     stat_films: document.getElementById('set-stat-films').value,
@@ -3013,6 +3063,28 @@ function execCmd(cmd, val=null) {
 function insertLink() {
   const url = prompt('Enter URL:');
   if (url) execCmd('createLink', url);
+}
+
+function previewTeamPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  document.getElementById('team-photo-filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('team-photo-img').src = e.target.result;
+    document.getElementById('team-photo-preview').style.display = 'block';
+    document.getElementById('team-photo-clear-btn').style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearTeamPhoto() {
+  document.getElementById('set-team-photo-file').value = '';
+  document.getElementById('set-team-photo-url').value = '';
+  document.getElementById('team-photo-img').src = '';
+  document.getElementById('team-photo-preview').style.display = 'none';
+  document.getElementById('team-photo-clear-btn').style.display = 'none';
+  document.getElementById('team-photo-filename').textContent = 'No file chosen';
 }
 
 async function apiFetch(url, method='GET', body=null) {

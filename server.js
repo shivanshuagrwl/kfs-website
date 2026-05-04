@@ -188,6 +188,13 @@ app.get('/api/settings', async (req, res) => {
   res.json(obj);
 });
 
+app.post('/api/admin/upload-team-photo', authMiddleware, upload.single('photo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const url = await uploadImage(req.file, 'general');
+  if (!url) return res.status(500).json({ error: 'Upload failed' });
+  res.json({ url });
+});
+
 app.post('/api/admin/settings', authMiddleware, async (req, res) => {
   const entries = Object.entries(req.body);
   for (const [key, value] of entries) {
