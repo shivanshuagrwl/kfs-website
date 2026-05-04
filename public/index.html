@@ -31,9 +31,13 @@ body.light-mode .nav-hamburger span{background:#111}
   body.light-mode .nav-links a.active,body.light-mode .nav-links a:hover{color:#111;background:rgba(0,0,0,.05)}
 }
 /* hero */
-body.light-mode .glow-word{color:#111 !important}
-body.light-mode .glow-word.lit{color:#111 !important;text-shadow:0 0 20px rgba(0,0,0,.12),0 0 40px rgba(0,0,0,.05)}
-body.light-mode .hero-tagline em{color:#999}
+body.light-mode .glow-word{color:#1a1a1a !important;text-shadow:none}
+body.light-mode .glow-word.lit{
+  color:#000 !important;
+  text-shadow:0 1px 2px rgba(0,0,0,.18),0 0 28px rgba(100,60,220,.18),0 0 60px rgba(100,60,220,.08)
+}
+body.light-mode .hero-tagline em{color:#aaa}
+body.light-mode .hero-sub{color:#555 !important}
 body.light-mode .hero-scroll span{color:#888}
 body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
 /* testimonials */
@@ -102,12 +106,6 @@ body.light-mode #search-overlay{background:rgba(240,240,240,.98)}
 body.light-mode #search-input{background:#fff;color:#111;border-color:#ccc}
 body.light-mode .search-result-item{border-color:#eee;color:#111}
 body.light-mode .search-result-item:hover{background:#f5f5f5}
-body.light-mode .movie-watch-badge{background:rgba(0,0,0,.75);color:#fff}
-body.light-mode .movie-watch-badge--done{background:rgba(0,0,0,.85);color:#fff}
-body.light-mode #movie-watch-status-btn{border-color:#999;color:#333}
-body.light-mode #movie-watch-status-btn:hover{border-color:#111;color:#111}
-#movie-watch-status-btn.watched-active{border-color:var(--white);color:var(--white);background:rgba(255,255,255,.08)}
-body.light-mode #movie-watch-status-btn.watched-active{border-color:#111;color:#111;background:rgba(0,0,0,.06)}
 /* smooth transitions */
 body,nav,.admin-sidebar,.admin-main,.admin-card,.modal,.modal-box,
 input,textarea,select,.ep-card,.film-card,.blog-card,.movie-card,
@@ -1119,12 +1117,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <a class="btn btn-secondary" onclick="navigate('blog')">Read Our Blog</a>
     </div>
     <div class="hero-scroll">
-      <span>Scroll</span>
       <div class="scroll-line"></div>
     </div>
     <!-- Light mode confetti canvas -->
     <canvas id="hero-confetti" style="position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s"></canvas>
-  </section>
 
   <section class="section" style="padding-top:0">
     <div class="section-inner">
@@ -2290,12 +2286,11 @@ async function loadHomeData() {
 
 async function loadEvents() {
   allEvents = await apiFetch('/api/events') || [];
-  filterEvents('upcoming', document.querySelector('#page-events .events-tab'));
+  filterEvents('upcoming', document.querySelector('.events-tab'));
 }
 
 function filterEvents(type, tabEl) {
-  // Only toggle tabs inside the events page (not members page tabs)
-  document.querySelectorAll('#page-events .events-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.events-tab').forEach(t=>t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
   const filtered = allEvents.filter(e=> type==='upcoming' ? e.is_upcoming : !e.is_upcoming);
   const list = document.getElementById('events-list');
@@ -2303,16 +2298,6 @@ function filterEvents(type, tabEl) {
     list.innerHTML = filtered.map(e=>renderEventItem(e,true)).join('');
   } else {
     list.innerHTML = `<div class="empty-state"><p>No ${type} events.</p></div>`;
-  }
-  // Show/hide Chitra Vichitra section in past tab
-  const cvWrap = document.getElementById('cv-section-wrap');
-  if (cvWrap) {
-    if (type === 'past') {
-      cvWrap.style.display = 'block';
-      loadCVCards();
-    } else {
-      cvWrap.style.display = 'none';
-    }
   }
 }
 
@@ -3007,9 +2992,6 @@ async function loadAdminData(name) {
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
       </div></td>
     </tr>`).join('');
-  }
-  else if (name==='chitra-vichitra') {
-    loadAdminCV();
   }
   else if (name==='analytics') {
     loadTrafficAnalytics(currentAnalyticsRange);
@@ -3852,7 +3834,10 @@ async function bulkDelete(section) {
 </script>
 
 <style>
-  .ep-actions{flex-direction:column;}
+
+  .ep-actions{flex-direction:column}
+}
+
 </style>
 
 <!-- Notification Modal -->
@@ -4342,7 +4327,8 @@ function updateDetailWatchBtn(id) {
   btn.innerHTML = watched
     ? '<span>✓</span> Watched'
     : '<span>☐</span> Mark as Watched';
-  btn.classList.toggle('watched-active', watched);
+  btn.style.borderColor = watched ? 'rgba(255,255,255,.5)' : '';
+  btn.style.color = watched ? 'var(--white)' : '';
 }
 
 function toggleWatchStatusCard(id, cardEl) {
@@ -4358,12 +4344,12 @@ function toggleWatchStatusCard(id, cardEl) {
   if (window._currentMovieId === id) updateDetailWatchBtn(id);
 }
 
-// ── LIGHT MODE STRING CONFETTI ────────────────────────────────────────
+// ── LIGHT MODE CONFETTI (bursts from hero text) ───────────────────────
 (function initHeroConfetti() {
   const canvas = document.getElementById('hero-confetti');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  let W, H, strings = [], raf;
+  let W, H, particles = [], raf, running = false;
 
   function resize() {
     const hero = document.getElementById('hero-section');
@@ -4371,71 +4357,161 @@ function toggleWatchStatusCard(id, cardEl) {
     H = canvas.height = hero ? hero.offsetHeight : window.innerHeight;
   }
 
-  function makeString() {
-    const colors = ['#d4a8ff','#a8d8ff','#ffd4a8','#a8ffce','#ffa8d4','#ffe4a8','#c8c8ff'];
+  // Get the vertical center of the hero tagline relative to the canvas
+  function getTextOriginY() {
+    const tag = document.getElementById('hero-tagline');
+    if (!tag) return H * 0.38;
+    const heroRect = document.getElementById('hero-section').getBoundingClientRect();
+    const tagRect = tag.getBoundingClientRect();
+    return (tagRect.top + tagRect.height / 2) - heroRect.top;
+  }
+
+  const COLORS = [
+    '#c084fc','#818cf8','#38bdf8','#34d399','#fb923c',
+    '#f472b6','#facc15','#a78bfa','#60a5fa','#4ade80',
+  ];
+
+  // A single confetti piece — either a string ribbon or a small square
+  function makePiece(fromText) {
+    const textY = fromText ? getTextOriginY() : -20 - Math.random() * 60;
+    const textX = fromText
+      ? W * 0.15 + Math.random() * W * 0.7   // spread across text width
+      : Math.random() * W;
+    const speed = fromText
+      ? 1.8 + Math.random() * 3.5             // burst upward then fall
+      : 0.5 + Math.random() * 1.0;
+    const isRibbon = Math.random() > 0.45;
     return {
-      x: Math.random() * W,
-      y: -30 - Math.random() * 200,
-      len: 12 + Math.random() * 28,
+      x: textX,
+      y: textY,
+      vx: (Math.random() - 0.5) * (fromText ? 5 : 1.2),
+      vy: fromText ? -(speed) : (0.4 + Math.random() * 0.9), // burst up or drift down
+      gravity: fromText ? 0.09 + Math.random() * 0.06 : 0.012,
+      len: isRibbon ? 10 + Math.random() * 22 : 0,
+      size: isRibbon ? 0 : 4 + Math.random() * 5,
       angle: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 0.04,
-      vy: 0.6 + Math.random() * 1.2,
-      vx: (Math.random() - 0.5) * 0.6,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      width: 1.5 + Math.random() * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.07,
       wavy: Math.random() * Math.PI * 2,
-      wavySpeed: 0.02 + Math.random() * 0.02,
+      wavyAmp: fromText ? 0.3 + Math.random() * 0.5 : 0.2 + Math.random() * 0.3,
+      wavySpeed: 0.03 + Math.random() * 0.03,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      alpha: fromText ? 0.0 : 0.8,          // fade in for burst pieces
+      alphaTarget: 0.75 + Math.random() * 0.2,
+      isRibbon,
+      fromText,
+      life: 1.0,                              // 1 = alive, fades as it exits
     };
+  }
+
+  // Burst a wave of confetti from the text
+  function burst() {
+    const count = 55 + Math.floor(Math.random() * 20);
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => particles.push(makePiece(true)), i * 18);
+    }
   }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
     const isLight = document.body.classList.contains('light-mode');
-    if (!isLight) { canvas.style.opacity = 0; raf = requestAnimationFrame(draw); return; }
+    if (!isLight) {
+      canvas.style.opacity = 0;
+      raf = requestAnimationFrame(draw);
+      return;
+    }
     canvas.style.opacity = 1;
 
-    // Spawn
-    if (strings.length < 60 && Math.random() < 0.3) strings.push(makeString());
+    // Trickle new ambient pieces
+    if (particles.length < 55 && Math.random() < 0.25) {
+      particles.push(makePiece(false));
+    }
 
-    strings = strings.filter(s => s.y < H + 60);
-    strings.forEach(s => {
-      s.y += s.vy;
-      s.x += s.vx + Math.sin(s.wavy) * 0.4;
-      s.angle += s.rotSpeed;
-      s.wavy += s.wavySpeed;
+    particles = particles.filter(p => p.y < H + 80 && p.alpha > 0.02);
+
+    particles.forEach(p => {
+      // Physics
+      p.x += p.vx + Math.sin(p.wavy) * p.wavyAmp;
+      p.y += p.vy;
+      p.vy += p.gravity;
+      p.vx *= 0.995;
+      p.angle += p.rotSpeed;
+      p.wavy += p.wavySpeed;
+
+      // Fade in for burst pieces
+      if (p.fromText && p.alpha < p.alphaTarget) p.alpha = Math.min(p.alphaTarget, p.alpha + 0.06);
+
+      // Fade out near bottom
+      if (p.y > H * 0.82) p.alpha -= 0.018;
+
       ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(s.angle);
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.width;
-      ctx.lineCap = 'round';
-      ctx.globalAlpha = 0.7;
-      ctx.beginPath();
-      // Wavy string shape
-      ctx.moveTo(-s.len/2, 0);
-      ctx.bezierCurveTo(-s.len/4, -s.len*0.3, s.len/4, s.len*0.3, s.len/2, 0);
-      ctx.stroke();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.globalAlpha = Math.max(0, p.alpha);
+
+      if (p.isRibbon) {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-p.len / 2, 0);
+        ctx.bezierCurveTo(-p.len / 4, -p.len * 0.3, p.len / 4, p.len * 0.3, p.len / 2, 0);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = p.color;
+        const s = p.size;
+        // Alternate circles and rounded rects
+        if (Math.random() > 0.5) {
+          ctx.beginPath();
+          ctx.arc(0, 0, s / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(-s / 2, -s / 4, s, s / 2);
+        }
+      }
       ctx.restore();
     });
+
     raf = requestAnimationFrame(draw);
   }
 
-  function start() { resize(); strings = []; if (raf) cancelAnimationFrame(raf); draw(); }
+  function start() {
+    resize();
+    particles = [];
+    if (raf) cancelAnimationFrame(raf);
+    running = true;
+    draw();
+    // Burst immediately, then again after a short delay for a double-pop feel
+    setTimeout(burst, 120);
+    setTimeout(burst, 900);
+  }
 
-  // Start/stop based on light mode toggle
+  function stop() {
+    running = false;
+    // Let existing particles fade out naturally — just stop spawning new ones
+  }
+
+  // Wrap toggleTheme so we can react to mode changes
   const _orig = window.toggleTheme;
   window.toggleTheme = function() {
     _orig();
-    // small delay so class is applied
     setTimeout(() => {
-      if (document.body.classList.contains('light-mode')) start();
+      if (document.body.classList.contains('light-mode')) {
+        start();
+      } else {
+        stop();
+      }
     }, 50);
   };
 
   window.addEventListener('resize', resize);
-  // If page loads in light mode, start immediately
-  if (document.body.classList.contains('light-mode')) start();
-  else { resize(); draw(); } // still run loop so it's ready on toggle
+
+  // Auto-start if already in light mode on page load
+  if (document.body.classList.contains('light-mode')) {
+    start();
+  } else {
+    resize();
+    draw(); // run idle loop so it's instant on first toggle
+  }
 })();
 
 // Analytics auto-load is handled inside loadAdminData()
