@@ -55,6 +55,7 @@ body.light-mode .hero-cta{position:relative;z-index:1}
 body.light-mode .hero-scroll{position:absolute;bottom:60px;right:80px;left:auto;transform:none;align-items:center;flex-direction:row;gap:10px;z-index:1}
 body.light-mode .hero-scroll span{color:#333;font-weight:600;writing-mode:vertical-rl;letter-spacing:.18em}
 body.light-mode .scroll-line{width:1px;height:56px;background:linear-gradient(to bottom,#333,transparent)}
+body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
 /* testimonials */
 body.light-mode .testimonials-track::before{background:linear-gradient(to right,#f0f0f0,transparent)}
 body.light-mode .testimonials-track::after{background:linear-gradient(to left,#f0f0f0,transparent)}
@@ -1168,33 +1169,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
 
   <section class="section">
     <div class="section-inner">
-      <p class="section-label">Milestones</p>
-      <h2 class="section-title">Achievements</h2>
-      <div class="achievements-grid" id="achievements-grid">
-        <div class="loading">Loading achievements...</div>
-      </div>
-    </div>
-  </section>
-
-  <div class="section-divider" style="margin:0 80px"></div>
-
-  <section class="section">
-    <div class="section-inner">
-      <p class="section-label">What's On</p>
-      <h2 class="section-title">Upcoming Events</h2>
-      <div id="home-events" style="margin-top:40px">
-        <div class="loading">Loading events...</div>
-      </div>
-      <div style="margin-top:40px">
-        <a class="btn btn-secondary" onclick="navigate('events')">All Events →</a>
-      </div>
-    </div>
-  </section>
-
-  <div class="section-divider" style="margin:0 80px"></div>
-
-  <section class="section">
-    <div class="section-inner">
       <p class="section-label">From the Lens</p>
       <h2 class="section-title">Latest Posts</h2>
       <div class="blog-grid" id="home-blog-grid">
@@ -1217,6 +1191,33 @@ body:has(#admin-panel.active) #main-nav{display:none}
       </div>
       <div style="margin-top:40px">
         <a class="btn btn-secondary" onclick="navigate('movies')">All Films →</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider" style="margin:0 80px"></div>
+
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">Milestones</p>
+      <h2 class="section-title">Achievements</h2>
+      <div class="achievements-grid" id="achievements-grid">
+        <div class="loading">Loading achievements...</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider" style="margin:0 80px"></div>
+
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">What's On</p>
+      <h2 class="section-title">Upcoming Events</h2>
+      <div id="home-events" style="margin-top:40px">
+        <div class="loading">Loading events...</div>
+      </div>
+      <div style="margin-top:40px">
+        <a class="btn btn-secondary" onclick="navigate('events')">All Events →</a>
       </div>
     </div>
   </section>
