@@ -70,8 +70,8 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
     await supabase.from('admin_activity').insert([{
       admin_id: adminId,
       admin_name: adminName,
-      action,       // 'create' | 'update' | 'delete'
-      entity,       // 'movie' | 'blog' | 'event' | 'member' | etc.
+      action,
+      entity,
       entity_name: entityName,
     }]);
   } catch(e) { console.error('Activity log error:', e); }
@@ -79,7 +79,6 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
-  // Ensure master admin exists
   const { data: master } = await supabase.from('admins').select('id').eq('role', 'master').single();
   if (!master) {
     const hash = await bcrypt.hash('KFS@master2024!', 10);
@@ -92,7 +91,6 @@ async function initDB() {
     console.log('Master admin created: username=kfsmaster password=KFS@master2024!');
   }
 
-  // Migrate old settings-based admin password into admins table as a regular admin (once)
   const { data: settings } = await supabase.from('settings').select('*').eq('key', 'admin_password').single();
   if (!settings) {
     await supabase.from('settings').insert([
@@ -123,7 +121,6 @@ app.post('/api/admin/login', async (req, res) => {
   res.json({ token, name: admin.name, role: admin.role });
 });
 
-// Change own password (any admin)
 app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
   const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Password too short' });
@@ -133,9 +130,6 @@ app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
 });
 
 // ── TOKEN REFRESH ─────────────────────────────────────────────────────────────
-// Re-issues a JWT with the CURRENT role from the DB.
-// Called on every page load — this is the fix for "add admin not working":
-// old tokens have role:'admin' baked in even after DB was fixed to 'master'.
 app.post('/api/admin/refresh', authMiddleware, async (req, res) => {
   const { data: admin, error } = await supabase
     .from('admins').select('id,name,username,role').eq('id', req.admin.id).single();
@@ -167,7 +161,6 @@ app.post('/api/master/admins', masterMiddleware, async (req, res) => {
 });
 
 app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
-  // Prevent deleting the master account
   const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).single();
   if (!target) return res.status(404).json({ error: 'Not found' });
   if (target.role === 'master') return res.status(403).json({ error: 'Cannot delete master admin' });
@@ -202,7 +195,6 @@ app.post('/api/admin/settings', authMiddleware, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    // Handle team photo file upload if provided
     if (req.file) {
       console.log('[settings] uploading team photo:', req.file.originalname, req.file.size);
       const photoUrl = await uploadImage(req.file, 'general');
@@ -445,6 +437,115 @@ app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
   const { data: mv } = await supabase.from('movies').select('title').eq('id', req.params.id).single();
   await supabase.from('movies').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'movie', mv?.title || req.params.id);
+  res.json({ success: true });
+});
+
+// ── CHITRA VICHITRA — PUBLIC ──────────────────────────────────────────────────
+// Get all CV editions (with movie count)
+app.get('/api/chitra-vichitra', async (req, res) => {
+  const { data: editions, error } = await supabase
+    .from('chitra_vichitra')
+    .select('*')
+    .order('sort_order', { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Attach movie counts
+  const result = await Promise.all((editions || []).map(async (cv) => {
+    const { count } = await supabase
+      .from('chitra_vichitra_movies')
+      .select('*', { count: 'exact', head: true })
+      .eq('cv_id', cv.id);
+    return { ...cv, movie_count: count || 0 };
+  }));
+  res.json(result);
+});
+
+// Get movies for a specific CV edition
+app.get('/api/chitra-vichitra/:id/movies', async (req, res) => {
+  const { data, error } = await supabase
+    .from('chitra_vichitra_movies')
+    .select(`
+      id,
+      movies (
+        id, title, release_year, director, poster_image, trailer_url, watch_url,
+        producer, dop, screenwriter, video_editor, sound_design, management,
+        graphic_design, actors, support_crew
+      )
+    `)
+    .eq('cv_id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Flatten: attach cv_movie_id for removal from admin
+  const movies = (data || []).map(row => ({
+    cv_movie_id: row.id,
+    ...row.movies,
+  }));
+  res.json(movies);
+});
+
+// ── CHITRA VICHITRA — ADMIN ───────────────────────────────────────────────────
+// Create a new CV edition
+app.post('/api/admin/chitra-vichitra', authMiddleware, upload.single('cover'), async (req, res) => {
+  const { year, sort_order } = req.body;
+  if (!year) return res.status(400).json({ error: 'Year is required' });
+  const coverUrl = await uploadImage(req.file, 'chitra-vichitra');
+  const { data, error } = await supabase.from('chitra_vichitra').insert([{
+    year: year.trim(),
+    cover_image: coverUrl,
+    sort_order: parseInt(sort_order) || 99,
+  }]).select().single();
+  if (error) return res.status(400).json({ error: error.message.includes('unique') ? 'A CV edition for this year already exists' : error.message });
+  await logActivity(req.admin.id, req.admin.name, 'create', 'chitra_vichitra', `CV ${year}`);
+  res.json(data);
+});
+
+// Update a CV edition (year, cover, sort_order)
+app.put('/api/admin/chitra-vichitra/:id', authMiddleware, upload.single('cover'), async (req, res) => {
+  const { year, sort_order } = req.body;
+  const updates = {
+    year: year?.trim(),
+    sort_order: parseInt(sort_order) || 99,
+  };
+  if (req.file) updates.cover_image = await uploadImage(req.file, 'chitra-vichitra');
+  const { data, error } = await supabase.from('chitra_vichitra').update(updates).eq('id', req.params.id).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  await logActivity(req.admin.id, req.admin.name, 'update', 'chitra_vichitra', `CV ${year}`);
+  res.json(data);
+});
+
+// Delete a CV edition (cascade deletes cv_movies via FK)
+app.delete('/api/admin/chitra-vichitra/:id', authMiddleware, async (req, res) => {
+  const { data: cv } = await supabase.from('chitra_vichitra').select('year').eq('id', req.params.id).single();
+  await supabase.from('chitra_vichitra').delete().eq('id', req.params.id);
+  await logActivity(req.admin.id, req.admin.name, 'delete', 'chitra_vichitra', `CV ${cv?.year || req.params.id}`);
+  res.json({ success: true });
+});
+
+// Add a movie to a CV edition
+app.post('/api/admin/chitra-vichitra/:id/movies', authMiddleware, async (req, res) => {
+  const { movie_id } = req.body;
+  if (!movie_id) return res.status(400).json({ error: 'movie_id required' });
+
+  // Check for duplicate
+  const { data: existing } = await supabase
+    .from('chitra_vichitra_movies')
+    .select('id')
+    .eq('cv_id', req.params.id)
+    .eq('movie_id', movie_id)
+    .single();
+  if (existing) return res.status(400).json({ error: 'This film is already in this CV edition' });
+
+  const { data, error } = await supabase.from('chitra_vichitra_movies').insert([{
+    cv_id: req.params.id,
+    movie_id,
+  }]).select().single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// Remove a movie from a CV edition (by chitra_vichitra_movies row id)
+app.delete('/api/admin/chitra-vichitra/movies/:cvMovieId', authMiddleware, async (req, res) => {
+  await supabase.from('chitra_vichitra_movies').delete().eq('id', req.params.cvMovieId);
   res.json({ success: true });
 });
 
