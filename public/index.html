@@ -799,6 +799,18 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <!-- TRAILER MODAL -->
 <div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
   <div id="trailer-modal-inner">
+
+<!-- ADD ADMIN MODAL -->
+<div class="modal-overlay" id="add-admin-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>Add Admin</h3><button class="modal-close" onclick="closeAddAdminModal()">✕</button></div>
+    <div class="form-group"><label>Full Name</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma"></div>
+    <div class="form-group"><label>Username</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters"></div>
+    <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewAdmin()">Create Admin</button></div>
+  </div>
+</div>
     <button id="trailer-close" onclick="closeTrailer()">✕</button>
     <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
@@ -1213,9 +1225,13 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <h2>Admin Access</h2>
     <p>KFS Content Management</p>
     <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="admin-username" placeholder="Enter username" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box" autocomplete="username">
+    </div>
+    <div class="form-group">
       <label>Password</label>
       <div style="position:relative;display:block">
-        <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;padding-right:44px">
+        <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;padding-right:44px" autocomplete="current-password">
         <button type="button" id="pw-eye" onclick="(function(){var i=document.getElementById('admin-password');var open=i.type==='password';i.type=open?'text':'password';document.getElementById('eye-open').style.display=open?'none':'block';document.getElementById('eye-closed').style.display=open?'block':'none';})()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px">
           <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -1231,6 +1247,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <div id="admin-panel">
   <div class="admin-sidebar">
     <div class="admin-sidebar-logo">KFS Admin</div>
+    <div style="padding:0 16px 14px;font-size:12px;color:var(--grey);border-bottom:1px solid var(--border);margin-bottom:8px">
+      <span id="sidebar-admin-name" style="font-weight:600;color:var(--white)"></span>
+      <span id="sidebar-admin-role" style="margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555"></span>
+    </div>
     <div class="admin-sidebar-group">Content</div>
     <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon">✍️</span> Blog Posts</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon">🎬</span> Events</div>
@@ -1245,6 +1265,8 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon">🔔</span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon">⚙️</span> Settings</div>
+    <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon">🔐</span> Manage Admins</div>
+    <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon">📋</span> Activity Log</div>
     <div class="admin-sidebar-bottom">
       <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
     </div>
@@ -1400,13 +1422,41 @@ body:has(#admin-panel.active) #main-nav{display:none}
         </div>
 
         <div class="settings-divider"></div>
-        <p class="settings-section-title">Change Password</p>
-        <p class="settings-section-desc">Update your admin login password</p>
+        <p class="settings-section-title">Change Your Password</p>
+        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords.</p>
         <div class="settings-grid">
           <div class="form-group"><label>New Password</label><input type="password" id="new-password"></div>
           <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
         </div>
         <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
+      </div>
+    </div>
+
+    <!-- MANAGE ADMINS (master only) -->
+    <div class="admin-section" id="section-admins">
+      <div class="admin-header">
+        <div><h2>Manage Admins</h2><p>Add or remove admin accounts</p></div>
+        <button class="btn btn-primary" onclick="openAddAdminModal()">+ Add Admin</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="admins-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ACTIVITY LOG (master only) -->
+    <div class="admin-section" id="section-activity">
+      <div class="admin-header">
+        <div><h2>Activity Log</h2><p>All changes made by all admins</p></div>
+        <button class="btn btn-secondary" onclick="loadAdminData('activity')">Refresh</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Admin</th><th>Action</th><th>Type</th><th>Item</th><th>When</th></tr></thead>
+          <tbody id="activity-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -2320,27 +2370,40 @@ function renderTestimonials(testimonials) {
 }
 
 // ── ADMIN ──
+let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
+let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
+
 async function adminLogin() {
+  const username = document.getElementById('admin-username').value.trim();
   const password = document.getElementById('admin-password').value;
   const err = document.getElementById('login-error');
+  if (!username || !password) { err.textContent = 'Enter username and password.'; return; }
   const res = await fetch('/api/admin/login',{
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({password})
+    body: JSON.stringify({username, password})
   });
   const data = await res.json();
   if (data.token) {
     adminToken = data.token;
+    currentAdminRole = data.role || 'admin';
+    currentAdminName = data.name || username;
     localStorage.setItem('kfs_token', adminToken);
+    localStorage.setItem('kfs_role', currentAdminRole);
+    localStorage.setItem('kfs_admin_name', currentAdminName);
     err.textContent = '';
     showAdminPanel();
   } else {
-    err.textContent = 'Incorrect password.';
+    err.textContent = data.error || 'Invalid credentials.';
   }
 }
 
 function adminLogout() {
   adminToken = null;
+  currentAdminRole = 'admin';
+  currentAdminName = '';
   localStorage.removeItem('kfs_token');
+  localStorage.removeItem('kfs_role');
+  localStorage.removeItem('kfs_admin_name');
   navigate('home');
 }
 
@@ -2348,9 +2411,20 @@ function showAdminPanel() {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
-  // Remove any visitor popups that may have appeared
   document.getElementById('event-popup-overlay')?.remove();
   document.querySelectorAll('.notif-popup-overlay').forEach(el=>el.remove());
+
+  // Show logged-in admin name and role
+  const nameEl = document.getElementById('sidebar-admin-name');
+  const roleEl = document.getElementById('sidebar-admin-role');
+  if (nameEl) nameEl.textContent = currentAdminName || 'Admin';
+  if (roleEl) roleEl.textContent = currentAdminRole === 'master' ? 'Master' : 'Admin';
+
+  // Show master-only sidebar items
+  const isMaster = currentAdminRole === 'master';
+  document.getElementById('sidebar-admins-link').style.display = isMaster ? 'flex' : 'none';
+  document.getElementById('sidebar-activity-link').style.display = isMaster ? 'flex' : 'none';
+
   loadAdminData('blogs');
 }
 
@@ -2485,6 +2559,33 @@ async function loadAdminData(name) {
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
     }
+  }
+  else if (name==='admins') {
+    if (currentAdminRole !== 'master') return;
+    const admins = await apiFetch('/api/master/admins');
+    const tbody = document.getElementById('admins-tbody');
+    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No admins found.</td></tr>`; return; }
+    tbody.innerHTML = admins.map(a => `<tr>
+      <td style="font-weight:500">${a.name}</td>
+      <td style="color:var(--grey);font-family:monospace">${a.username}</td>
+      <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}</span></td>
+      <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
+      <td>${a.role==='master' ? `<span style="color:#555;font-size:12px">Protected</span>` : `<button class="btn-sm danger" onclick="deleteAdmin('${a.id}','${a.name}')">Remove</button>`}</td>
+    </tr>`).join('');
+  }
+  else if (name==='activity') {
+    if (currentAdminRole !== 'master') return;
+    const logs = await apiFetch('/api/master/activity');
+    const tbody = document.getElementById('activity-tbody');
+    if (!logs || !logs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No activity yet.</td></tr>`; return; }
+    const actionColors = { create:'#22c55e', update:'#f59e0b', delete:'#ef4444' };
+    tbody.innerHTML = logs.map(l => `<tr>
+      <td style="font-weight:500">${l.admin_name||'—'}</td>
+      <td><span style="color:${actionColors[l.action]||'#888'};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${l.action}</span></td>
+      <td style="color:var(--grey);text-transform:capitalize">${l.entity||'—'}</td>
+      <td style="color:var(--white)">${l.entity_name||'—'}</td>
+      <td style="color:var(--grey);font-size:12px">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
+    </tr>`).join('');
   }
 }
 
@@ -3139,6 +3240,47 @@ function filterAdminMembers(q) {
 function clearMemberSearch() {
   const searchEl = document.getElementById('member-admin-search');
   if (searchEl) { searchEl.value = ''; filterAdminMembers(''); searchEl.focus(); }
+}
+
+// ── ADMIN MANAGEMENT (master only) ───────────────────────────────────
+function openAddAdminModal() {
+  document.getElementById('new-admin-name').value = '';
+  document.getElementById('new-admin-username').value = '';
+  document.getElementById('new-admin-password').value = '';
+  document.getElementById('add-admin-error').textContent = '';
+  document.getElementById('add-admin-modal').classList.add('open');
+}
+
+function closeAddAdminModal() {
+  document.getElementById('add-admin-modal').classList.remove('open');
+}
+
+async function saveNewAdmin() {
+  const name = document.getElementById('new-admin-name').value.trim();
+  const username = document.getElementById('new-admin-username').value.trim().toLowerCase();
+  const password = document.getElementById('new-admin-password').value;
+  const errEl = document.getElementById('add-admin-error');
+  if (!name || !username || !password) { errEl.textContent = 'All fields are required.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  const res = await apiFetch('/api/master/admins', 'POST', JSON.stringify({ name, username, password }));
+  if (res && res.id) {
+    closeAddAdminModal();
+    loadAdminData('admins');
+    if (typeof showToast === 'function') showToast(`Admin "${name}" created`, 'success');
+  } else {
+    errEl.textContent = res?.error || 'Failed to create admin.';
+  }
+}
+
+async function deleteAdmin(id, name) {
+  if (!confirm(`Remove admin "${name}"? They will no longer be able to log in.`)) return;
+  const res = await apiFetch('/api/master/admins/' + id, 'DELETE');
+  if (res && res.success) {
+    loadAdminData('admins');
+    if (typeof showToast === 'function') showToast(`Admin "${name}" removed`, 'success');
+  } else {
+    if (typeof showToast === 'function') showToast('Failed to remove admin', 'error');
+  }
 }
 
 // ── BULK DELETE ──────────────────────────────────────────────────────
