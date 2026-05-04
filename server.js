@@ -27,7 +27,7 @@ async function uploadImage(file, folder = 'general') {
   const { data, error } = await supabase.storage
     .from('kfs-media')
     .upload(filename, file.buffer, { contentType: file.mimetype, upsert: true });
-  if (error) { console.error('Storage error:', error); return null; }
+  if (error) { console.error('Storage error:', JSON.stringify(error)); return null; }
   const { data: urlData } = supabase.storage.from('kfs-media').getPublicUrl(filename);
   return urlData.publicUrl;
 }
@@ -189,21 +189,30 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.post('/api/admin/settings', authMiddleware, upload.single('team_photo'), async (req, res) => {
-  // Handle team photo file upload if provided
-  if (req.file) {
-    const photoUrl = await uploadImage(req.file, 'general');
-    if (photoUrl) {
-      await supabase.from('settings').upsert({ key: 'team_photo', value: photoUrl }, { onConflict: 'key' });
+  try {
+    // Handle team photo file upload if provided
+    if (req.file) {
+      console.log('[settings] uploading team photo:', req.file.originalname, req.file.size);
+      const photoUrl = await uploadImage(req.file, 'general');
+      console.log('[settings] photo upload result:', photoUrl);
+      if (photoUrl) {
+        await supabase.from('settings').upsert({ key: 'team_photo', value: photoUrl }, { onConflict: 'key' });
+      } else {
+        return res.status(500).json({ error: 'Photo upload to storage failed — check Supabase storage bucket permissions' });
+      }
     }
+    const body = req.body || {};
+    const entries = Object.entries(body);
+    for (const [key, value] of entries) {
+      if (value === '' || value === null || value === undefined) continue;
+      await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
+    }
+    try { await logActivity(req.admin.id, req.admin.name, 'update', 'settings', 'Site Settings'); } catch(e) {}
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[settings] error:', e);
+    res.status(500).json({ error: e.message || 'Internal server error' });
   }
-  const body = req.body;
-  const entries = Object.entries(body);
-  for (const [key, value] of entries) {
-    if (value === '' || value === null || value === undefined) continue;
-    await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
-  }
-  await logActivity(req.admin.id, req.admin.name, 'update', 'settings', 'Site Settings');
-  res.json({ success: true });
 });
 
 // ── BLOGS ─────────────────────────────────────────────────────────────────────
