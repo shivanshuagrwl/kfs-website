@@ -128,14 +128,17 @@ app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
-// Refresh token — re-issues JWT from live DB row (fixes stale role in token)
+// Refresh token — re-issues JWT with the CURRENT role from the DB row
+// Called automatically on every page load to fix stale tokens (the add-admin fix)
 app.post('/api/admin/refresh', authMiddleware, async (req, res) => {
-  const { data: admin } = await supabase.from('admins').select('id,name,username,role').eq('id', req.admin.id).single();
+  const { data: admin } = await supabase
+    .from('admins').select('id,name,username,role').eq('id', req.admin.id).single();
   if (!admin) return res.status(401).json({ error: 'Admin not found' });
   const token = jwt.sign(
     { id: admin.id, name: admin.name, username: admin.username, role: admin.role },
     JWT_SECRET, { expiresIn: '7d' }
   );
+  console.log('Token refreshed for', admin.username, '— role:', admin.role);
   res.json({ token, name: admin.name, role: admin.role });
 });
 
