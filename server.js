@@ -188,17 +188,17 @@ app.get('/api/settings', async (req, res) => {
   res.json(obj);
 });
 
-app.post('/api/admin/upload-team-photo', authMiddleware, upload.single('photo'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const url = await uploadImage(req.file, 'general');
-  if (!url) return res.status(500).json({ error: 'Upload failed' });
-  res.json({ url });
-});
-
-app.post('/api/admin/settings', authMiddleware, async (req, res) => {
-  const entries = Object.entries(req.body);
+app.post('/api/admin/settings', authMiddleware, upload.single('team_photo'), async (req, res) => {
+  // Handle team photo file upload if provided
+  if (req.file) {
+    const photoUrl = await uploadImage(req.file, 'general');
+    if (photoUrl) {
+      await supabase.from('settings').upsert({ key: 'team_photo', value: photoUrl }, { onConflict: 'key' });
+    }
+  }
+  const body = req.body;
+  const entries = Object.entries(body);
   for (const [key, value] of entries) {
-    // Skip empty strings so they don't overwrite existing values (e.g. team_photo)
     if (value === '' || value === null || value === undefined) continue;
     await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
   }

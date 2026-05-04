@@ -51,6 +51,15 @@ body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
 body.light-mode .blog-detail-content{color:#111}
+body.light-mode .bar-chart-bar{background:#111}
+body.light-mode .leaderboard-bar-fill{background:#111}
+body.light-mode .review-cat-fill{background:#333}
+body.light-mode .analytics-tab.active{color:#111;border-bottom-color:#111}
+body.light-mode .analytics-tab{color:#666}
+body.light-mode .chart-wrap h3{color:#666}
+body.light-mode .bar-chart-label{color:#666}
+body.light-mode .bar-chart-val{color:#666}
+body.light-mode .analytics-card-num{color:#111}
 body.light-mode .blog-detail-body{color:#222}
 body.light-mode .blog-detail-body h2,body.light-mode .blog-detail-body h3{color:#0f0f0f}
 body.light-mode .blog-detail-body blockquote{color:#555;border-color:#aaa}
@@ -3017,58 +3026,54 @@ async function deleteAchievement(id) {
 }
 
 async function saveSettings() {
-  // Upload team photo if a new file was selected
-  const photoFile = document.getElementById('set-team-photo-file').files[0];
-  if (photoFile) {
+  const saveBtn = document.querySelector('#section-settings .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  try {
     const fd = new FormData();
-    fd.append('photo', photoFile);
-    const saveBtn = document.querySelector('#section-settings .btn-primary');
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Uploading photo...'; }
-    try {
-      const r = await fetch('/api/admin/upload-team-photo', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + adminToken },
-        body: fd
-      });
-      const d = await r.json();
-      if (r.ok && d.url) {
-        document.getElementById('set-team-photo-url').value = d.url;
-        document.getElementById('team-photo-img').src = d.url;
-        document.getElementById('team-photo-preview').style.display = 'block';
-        console.log('[team photo] uploaded:', d.url);
-      } else {
-        alert('Photo upload failed: ' + (d.error || 'unknown error'));
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Settings'; }
-        return;
+    // Text fields
+    fd.append('site_tagline', document.getElementById('set-tagline').value);
+    fd.append('about_text', document.getElementById('set-about').value);
+    fd.append('stat_members', document.getElementById('set-stat-members').value);
+    fd.append('stat_events', document.getElementById('set-stat-events').value);
+    fd.append('stat_films', document.getElementById('set-stat-films').value);
+    fd.append('stat_years', document.getElementById('set-stat-years').value);
+    fd.append('spotlight_name', document.getElementById('set-spotlight-name').value);
+    fd.append('spotlight_role', document.getElementById('set-spotlight-role').value);
+    fd.append('spotlight_quote', document.getElementById('set-spotlight-quote').value);
+    fd.append('spotlight_photo', document.getElementById('set-spotlight-photo').value);
+    fd.append('instagram', document.getElementById('set-instagram').value);
+    fd.append('youtube', document.getElementById('set-youtube').value);
+    fd.append('email', document.getElementById('set-email').value);
+    // Team photo file (if a new one was chosen)
+    const photoFile = document.getElementById('set-team-photo-file').files[0];
+    if (photoFile) fd.append('team_photo', photoFile);
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+      body: fd
+    });
+    if (res.ok) {
+      alert('Settings saved!');
+      // Refresh preview if photo was uploaded
+      if (photoFile) {
+        const d = await res.json().catch(() => ({}));
+        // Reload settings to get the new photo URL
+        const fresh = await apiFetch('/api/settings');
+        if (fresh && fresh.team_photo) {
+          document.getElementById('set-team-photo-url').value = fresh.team_photo;
+          document.getElementById('team-photo-img').src = fresh.team_photo;
+          document.getElementById('team-photo-preview').style.display = 'block';
+        }
       }
-    } catch(e) {
-      alert('Photo upload failed: ' + e.message);
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Settings'; }
-      return;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Save failed: ' + (err.error || res.status));
     }
+  } catch(e) {
+    alert('Save failed: ' + e.message);
+  } finally {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Settings'; }
   }
-  const teamPhotoUrl = document.getElementById('set-team-photo-url').value;
-  const body = {
-    site_tagline: document.getElementById('set-tagline').value,
-    about_text: document.getElementById('set-about').value,
-    ...(teamPhotoUrl ? { team_photo: teamPhotoUrl } : {}),
-    stat_members: document.getElementById('set-stat-members').value,
-    stat_events: document.getElementById('set-stat-events').value,
-    stat_films: document.getElementById('set-stat-films').value,
-    stat_years: document.getElementById('set-stat-years').value,
-    spotlight_name: document.getElementById('set-spotlight-name').value,
-    spotlight_role: document.getElementById('set-spotlight-role').value,
-    spotlight_quote: document.getElementById('set-spotlight-quote').value,
-    spotlight_photo: document.getElementById('set-spotlight-photo').value,
-    instagram: document.getElementById('set-instagram').value,
-    youtube: document.getElementById('set-youtube').value,
-    email: document.getElementById('set-email').value,
-  };
-  const res = await fetch('/api/admin/settings',{method:'POST',
-    headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
-    body:JSON.stringify(body)});
-  if (res.ok) alert('Settings saved!');
 }
 
 async function changePassword() {
@@ -3714,14 +3719,17 @@ function renderLineChart(svgId, labelsId, byDate) {
     const y = H - pad - (d.views/maxV)*(H-pad*2);
     return `${x},${y}`;
   });
+  const isLight = document.body.classList.contains('light-mode');
+  const lineColor = isLight ? '#111' : 'white';
+  const gradColor = isLight ? '#111' : 'white';
   svg.innerHTML = `
-    <polyline points="${pts.join(' ')}" fill="none" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round"/>
     ${byDate.map((d,i)=>{
       const x=pad+(i/(byDate.length-1||1))*(W-pad*2);
       const y=H-pad-(d.views/maxV)*(H-pad*2);
-      return `<circle cx="${x}" cy="${y}" r="3" fill="white"/>`;
+      return `<circle cx="${x}" cy="${y}" r="3" fill="${lineColor}"/>`;
     }).join('')}
-    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="white" stop-opacity=".15"/><stop offset="100%" stop-color="white" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${gradColor}" stop-opacity=".15"/><stop offset="100%" stop-color="${gradColor}" stop-opacity="0"/></linearGradient></defs>
     <polygon points="${pts.join(' ')} ${W-pad},${H} ${pad},${H}" fill="url(#fadeG)"/>`;
   // Labels — show first, middle, last
   const show = [0, Math.floor(byDate.length/2), byDate.length-1].filter((v,i,a)=>a.indexOf(v)===i);
