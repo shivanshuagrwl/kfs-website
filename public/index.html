@@ -30,11 +30,41 @@ body.light-mode .nav-hamburger span{background:#111}
   body.light-mode .nav-links a{color:#333}
   body.light-mode .nav-links a.active,body.light-mode .nav-links a:hover{color:#111;background:rgba(0,0,0,.05)}
 }
-/* hero */
-body.light-mode .glow-word{color:#1a1a1a !important}
-body.light-mode .glow-word.lit{color:#000 !important;text-shadow:0 1px 2px rgba(0,0,0,.18),0 0 28px rgba(100,60,220,.18),0 0 60px rgba(100,60,220,.08)}
-body.light-mode .hero-tagline em{color:#aaa}
+/* hero — light mode black glow */
+body.light-mode .glow-word{color:#0a0a0a !important;transition:text-shadow .8s ease,color .4s ease}
+body.light-mode .glow-word.lit{
+  color:#000 !important;
+  text-shadow:
+    0 0 8px  rgba(0,0,0,.55),
+    0 0 20px rgba(0,0,0,.35),
+    0 0 45px rgba(0,0,0,.18),
+    0 0 90px rgba(0,0,0,.08)
+}
+body.light-mode .hero-tagline em{color:#888}
 body.light-mode .hero-sub{color:#555 !important}
+/* pulsing ambient glow orb behind the text in light mode */
+body.light-mode #hero-section::after{
+  content:'';
+  position:absolute;
+  left:50%;top:42%;
+  transform:translate(-50%,-50%);
+  width:min(70vw,700px);
+  height:min(40vw,380px);
+  border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,.13) 0%,rgba(0,0,0,.06) 40%,transparent 70%);
+  pointer-events:none;
+  animation:lightGlowPulse 4s ease-in-out infinite;
+  z-index:0
+}
+@keyframes lightGlowPulse{
+  0%,100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}
+}
+/* make tagline sit above the orb */
+body.light-mode .hero-tagline,
+body.light-mode .hero-sub,
+body.light-mode .hero-cta,
+body.light-mode .hero-scroll{position:relative;z-index:1}
 body.light-mode .hero-scroll span{color:#888}
 body.light-mode .scroll-line{background:linear-gradient(to bottom,#aaa,transparent)}
 /* testimonials */
@@ -103,11 +133,6 @@ body.light-mode #search-overlay{background:rgba(240,240,240,.98)}
 body.light-mode #search-input{background:#fff;color:#111;border-color:#ccc}
 body.light-mode .search-result-item{border-color:#eee;color:#111}
 body.light-mode .search-result-item:hover{background:#f5f5f5}
-body.light-mode .movie-watch-badge{background:rgba(0,0,0,.72);color:#fff}
-body.light-mode .movie-watch-badge--done{background:rgba(0,0,0,.85);color:#fff}
-body.light-mode #movie-watch-status-btn{border-color:#999;color:#444}
-#movie-watch-status-btn.watched-active{border-color:var(--white);color:var(--white);background:rgba(255,255,255,.08)}
-body.light-mode #movie-watch-status-btn.watched-active{border-color:#111;color:#111;background:rgba(0,0,0,.06)}
 /* smooth transitions */
 body,nav,.admin-sidebar,.admin-main,.admin-card,.modal,.modal-box,
 input,textarea,select,.ep-card,.film-card,.blog-card,.movie-card,
@@ -1122,8 +1147,6 @@ body:has(#admin-panel.active) #main-nav{display:none}
       <span>Scroll</span>
       <div class="scroll-line"></div>
     </div>
-    <!-- Light mode confetti canvas -->
-    <canvas id="hero-confetti" style="position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s"></canvas>
   </section>
 
   <section class="section" style="padding-top:0">
@@ -4333,8 +4356,11 @@ function updateDetailWatchBtn(id) {
   const btn = document.getElementById('movie-watch-status-btn');
   if (!btn) return;
   const watched = isMovieWatched(id);
-  btn.innerHTML = watched ? '<span>✓</span> Watched' : '<span>☐</span> Mark as Watched';
-  btn.classList.toggle('watched-active', watched);
+  btn.innerHTML = watched
+    ? '<span>✓</span> Watched'
+    : '<span>☐</span> Mark as Watched';
+  btn.style.borderColor = watched ? 'rgba(255,255,255,.5)' : '';
+  btn.style.color = watched ? 'var(--white)' : '';
 }
 
 function toggleWatchStatusCard(id, cardEl) {
@@ -4349,120 +4375,6 @@ function toggleWatchStatusCard(id, cardEl) {
   // Sync detail btn if same film is open
   if (window._currentMovieId === id) updateDetailWatchBtn(id);
 }
-
-// ── LIGHT MODE CONFETTI — bursts from hero text ───────────────────────
-(function initHeroConfetti() {
-  const canvas = document.getElementById('hero-confetti');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H, particles = [], raf;
-
-  function resize() {
-    const hero = document.getElementById('hero-section');
-    W = canvas.width = hero ? hero.offsetWidth : window.innerWidth;
-    H = canvas.height = hero ? hero.offsetHeight : window.innerHeight;
-  }
-
-  function getTextY() {
-    const tag = document.getElementById('hero-tagline');
-    const hero = document.getElementById('hero-section');
-    if (!tag || !hero) return H * 0.38;
-    const hr = hero.getBoundingClientRect();
-    const tr = tag.getBoundingClientRect();
-    return (tr.top + tr.height / 2) - hr.top;
-  }
-
-  const COLORS = ['#c084fc','#818cf8','#38bdf8','#34d399','#fb923c','#f472b6','#facc15','#a78bfa','#60a5fa'];
-
-  function makePiece(fromText) {
-    const ty = fromText ? getTextY() : -20 - Math.random() * 60;
-    const tx = fromText ? W * 0.12 + Math.random() * W * 0.76 : Math.random() * W;
-    const burst = fromText ? 2.2 + Math.random() * 3.8 : 0;
-    const isRibbon = Math.random() > 0.42;
-    return {
-      x: tx, y: ty,
-      vx: (Math.random() - 0.5) * (fromText ? 5.5 : 1.0),
-      vy: fromText ? -(burst) : 0.45 + Math.random() * 0.85,
-      gravity: fromText ? 0.1 + Math.random() * 0.05 : 0.01,
-      len: isRibbon ? 10 + Math.random() * 22 : 0,
-      size: isRibbon ? 0 : 4 + Math.random() * 5,
-      angle: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 0.07,
-      wavy: Math.random() * Math.PI * 2,
-      wavyAmp: 0.25 + Math.random() * 0.35,
-      wavySpeed: 0.025 + Math.random() * 0.025,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      alpha: fromText ? 0 : 0.75,
-      alphaTarget: 0.7 + Math.random() * 0.25,
-      isRibbon, fromText,
-    };
-  }
-
-  function burst() {
-    const n = 52 + Math.floor(Math.random() * 16);
-    for (let i = 0; i < n; i++) setTimeout(() => particles.push(makePiece(true)), i * 16);
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    if (!document.body.classList.contains('light-mode')) {
-      canvas.style.opacity = 0;
-      raf = requestAnimationFrame(draw);
-      return;
-    }
-    canvas.style.opacity = 1;
-
-    // gentle ambient trickle
-    if (particles.length < 50 && Math.random() < 0.22) particles.push(makePiece(false));
-
-    particles = particles.filter(p => p.y < H + 80 && p.alpha > 0.015);
-    particles.forEach(p => {
-      p.x += p.vx + Math.sin(p.wavy) * p.wavyAmp;
-      p.y += p.vy; p.vy += p.gravity; p.vx *= 0.994;
-      p.angle += p.rotSpeed; p.wavy += p.wavySpeed;
-      if (p.fromText && p.alpha < p.alphaTarget) p.alpha = Math.min(p.alphaTarget, p.alpha + 0.07);
-      if (p.y > H * 0.80) p.alpha -= 0.02;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.angle);
-      ctx.globalAlpha = Math.max(0, p.alpha);
-      if (p.isRibbon) {
-        ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-p.len/2, 0);
-        ctx.bezierCurveTo(-p.len/4, -p.len*0.3, p.len/4, p.len*0.3, p.len/2, 0);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = p.color;
-        if (p.size < 6) { ctx.beginPath(); ctx.arc(0,0,p.size/2,0,Math.PI*2); ctx.fill(); }
-        else ctx.fillRect(-p.size/2, -p.size/4, p.size, p.size/2);
-      }
-      ctx.restore();
-    });
-    raf = requestAnimationFrame(draw);
-  }
-
-  function start() {
-    resize(); particles = [];
-    if (raf) cancelAnimationFrame(raf);
-    draw();
-    setTimeout(burst, 100);
-    setTimeout(burst, 850);
-  }
-
-  const _orig = window.toggleTheme;
-  window.toggleTheme = function() {
-    _orig();
-    setTimeout(() => {
-      if (document.body.classList.contains('light-mode')) start();
-    }, 50);
-  };
-
-  window.addEventListener('resize', resize);
-  if (document.body.classList.contains('light-mode')) start();
-  else { resize(); draw(); }
-})();
 
 // Analytics auto-load is handled inside loadAdminData()
 </script>
