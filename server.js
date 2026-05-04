@@ -18,7 +18,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const JWT_SECRET = process.env.JWT_SECRET || 'kfs@KIIT#filmSociety$2024!secret';
 
 // ── File uploads ──────────────────────────────────────────────────────────────
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 async function uploadImage(file, folder = 'general') {
   if (!file) return null;
@@ -27,7 +27,11 @@ async function uploadImage(file, folder = 'general') {
   const { data, error } = await supabase.storage
     .from('kfs-media')
     .upload(filename, file.buffer, { contentType: file.mimetype, upsert: true });
-  if (error) { console.error('Storage error:', JSON.stringify(error)); return null; }
+  if (error) {
+    const msg = error.message || JSON.stringify(error);
+    console.error('Storage error:', msg);
+    throw new Error('Supabase storage: ' + msg);
+  }
   const { data: urlData } = supabase.storage.from('kfs-media').getPublicUrl(filename);
   return urlData.publicUrl;
 }
@@ -188,7 +192,15 @@ app.get('/api/settings', async (req, res) => {
   res.json(obj);
 });
 
-app.post('/api/admin/settings', authMiddleware, upload.single('team_photo'), async (req, res) => {
+app.post('/api/admin/settings', authMiddleware, (req, res, next) => {
+  upload.single('team_photo')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Photo too large — please use an image under 20MB' });
+      return res.status(400).json({ error: 'Upload error: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     // Handle team photo file upload if provided
     if (req.file) {

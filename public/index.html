@@ -3102,6 +3102,11 @@ function insertLink() {
 function previewTeamPhoto(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
+  if (file.size > 20 * 1024 * 1024) {
+    alert('Photo is too large (' + (file.size/1024/1024).toFixed(1) + 'MB). Please use an image under 20MB.');
+    input.value = '';
+    return;
+  }
   document.getElementById('team-photo-filename').textContent = file.name;
   const reader = new FileReader();
   reader.onload = function(e) {
