@@ -2872,9 +2872,16 @@ function insertLink() {
 async function apiFetch(url, method='GET', body=null) {
   const opts = { method, headers:{} };
   if (adminToken) opts.headers['Authorization'] = 'Bearer '+adminToken;
-  if (body && typeof body==='object' && !(body instanceof FormData)) {
-    opts.headers['Content-Type']='application/json';
-    opts.body = JSON.stringify(body);
+  if (body) {
+    if (body instanceof FormData) {
+      opts.body = body;
+    } else if (typeof body === 'string') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = body;
+    } else {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
   }
   try {
     const res = await fetch(url, opts);
@@ -3262,7 +3269,7 @@ async function saveNewAdmin() {
   const errEl = document.getElementById('add-admin-error');
   if (!name || !username || !password) { errEl.textContent = 'All fields are required.'; return; }
   if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
-  const res = await apiFetch('/api/master/admins', 'POST', JSON.stringify({ name, username, password }));
+  const res = await apiFetch('/api/master/admins', 'POST', { name, username, password });
   if (res && res.id) {
     closeAddAdminModal();
     loadAdminData('admins');
