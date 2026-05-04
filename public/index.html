@@ -1700,6 +1700,28 @@ body:has(#admin-panel.active) #main-nav{display:none}
 <script>
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
+
+// Decode JWT to get the real role baked into the token (not just localStorage cache)
+(function syncRoleFromToken() {
+  if (!adminToken) return;
+  try {
+    const payload = JSON.parse(atob(adminToken.split('.')[1]));
+    // If token is expired, clear it
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      adminToken = null;
+      localStorage.removeItem('kfs_token');
+      localStorage.removeItem('kfs_role');
+      localStorage.removeItem('kfs_admin_name');
+      return;
+    }
+    // Sync role and name from the actual JWT payload
+    if (payload.role) localStorage.setItem('kfs_role', payload.role);
+    if (payload.name) localStorage.setItem('kfs_admin_name', payload.name);
+  } catch(e) { /* malformed token */ }
+})();
+
+let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
+let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let allEvents = [];
 
 // ── CURSOR (dot only) ──
@@ -2370,9 +2392,6 @@ function renderTestimonials(testimonials) {
 }
 
 // ── ADMIN ──
-let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
-let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
-
 async function adminLogin() {
   const username = document.getElementById('admin-username').value.trim();
   const password = document.getElementById('admin-password').value;
@@ -2408,6 +2427,14 @@ function adminLogout() {
 }
 
 function showAdminPanel() {
+  // Always re-read from localStorage so refresh works correctly
+  if (!currentAdminRole || currentAdminRole === 'admin') {
+    currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
+  }
+  if (!currentAdminName) {
+    currentAdminName = localStorage.getItem('kfs_admin_name') || '';
+  }
+
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
@@ -2885,8 +2912,13 @@ async function apiFetch(url, method='GET', body=null) {
   }
   try {
     const res = await fetch(url, opts);
-    return await res.json();
-  } catch(e) { return null; }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) console.warn('apiFetch', method, url, res.status, data);
+    return data;
+  } catch(e) {
+    console.error('apiFetch network error:', e);
+    return null;
+  }
 }
 
 function checkRoute() {
@@ -3267,15 +3299,22 @@ async function saveNewAdmin() {
   const username = document.getElementById('new-admin-username').value.trim().toLowerCase();
   const password = document.getElementById('new-admin-password').value;
   const errEl = document.getElementById('add-admin-error');
+  const btn = document.querySelector('#add-admin-modal .btn-primary');
   if (!name || !username || !password) { errEl.textContent = 'All fields are required.'; return; }
   if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
-  const res = await apiFetch('/api/master/admins', 'POST', { name, username, password });
-  if (res && res.id) {
-    closeAddAdminModal();
-    loadAdminData('admins');
-    if (typeof showToast === 'function') showToast(`Admin "${name}" created`, 'success');
-  } else {
-    errEl.textContent = res?.error || 'Failed to create admin.';
+  errEl.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+  try {
+    const res = await apiFetch('/api/master/admins', 'POST', { name, username, password });
+    if (res && res.id) {
+      closeAddAdminModal();
+      loadAdminData('admins');
+      if (typeof showToast === 'function') showToast('Admin "' + name + '" created', 'success');
+    } else {
+      errEl.textContent = (res && res.error) ? res.error : 'Failed to create admin. Check console for details.';
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Admin'; }
   }
 }
 
