@@ -11,36 +11,59 @@
   --black:#0a0a0a;--white:#f5f5f5;--grey:#888;--mid:#333;--border:#1e1e1e;
   --accent:#f5f5f5;--card:#111;--ease:cubic-bezier(.4,0,.2,1);
 }
+
+/* ── LIGHT MODE ──────────────────────────────────────────────────────── */
 body.light-mode{
-  --black:#f4f4f4;--white:#0f0f0f;--grey:#555;--mid:#ccc;--border:#e0e0e0;
+  --black:#f0f0f0;--white:#0f0f0f;--grey:#666;--mid:#bbb;--border:#ddd;
   --accent:#0f0f0f;--card:#fff;
 }
-body.light-mode nav{background:rgba(244,244,244,.92);border-bottom:1px solid rgba(0,0,0,.08)}
-body.light-mode .nav-hamburger span{background:var(--white)}
-body.light-mode #cursor{background:var(--white)}
-body.light-mode .admin-sidebar{background:#fff;border-right:1px solid #e5e5e5}
+/* cursor: invert in light mode so it stays visible */
+body.light-mode #cursor{background:#0f0f0f;mix-blend-mode:normal}
+/* nav */
+body.light-mode nav{background:rgba(240,240,240,.92);border-bottom:1px solid rgba(0,0,0,.1)}
+body.light-mode .nav-hamburger span{background:#0f0f0f}
+body.light-mode .nav-logo-text{color:#0f0f0f}
+/* hero — keep glow words readable */
+body.light-mode .glow-word{color:#0f0f0f}
+body.light-mode .glow-word.lit{color:#0f0f0f;text-shadow:0 0 20px rgba(0,0,0,.25),0 0 50px rgba(0,0,0,.1)}
+body.light-mode .hero-tagline em{color:#999}
+body.light-mode .scroll-line{background:linear-gradient(to bottom,#999,transparent)}
+/* cards */
+body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
+body.light-mode .testimonial-card,body.light-mode .achievement-card{background:#fff;border-color:#e0e0e0}
+/* admin */
+body.light-mode .admin-sidebar{background:#fff;border-right:1px solid #e0e0e0}
+body.light-mode .admin-sidebar-item{color:#444}
 body.light-mode .admin-sidebar-item:hover,body.light-mode .admin-sidebar-item.active{background:#f0f0f0;color:#0f0f0f}
-body.light-mode .admin-content{background:#f4f4f4}
-body.light-mode .admin-card{background:#fff;border-color:#e5e5e5;color:#0f0f0f}
-body.light-mode .admin-table th{background:#f0f0f0;color:#555}
-body.light-mode .admin-table td{border-color:#e5e5e5;color:#0f0f0f}
-body.light-mode .admin-table tr:hover td{background:#f8f8f8}
+body.light-mode .admin-sidebar-group{color:#999}
+body.light-mode .admin-main,body.light-mode .admin-content{background:#f4f4f4}
+body.light-mode .admin-card{background:#fff;border-color:#e0e0e0;color:#0f0f0f}
+body.light-mode .admin-table th{background:#f0f0f0;color:#666;border-color:#e0e0e0}
+body.light-mode .admin-table td{border-color:#e8e8e8;color:#0f0f0f}
+body.light-mode .admin-table tr:hover td{background:#fafafa}
+body.light-mode .admin-header h2{color:#0f0f0f}
+body.light-mode .admin-header p{color:#666}
 body.light-mode input,body.light-mode textarea,body.light-mode select{
-  background:#f8f8f8;color:#0f0f0f;border-color:#d0d0d0}
+  background:#fff;color:#0f0f0f;border-color:#ccc}
+body.light-mode input::placeholder,body.light-mode textarea::placeholder{color:#aaa}
 body.light-mode .modal-box{background:#fff;color:#0f0f0f}
-body.light-mode .modal-header,body.light-mode .modal-footer{border-color:#e5e5e5}
-body.light-mode .btn{background:#0f0f0f;color:#f5f5f5}
-body.light-mode .btn-secondary{background:#e5e5e5;color:#0f0f0f}
-body.light-mode .hero-grain{opacity:.03}
-body.light-mode .section-tag{color:#555}
-body.light-mode .ep-card,.light-mode .film-card,.light-mode .blog-card{background:#fff;border-color:#e5e5e5}
-*,*::before,*::after{transition:background-color .25s var(--ease),border-color .25s var(--ease),color .1s var(--ease)}
+body.light-mode .modal-header,body.light-mode .modal-footer{border-color:#e0e0e0}
+body.light-mode .modal-header h3{color:#0f0f0f}
+body.light-mode label{color:#555}
+body.light-mode .btn-primary{background:#0f0f0f;color:#f5f5f5;border-color:#0f0f0f}
+body.light-mode .btn-secondary{background:#e8e8e8;color:#0f0f0f;border-color:#ccc}
+body.light-mode .admin-sidebar-bottom{border-top:1px solid #e0e0e0}
+/* smooth transitions site-wide */
+body,nav,.admin-sidebar,.admin-main,.admin-card,.modal-box,input,textarea,select,
+.ep-card,.film-card,.blog-card,.admin-table td,.admin-table th{
+  transition:background-color .22s ease,border-color .22s ease,color .1s ease}
+
 html{scroll-behavior:smooth;font-size:16px;overflow-x:hidden;max-width:100vw}
 body{background:var(--black);color:var(--white);font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
   -webkit-font-smoothing:antialiased;overflow-x:hidden;cursor:none;width:100%;max-width:100vw}
 
 /* ── CURSOR ──────────────────────────────────────────────────────────── */
-#cursor{position:fixed;width:8px;height:8px;background:var(--white);border-radius:50%;pointer-events:none;
+#cursor{position:fixed;width:8px;height:8px;background:#888;border-radius:50%;pointer-events:none;
   z-index:9999;transition:opacity .2s;mix-blend-mode:difference;opacity:0}
 #cursor-ring{display:none}
 @media(hover:none),(pointer:coarse){#cursor{display:none}body{cursor:auto}}
@@ -131,14 +154,16 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(4rem,11.5vw,10.5rem);font-weight:900;letter-spacing:-.05em;
   line-height:.9;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
-  width:min(96vw,1400px);text-align:center}
+  width:min(96vw,1400px);text-align:center;color:var(--white)}
 .hero-tagline em{font-style:normal;color:var(--grey)}
-.glow-word{display:inline;transition:text-shadow .7s ease,color .7s ease}
+.glow-word{display:inline;transition:text-shadow .7s ease,color .7s ease;color:var(--white)}
 .glow-word.lit{
-  color:#fff;
+  color:var(--white);
   text-shadow:0 0 18px rgba(255,255,255,.98),0 0 40px rgba(255,255,255,.75),
     0 0 80px rgba(255,255,255,.45),0 0 150px rgba(255,255,255,.2)
 }
+body.light-mode .glow-word{color:#0f0f0f}
+body.light-mode .glow-word.lit{color:#0f0f0f;text-shadow:0 0 20px rgba(0,0,0,.2),0 0 40px rgba(0,0,0,.08)}
 .hero-sub{margin-top:24px;font-size:14px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--grey);opacity:0;animation:fadeUp .8s .6s var(--ease) forwards}
 .hero-cta{margin-top:48px;display:flex;gap:16px;opacity:0;animation:fadeUp .8s .8s var(--ease) forwards}
@@ -856,16 +881,18 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
   </button>
-  <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode"
-    style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);transition:color .2s">
-    <svg id="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
-      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
-    <svg id="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <button id="nav-theme-btn" onclick="toggleTheme()" title="Toggle light / dark"
+    style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);transition:color .2s;flex-shrink:0">
+    <!-- moon shown in dark mode; sun shown in light mode -->
+    <svg id="nav-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+    <svg id="nav-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
     </svg>
   </button>
   <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
@@ -1304,6 +1331,10 @@ body:has(#admin-panel.active) #main-nav{display:none}
     <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon">🔐</span> Manage Admins</div>
     <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon">📋</span> Activity Log</div>
     <div class="admin-sidebar-bottom">
+      <div class="admin-sidebar-item" id="admin-theme-toggle" onclick="toggleTheme()" style="justify-content:space-between">
+        <span><span class="icon" id="admin-theme-icon">◑</span> Light Mode</span>
+        <span id="admin-theme-label" style="font-size:11px;opacity:.5;letter-spacing:.04em">OFF</span>
+      </div>
       <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
     </div>
   </div>
@@ -1737,7 +1768,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
 
-// Decode JWT payload to get the real role baked in at login time
+// Decode JWT payload immediately to get whatever role is baked in
 (function syncRoleFromToken() {
   if (!adminToken) return;
   try {
@@ -1752,25 +1783,25 @@ let adminToken = localStorage.getItem('kfs_token');
   } catch(e) {}
 })();
 
-// Silently refresh token on page load to fix stale roles (e.g. after DB role was corrected)
+// Silently refresh token on every page load — fixes stale role (e.g. after DB role was corrected)
+// This is the definitive fix for "add admin not working": token gets reissued with correct role from DB
 (function autoRefreshToken() {
   if (!adminToken) return;
-  fetch('/api/admin/refresh', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + adminToken }
-  }).then(r => r.ok ? r.json() : null).then(data => {
-    if (!data || !data.token) return;
-    adminToken = data.token;
-    localStorage.setItem('kfs_token', data.token);
-    localStorage.setItem('kfs_role', data.role);
-    localStorage.setItem('kfs_admin_name', data.name);
-    currentAdminRole = data.role;
-    currentAdminName = data.name;
-    // Re-render sidebar if admin panel is already open
-    if (document.getElementById('admin-panel')?.classList.contains('active')) {
-      showAdminPanel();
-    }
-  }).catch(() => {});
+  fetch('/api/admin/refresh', { method:'POST', headers:{'Authorization':'Bearer '+adminToken} })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.token) return;
+      adminToken = data.token;
+      currentAdminRole = data.role || 'admin';
+      currentAdminName = data.name || '';
+      localStorage.setItem('kfs_token', data.token);
+      localStorage.setItem('kfs_role', data.role);
+      localStorage.setItem('kfs_admin_name', data.name);
+      // If admin panel is already open, re-render sidebar with correct role
+      if (document.getElementById('admin-panel')?.classList.contains('active')) {
+        showAdminPanel();
+      }
+    }).catch(() => {});
 })();
 
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
@@ -1882,20 +1913,25 @@ function closeMenu() {
   if (hb) hb.classList.remove('open');
 }
 
+function _applyThemeUI(isLight) {
+  const moon = document.getElementById('nav-icon-moon');
+  const sun  = document.getElementById('nav-icon-sun');
+  const lbl  = document.getElementById('admin-theme-label');
+  if (moon) moon.style.display = isLight ? 'none'  : 'block';
+  if (sun)  sun.style.display  = isLight ? 'block' : 'none';
+  if (lbl)  lbl.textContent    = isLight ? 'ON' : 'OFF';
+}
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light-mode');
   localStorage.setItem('kfs_theme', isLight ? 'light' : 'dark');
-  document.getElementById('theme-icon-dark').style.display = isLight ? 'block' : 'none';
-  document.getElementById('theme-icon-light').style.display = isLight ? 'none' : 'block';
+  _applyThemeUI(isLight);
 }
-(function initTheme() {
-  if (localStorage.getItem('kfs_theme') === 'light') {
-    document.body.classList.add('light-mode');
-    const dark = document.getElementById('theme-icon-dark');
-    const light = document.getElementById('theme-icon-light');
-    if (dark) dark.style.display = 'block';
-    if (light) light.style.display = 'none';
-  }
+// Restore saved theme on page load
+(function initTheme(){
+  const isLight = localStorage.getItem('kfs_theme') === 'light';
+  if (isLight) document.body.classList.add('light-mode');
+  // Icons may not be in DOM yet — use setTimeout to defer
+  setTimeout(() => _applyThemeUI(isLight), 0);
 })();
 
 function animateCounters() {
