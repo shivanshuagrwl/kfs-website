@@ -1052,13 +1052,53 @@ body.light-mode .member-film-poster-ph{background:#eee}
 
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-header"><h3>Add Admin</h3><button class="modal-close" onclick="closeAddAdminModal()">✕</button></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma"></div>
     <div class="form-group"><label>Username</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase"></div>
     <div class="form-group"><label>Password</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters"></div>
+    <div class="form-group">
+      <label style="margin-bottom:10px;display:block">Section Access <span style="font-size:11px;color:var(--grey);font-weight:400">(uncheck to restrict)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="blogs" checked> Blog Posts</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="events" checked> Events</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="members" checked> Members</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="movies" checked> Films</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="chitra-vichitra" checked> Chitra Vichitra</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="testimonials" checked> Testimonials</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="achievements" checked> Achievements</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="notifications" checked> Notifications</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="settings" checked> Settings</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
+      </div>
+    </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewAdmin()">Create Admin</button></div>
+  </div>
+</div>
+
+<!-- EDIT PERMISSIONS MODAL -->
+<div class="modal-overlay" id="edit-perms-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><h3>Edit Permissions — <span id="edit-perms-admin-name"></span></h3><button class="modal-close" onclick="closeEditPermsModal()">✕</button></div>
+    <input type="hidden" id="edit-perms-admin-id">
+    <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Check the sections this admin is allowed to manage.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="blogs"> Blog Posts</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="events"> Events</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="members"> Members</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="movies"> Films</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="chitra-vichitra"> Chitra Vichitra</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="testimonials"> Testimonials</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="achievements"> Achievements</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="notifications"> Notifications</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="settings"> Settings</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
+    </div>
+    <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
   </div>
 </div>
 
@@ -1777,7 +1817,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Permissions</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody id="admins-tbody"></tbody>
         </table>
       </div>
@@ -3171,14 +3211,27 @@ async function loadAdminData(name) {
     if (currentAdminRole !== 'master') return;
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
-    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No admins found.</td></tr>`; return; }
-    tbody.innerHTML = admins.map(a => `<tr>
-      <td style="font-weight:500">${a.name}</td>
-      <td style="color:var(--grey);font-family:monospace">${a.username}</td>
-      <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}</span></td>
-      <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
-      <td>${a.role==='master' ? `<span style="color:#555;font-size:12px">Protected</span>` : `<button class="btn-sm danger" onclick="deleteAdmin('${a.id}','${a.name}')">Remove</button>`}</td>
-    </tr>`).join('');
+    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.</td></tr>`; return; }
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics'};
+    tbody.innerHTML = admins.map(a => {
+      const perms = Array.isArray(a.permissions) ? a.permissions : [];
+      const permsDisplay = a.role === 'master'
+        ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Full Access</span>'
+        : perms.length === 0
+          ? '<span style="color:#22c55e;font-size:11px;font-weight:600">Full Access</span>'
+          : perms.map(p => `<span style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:2px 6px;font-size:10px;color:var(--grey);white-space:nowrap">${SECTION_LABELS[p]||p}</span>`).join(' ');
+      const actions = a.role === 'master'
+        ? `<span style="color:#555;font-size:12px">Protected</span>`
+        : `<button class="btn-sm" style="margin-right:4px" onclick="openEditPermsModal('${a.id}','${a.name.replace(/'/g,"\\'")}',${JSON.stringify(perms)})">Permissions</button><button class="btn-sm danger" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
+      return `<tr>
+        <td style="font-weight:500">${a.name}</td>
+        <td style="color:var(--grey);font-family:monospace">${a.username}</td>
+        <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}</span></td>
+        <td style="max-width:200px">${permsDisplay}</td>
+        <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
   }
   else if (name==='activity') {
     if (currentAdminRole !== 'master') return;
@@ -3859,6 +3912,7 @@ function openAddAdminModal() {
   document.getElementById('new-admin-username').value = '';
   document.getElementById('new-admin-password').value = '';
   document.getElementById('add-admin-error').textContent = '';
+  document.querySelectorAll('.new-admin-perm').forEach(cb => cb.checked = true);
   document.getElementById('add-admin-modal').classList.add('open');
 }
 
@@ -3870,6 +3924,7 @@ async function saveNewAdmin() {
   const name = document.getElementById('new-admin-name').value.trim();
   const username = document.getElementById('new-admin-username').value.trim().toLowerCase();
   const password = document.getElementById('new-admin-password').value;
+  const permissions = Array.from(document.querySelectorAll('.new-admin-perm:checked')).map(cb => cb.value);
   const errEl = document.getElementById('add-admin-error');
   const btn = document.querySelector('#add-admin-modal .btn-primary');
   if (!name || !username || !password) { errEl.textContent = 'All fields are required.'; return; }
@@ -3881,7 +3936,7 @@ async function saveNewAdmin() {
     const rawRes = await fetch('/api/master/admins', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, username, password })
+      body: JSON.stringify({ name, username, password, permissions })
     });
     const data = await rawRes.json().catch(() => ({}));
     if (rawRes.ok && data.id) {
@@ -3902,7 +3957,7 @@ async function saveNewAdmin() {
         const retry = await fetch('/api/master/admins', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, username, password })
+          body: JSON.stringify({ name, username, password, permissions })
         });
         const retryData = await retry.json().catch(() => ({}));
         if (retry.ok && retryData.id) {
@@ -3921,6 +3976,49 @@ async function saveNewAdmin() {
     errEl.textContent = 'Network error: ' + e.message;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Create Admin'; }
+  }
+}
+
+function openEditPermsModal(id, name, currentPerms) {
+  document.getElementById('edit-perms-admin-id').value = id;
+  document.getElementById('edit-perms-admin-name').textContent = name;
+  document.getElementById('edit-perms-error').textContent = '';
+  const permsArr = Array.isArray(currentPerms) ? currentPerms : [];
+  document.querySelectorAll('.edit-perm-cb').forEach(cb => {
+    cb.checked = permsArr.length === 0 || permsArr.includes(cb.value);
+  });
+  document.getElementById('edit-perms-modal').classList.add('open');
+}
+
+function closeEditPermsModal() {
+  document.getElementById('edit-perms-modal').classList.remove('open');
+}
+
+async function savePermissions() {
+  const id = document.getElementById('edit-perms-admin-id').value;
+  const permissions = Array.from(document.querySelectorAll('.edit-perm-cb:checked')).map(cb => cb.value);
+  const errEl = document.getElementById('edit-perms-error');
+  const btn = document.getElementById('save-perms-btn');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/master/admins/' + id + '/permissions', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      closeEditPermsModal();
+      loadAdminData('admins');
+      if (typeof showToast === 'function') showToast('Permissions updated', 'success');
+    } else {
+      errEl.textContent = data.error || 'Failed to update permissions.';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Permissions';
   }
 }
 
