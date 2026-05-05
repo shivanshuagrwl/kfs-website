@@ -2829,7 +2829,7 @@ function renderMovieCard(m, clickable=false) {
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
       <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}<\/span>` : ''}<\/div>
-      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}<\/div>
+      <div class="movie-director">${m.director ? 'Dir. '+m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
   <\/div>`;
@@ -3291,7 +3291,7 @@ async function loadAdminData(name) {
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}<\/td>
       <td style="font-weight:500">${m.title}<\/td>
       <td style="color:var(--grey)">${m.release_year||'—'}<\/td>
-      <td style="color:var(--grey)">${m.director||'—'}<\/td>
+      <td style="color:var(--grey)">${m.director ? m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : '—'}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete<\/button>
@@ -4493,7 +4493,7 @@ function doSearch(q) {
         if (name.toLowerCase().includes(q) && !m.title?.toLowerCase().includes(q)) matchedCrew.push(name);
       });
     });
-    const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
+    const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : m.release_year||'');
     results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
   });
   searchData.blogs.filter(b => b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)).forEach(b =>
