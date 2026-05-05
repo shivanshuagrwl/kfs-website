@@ -363,8 +363,11 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 
 /* ── BLOG PAGE SECTION NAV ───────────────────────────────────────────── */
 .blog-page-nav{position:sticky;top:64px;z-index:80;background:var(--black);
-  border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--border);border-top:1px solid var(--border);
+  display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+  padding-left:80px;
   transition:background .3s}
+@media(max-width:768px){.blog-page-nav{padding-left:24px}}
 .blog-page-nav::-webkit-scrollbar{display:none}
 body.light-mode .blog-page-nav{background:#f0f0f0}
 .blog-page-nav-btn{flex:none;padding:12px 20px;font-size:11px;letter-spacing:.1em;
@@ -376,12 +379,18 @@ body.light-mode .blog-page-nav{background:#f0f0f0}
 body.light-mode .blog-page-nav-btn.active{color:#111;border-bottom-color:#111}
 body.light-mode .blog-page-nav-btn:hover{color:#111}
 /* Blog page section block */
-.blog-page-section{padding:60px 0 20px}
+.blog-page-section{padding:60px 80px 20px}
+@media(max-width:768px){.blog-page-section{padding:40px 24px 16px}}
 .blog-page-section-header{margin-bottom:32px}
 .blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--grey);margin-bottom:10px;font-weight:600}
 .blog-page-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em}
 .blog-page-divider{width:100%;height:1px;background:var(--border);margin:0}
+/* Blog page tag pill (section label on each card) */
+.blog-card-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--border);color:var(--grey);margin-bottom:8px}
+body.light-mode .blog-card-tag{border-color:#ccc;color:#777}
 /* Scroll hint */
 .carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 20px 0;
   margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
@@ -2740,7 +2749,7 @@ async function loadBlog() {
   const nav = document.getElementById('blog-page-nav');
   if (!blogs || !blogs.length) {
     nav.style.display = 'none';
-    wrap.innerHTML = `<div class="section-inner" style="padding:60px 0"><div class="empty-state"><p>No posts yet.</p></div></div>`;
+    wrap.innerHTML = `<div class="blog-page-section"><div class="empty-state"><p>No posts yet.</p></div></div>`;
     return;
   }
   window._allBlogs = blogs;
@@ -2771,7 +2780,7 @@ async function loadBlog() {
   let html = '';
 
   // All Posts block
-  html += `<div class="blog-page-section section-inner" id="blog-all">
+  html += `<div class="blog-page-section" id="blog-all">
     <div class="blog-page-section-header">
       <p class="blog-page-section-label">From the Lens</p>
       <h3 class="blog-page-section-title">All Posts</h3>
@@ -2788,9 +2797,9 @@ async function loadBlog() {
     });
     if (!tagged.length) return;
     html += `<div class="blog-page-divider"></div>
-    <div class="blog-page-section section-inner" id="blog-sec-${st.id}">
+    <div class="blog-page-section" id="blog-sec-${st.id}">
       <div class="blog-page-section-header">
-        <p class="blog-page-section-label">Section</p>
+        <p class="blog-page-section-label">Category</p>
         <h3 class="blog-page-section-title">${st.label}</h3>
       </div>
       <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}</div>
@@ -2852,6 +2861,12 @@ function renderBlogCard(b) {
   const isRead = !!readState[b.id];
   const cls = isRead ? 'read' : 'unread';
   const badge = isRead ? 'Read' : 'Unread';
+  // Parse section tags
+  let secs = [];
+  try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
+  const tagPills = secs.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${secs.map(s=>`<span class="blog-card-tag">${s.label}</span>`).join('')}</div>`
+    : '';
   return `<div class="blog-card ${cls}" onclick="openBlog('${b.id}')" data-blog-id="${b.id}">
     <div class="blog-card-img-wrap">
       <span class="blog-read-badge">${badge}<\/span>
@@ -2861,6 +2876,7 @@ function renderBlogCard(b) {
     <\/div>
     <div class="blog-card-body">
       <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}<\/p>
+      ${tagPills}
       <h3 class="blog-card-title">${b.title}<\/h3>
       <p class="blog-card-excerpt">${b.excerpt||''}<\/p>
     <\/div>
@@ -4850,8 +4866,16 @@ function doSearch(q) {
   }).forEach(b => {
     let secs = [];
     try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
-    const matchedSec = secs.find(s => s.label.toLowerCase().includes(q));
-    const sub = matchedSec ? `${matchedSec.label} · ${b.excerpt||''}` : (b.excerpt||'');
+    // Find all section tags that match the query
+    const matchedSecs = secs.filter(s => s.label.toLowerCase().includes(q));
+    // Also show all tags even if matched by title
+    const allTagLabels = secs.map(s=>s.label).join(' · ');
+    let sub = '';
+    if (matchedSecs.length) {
+      sub = '[' + matchedSecs.map(s=>s.label).join(', ') + ']' + (b.excerpt ? ' — ' + b.excerpt : '');
+    } else {
+      sub = (allTagLabels ? allTagLabels + ' — ' : '') + (b.excerpt || '');
+    }
     results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg>`, title: b.title, sub, action: ()=>{ closeSearch(); openBlog(b.id); } });
   });
   searchData.events.filter(e => e.title?.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q)).forEach(e =>
