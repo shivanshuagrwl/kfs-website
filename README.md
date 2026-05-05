@@ -126,3 +126,26 @@ Client-side navigation via `navigate(page)` updates the URL hash. The Express ca
 ---
 
 *Built and maintained by KIIT Film Society.*
+
+---
+
+## Member Linking
+
+Crew fields in films (Director, Producer, DOP, etc.) support linked members using the format:
+
+```
+Name||memberId
+```
+
+For example: `Abhinav Mishra||uuid-of-member`
+
+When a member is linked:
+- Their name appears as a **clickable link** in the film detail page
+- Their member profile shows all films they are part of
+- Universal search finds films by searching crew member names
+- Search results for members show their film count
+
+**No database schema change is required.** The `||` format is stored in the existing `text` columns of the `movies` table.
+
+### How to link in the Admin panel
+In the Films form, each crew field has a live-search member picker. Type a name to search members — click one to tag them. You can also type a free-text name (press Enter) for people not in the members list.
