@@ -2701,9 +2701,14 @@ function renderMemberSections(type) {
     { label: 'President',       roles: ['President'] },
     { label: 'Vice Presidents', roles: ['Vice President'] },
     { label: 'Core & Leads',    roles: ['Lead', 'Core Member'] },
-    { label: 'Members',         roles: ['Member'] },
   ];
-  const plainGroups = [];
+  // Members: split by whether they have a photo
+  const membersWithPhoto = (sections['Member']||[]).filter(m=>m.photo);
+  const membersNoPhoto   = (sections['Member']||[]).filter(m=>!m.photo);
+  if (membersWithPhoto.length) sections['MemberPhoto'] = membersWithPhoto;
+  if (membersNoPhoto.length)   sections['MemberPlain'] = membersNoPhoto;
+  if (membersWithPhoto.length) photoGroups.push({ label: 'Members', roles: ['MemberPhoto'] });
+  const plainGroups = membersNoPhoto.length ? [{ label: 'General Members', roles: ['MemberPlain'] }] : [];
 
   function photoCard(m) {
     const subtitle = m.domain ? m.domain : (m.role === 'Member' ? '' : (m.role||''));
@@ -2832,6 +2837,11 @@ function renderMovieCard(m, clickable=false) {
 }
 
 async function openMovie(id) {
+  // Ensure members are loaded before rendering crew links
+  if (!allMembers || !allMembers.length) {
+    const data = await apiFetch('/api/members');
+    if (data) allMembers = data;
+  }
   const m = await apiFetch('/api/movies/'+id);
   if (!m) return;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
