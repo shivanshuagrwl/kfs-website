@@ -273,10 +273,11 @@ app.get('/api/blogs/:id', async (req, res) => {
 });
 
 app.post('/api/admin/blogs', requireSection('blogs'), upload.single('cover'), async (req, res) => {
-  const { title, excerpt, content, published } = req.body;
+  const { title, excerpt, content, published, sections } = req.body;
   const coverUrl = await uploadImage(req.file, 'blogs');
   const { data, error } = await supabase.from('blogs').insert([{
     title, excerpt, content, cover_image: coverUrl, published: published === 'true',
+    sections: sections || '[]',
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'create', 'blog', title);
@@ -284,8 +285,8 @@ app.post('/api/admin/blogs', requireSection('blogs'), upload.single('cover'), as
 });
 
 app.put('/api/admin/blogs/:id', requireSection('blogs'), upload.single('cover'), async (req, res) => {
-  const { title, excerpt, content, published } = req.body;
-  const updates = { title, excerpt, content, published: published === 'true' };
+  const { title, excerpt, content, published, sections } = req.body;
+  const updates = { title, excerpt, content, published: published === 'true', sections: sections || '[]' };
   if (req.file) updates.cover_image = await uploadImage(req.file, 'blogs');
   const { data, error } = await supabase.from('blogs').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
