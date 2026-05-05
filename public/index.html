@@ -67,10 +67,12 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
-#movie-watch-status-btn{border:1px solid var(--white);color:var(--white);background:transparent}
-#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black)}
-body.light-mode #movie-watch-status-btn{border-color:#111;color:#111}
+#movie-watch-status-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;border:1px solid var(--white);color:var(--white);background:transparent}
+#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black);border-color:var(--white)}
+#movie-watch-status-btn:hover{opacity:.8}
+body.light-mode #movie-watch-status-btn{border-color:#111;color:#111;background:transparent}
 body.light-mode #movie-watch-status-btn.is-watched{background:#111;color:#fff;border-color:#111}
+body.light-mode #movie-watch-status-btn:hover{opacity:.75}
 body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
@@ -1543,7 +1545,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
+        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()">
           <span id="movie-watch-status-icon">☐</span> Mark as Watched
         </button>
       </div>
@@ -2381,11 +2383,11 @@ async function loadHomeData() {
       var parts = settings.site_tagline.match(/([^.]+\.)[\s]*([^.]+\.)[\s]*(.+)/);
       if (parts) {
         tagEl.innerHTML =
-          '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'</span><br>'+
-          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'</span></em><br>'+
-          '<span class="glow-word" id="glow-kfs">'+parts[3].trim()+'</span>';
+          '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'<\/span><br>'+
+          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'<\/span><\/em><br>'+
+          '<span class="glow-word" id="glow-kfs">'+parts[3].trim()+'<\/span>';
       } else {
-        tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'</span>';
+        tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'<\/span>';
       }
       if(window.glowUpdate) window.glowUpdate();
     }
@@ -2423,14 +2425,14 @@ async function loadHomeData() {
       <div>
         ${settings.spotlight_photo
           ? `<img class="spotlight-photo" src="${settings.spotlight_photo}" alt="${settings.spotlight_name}">`
-          : `<div class="spotlight-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
-      </div>
+          : `<div class="spotlight-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
+      <\/div>
       <div>
-        <div class="spotlight-label">Member Spotlight</div>
-        <p class="spotlight-quote">${settings.spotlight_quote || ''}</p>
-        <div class="spotlight-name">${settings.spotlight_name}</div>
-        <div class="spotlight-role">${settings.spotlight_role || ''}</div>
-      </div>`;
+        <div class="spotlight-label">Member Spotlight<\/div>
+        <p class="spotlight-quote">${settings.spotlight_quote || ''}<\/p>
+        <div class="spotlight-name">${settings.spotlight_name}<\/div>
+        <div class="spotlight-role">${settings.spotlight_role || ''}<\/div>
+      <\/div>`;
   }
 
   const achievements = await apiFetch('/api/achievements');
@@ -2438,13 +2440,13 @@ async function loadHomeData() {
   if (achievements && achievements.length) {
     ag.innerHTML = achievements.map(a=>`
       <div class="achievement-card">
-        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}</div>
-        <div class="achievement-title">${a.title}</div>
-        <div class="achievement-year">${a.year||''}</div>
-        <div class="achievement-desc">${a.description||''}</div>
-      </div>`).join('');
+        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}<\/div>
+        <div class="achievement-title">${a.title}<\/div>
+        <div class="achievement-year">${a.year||''}<\/div>
+        <div class="achievement-desc">${a.description||''}<\/div>
+      <\/div>`).join('');
   } else {
-    ag.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No achievements yet.</p></div>`;
+    ag.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No achievements yet.<\/p><\/div>`;
   }
 
   const events = await apiFetch('/api/events');
@@ -2453,7 +2455,7 @@ async function loadHomeData() {
   if (upcoming.length) {
     homeEvents.innerHTML = upcoming.map(e=>renderEventItem(e)).join('');
   } else {
-    homeEvents.innerHTML = `<div class="empty-state"><p>No upcoming events. Check back soon.</p></div>`;
+    homeEvents.innerHTML = `<div class="empty-state"><p>No upcoming events. Check back soon.<\/p><\/div>`;
   }
 
   const blogs = await apiFetch('/api/blogs');
@@ -2467,7 +2469,7 @@ async function loadHomeData() {
     });
     hbg.innerHTML = _hsorted.slice(0,3).map(b=>renderBlogCard(b)).join('');
   } else {
-    hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.</p></div>`;
+    hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.<\/p><\/div>`;
   }
 
   const testimonials = await apiFetch('/api/testimonials');
@@ -2495,7 +2497,7 @@ async function loadHomeData() {
   if (movies && movies.length) {
     hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m,true)).join('');
   } else {
-    hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.</p></div>`;
+    hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.<\/p><\/div>`;
   }
 
   animateCounters();
@@ -2514,7 +2516,7 @@ function filterEvents(type, tabEl) {
   if (filtered.length) {
     list.innerHTML = filtered.map(e=>renderEventItem(e,true)).join('');
   } else {
-    list.innerHTML = `<div class="empty-state"><p>No ${type} events.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><p>No ${type} events.<\/p><\/div>`;
   }
   const cvWrap = document.getElementById('cv-section-wrap');
   if (cvWrap) {
@@ -2529,17 +2531,17 @@ function renderEventItem(e, full=false) {
   const month = d ? d.toLocaleString('default',{month:'short'}).toUpperCase() : '';
   return `<div class="event-item">
     <div class="event-date-block">
-      <span class="event-day">${day}</span>
-      <span class="event-month">${month}</span>
-    </div>
+      <span class="event-day">${day}<\/span>
+      <span class="event-month">${month}<\/span>
+    <\/div>
     <div class="event-info">
-      <span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}</span>
-      <h3>${e.title}</h3>
-      <p>${e.description||''}</p>
+      <span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span>
+      <h3>${e.title}<\/h3>
+      <p>${e.description||''}<\/p>
       ${full && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
-    </div>
-    <div class="event-location">${e.location||''}<br><span style="font-size:11px">${e.event_time||''}</span></div>
-  </div>`;
+    <\/div>
+    <div class="event-location">${e.location||''}<br><span style="font-size:11px">${e.event_time||''}<\/span><\/div>
+  <\/div>`;
 }
 
 async function loadBlog() {
@@ -2554,7 +2556,7 @@ async function loadBlog() {
     });
     grid.innerHTML = _sorted.map(b=>renderBlogCard(b)).join('');
   } else {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.</p></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.<\/p><\/div>`;
   }
 }
 
@@ -2578,17 +2580,17 @@ function renderBlogCard(b) {
   const badge = isRead ? 'Read' : 'Unread';
   return `<div class="blog-card ${cls}" onclick="openBlog('${b.id}')" data-blog-id="${b.id}">
     <div class="blog-card-img-wrap">
-      <span class="blog-read-badge">${badge}</span>
+      <span class="blog-read-badge">${badge}<\/span>
       ${b.cover_image
         ? `<img class="blog-card-img" src="${b.cover_image}" alt="${b.title}">`
-        : `<div class="blog-card-img-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
-    </div>
+        : `<div class="blog-card-img-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
+    <\/div>
     <div class="blog-card-body">
-      <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}</p>
-      <h3 class="blog-card-title">${b.title}</h3>
-      <p class="blog-card-excerpt">${b.excerpt||''}</p>
-    </div>
-  </div>`;
+      <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}<\/p>
+      <h3 class="blog-card-title">${b.title}<\/h3>
+      <p class="blog-card-excerpt">${b.excerpt||''}<\/p>
+    <\/div>
+  <\/div>`;
 }
 
 async function openBlog(id) {
@@ -2631,21 +2633,21 @@ function renderRecentlyViewed(currentId) {
   const section = document.createElement('div');
   section.id = 'recently-viewed-section';
   section.className = 'recently-viewed';
-  section.innerHTML = '<div class="recently-viewed-label">Recently Viewed</div>'
+  section.innerHTML = '<div class="recently-viewed-label">Recently Viewed<\/div>'
     + '<div class="recently-viewed-list">'
     + items.map(b => `
       <div class="rv-item" onclick="openBlog('${b.id}')">
         <div class="rv-thumb-wrap">
           ${b.cover_image
             ? `<img src="${b.cover_image}" alt="${b.title}">`
-            : `<div class="rv-thumb-placeholder"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
-        </div>
+            : `<div class="rv-thumb-placeholder"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
+        <\/div>
         <div class="rv-item-info">
-          <div class="rv-item-title">${b.title}</div>
-          <div class="rv-item-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
-        </div>
-      </div>`).join('')
-    + '</div>';
+          <div class="rv-item-title">${b.title}<\/div>
+          <div class="rv-item-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}<\/div>
+        <\/div>
+      <\/div>`).join('')
+    + '<\/div>';
   document.getElementById('blog-detail-body').after(section);
 }
 
@@ -2653,7 +2655,7 @@ let allMembers = [];
 
 async function loadMembers() {
   const container = document.getElementById('members-content');
-  container.innerHTML = '<div class="loading">Loading members...</div>';
+  container.innerHTML = '<div class="loading">Loading members...<\/div>';
   const data = await apiFetch('/api/members');
   allMembers = data || [];
   // reset tabs
@@ -2674,7 +2676,7 @@ function renderMemberSections(type) {
   const members = allMembers.filter(m => type === 'past' ? m.is_past === true : m.is_past !== true);
 
   if (!members.length) {
-    container.innerHTML = `<div class="empty-state"><p>No ${type === 'past' ? 'alumni' : 'current members'} yet.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><p>No ${type === 'past' ? 'alumni' : 'current members'} yet.<\/p><\/div>`;
     return;
   }
 
@@ -2700,24 +2702,24 @@ function renderMemberSections(type) {
     return `<div class="member-card-photo" onclick="openMemberProfile(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="cursor:pointer">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
-        : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
+        : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
       <div class="member-info-sq">
-        <div class="member-name-sq">${m.name}</div>
-        ${subtitle ? `<div class="member-role-sq">${subtitle}</div>` : ''}
-        ${m.batch ? `<div class="member-batch-sq">${m.batch}</div>` : ''}
-      </div>
-    </div>`;
+        <div class="member-name-sq">${m.name}<\/div>
+        ${subtitle ? `<div class="member-role-sq">${subtitle}<\/div>` : ''}
+        ${m.batch ? `<div class="member-batch-sq">${m.batch}<\/div>` : ''}
+      <\/div>
+    <\/div>`;
   }
 
   function plainRow(m) {
     const roleLabel = (m.role === 'Lead' && m.domain) ? m.domain + ' Lead' : (m.role||'');
     return `<div class="member-row" onclick="openMemberProfile(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="cursor:pointer">
-      <div><div class="member-row-name">${m.name}</div></div>
+      <div><div class="member-row-name">${m.name}<\/div><\/div>
       <div class="member-row-meta">
-        <div>${roleLabel}</div>
-        ${m.batch ? `<div class="member-row-batch">${m.batch}</div>` : ''}
-      </div>
-    </div>`;
+        <div>${roleLabel}<\/div>
+        ${m.batch ? `<div class="member-row-batch">${m.batch}<\/div>` : ''}
+      <\/div>
+    <\/div>`;
   }
 
   let html = '';
@@ -2725,20 +2727,20 @@ function renderMemberSections(type) {
     const combined = group.roles.flatMap(r => sections[r] || []);
     if (!combined.length) return;
     html += `<div class="members-section">
-      <div class="members-section-title">${group.label}</div>
-      <div class="members-grid-photo">${combined.map(photoCard).join('')}</div>
-    </div>`;
+      <div class="members-section-title">${group.label}<\/div>
+      <div class="members-grid-photo">${combined.map(photoCard).join('')}<\/div>
+    <\/div>`;
   });
   plainGroups.forEach(group => {
     const combined = group.roles.flatMap(r => sections[r] || []);
     if (!combined.length) return;
     html += `<div class="members-section">
-      <div class="members-section-title">${group.label}</div>
-      <div class="members-list-plain">${combined.map(plainRow).join('')}</div>
-    </div>`;
+      <div class="members-section-title">${group.label}<\/div>
+      <div class="members-list-plain">${combined.map(plainRow).join('')}<\/div>
+    <\/div>`;
   });
 
-  container.innerHTML = html || `<div class="empty-state"><p>No members yet.</p></div>`;
+  container.innerHTML = html || `<div class="empty-state"><p>No members yet.<\/p><\/div>`;
 }
 
 function autoMemberSort() {
@@ -2792,7 +2794,7 @@ async function loadMovies() {
   if (movies && movies.length) {
     grid.innerHTML = movies.map(m=>renderMovieCard(m,true)).join('');
   } else {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.</p></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.<\/p><\/div>`;
   }
 }
 
@@ -2800,25 +2802,25 @@ function renderMovieCard(m, clickable=false) {
   const watched = isMovieWatched(m.id);
   const rating = window._movieRatings && window._movieRatings[m.id];
   const ratingBadge = rating
-    ? `<div class="movie-rating-badge"><span class="rb-star">★</span>${rating.avg.toFixed(1)}<span class="rb-count">(${rating.count})</span></div>`
+    ? `<div class="movie-rating-badge"><span class="rb-star">★<\/span>${rating.avg.toFixed(1)}<span class="rb-count">(${rating.count})<\/span><\/div>`
     : '';
   return `<div class="movie-card${watched?' watched':''}" ${clickable?`onclick="openMovie('${m.id}')"`:''}> 
     <div style="position:relative">
       ${m.poster_image
         ? `<img class="movie-poster" src="${m.poster_image}" alt="${m.title}">`
-        : `<div class="movie-poster-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
+        : `<div class="movie-poster-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
       ${ratingBadge}
       ${clickable ? `<div class="movie-watch-badge${watched?' movie-watch-badge--done':''}" onclick="event.stopPropagation();toggleWatchStatusCard('${m.id}',this.closest('.movie-card'))" title="${watched?'Watched':'Mark as Watched'}">
         ${watched ? '✓ Watched' : '+ Watchlist'}
-      </div>` : ''}
-    </div>
+      <\/div>` : ''}
+    <\/div>
     <div class="movie-info">
-      <div class="movie-title">${m.title}</div>
-      <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}</span>` : ''}</div>
-      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}</div>
-      ${m.description ? `<div class="movie-desc-snip">${m.description}</div>` : ''}
-    </div>
-  </div>`;
+      <div class="movie-title">${m.title}<\/div>
+      <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}<\/span>` : ''}<\/div>
+      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}<\/div>
+      ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
+    <\/div>
+  <\/div>`;
 }
 
 async function openMovie(id) {
@@ -2860,8 +2862,8 @@ async function openMovie(id) {
   if (m.trailer_url || m.watch_url) {
     actionBtns.style.display = 'flex';
     actionBtns.innerHTML = [
-      m.watch_url ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now</a>` : '',
-      m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points='5 3 19 12 5 21 5 3'/></svg> Trailer</button>` : '',
+      m.watch_url ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now<\/a>` : '',
+      m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points='5 3 19 12 5 21 5 3'/><\/svg> Trailer<\/button>` : '',
     ].join('');
   } else {
     actionBtns.style.display = 'none';
@@ -2880,9 +2882,9 @@ async function openMovie(id) {
   ].filter(f=>f.val);
   document.getElementById('movie-detail-crew').innerHTML = crewFields.map(f=>`
     <div class="movie-crew-item">
-      <div class="movie-crew-label">${f.label}</div>
-      <div class="movie-crew-value">${renderCrewNames(f.val)}</div>
-    </div>`).join('');
+      <div class="movie-crew-label">${f.label}<\/div>
+      <div class="movie-crew-value">${renderCrewNames(f.val)}<\/div>
+    <\/div>`).join('');
   const actorsSec = document.getElementById('movie-detail-actors-section');
   const actorsEl = document.getElementById('movie-detail-actors');
   if (m.actors) {
@@ -2956,7 +2958,7 @@ function renderReviews(reviews) {
 
   if (!reviews.length) {
     summaryEl.style.display = 'none';
-    listEl.innerHTML = '<p style="color:var(--grey);font-size:13px;padding:16px 0">No reviews yet. Be the first!</p>';
+    listEl.innerHTML = '<p style="color:var(--grey);font-size:13px;padding:16px 0">No reviews yet. Be the first!<\/p>';
     return;
   }
 
@@ -2973,10 +2975,10 @@ function renderReviews(reviews) {
     const vals = reviews.map(r=>r[c]).filter(Boolean);
     const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
     return `<div class="review-cat-row">
-      <div class="review-cat-name">${catLabels[c]}</div>
-      <div class="review-cat-bar"><div class="review-cat-fill" style="width:${avg ? avg/5*100 : 0}%"></div></div>
-      <div class="review-cat-val">${avg ? avg.toFixed(1) : '—'}</div>
-    </div>`;
+      <div class="review-cat-name">${catLabels[c]}<\/div>
+      <div class="review-cat-bar"><div class="review-cat-fill" style="width:${avg ? avg/5*100 : 0}%"><\/div><\/div>
+      <div class="review-cat-val">${avg ? avg.toFixed(1) : '—'}<\/div>
+    <\/div>`;
   }).join('');
 
   // Review cards
@@ -2984,17 +2986,17 @@ function renderReviews(reviews) {
     const stars = '★'.repeat(r.overall) + '☆'.repeat(5-r.overall);
     const subs = ['direction','sound','cinematography','script']
       .filter(c => r[c])
-      .map(c => `<span class="review-sub-score">${catLabels[c]}: <span>${r[c]}/5</span></span>`).join('');
+      .map(c => `<span class="review-sub-score">${catLabels[c]}: <span>${r[c]}/5<\/span><\/span>`).join('');
     const date = r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
     return `<div class="review-card">
       <div class="review-card-header">
-        <div class="review-card-name">${r.reviewer_name||'Anonymous'}</div>
-        <div class="review-card-date">${date}</div>
-      </div>
-      <div class="review-stars-display">${stars}</div>
-      ${subs ? `<div class="review-sub-scores">${subs}</div>` : ''}
-      ${r.review_text ? `<div class="review-card-text">${r.review_text}</div>` : ''}
-    </div>`;
+        <div class="review-card-name">${r.reviewer_name||'Anonymous'}<\/div>
+        <div class="review-card-date">${date}<\/div>
+      <\/div>
+      <div class="review-stars-display">${stars}<\/div>
+      ${subs ? `<div class="review-sub-scores">${subs}<\/div>` : ''}
+      ${r.review_text ? `<div class="review-card-text">${r.review_text}<\/div>` : ''}
+    <\/div>`;
   }).join('');
 }
 
@@ -3051,20 +3053,20 @@ function renderTestimonials(testimonials) {
   const track = document.getElementById('testimonials-track');
   const inner = document.getElementById('testimonials-inner');
   if (!testimonials || !testimonials.length) {
-    inner.innerHTML = `<div class="testimonial-card"><p style="color:var(--grey)">No testimonials yet.</p></div>`;
+    inner.innerHTML = `<div class="testimonial-card"><p style="color:var(--grey)">No testimonials yet.<\/p><\/div>`;
     return;
   }
   function cardHTML(t) {
     return `<div class="testimonial-card">
-      <p class="testimonial-quote">"${t.quote}"</p>
+      <p class="testimonial-quote">"${t.quote}"<\/p>
       <div class="testimonial-author">
-        ${t.photo ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">` : `<div class="testimonial-avatar-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
+        ${t.photo ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">` : `<div class="testimonial-avatar-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
         <div>
-          <div class="testimonial-name">${t.name}</div>
-          <div class="testimonial-role">${t.role||''} ${t.batch?'· '+t.batch:''}</div>
-        </div>
-      </div>
-    </div>`;
+          <div class="testimonial-name">${t.name}<\/div>
+          <div class="testimonial-role">${t.role||''} ${t.batch?'· '+t.batch:''}<\/div>
+        <\/div>
+      <\/div>
+    <\/div>`;
   }
   inner.innerHTML = testimonials.map(cardHTML).join('') + testimonials.map(cardHTML).join('');
   let pos=0, autoSpeed=0.8, paused=false, isDragging=false;
@@ -3183,35 +3185,35 @@ async function loadAdminData(name) {
   if (name==='blogs') {
     const blogs = await apiFetch('/api/admin/blogs');
     const tbody = document.getElementById('admin-blogs-tbody');
-    if (blogs === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`; return; }
-    if (!blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`; return; }
+    if (blogs === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
+    if (!blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!<\/td><\/tr>`; return; }
     tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">
-      <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"></td>
-      <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}</td>
-      <td style="font-weight:500">${b.title}</td>
-      <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}</span></td>
-      <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}</td>
+      <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"><\/td>
+      <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}<\/td>
+      <td style="font-weight:500">${b.title}<\/td>
+      <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}<\/span><\/td>
+      <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='events') {
     const events = await apiFetch('/api/events');
     const tbody = document.getElementById('admin-events-tbody');
-    if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`; return; }
-    if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`; return; }
+    if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
+    if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.<\/td><\/tr>`; return; }
     tbody.innerHTML = events.map(e=>`<tr>
-      <td style="font-weight:500">${e.title}</td>
-      <td style="color:var(--grey)">${e.event_date||'—'}</td>
-      <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}</span></td>
-      <td style="color:var(--grey)">${e.location||'—'}</td>
+      <td style="font-weight:500">${e.title}<\/td>
+      <td style="color:var(--grey)">${e.event_date||'—'}<\/td>
+      <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span><\/td>
+      <td style="color:var(--grey)">${e.location||'—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='members') {
     const members = await apiFetch('/api/members');
@@ -3220,64 +3222,64 @@ async function loadAdminData(name) {
     if (searchEl) searchEl.value = '';
     const clearBtn = document.getElementById('member-search-clear-btn');
     if (clearBtn) clearBtn.classList.remove('visible');
-    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
+    if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.<\/td><\/tr>`; return; }
     tbody.innerHTML = members.map(m=>`<tr data-id="${m.id}">
-      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"></td>
-      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'</td>
-      <td style="font-weight:500">${m.name}</td>
-      <td style="color:var(--grey)">${m.role||'—'}</td>
-      <td style="color:var(--grey)">${m.batch||'—'}</td>
-      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}</span></td>
+      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"><\/td>
+      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
+      <td style="font-weight:500">${m.name}<\/td>
+      <td style="color:var(--grey)">${m.role||'—'}<\/td>
+      <td style="color:var(--grey)">${m.batch||'—'}<\/td>
+      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='testimonials') {
     const testimonials = await apiFetch('/api/testimonials');
     const tbody = document.getElementById('admin-testimonials-tbody');
-    if (!testimonials || !testimonials.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No testimonials yet.</td></tr>`; return; }
+    if (!testimonials || !testimonials.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No testimonials yet.<\/td><\/tr>`; return; }
     tbody.innerHTML = testimonials.map(t=>`<tr>
-      <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'</td>
-      <td style="font-weight:500">${t.name}</td>
-      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"</td>
+      <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
+      <td style="font-weight:500">${t.name}<\/td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editTestimonial(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteTestimonial('${t.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editTestimonial(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteTestimonial('${t.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='achievements') {
     const achievements = await apiFetch('/api/achievements');
     const tbody = document.getElementById('admin-achievements-tbody');
-    if (!achievements || !achievements.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No achievements yet.</td></tr>`; return; }
+    if (!achievements || !achievements.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No achievements yet.<\/td><\/tr>`; return; }
     tbody.innerHTML = achievements.map(a=>`<tr>
       
-      <td style="font-weight:500">${a.title}</td>
-      <td style="color:var(--grey)">${a.year||'—'}</td>
+      <td style="font-weight:500">${a.title}<\/td>
+      <td style="color:var(--grey)">${a.year||'—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editAchievement(${JSON.stringify(a).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteAchievement('${a.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editAchievement(${JSON.stringify(a).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteAchievement('${a.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='movies') {
     const movies = await apiFetch('/api/movies');
     const tbody = document.getElementById('admin-movies-tbody');
-    if (movies === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`; return; }
-    if (!movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
+    if (movies === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
+    if (!movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.<\/td><\/tr>`; return; }
     tbody.innerHTML = movies.map(m=>`<tr data-id="${m.id}">
-      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"></td>
-      <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>'</td>
-      <td style="font-weight:500">${m.title}</td>
-      <td style="color:var(--grey)">${m.release_year||'—'}</td>
-      <td style="color:var(--grey)">${m.director||'—'}</td>
+      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"><\/td>
+      <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}<\/td>
+      <td style="font-weight:500">${m.title}<\/td>
+      <td style="color:var(--grey)">${m.release_year||'—'}<\/td>
+      <td style="color:var(--grey)">${m.director||'—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
   }
   else if (name==='chitra-vichitra') {
     loadAdminCV();
@@ -3320,7 +3322,7 @@ async function loadAdminData(name) {
     if (currentAdminRole !== 'master') return;
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
-    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.</td></tr>`; return; }
+    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
     const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics'};
     // Store perms in a global map so onclick can look up safely (avoids JSON-in-attribute quoting bugs)
     window._adminPermsMap = {};
@@ -3329,36 +3331,36 @@ async function loadAdminData(name) {
       const perms = window._adminPermsMap[a.id];
       const isFullAccess = perms.length === 0;
       const permsDisplay = a.role === 'master'
-        ? '<span class="perm-badge master-badge">All Sections</span>'
+        ? '<span class="perm-badge master-badge">All Sections<\/span>'
         : isFullAccess
-          ? '<span class="perm-badge full-badge">Full Access</span>'
-          : perms.map(p => `<span class="perm-badge">${SECTION_LABELS[p]||p}</span>`).join('');
+          ? '<span class="perm-badge full-badge">Full Access<\/span>'
+          : perms.map(p => `<span class="perm-badge">${SECTION_LABELS[p]||p}<\/span>`).join('');
       const actions = a.role === 'master'
-        ? `<span style="color:var(--grey);font-size:12px">Protected</span>`
-        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Permissions</button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
+        ? `<span style="color:var(--grey);font-size:12px">Protected<\/span>`
+        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/><\/svg> Permissions<\/button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove<\/button>`;
       return `<tr>
-        <td style="font-weight:500">${a.name}</td>
-        <td style="color:var(--grey);font-family:monospace;font-size:13px">${a.username}</td>
-        <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}</span></td>
-        <td style="max-width:220px">${permsDisplay}</td>
-        <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
-        <td>${actions}</td>
-      </tr>`;
+        <td style="font-weight:500">${a.name}<\/td>
+        <td style="color:var(--grey);font-family:monospace;font-size:13px">${a.username}<\/td>
+        <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}<\/span><\/td>
+        <td style="max-width:220px">${permsDisplay}<\/td>
+        <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}<\/td>
+        <td>${actions}<\/td>
+      <\/tr>`;
     }).join('');
   }
   else if (name==='activity') {
     if (currentAdminRole !== 'master') return;
     const logs = await apiFetch('/api/master/activity');
     const tbody = document.getElementById('activity-tbody');
-    if (!logs || !logs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No activity yet.</td></tr>`; return; }
+    if (!logs || !logs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No activity yet.<\/td><\/tr>`; return; }
     const actionColors = { create:'#22c55e', update:'#f59e0b', delete:'#ef4444' };
     tbody.innerHTML = logs.map(l => `<tr>
-      <td style="font-weight:500">${l.admin_name||'—'}</td>
-      <td><span style="color:${actionColors[l.action]||'#888'};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${l.action}</span></td>
-      <td style="color:var(--grey);text-transform:capitalize">${l.entity||'—'}</td>
-      <td style="color:var(--white)">${l.entity_name||'—'}</td>
-      <td style="color:var(--grey);font-size:12px">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
-    </tr>`).join('');
+      <td style="font-weight:500">${l.admin_name||'—'}<\/td>
+      <td><span style="color:${actionColors[l.action]||'#888'};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${l.action}<\/span><\/td>
+      <td style="color:var(--grey);text-transform:capitalize">${l.entity||'—'}<\/td>
+      <td style="color:var(--white)">${l.entity_name||'—'}<\/td>
+      <td style="color:var(--grey);font-size:12px">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}<\/td>
+    <\/tr>`).join('');
   }
 }
 
@@ -3801,21 +3803,21 @@ function renderNotifTable() {
   const tbody = document.getElementById('notif-tbody');
   if (!tbody) return;
   if (!allNotifications.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.<\/td><\/tr>';
     return;
   }
   const typeLabels = {announcement:'Announcement',achievement:'Achievement',film:'Film',event:'Event'};
   tbody.innerHTML = allNotifications.map((n,i) => `
     <tr>
-      <td style="font-weight:600">${n.title}</td>
-      <td>${typeLabels[n.type]||n.type}</td>
-      <td style="color:var(--grey);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.message||''}</td>
-      <td><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.06em;background:${n.active?'rgba(255,255,255,.12)':'rgba(255,255,255,.04)'};color:${n.active?'#f5f5f5':'#888'}">${n.active?'ACTIVE':'OFF'}</span></td>
+      <td style="font-weight:600">${n.title}<\/td>
+      <td>${typeLabels[n.type]||n.type}<\/td>
+      <td style="color:var(--grey);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.message||''}<\/td>
+      <td><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.06em;background:${n.active?'rgba(255,255,255,.12)':'rgba(255,255,255,.04)'};color:${n.active?'#f5f5f5':'#888'}">${n.active?'ACTIVE':'OFF'}<\/span><\/td>
       <td><div class="action-btns">
-        <button class="btn-edit" onclick="openNotifModal(${i})">Edit</button>
-        <button class="btn-delete" onclick="deleteNotif(${i})">Delete</button>
-      </div></td>
-    </tr>`).join('');
+        <button class="btn-edit" onclick="openNotifModal(${i})">Edit<\/button>
+        <button class="btn-delete" onclick="deleteNotif(${i})">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`).join('');
 }
 
 function openNotifModal(idx) {
@@ -3868,16 +3870,16 @@ async function saveNotif() {
     overlay.className = 'notif-popup-overlay';
     overlay.innerHTML = `
       <div class="notif-popup-box">
-        <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666;margin-bottom:8px">PREVIEW</div>
-        <div class="ep-label">${(notif.type||'').charAt(0).toUpperCase()+(notif.type||'').slice(1)}</div>
-        <div class="ep-title" style="font-size:20px;margin-bottom:10px;line-height:1.3">${notif.title}</div>
-        ${notif.message ? `<div style="font-size:13px;color:#888;line-height:1.6;margin-bottom:20px">${notif.message}</div>` : ''}
+        <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666;margin-bottom:8px">PREVIEW<\/div>
+        <div class="ep-label">${(notif.type||'').charAt(0).toUpperCase()+(notif.type||'').slice(1)}<\/div>
+        <div class="ep-title" style="font-size:20px;margin-bottom:10px;line-height:1.3">${notif.title}<\/div>
+        ${notif.message ? `<div style="font-size:13px;color:#888;line-height:1.6;margin-bottom:20px">${notif.message}<\/div>` : ''}
         <div class="ep-actions">
-          ${notif.btnText ? `<button class="ep-btn-primary">${notif.btnText}</button>` : ''}
-          <button class="ep-btn-close" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">Dismiss</button>
-        </div>
-        <button class="ep-x" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">✕</button>
-      </div>`;
+          ${notif.btnText ? `<button class="ep-btn-primary">${notif.btnText}<\/button>` : ''}
+          <button class="ep-btn-close" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">Dismiss<\/button>
+        <\/div>
+        <button class="ep-x" onclick="this.closest('.notif-popup-overlay').classList.remove('visible');setTimeout(()=>this.closest('.notif-popup-overlay').remove(),400)">✕<\/button>
+      <\/div>`;
     overlay.addEventListener('click', e => { if(e.target===overlay){overlay.classList.remove('visible');setTimeout(()=>overlay.remove(),400);} });
     document.body.appendChild(overlay);
     setTimeout(() => overlay.classList.add('visible'), 100);
@@ -4008,7 +4010,7 @@ function filterAdminMembers(q) {
   if (rows.length > 0 && visible.length === 0) {
     const tr = document.createElement('tr');
     tr.id = 'member-search-empty';
-    tr.innerHTML = `<td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members match "${q}"</td>`;
+    tr.innerHTML = `<td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members match "${q}"<\/td>`;
     tbody.appendChild(tr);
   }
 }
@@ -4273,15 +4275,15 @@ function renderCrewNames(val) {
   return val.split(',').map(p => {
     const [name, id] = p.trim().split('||');
     const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
-    if (member) return `<span style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}</span>`;
+    if (member) return `<span style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}<\/span>`;
     return name.trim();
   }).join(', ');
 }
 function crewNameTag(part) {
   const [name, id] = part.split('||');
   const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
-  if (member) return `<span class="movie-cast-tag" style="cursor:pointer" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}</span>`;
-  return `<span class="movie-cast-tag">${name.trim()}</span>`;
+  if (member) return `<span class="movie-cast-tag" style="cursor:pointer" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}<\/span>`;
+  return `<span class="movie-cast-tag">${name.trim()}<\/span>`;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4297,8 +4299,8 @@ class MemberPicker {
   render() {
     this.container.innerHTML = `
       <input class="mpicker-input" placeholder="Type a name or search members…" autocomplete="off">
-      <div class="mpicker-dropdown" style="display:none"></div>
-      <div class="mpicker-tags"></div>`;
+      <div class="mpicker-dropdown" style="display:none"><\/div>
+      <div class="mpicker-tags"><\/div>`;
     this.input = this.container.querySelector('.mpicker-input');
     this.dropdown = this.container.querySelector('.mpicker-dropdown');
     this.tagsEl = this.container.querySelector('.mpicker-tags');
@@ -4318,10 +4320,10 @@ class MemberPicker {
     if (!matches.length) { this._hideDropdown(); return; }
     this.dropdown.innerHTML = matches.map(m=>`
       <div class="mpicker-opt" data-id="${m.id}">
-        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>'}
-        <span class="mpicker-opt-name">${m.name}</span>
-        <span class="mpicker-opt-role">${m.role||''}</span>
-      </div>`).join('');
+        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>'}
+        <span class="mpicker-opt-name">${m.name}<\/span>
+        <span class="mpicker-opt-role">${m.role||''}<\/span>
+      <\/div>`).join('');
     this.dropdown.querySelectorAll('.mpicker-opt').forEach(el=>{
       el.addEventListener('mousedown', e=>{ e.preventDefault(); const m=members.find(x=>x.id==el.dataset.id); if(m) this._select({id:m.id,name:m.name,photo:m.photo,role:m.role}); });
     });
@@ -4346,10 +4348,10 @@ class MemberPicker {
   _renderTags() {
     this.tagsEl.innerHTML = this.selected.map(s=>`
       <span class="mpicker-tag">
-        ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>'}
-        <span class="mpicker-tag-name">${s.name}</span>
-        <span class="mpicker-tag-remove" data-name="${s.name}">×</span>
-      </span>`).join('');
+        ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/span>'}
+        <span class="mpicker-tag-name">${s.name}<\/span>
+        <span class="mpicker-tag-remove" data-name="${s.name}">×<\/span>
+      <\/span>`).join('');
     this.tagsEl.querySelectorAll('.mpicker-tag-remove').forEach(el=>{
       el.addEventListener('click',()=>this._remove(el.dataset.name));
     });
@@ -4392,7 +4394,7 @@ function openMemberProfile(member) {
   const photoWrap = document.getElementById('mprofile-photo-wrap');
   photoWrap.innerHTML = member.photo
     ? `<img class="member-profile-photo" src="${member.photo}" alt="${member.name}">`
-    : `<div class="member-profile-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+    : `<div class="member-profile-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`;
 
   // find films this member is linked to
   const allMovies = window._allMoviesCache || [];
@@ -4420,12 +4422,12 @@ function openMemberProfile(member) {
     filmsWrap.style.display='block';
     filmsGrid.innerHTML = memberFilms.map(({movie:mv, role})=>`
       <div class="member-film-card" onclick="closeMemberProfile();openMovie('${mv.id}')">
-        ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
+        ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
         <div class="member-film-info">
-          <div class="member-film-title">${mv.title}</div>
-          <div class="member-film-role-label">${role}</div>
-        </div>
-      </div>`).join('');
+          <div class="member-film-title">${mv.title}<\/div>
+          <div class="member-film-role-label">${role}<\/div>
+        <\/div>
+      <\/div>`).join('');
   } else {
     filmsWrap.style.display='none';
   }
@@ -4461,22 +4463,22 @@ function doSearch(q) {
       });
     });
     const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
-    results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
+    results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
   });
   searchData.blogs.filter(b => b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)).forEach(b =>
-    results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`, title: b.title, sub: b.excerpt||'', action: ()=>{ closeSearch(); openBlog(b.id); } })
+    results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg>`, title: b.title, sub: b.excerpt||'', action: ()=>{ closeSearch(); openBlog(b.id); } })
   );
   searchData.events.filter(e => e.title?.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q)).forEach(e =>
-    results.push({ type:'event', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`, title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
+    results.push({ type:'event', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><\/svg>`, title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
   );
   searchData.members.filter(m => m.name?.toLowerCase().includes(q) || m.role?.toLowerCase().includes(q) || m.domain?.toLowerCase().includes(q)).forEach(m => {
     const allMovies = window._allMoviesCache || [];
     const filmCount = allMovies.filter(mv=>crewFields.some(f=>(mv[f]||'').split(',').some(p=>{ const [nm,id]=p.split('||'); return (id&&id.trim()==String(m.id))||nm.trim().toLowerCase()===m.name.toLowerCase(); }))).length;
     const sub = [m.role, m.domain, filmCount ? filmCount+' film'+(filmCount>1?'s':'') : ''].filter(Boolean).join(' · ');
-    results.push({ type:'member', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`, title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
+    results.push({ type:'member', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg>`, title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
   });
 
-  if (!results.length) { out.innerHTML = '<div class="search-empty">No results for "'+q+'"</div>'; return; }
+  if (!results.length) { out.innerHTML = '<div class="search-empty">No results for "'+q+'"<\/div>'; return; }
 
   const groups = ['film','blog','event','member'];
   const labels = { film:'Films', blog:'Blog', event:'Events', member:'Members' };
@@ -4484,12 +4486,12 @@ function doSearch(q) {
   groups.forEach(g => {
     const items = results.filter(r=>r.type===g);
     if (!items.length) return;
-    html += `<div class="search-result-group">${labels[g]}</div>`;
+    html += `<div class="search-result-group">${labels[g]}<\/div>`;
     items.slice(0,5).forEach(item => {
       html += `<div class="search-result-item" data-idx="${results.indexOf(item)}">
-        <span class="search-result-icon">${item.icon}</span>
-        <div><div class="search-result-title">${item.title}</div>${item.sub?`<div class="search-result-sub">${item.sub}</div>`:''}</div>
-      </div>`;
+        <span class="search-result-icon">${item.icon}<\/span>
+        <div><div class="search-result-title">${item.title}<\/div>${item.sub?`<div class="search-result-sub">${item.sub}<\/div>`:''}<\/div>
+      <\/div>`;
     });
   });
   out.innerHTML = html;
@@ -4509,7 +4511,7 @@ async function loadCVCards() {
   const row = document.getElementById('cv-cards-row');
   if (!row) return;
   if (!_cvData.length) {
-    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.</div>`;
+    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.<\/div>`;
     return;
   }
   row.innerHTML = _cvData.map(cv => {
@@ -4517,15 +4519,15 @@ async function loadCVCards() {
     return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
       ${cv.cover_image
         ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
-        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg></div>`}
-      <div class="cv-year-card-overlay"></div>
+        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
+      <div class="cv-year-card-overlay"><\/div>
       <div class="cv-year-card-info">
-        <div class="cv-year-badge">Chitra Vichitra</div>
-        <div class="cv-year-num">${cv.year}</div>
-        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened</div>
-        <div class="cv-year-arrow">View Films →</div>
-      </div>
-    </div>`;
+        <div class="cv-year-badge">Chitra Vichitra<\/div>
+        <div class="cv-year-num">${cv.year}<\/div>
+        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened<\/div>
+        <div class="cv-year-arrow">View Films →<\/div>
+      <\/div>
+    <\/div>`;
   }).join('');
 }
 
@@ -4536,10 +4538,10 @@ async function openCVDetail(cvId, year) {
   detailView.style.display = 'block';
   document.getElementById('cv-detail-year-title').textContent = `Chitra Vichitra ${year}`;
   const grid = document.getElementById('cv-movies-grid');
-  grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading...</div>`;
+  grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading...<\/div>`;
   const data = await apiFetch(`/api/chitra-vichitra/${cvId}/movies`);
   if (!data || !data.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films added to CV ${year} yet.</p></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films added to CV ${year} yet.<\/p><\/div>`;
     return;
   }
   grid.innerHTML = data.map(m => renderMovieCard(m, true)).join('');
@@ -4562,7 +4564,7 @@ async function loadAdminCV() {
   const list = document.getElementById('cv-admin-list');
   const editions = await apiFetch('/api/chitra-vichitra') || [];
   if (!editions.length) {
-    list.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center"><p>No CV editions yet. Add one to get started.</p></div>`;
+    list.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center"><p>No CV editions yet. Add one to get started.<\/p><\/div>`;
     return;
   }
   list.innerHTML = editions.map(cv => `
@@ -4570,18 +4572,18 @@ async function loadAdminCV() {
       <div>
         ${cv.cover_image
           ? `<img src="${cv.cover_image}" alt="${cv.year}" style="width:80px;height:52px;object-fit:cover;border-radius:3px;border:1px solid var(--border)">`
-          : `<div style="width:80px;height:52px;background:var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg></div>`}
-      </div>
+          : `<div style="width:80px;height:52px;background:var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
+      <\/div>
       <div>
-        <div style="font-weight:700;font-size:16px">Chitra Vichitra ${cv.year}</div>
-        <div style="font-size:12px;color:var(--grey);margin-top:3px">${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened</div>
-      </div>
+        <div style="font-weight:700;font-size:16px">Chitra Vichitra ${cv.year}<\/div>
+        <div style="font-size:12px;color:var(--grey);margin-top:3px">${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened<\/div>
+      <\/div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> Manage Films</button>
-        <button class="btn-sm" onclick="editCV(${JSON.stringify(cv).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteCV('${cv.id}','${cv.year}')">Delete</button>
-      </div>
-    </div>`).join('');
+        <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg> Manage Films<\/button>
+        <button class="btn-sm" onclick="editCV(${JSON.stringify(cv).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm danger" onclick="deleteCV('${cv.id}','${cv.year}')">Delete<\/button>
+      <\/div>
+    <\/div>`).join('');
 }
 
 function openCVModal(cv=null) {
@@ -4635,8 +4637,8 @@ async function openCVMoviesModal(cvId, year) {
   // Load all movies for dropdown
   _allMoviesForDropdown = await apiFetch('/api/movies') || [];
   const sel = document.getElementById('cv-movie-dropdown');
-  sel.innerHTML = '<option value="">— Select a film —</option>' +
-    _allMoviesForDropdown.map(m=>`<option value="${m.id}">${m.title}${m.release_year?' ('+m.release_year+')':''}</option>`).join('');
+  sel.innerHTML = '<option value="">— Select a film —<\/option>' +
+    _allMoviesForDropdown.map(m=>`<option value="${m.id}">${m.title}${m.release_year?' ('+m.release_year+')':''}<\/option>`).join('');
 
   await refreshCVMoviesList();
 }
@@ -4645,20 +4647,20 @@ async function refreshCVMoviesList() {
   const container = document.getElementById('cv-current-movies-list');
   const data = await apiFetch(`/api/chitra-vichitra/${_cvMoviesEditId}/movies`);
   if (!data || !data.length) {
-    container.innerHTML = `<div style="font-size:13px;color:var(--grey);padding:16px">No films added yet.</div>`;
+    container.innerHTML = `<div style="font-size:13px;color:var(--grey);padding:16px">No films added yet.<\/div>`;
     return;
   }
   container.innerHTML = data.map(m => `
     <div style="display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:1px solid var(--border)">
       ${m.poster_image
         ? `<img src="${m.poster_image}" alt="${m.title}" style="width:44px;height:60px;object-fit:cover;border-radius:2px">`
-        : `<div style="width:44px;height:60px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
+        : `<div style="width:44px;height:60px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
       <div>
-        <div style="font-size:13px;font-weight:600">${m.title}</div>
-        <div style="font-size:11px;color:var(--grey)">${m.release_year||''}</div>
-      </div>
-      <button class="btn-sm danger" style="font-size:11px;padding:4px 10px" onclick="removeMovieFromCV('${m.cv_movie_id}')">Remove</button>
-    </div>`).join('');
+        <div style="font-size:13px;font-weight:600">${m.title}<\/div>
+        <div style="font-size:11px;color:var(--grey)">${m.release_year||''}<\/div>
+      <\/div>
+      <button class="btn-sm danger" style="font-size:11px;padding:4px 10px" onclick="removeMovieFromCV('${m.cv_movie_id}')">Remove<\/button>
+    <\/div>`).join('');
 }
 
 async function addMovieToCV() {
@@ -4744,19 +4746,19 @@ async function loadTrafficAnalytics(range='7d') {
   const maxViews = Math.max(...(data.by_page||[]).map(p=>p.views), 1);
   document.getElementById('page-leaderboard').innerHTML = (data.by_page||[]).slice(0,8).map((p,i)=>`
     <div class="leaderboard-row">
-      <span class="leaderboard-rank">${i+1}</span>
-      <span style="font-size:13px;flex:1">/${p.page||'home'}</span>
-      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${p.views/maxViews*100}%"></div></div>
-      <span class="leaderboard-score">${fmtNum(p.views)}</span>
-    </div>`).join('');
+      <span class="leaderboard-rank">${i+1}<\/span>
+      <span style="font-size:13px;flex:1">/${p.page||'home'}<\/span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${p.views/maxViews*100}%"><\/div><\/div>
+      <span class="leaderboard-score">${fmtNum(p.views)}<\/span>
+    <\/div>`).join('');
 
   // Hours bar chart
   const hoursEl = document.getElementById('hours-bar-chart');
   const maxHour = Math.max(...(data.by_hour||Array(24).fill(0)), 1);
   hoursEl.innerHTML = (data.by_hour||Array(24).fill(0)).map((v,h)=>`
     <div class="bar-chart-col" style="flex:1">
-      <div class="bar-chart-bar" style="height:${Math.max(v/maxHour*90,2)}px;opacity:${h===new Date().getHours()?1:.5}"></div>
-    </div>`).join('');
+      <div class="bar-chart-bar" style="height:${Math.max(v/maxHour*90,2)}px;opacity:${h===new Date().getHours()?1:.5}"><\/div>
+    <\/div>`).join('');
 }
 
 function renderLineChart(svgId, labelsId, byDate) {
@@ -4776,20 +4778,20 @@ function renderLineChart(svgId, labelsId, byDate) {
       .chart-line { stroke: var(--white); }
       .chart-dot  { fill:   var(--white); }
       .chart-grad-stop { stop-color: var(--white); }
-    </style>
+    <\/style>
     <polyline class="chart-line" points="${pts.join(' ')}" fill="none" stroke-width="1.5" stroke-linejoin="round"/>
     ${byDate.map((d,i)=>{
       const x=pad+(i/(byDate.length-1||1))*(W-pad*2);
       const y=H-pad-(d.views/maxV)*(H-pad*2);
       return `<circle class="chart-dot" cx="${x}" cy="${y}" r="3"/>`;
     }).join('')}
-    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop class="chart-grad-stop" offset="0%" stop-opacity=".15"/><stop class="chart-grad-stop" offset="100%" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1"><stop class="chart-grad-stop" offset="0%" stop-opacity=".15"/><stop class="chart-grad-stop" offset="100%" stop-opacity="0"/><\/linearGradient><\/defs>
     <polygon points="${pts.join(' ')} ${W-pad},${H} ${pad},${H}" fill="url(#fadeG)"/>`;
   // Labels — show first, middle, last
   const show = [0, Math.floor(byDate.length/2), byDate.length-1].filter((v,i,a)=>a.indexOf(v)===i);
   labelsEl.innerHTML = byDate.map((d,i)=> show.includes(i)
-    ? `<span style="font-size:10px;color:var(--grey)">${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>`
-    : `<span></span>`).join('');
+    ? `<span style="font-size:10px;color:var(--grey)">${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}<\/span>`
+    : `<span><\/span>`).join('');
 }
 
 function fmtNum(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : (n||0).toString(); }
@@ -4815,37 +4817,39 @@ async function loadReviewAnalytics() {
   chartEl.style.height = '120px';
   chartEl.innerHTML = films.map(f=>`
     <div class="bar-chart-col">
-      <div class="bar-chart-val">${f.avg.toFixed(1)}</div>
-      <div class="bar-chart-bar" style="height:${f.avg/maxScore*100}px"></div>
-    </div>`).join('');
-  labelsEl.innerHTML = films.map(f=>`<span style="flex:1;font-size:9px;color:var(--grey);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.title}</span>`).join('');
+      <div class="bar-chart-val">${f.avg.toFixed(1)}<\/div>
+      <div class="bar-chart-bar" style="height:${f.avg/maxScore*100}px"><\/div>
+    <\/div>`).join('');
+  labelsEl.innerHTML = films.map(f=>`<span style="flex:1;font-size:9px;color:var(--grey);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.title}<\/span>`).join('');
 
   // Category breakdown
   const cats = ['direction','sound','cinematography','script'];
   const catLabels = { direction:'Direction', sound:'Sound', cinematography:'Cinemato.', script:'Script' };
   document.getElementById('category-breakdown').innerHTML = cats.map(c=>`
     <div class="leaderboard-row">
-      <span style="font-size:12px;flex:1;color:var(--grey);text-transform:uppercase;letter-spacing:.08em;font-size:10px">${catLabels[c]}</span>
-      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${(data.cat_avgs?.[c]||0)/5*100}%"></div></div>
-      <span class="leaderboard-score">${data.cat_avgs?.[c]?.toFixed(1)||'—'}</span>
-    </div>`).join('');
+      <span style="font-size:12px;flex:1;color:var(--grey);text-transform:uppercase;letter-spacing:.08em;font-size:10px">${catLabels[c]}<\/span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${(data.cat_avgs?.[c]||0)/5*100}%"><\/div><\/div>
+      <span class="leaderboard-score">${data.cat_avgs?.[c]?.toFixed(1)||'—'}<\/span>
+    <\/div>`).join('');
 
   // Film leaderboard
   const maxR = Math.max(...films.map(f=>f.count),1);
   document.getElementById('film-leaderboard').innerHTML = films.map((f,i)=>`
     <div class="leaderboard-row">
-      <span class="leaderboard-rank">${i+1}</span>
-      <span style="font-size:13px;flex:1">${f.title}</span>
-      <span style="font-size:11px;color:var(--grey);margin-right:8px">${f.count} review${f.count!==1?'s':''}</span>
-      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${f.avg/5*100}%"></div></div>
-      <span class="leaderboard-score">${f.avg.toFixed(1)}</span>
-    </div>`).join('');
+      <span class="leaderboard-rank">${i+1}<\/span>
+      <span style="font-size:13px;flex:1">${f.title}<\/span>
+      <span style="font-size:11px;color:var(--grey);margin-right:8px">${f.count} review${f.count!==1?'s':''}<\/span>
+      <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${f.avg/5*100}%"><\/div><\/div>
+      <span class="leaderboard-score">${f.avg.toFixed(1)}<\/span>
+    <\/div>`).join('');
 }
 
 // ── WATCH STATUS (localStorage) ──────────────────────────────────────
 function getWatchedMovies() {
   try { return JSON.parse(localStorage.getItem('kfs_watched_movies') || '{}'); } catch { return {}; }
 }
+function svgFilm(size=18){return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>';}
+function svgPerson(size=16){return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg>';}
 function isMovieWatched(id) { return !!getWatchedMovies()[id]; }
 function setMovieWatched(id, val) {
   const w = getWatchedMovies();
@@ -4876,8 +4880,8 @@ function updateDetailWatchBtn(id) {
   if (!btn) return;
   const watched = isMovieWatched(id);
   btn.innerHTML = watched
-    ? '<span>✓</span> Watched'
-    : '<span>☐</span> Mark as Watched';
+    ? '<span>✓<\/span> Watched'
+    : '<span>☐<\/span> Mark as Watched';
   btn.classList.toggle('is-watched', watched);
   btn.style.cssText = ''; // clear any previously set inline styles
 }
