@@ -209,6 +209,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .page{display:none;min-height:100vh;padding-top:72px;
   animation:fadeUp .6s var(--ease) both}
 .page.active{display:block}
+@keyframes hint-slide{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(5px);opacity:1}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── HERO ─────────────────────────────────────────────────────────────── */
@@ -360,7 +361,32 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 .apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
 @media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr}}
 
-/* ── EVENTS ──────────────────────────────────────────────────────────── */
+/* ── BLOG PAGE SECTION NAV ───────────────────────────────────────────── */
+.blog-page-nav{position:sticky;top:64px;z-index:80;background:var(--black);
+  border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+  transition:background .3s}
+.blog-page-nav::-webkit-scrollbar{display:none}
+body.light-mode .blog-page-nav{background:#f0f0f0}
+.blog-page-nav-btn{flex:none;padding:12px 20px;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:600;background:none;border:none;color:var(--grey);
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color .2s,border-color .2s;white-space:nowrap}
+.blog-page-nav-btn.active{color:var(--white);border-bottom-color:var(--white)}
+.blog-page-nav-btn:hover{color:var(--white)}
+body.light-mode .blog-page-nav-btn.active{color:#111;border-bottom-color:#111}
+body.light-mode .blog-page-nav-btn:hover{color:#111}
+/* Blog page section block */
+.blog-page-section{padding:60px 0 20px}
+.blog-page-section-header{margin-bottom:32px}
+.blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--grey);margin-bottom:10px;font-weight:600}
+.blog-page-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em}
+.blog-page-divider{width:100%;height:1px;background:var(--border);margin:0}
+/* Scroll hint */
+.carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 20px 0;
+  margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+@media(min-width:600px){.carousel-scroll-hint{padding:0 32px 0}}
+.carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
 .events-tabs{display:flex;gap:0;margin-top:60px;border-bottom:1px solid var(--border)}
 .events-tab{padding:12px 24px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--grey);transition:color .2s;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -413,7 +439,7 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 @media(max-width:480px){.cv-movies-grid{grid-template-columns:1fr}}
 
 /* ── BLOG GRID ────────────────────────────────────────────────────────── */
-.blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent;margin-top:60px}
+.blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent}
 @media(max-width:768px){.blog-grid{grid-template-columns:1fr}}
 .blog-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease),box-shadow .25s var(--ease);position:relative;cursor:pointer;border:1px solid var(--border);border-radius:12px}
 .blog-card.unread .blog-card-img{filter:grayscale(0%);transition:filter .4s var(--ease)}
@@ -887,7 +913,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   .event-day{font-size:1.6rem}
 
   /* blog */
-  .blog-grid{margin-top:28px;grid-template-columns:1fr}
+  .blog-grid{grid-template-columns:1fr}
   .blog-card-body{padding:16px}
   .blog-card-title{font-size:16px}
   .blog-detail-content{padding:28px 20px}
@@ -1409,6 +1435,13 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <p class="section-label">From the Lens</p>
         <h2 class="section-title">Latest Posts</h2>
       </div>
+      <div class="carousel-scroll-hint">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="4" width="10" height="4" rx="2" fill="currentColor" opacity=".35"/>
+          <path d="M12 6L17 6M17 6L14.5 3.5M17 6L14.5 8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Scroll to explore</span>
+      </div>
       <div class="home-carousel" id="home-blog-grid">
         <div class="loading" style="padding:40px 0">Loading posts...</div>
       </div>
@@ -1425,6 +1458,13 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <div class="section-header">
         <p class="section-label">Our Work</p>
         <h2 class="section-title">Films</h2>
+      </div>
+      <div class="carousel-scroll-hint">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="4" width="10" height="4" rx="2" fill="currentColor" opacity=".35"/>
+          <path d="M12 6L17 6M17 6L14.5 3.5M17 6L14.5 8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Scroll to explore</span>
       </div>
       <div class="home-carousel" id="home-movies-grid">
         <div class="loading" style="padding:40px 0">Loading films...</div>
@@ -1548,15 +1588,18 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- ── BLOG PAGE ── -->
 <div class="page" id="page-blog">
-  <section class="section">
+  <section class="section" style="padding-bottom:0">
     <div class="section-inner">
       <p class="section-label">From the Lens</p>
       <h2 class="section-title">The Blog</h2>
-      <div class="blog-grid" id="blog-grid" style="margin-top:60px">
-        <div class="loading" style="grid-column:1/-1">Loading posts...</div>
-      </div>
     </div>
   </section>
+  <nav class="blog-page-nav" id="blog-page-nav" style="display:none"></nav>
+  <div id="blog-sections-wrap">
+    <div class="section-inner" style="padding:60px 0">
+      <div class="loading">Loading posts...</div>
+    </div>
+  </div>
 </div>
 
 <!-- Blog Detail -->
@@ -2693,18 +2736,102 @@ function renderEventItem(e, full=false) {
 
 async function loadBlog() {
   const blogs = await apiFetch('/api/blogs');
-  const grid = document.getElementById('blog-grid');
-  if (blogs && blogs.length) {
-    window._allBlogs = blogs;
-    const _rs = getBlogReadState();
-    const _sorted = [...blogs].sort((a,b)=>{
-      const ar=!!_rs[a.id], br=!!_rs[b.id];
-      if(ar===br) return 0; return ar?1:-1;
-    });
-    grid.innerHTML = _sorted.map(b=>renderBlogCard(b)).join('');
-  } else {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.<\/p><\/div>`;
+  const wrap = document.getElementById('blog-sections-wrap');
+  const nav = document.getElementById('blog-page-nav');
+  if (!blogs || !blogs.length) {
+    nav.style.display = 'none';
+    wrap.innerHTML = `<div class="section-inner" style="padding:60px 0"><div class="empty-state"><p>No posts yet.</p></div></div>`;
+    return;
   }
+  window._allBlogs = blogs;
+  const _rs = getBlogReadState();
+
+  // Collect all section types that appear across blogs
+  const sectionTypes = [];
+  blogs.forEach(b => {
+    let secs = [];
+    try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
+    secs.forEach(s => { if (!sectionTypes.find(t=>t.id===s.id)) sectionTypes.push({id:s.id,label:s.label}); });
+  });
+
+  // Build nav buttons: All + one per section type
+  const navItems = [{id:'blog-all',label:'All Posts'}, ...sectionTypes.map(s=>({id:'blog-sec-'+s.id,label:s.label}))];
+  nav.style.display = navItems.length > 1 ? 'flex' : 'none';
+  nav.innerHTML = navItems.map((n,i)=>
+    `<button class="blog-page-nav-btn${i===0?' active':''}" onclick="scrollToBlogSection('${n.id}',this)">${n.label}</button>`
+  ).join('');
+
+  // Sort: unread first within each group
+  const sorted = [...blogs].sort((a,b)=>{
+    const ar=!!_rs[a.id], br=!!_rs[b.id];
+    if(ar===br) return 0; return ar?1:-1;
+  });
+
+  // Build HTML: "All Posts" block + one block per section type
+  let html = '';
+
+  // All Posts block
+  html += `<div class="blog-page-section section-inner" id="blog-all">
+    <div class="blog-page-section-header">
+      <p class="blog-page-section-label">From the Lens</p>
+      <h3 class="blog-page-section-title">All Posts</h3>
+    </div>
+    <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}</div>
+  </div>`;
+
+  // Per-section blocks
+  sectionTypes.forEach(st => {
+    const tagged = sorted.filter(b => {
+      let secs = [];
+      try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
+      return secs.find(s=>s.id===st.id);
+    });
+    if (!tagged.length) return;
+    html += `<div class="blog-page-divider"></div>
+    <div class="blog-page-section section-inner" id="blog-sec-${st.id}">
+      <div class="blog-page-section-header">
+        <p class="blog-page-section-label">Section</p>
+        <h3 class="blog-page-section-title">${st.label}</h3>
+      </div>
+      <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}</div>
+    </div>`;
+  });
+
+  wrap.innerHTML = html;
+
+  // Highlight nav on scroll
+  _setupBlogNavObserver(navItems);
+}
+
+function scrollToBlogSection(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Offset for sticky nav + site header (~64+45px)
+  const navH = document.getElementById('blog-page-nav').offsetHeight || 44;
+  const top = el.getBoundingClientRect().top + window.scrollY - 64 - navH - 12;
+  window.scrollTo({top, behavior:'smooth'});
+  // Immediately update active nav btn
+  document.querySelectorAll('.blog-page-nav-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function _setupBlogNavObserver(navItems) {
+  if (window._blogNavObserver) window._blogNavObserver.disconnect();
+  const opts = {rootMargin:'-70px 0px -60% 0px', threshold:0};
+  window._blogNavObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        document.querySelectorAll('.blog-page-nav-btn').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('onclick').includes("'"+id+"'"));
+        });
+      }
+    });
+  }, opts);
+  navItems.forEach(n => {
+    const el = document.getElementById(n.id);
+    if (el) window._blogNavObserver.observe(el);
+  });
 }
 
 function getBlogReadState() {
@@ -2745,13 +2872,12 @@ async function openBlog(id) {
   if (!blog) return;
   // Mark as read and update card live
   markBlogRead(id);
-  // Update blog page card (data-blog-id)
-  const card = document.querySelector('[data-blog-id="'+id+'"]');
-  if (card) {
+  // Update all blog page cards (post may appear in All + section block)
+  document.querySelectorAll('[data-blog-id="'+id+'"]').forEach(card => {
     card.classList.remove('unread'); card.classList.add('read');
     const badge = card.querySelector('.blog-read-badge');
     if (badge) badge.textContent = 'Read';
-  }
+  });
   // Update home carousel card
   const hcCard = document.querySelector('.hc-blog-card[onclick*="\''+id+'\'"]');
   if (hcCard) {
