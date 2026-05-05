@@ -305,14 +305,15 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .apple-section .section-cta{padding:16px 20px 48px}
 @media(min-width:600px){.apple-section .section-cta{padding:16px 32px 48px}}
 /* Carousel scroll track */
-.home-carousel{display:flex;gap:10px;overflow-x:auto;padding:0 20px 20px;
+.home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 20px 24px;
   scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-@media(min-width:600px){.home-carousel{padding:0 32px 24px;gap:12px}}
+@media(min-width:600px){.home-carousel{padding:0 32px 28px;gap:16px}}
 .home-carousel::-webkit-scrollbar{display:none}
 /* Blog carousel card */
-.hc-blog-card{flex:0 0 280px;scroll-snap-align:start;border-radius:10px;overflow:hidden;
+.hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
-@media(min-width:600px){.hc-blog-card{flex:0 0 320px}}
+@media(min-width:600px){.hc-blog-card{flex:0 0 420px}}
+@media(min-width:900px){.hc-blog-card{flex:0 0 480px}}
 .hc-blog-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .hc-blog-card:active{transform:scale(.98)}
 /* read state: greyscale image like blog page */
@@ -323,33 +324,34 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .hc-blog-img{width:100%;height:100%;object-fit:cover;transition:filter .4s var(--ease),transform .5s var(--ease)}
 .hc-blog-card:hover .hc-blog-img{transform:scale(1.04)}
 .hc-blog-placeholder{width:100%;aspect-ratio:16/9;background:var(--border)}
-.hc-read-badge{position:absolute;top:9px;left:9px;z-index:3;font-size:9px;font-weight:700;
-  letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:20px;
+.hc-read-badge{position:absolute;top:12px;left:12px;z-index:3;font-size:9px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:20px;
   backdrop-filter:blur(8px)}
 .hc-blog-card.hc-unread .hc-read-badge{background:rgba(255,255,255,.92);color:#0a0a0a}
 .hc-blog-card.hc-read .hc-read-badge{background:rgba(80,80,80,.75);color:rgba(255,255,255,.8)}
 body.light-mode .hc-blog-card.hc-unread .hc-read-badge{background:rgba(10,10,10,.85);color:#fff}
 body.light-mode .hc-blog-card.hc-read .hc-read-badge{background:rgba(150,150,150,.7);color:#fff}
-.hc-blog-body{padding:18px}
-.hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px}
-.hc-blog-title{font-size:15px;font-weight:600;line-height:1.35;margin-bottom:6px}
-.hc-blog-excerpt{font-size:12px;color:var(--grey);line-height:1.55;
+.hc-blog-body{padding:22px 20px 20px}
+.hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
+.hc-blog-title{font-size:18px;font-weight:600;line-height:1.3;margin-bottom:8px}
+.hc-blog-excerpt{font-size:13px;color:var(--grey);line-height:1.6;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* Film carousel card */
-.hc-film-card{flex:0 0 160px;scroll-snap-align:start;border-radius:10px;overflow:hidden;
+.hc-film-card{flex:0 0 42vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
-@media(min-width:600px){.hc-film-card{flex:0 0 190px}}
+@media(min-width:600px){.hc-film-card{flex:0 0 220px}}
+@media(min-width:900px){.hc-film-card{flex:0 0 260px}}
 .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .hc-film-card:active{transform:scale(.98)}
 .hc-film-poster-wrap{width:100%;aspect-ratio:2/3;overflow:hidden;position:relative}
 .hc-film-poster{width:100%;height:100%;object-fit:cover;transition:transform .5s var(--ease)}
 .hc-film-card:hover .hc-film-poster{transform:scale(1.04)}
 .hc-film-placeholder{width:100%;aspect-ratio:2/3;background:var(--border);display:flex;align-items:center;justify-content:center}
-.hc-film-info{padding:12px 14px 14px}
-.hc-film-title{font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;
+.hc-film-info{padding:14px 16px 16px}
+.hc-film-title{font-size:14px;font-weight:600;margin-bottom:4px;line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hc-film-meta{font-size:11px;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hc-film-rating{display:flex;align-items:center;gap:3px;margin-top:5px;font-size:11px;font-weight:600;color:#f59e0b}
+.hc-film-meta{font-size:12px;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hc-film-rating{display:flex;align-items:center;gap:3px;margin-top:6px;font-size:12px;font-weight:600;color:#f59e0b}
 .hc-film-rating-count{font-size:10px;font-weight:400;color:var(--grey)}
 /* achievement apple grid */
 .apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
@@ -470,6 +472,18 @@ body.light-mode .rv-item-title{color:#111}
 .blog-detail-body blockquote{border-left:2px solid var(--grey);padding-left:24px;color:var(--grey);font-style:italic;margin:2em 0}
 .blog-detail-body ul,.blog-detail-body ol{padding-left:24px;margin-bottom:1.5em}
 .blog-detail-body li{margin-bottom:.5em}
+/* Blog section nav */
+.blog-section-nav{display:flex;gap:0;margin-bottom:36px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.blog-section-nav::-webkit-scrollbar{display:none}
+.blog-section-btn{flex:none;padding:10px 18px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  font-weight:600;background:none;border:none;color:var(--grey);cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-1px;transition:color .2s,border-color .2s;white-space:nowrap}
+.blog-section-btn.active,.blog-section-btn:hover{color:var(--white);border-bottom-color:var(--white)}
+body.light-mode .blog-section-btn.active,body.light-mode .blog-section-btn:hover{color:#111;border-bottom-color:#111}
+.blog-content-section{display:none;animation:fadeUp .4s var(--ease) both}
+.blog-content-section.active{display:block}
+.blog-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);
+  margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 
 /* ── MEMBERS ─────────────────────────────────────────────────────────── */
 .members-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:transparent;margin-top:60px}
@@ -1551,6 +1565,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
     <p class="blog-detail-date" id="blog-detail-date"></p>
     <h1 class="blog-detail-title" id="blog-detail-title"></h1>
+    <div id="blog-section-nav-wrap"></div>
     <div class="blog-detail-body" id="blog-detail-body"></div>
   </div>
 </div>
@@ -2077,6 +2092,22 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="form-group">
       <label>Status</label>
       <select id="blog-published"><option value="true">Published</option><option value="false">Draft</option></select>
+    </div>
+    <div class="form-group">
+      <label>Extra Sections</label>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select id="blog-section-type" style="flex:1">
+          <option value="">— Add a section —</option>
+          <option value="Review">Review</option>
+          <option value="Our Take">Our Take</option>
+          <option value="Industry Insider">Industry Insider</option>
+          <option value="Behind the Scenes">Behind the Scenes</option>
+          <option value="Interview">Interview</option>
+          <option value="Analysis">Analysis</option>
+        </select>
+        <button class="btn-sm" onclick="addBlogSection()" style="white-space:nowrap">+ Add</button>
+      </div>
+      <div id="blog-sections-list"><p style="font-size:12px;color:var(--grey);margin:0">No extra sections added.</p></div>
     </div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeBlogModal()">Cancel</button>
@@ -2730,12 +2761,38 @@ async function openBlog(id) {
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
+  // Render section nav if blog has sections
+  const navWrap = document.getElementById('blog-section-nav-wrap');
+  let parsedSections = [];
+  try { parsedSections = blog.sections ? JSON.parse(blog.sections) : []; } catch(e){}
+  if (parsedSections && parsedSections.length) {
+    const allSections = [{id:'overview',label:'Overview',content: blog.content||''},...parsedSections];
+    document.getElementById('blog-detail-body').innerHTML = '';
+    navWrap.innerHTML = `<nav class="blog-section-nav">`
+      + allSections.map((s,i)=>`<button class="blog-section-btn${i===0?' active':''}" onclick="switchBlogSection(this,'bsec-${s.id}')">${s.label}</button>`).join('')
+      + `</nav>`
+      + allSections.map((s,i)=>`<div class="blog-content-section blog-detail-body${i===0?' active':''}" id="bsec-${s.id}">`
+        + `<div class="blog-section-label">${s.label}</div>`
+        + (s.content||'')
+        + `</div>`).join('');
+  } else {
+    navWrap.innerHTML = '';
+  }
   // Inject Recently Viewed below content
   renderRecentlyViewed(id);
   window.scrollTo({top:0,behavior:'instant'});
   history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
   hideScrollProgress();
   setTimeout(updateScrollProgress, 100);
+}
+
+function switchBlogSection(btn, sectionId) {
+  const navWrap = document.getElementById('blog-section-nav-wrap');
+  navWrap.querySelectorAll('.blog-section-btn').forEach(b=>b.classList.remove('active'));
+  navWrap.querySelectorAll('.blog-content-section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  const sec = document.getElementById(sectionId);
+  if (sec) sec.classList.add('active');
 }
 
 function renderRecentlyViewed(currentId) {
@@ -3502,9 +3559,46 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
   document.getElementById('blog-cover').value='';
+  // Populate sections
+  let secs = [];
+  try { secs = blog?.sections ? JSON.parse(blog.sections) : []; } catch(e){}
+  window._blogSections = secs.length ? [...secs] : [];
+  renderBlogSectionsList();
 }
 function editBlog(blog) { openBlogModal(blog); }
 function closeBlogModal() { document.getElementById('blog-modal').classList.remove('open'); }
+
+function renderBlogSectionsList() {
+  const wrap = document.getElementById('blog-sections-list');
+  if (!wrap) return;
+  const secs = window._blogSections || [];
+  if (!secs.length) { wrap.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No extra sections added.</p>'; return; }
+  wrap.innerHTML = secs.map((s,i)=>`
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">${s.label}</span>
+        <button onclick="removeBlogSection(${i})" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:18px;line-height:1;padding:0 4px">×</button>
+      </div>
+      <div contenteditable="true" id="bsec-edit-${i}" class="blog-detail-body"
+        style="min-height:80px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;outline:none"
+        oninput="window._blogSections[${i}].content=this.innerHTML">${s.content||''}</div>
+    </div>`).join('');
+}
+function addBlogSection() {
+  const sel = document.getElementById('blog-section-type');
+  if (!sel || !sel.value) return;
+  const label = sel.value;
+  const id = label.toLowerCase().replace(/\s+/g,'-');
+  if (!window._blogSections) window._blogSections = [];
+  if (window._blogSections.find(s=>s.id===id)) { alert('Section already added'); return; }
+  window._blogSections.push({id, label, content:''});
+  renderBlogSectionsList();
+  sel.value = '';
+}
+function removeBlogSection(i) {
+  window._blogSections.splice(i,1);
+  renderBlogSectionsList();
+}
 
 async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
@@ -3513,6 +3607,7 @@ async function saveBlog() {
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
   fd.append('content', document.getElementById('blog-editor-content').innerHTML);
   fd.append('published', document.getElementById('blog-published').value);
+  fd.append('sections', JSON.stringify(window._blogSections||[]));
   const cover = document.getElementById('blog-cover').files[0];
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
