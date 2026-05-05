@@ -713,6 +713,17 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
+// Pings Supabase every 4 days to prevent free tier auto-pause
+setInterval(async () => {
+  try {
+    await supabase.from('settings').select('id').limit(1);
+    console.log('Supabase keepalive ping OK');
+  } catch (e) {
+    console.error('Supabase keepalive failed:', e.message);
+  }
+}, 1000 * 60 * 60 * 24 * 4); // every 4 days
+
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
