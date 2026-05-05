@@ -95,9 +95,6 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
-  // Ensure permissions column exists (safe to run on existing DBs)
-  await supabase.rpc('exec_sql', { sql: `ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions text DEFAULT '[]'` }).catch(() => {});
-
   const { data: master } = await supabase.from('admins').select('id').eq('role', 'master').single();
   if (!master) {
     const hash = await bcrypt.hash('KFS@master2024!', 10);
