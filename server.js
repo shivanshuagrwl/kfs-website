@@ -681,6 +681,11 @@ app.get('/api/admin/analytics/reviews', requireSection('review-analytics'), asyn
 });
 
 // ── REVIEWS ───────────────────────────────────────────────────────────────────
+app.get('/api/reviews/all', async (req, res) => {
+  const { data } = await supabase.from('reviews').select('movie_id,overall');
+  res.json(data || []);
+});
+
 app.get('/api/reviews/:movieId', async (req, res) => {
   const { data } = await supabase.from('reviews').select('*').eq('movie_id', req.params.movieId).order('created_at', { ascending: false });
   res.json(data || []);

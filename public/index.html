@@ -1070,6 +1070,23 @@ body.light-mode .admin-action-btn.del-btn:hover{border-color:#e74c3c;color:#e74c
 body.light-mode .perm-check-item{color:#222}
 body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
+
+/* Movie card rating overlay */
+.movie-rating-badge{
+  position:absolute;top:10px;left:10px;
+  display:flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:20px;
+  background:rgba(10,10,10,.72);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.13);
+  font-size:11px;font-weight:700;letter-spacing:.04em;
+  color:#fff;z-index:3;pointer-events:none;
+  transition:opacity .2s;
+}
+.movie-rating-badge .rb-star{color:#f59e0b;font-size:11px;line-height:1}
+.movie-rating-badge .rb-count{font-size:9px;font-weight:400;color:rgba(255,255,255,.5);letter-spacing:.02em}
+.movie-card:hover .movie-rating-badge{opacity:.85}
+
 </style>
 </head>
 <body>
@@ -2456,8 +2473,24 @@ async function loadHomeData() {
   const testimonials = await apiFetch('/api/testimonials');
   renderTestimonials(testimonials||[]);
 
-  const movies = await apiFetch('/api/movies');
+  const [movies, allReviews] = await Promise.all([
+    apiFetch('/api/movies'),
+    fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
+  ]);
   window._allMoviesCache = movies || [];
+  // Build rating averages keyed by movie id
+  window._movieRatings = {};
+  if (Array.isArray(allReviews)) {
+    const grouped = {};
+    allReviews.forEach(r => {
+      if (!grouped[r.movie_id]) grouped[r.movie_id] = [];
+      grouped[r.movie_id].push(r.overall);
+    });
+    Object.keys(grouped).forEach(id => {
+      const vals = grouped[id].filter(Boolean);
+      window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
+    });
+  }
   const hmg = document.getElementById('home-movies-grid');
   if (movies && movies.length) {
     hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m,true)).join('');
@@ -2724,8 +2757,37 @@ function toggleDomainField() {
 }
 
 async function loadMovies() {
-  const movies = await apiFetch('/api/movies');
+  // Ensure ratings cache is built if not already (e.g. direct navigation to /movies)
+  if (!window._movieRatings) {
+    window._movieRatings = {};
+    const allReviews = await fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[]);
+    if (Array.isArray(allReviews)) {
+      const grouped = {};
+      allReviews.forEach(r => { if (!grouped[r.movie_id]) grouped[r.movie_id]=[];  grouped[r.movie_id].push(r.overall); });
+      Object.keys(grouped).forEach(id => {
+        const vals = grouped[id].filter(Boolean);
+        window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
+      });
+    }
+  }
+  const [movies, allReviews] = await Promise.all([
+    apiFetch('/api/movies'),
+    fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
+  ]);
   window._allMoviesCache = movies || [];
+  // Build rating averages keyed by movie id
+  window._movieRatings = {};
+  if (Array.isArray(allReviews)) {
+    const grouped = {};
+    allReviews.forEach(r => {
+      if (!grouped[r.movie_id]) grouped[r.movie_id] = [];
+      grouped[r.movie_id].push(r.overall);
+    });
+    Object.keys(grouped).forEach(id => {
+      const vals = grouped[id].filter(Boolean);
+      window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
+    });
+  }
   const grid = document.getElementById('movies-grid');
   if (movies && movies.length) {
     grid.innerHTML = movies.map(m=>renderMovieCard(m,true)).join('');
@@ -2736,11 +2798,16 @@ async function loadMovies() {
 
 function renderMovieCard(m, clickable=false) {
   const watched = isMovieWatched(m.id);
+  const rating = window._movieRatings && window._movieRatings[m.id];
+  const ratingBadge = rating
+    ? `<div class="movie-rating-badge"><span class="rb-star">★</span>${rating.avg.toFixed(1)}<span class="rb-count">(${rating.count})</span></div>`
+    : '';
   return `<div class="movie-card${watched?' watched':''}" ${clickable?`onclick="openMovie('${m.id}')"`:''}> 
     <div style="position:relative">
       ${m.poster_image
         ? `<img class="movie-poster" src="${m.poster_image}" alt="${m.title}">`
         : `<div class="movie-poster-placeholder">🎬</div>`}
+      ${ratingBadge}
       ${clickable ? `<div class="movie-watch-badge${watched?' movie-watch-badge--done':''}" onclick="event.stopPropagation();toggleWatchStatusCard('${m.id}',this.closest('.movie-card'))" title="${watched?'Watched':'Mark as Watched'}">
         ${watched ? '✓ Watched' : '+ Watchlist'}
       </div>` : ''}
@@ -2958,6 +3025,16 @@ async function submitReview() {
       resetReviewForm();
       loadReviews(currentMovieId);
       launchKonfetti();
+      // Refresh ratings cache so poster badge updates instantly
+      fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).then(allReviews => {
+        window._movieRatings = {};
+        const grouped = {};
+        allReviews.forEach(r => { if (!grouped[r.movie_id]) grouped[r.movie_id]=[]; grouped[r.movie_id].push(r.overall); });
+        Object.keys(grouped).forEach(id => {
+          const vals = grouped[id].filter(Boolean);
+          window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
+        });
+      }).catch(()=>{});
     } else {
       document.getElementById('review-submit-msg').textContent = 'Error submitting review. Try again.';
     }
