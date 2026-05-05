@@ -3295,7 +3295,7 @@ async function openMovie(id) {
   } else spotifySec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
   const mslug = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
-  history.pushState({page:'movie-detail', id}, '', '/movies/'+mslug);
+  history.pushState({page:'movie-detail', id}, '', '/films/'+mslug);
   loadReviews(id);
   resetReviewForm();
 }
@@ -4323,15 +4323,50 @@ function showAdminError(msg) {
   bar._t = setTimeout(() => bar?.remove(), 8000);
 }
 
-function checkRoute() {
+async function checkRoute() {
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
   if (path === 'admin') { navigate('admin', false); return; }
+
   const blogMatch = path.match(/^blog\/(.+)/);
-  const movieMatch = path.match(/^movies\/(.+)/);
-  // Slugs are for clean URLs — on direct load just go to listing page
-  if (blogMatch) { navigate('blog', false); return; }
-  if (movieMatch) { navigate('movies', false); return; }
+  const filmMatch = path.match(/^films\/(.+)/);
+  // legacy /movies/ URLs redirect to films
+  const movieLegacy = path.match(/^movies\/(.+)/);
+
+  if (filmMatch || movieLegacy) {
+    const slug = (filmMatch || movieLegacy)[1];
+    // Try to resolve slug → movie ID
+    try {
+      const movies = await apiFetch('/api/movies');
+      if (movies && movies.length) {
+        const match = movies.find(m => {
+          const s = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '';
+          return s === slug;
+        });
+        if (match) { openMovie(match.id); return; }
+      }
+    } catch(e) {}
+    // Fallback: go to films listing
+    navigate('movies', false);
+    return;
+  }
+
+  if (blogMatch) {
+    const slug = blogMatch[1];
+    try {
+      const blogs = await apiFetch('/api/blogs');
+      if (blogs && blogs.length) {
+        const match = blogs.find(b => {
+          const s = b.title ? b.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '';
+          return s === slug;
+        });
+        if (match) { openBlog(match.id); return; }
+      }
+    } catch(e) {}
+    navigate('blog', false);
+    return;
+  }
+
   navigate(path, false);
 }
 
