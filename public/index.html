@@ -259,11 +259,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-scroll{position:absolute;bottom:60px;right:80px;left:auto;transform:none;display:flex;flex-direction:row;align-items:center;gap:10px;opacity:0;animation:fadeUp .8s 1.2s var(--ease) forwards}
 .hero-scroll span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--grey);writing-mode:vertical-rl;font-weight:600}
 .scroll-line{width:1px;height:56px;background:linear-gradient(to bottom,var(--grey),transparent);animation:scrollLine 2s ease infinite}
-
-
-
-
-
 @keyframes scrollLine{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
 
 /* ── SECTIONS ─────────────────────────────────────────────────────────── */
@@ -305,12 +300,12 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .apple-section{width:100%;overflow:hidden}
 .apple-section .section-inner{max-width:none;padding:0}
 .apple-section .section-header{max-width:1200px;margin:0 auto;padding:52px 80px 28px}
-@media(max-width:768px){.apple-section .section-header{padding:36px 24px 20px}}
+@media(max-width:768px){.apple-section .section-header{padding:60px 24px 28px}}
 .apple-section .section-cta{max-width:1200px;margin:0 auto;padding:28px 80px 52px}
-@media(max-width:768px){.apple-section .section-cta{padding:20px 24px 36px}}
+@media(max-width:768px){.apple-section .section-cta{padding:28px 24px 60px}}
 /* Apple mosaic grid */
 .apple-mosaic{display:grid;gap:2px;background:var(--border)}
-.apple-mosaic-blog{grid-template-columns:repeat(3,1fr);grid-template-rows:auto}
+.apple-mosaic-blog{grid-template-columns:repeat(2,1fr);grid-template-rows:auto}
 .apple-mosaic-films{grid-template-columns:repeat(4,1fr);grid-template-rows:auto}
 @media(max-width:900px){.apple-mosaic-films{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:768px){.apple-mosaic-blog,.apple-mosaic-films{grid-template-columns:1fr}}
@@ -392,9 +387,9 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 @media(max-width:480px){.cv-movies-grid{grid-template-columns:1fr}}
 
 /* ── BLOG GRID ────────────────────────────────────────────────────────── */
-.blog-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:var(--border);margin-top:0;width:100%}
+.blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent;margin-top:60px}
 @media(max-width:768px){.blog-grid{grid-template-columns:1fr}}
-.blog-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);position:relative;cursor:pointer;border:none;border-radius:0}
+.blog-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);position:relative;cursor:pointer;border:1px solid var(--border);border-radius:12px}
 .blog-card.unread .blog-card-img{filter:grayscale(0%);transition:filter .4s var(--ease)}
 .blog-card.unread:hover .blog-card-img{filter:grayscale(0%)}
 .blog-card.read .blog-card-img{filter:grayscale(100%);transition:filter .4s var(--ease)}
@@ -1515,7 +1510,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="section-inner">
       <p class="section-label">From the Lens</p>
       <h2 class="section-title">The Blog</h2>
-      <div class="blog-grid" id="blog-grid">
+      <div class="blog-grid" id="blog-grid" style="margin-top:60px">
         <div class="loading" style="grid-column:1/-1">Loading posts...</div>
       </div>
     </div>
