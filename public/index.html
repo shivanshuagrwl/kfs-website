@@ -2121,6 +2121,8 @@ let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getI
 const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
+  // Empty array = no permissions set yet (legacy admin) = full access
+  if (!currentAdminPermissions || currentAdminPermissions.length === 0) return true;
   return currentAdminPermissions.includes(section);
 }
 let allEvents = [];

@@ -74,8 +74,9 @@ function requireSection(section) {
       req.admin = decoded;
       if (decoded.role === 'master') return next(); // master always passes
       const perms = decoded.permissions || [];
-      if (!perms.includes(section)) return res.status(403).json({ error: `No permission for section: ${section}` });
-      next();
+      // Empty array = legacy admin with no permissions set yet = full access
+      if (perms.length === 0 || perms.includes(section)) return next();
+      return res.status(403).json({ error: `No permission for section: ${section}` });
     } catch { res.status(401).json({ error: 'Invalid token' }); }
   };
 }
