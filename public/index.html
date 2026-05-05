@@ -297,67 +297,60 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 .achievement-desc{font-size:14px;color:var(--grey);line-height:1.6}
 
 /* ── APPLE-STYLE FULL-BLEED GRID SECTIONS ────────────────────────────── */
+/* ── HOME CAROUSEL SECTIONS ─────────────────────────────────────────── */
 .apple-section{width:100%;overflow:hidden}
 .apple-section .section-inner{max-width:none;padding:0}
-.apple-section .section-header{max-width:1200px;margin:0 auto;padding:52px 80px 28px}
-@media(max-width:768px){.apple-section .section-header{padding:60px 24px 28px}}
-.apple-section .section-cta{max-width:1200px;margin:0 auto;padding:28px 80px 52px}
-@media(max-width:768px){.apple-section .section-cta{padding:28px 24px 60px}}
-/* Apple mosaic grid */
-.apple-mosaic{display:grid;gap:2px;background:var(--border);border-radius:12px;overflow:hidden}
-.apple-mosaic-blog{grid-template-columns:repeat(2,1fr);grid-template-rows:auto}
-.apple-mosaic-films{grid-template-columns:repeat(4,1fr);grid-template-rows:auto}
-@media(max-width:900px){.apple-mosaic-films{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:768px){.apple-mosaic-blog,.apple-mosaic-films{grid-template-columns:1fr}}
-/* blog tile */
-.apple-blog-tile{background:var(--black);cursor:pointer;overflow:hidden;transition:background .3s var(--ease);position:relative}
-.apple-blog-tile:hover{background:var(--card)}
-.apple-blog-tile:hover .apple-tile-img{transform:scale(1.04)}
-.apple-tile-img-wrap{overflow:hidden;width:100%;aspect-ratio:16/9;position:relative}
-.apple-tile-img{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
-.apple-tile-img-placeholder{width:100%;aspect-ratio:16/9;background:var(--card)}
-.apple-tile-body{padding:28px}
-.apple-tile-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
-.apple-tile-title{font-size:17px;font-weight:600;line-height:1.3;margin-bottom:8px}
-.apple-tile-excerpt{font-size:13px;color:var(--grey);line-height:1.6}
-/* read badge on home blog tile */
-.apple-tile-read-badge{position:absolute;top:10px;left:10px;z-index:3;font-size:9px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;padding:4px 9px;border-radius:20px;
-  background:rgba(255,255,255,.92);color:#0a0a0a;backdrop-filter:blur(6px)}
-.apple-tile-read-badge.is-read{background:rgba(120,120,120,.7);color:#fff}
-body.light-mode .apple-tile-read-badge{background:rgba(20,20,20,.85);color:#fff}
-/* film tile */
-.apple-film-tile{background:var(--black);cursor:pointer;overflow:hidden;transition:background .3s var(--ease);position:relative}
-.apple-film-tile:hover{background:var(--card)}
-.apple-film-tile:hover .apple-film-poster{transform:scale(1.04)}
-.apple-film-poster-wrap{overflow:hidden;width:100%;aspect-ratio:2/3;position:relative}
-.apple-film-poster{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
-.apple-film-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);display:flex;align-items:center;justify-content:center}
-.apple-film-info{padding:20px}
-.apple-film-title{font-size:15px;font-weight:600;margin-bottom:4px;line-height:1.3}
-.apple-film-meta{font-size:12px;color:var(--grey)}
-/* rating badge on home film tile */
-.apple-film-rating{display:inline-flex;align-items:center;gap:4px;margin-top:6px;
-  font-size:12px;font-weight:600;color:#f59e0b}
-.apple-film-rating svg{flex-shrink:0}
-.apple-film-rating-count{font-size:11px;font-weight:400;color:var(--grey);margin-left:1px}
-/* Blog detail sections nav */
-.blog-sections-nav{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:40px;overflow-x:auto;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.blog-sections-nav::-webkit-scrollbar{display:none}
-.blog-section-tab{padding:10px 20px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--grey);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
-  white-space:nowrap;transition:color .2s,border-color .2s;flex-shrink:0}
-.blog-section-tab.active{color:var(--white);border-bottom-color:var(--white)}
-body.light-mode .blog-section-tab.active{color:#111;border-bottom-color:#111}
-/* Blog content sections */
-.blog-content-section{display:none;animation:fadeUp .4s var(--ease) both}
-.blog-content-section.active{display:block}
-.blog-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);
-  font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
-/* apple section edge-to-edge polish */
-.apple-section{padding-left:0!important;padding-right:0!important}
-.apple-section .section-header,.apple-section .section-cta{padding-left:clamp(20px,5vw,80px);padding-right:clamp(20px,5vw,80px)}
+.apple-section .section-header{padding:52px 20px 20px}
+@media(min-width:600px){.apple-section .section-header{padding:52px 32px 20px}}
+.apple-section .section-cta{padding:16px 20px 48px}
+@media(min-width:600px){.apple-section .section-cta{padding:16px 32px 48px}}
+/* Carousel scroll track */
+.home-carousel{display:flex;gap:10px;overflow-x:auto;padding:0 20px 20px;
+  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+@media(min-width:600px){.home-carousel{padding:0 32px 24px;gap:12px}}
+.home-carousel::-webkit-scrollbar{display:none}
+/* Blog carousel card */
+.hc-blog-card{flex:0 0 280px;scroll-snap-align:start;border-radius:10px;overflow:hidden;
+  background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
+@media(min-width:600px){.hc-blog-card{flex:0 0 320px}}
+.hc-blog-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.hc-blog-card:active{transform:scale(.98)}
+/* read state: greyscale image like blog page */
+.hc-blog-card.hc-read .hc-blog-img{filter:grayscale(100%)}
+.hc-blog-card.hc-unread .hc-blog-img{filter:grayscale(0%)}
+.hc-blog-card:hover .hc-blog-img{filter:grayscale(0%)!important;transition:filter .3s,transform .5s}
+.hc-blog-img-wrap{width:100%;aspect-ratio:16/9;overflow:hidden;position:relative}
+.hc-blog-img{width:100%;height:100%;object-fit:cover;transition:filter .4s var(--ease),transform .5s var(--ease)}
+.hc-blog-card:hover .hc-blog-img{transform:scale(1.04)}
+.hc-blog-placeholder{width:100%;aspect-ratio:16/9;background:var(--border)}
+.hc-read-badge{position:absolute;top:9px;left:9px;z-index:3;font-size:9px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:20px;
+  backdrop-filter:blur(8px)}
+.hc-blog-card.hc-unread .hc-read-badge{background:rgba(255,255,255,.92);color:#0a0a0a}
+.hc-blog-card.hc-read .hc-read-badge{background:rgba(80,80,80,.75);color:rgba(255,255,255,.8)}
+body.light-mode .hc-blog-card.hc-unread .hc-read-badge{background:rgba(10,10,10,.85);color:#fff}
+body.light-mode .hc-blog-card.hc-read .hc-read-badge{background:rgba(150,150,150,.7);color:#fff}
+.hc-blog-body{padding:18px}
+.hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px}
+.hc-blog-title{font-size:15px;font-weight:600;line-height:1.35;margin-bottom:6px}
+.hc-blog-excerpt{font-size:12px;color:var(--grey);line-height:1.55;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Film carousel card */
+.hc-film-card{flex:0 0 160px;scroll-snap-align:start;border-radius:10px;overflow:hidden;
+  background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
+@media(min-width:600px){.hc-film-card{flex:0 0 190px}}
+.hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.hc-film-card:active{transform:scale(.98)}
+.hc-film-poster-wrap{width:100%;aspect-ratio:2/3;overflow:hidden;position:relative}
+.hc-film-poster{width:100%;height:100%;object-fit:cover;transition:transform .5s var(--ease)}
+.hc-film-card:hover .hc-film-poster{transform:scale(1.04)}
+.hc-film-placeholder{width:100%;aspect-ratio:2/3;background:var(--border);display:flex;align-items:center;justify-content:center}
+.hc-film-info{padding:12px 14px 14px}
+.hc-film-title{font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hc-film-meta{font-size:11px;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hc-film-rating{display:flex;align-items:center;gap:3px;margin-top:5px;font-size:11px;font-weight:600;color:#f59e0b}
+.hc-film-rating-count{font-size:10px;font-weight:400;color:var(--grey)}
 /* achievement apple grid */
 .apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
 @media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr}}
@@ -1395,8 +1388,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <p class="section-label">From the Lens</p>
         <h2 class="section-title">Latest Posts</h2>
       </div>
-      <div class="apple-mosaic apple-mosaic-blog" id="home-blog-grid">
-        <div class="loading" style="grid-column:1/-1;padding:40px">Loading posts...</div>
+      <div class="home-carousel" id="home-blog-grid">
+        <div class="loading" style="padding:40px 0">Loading posts...</div>
       </div>
       <div class="section-cta">
         <a class="btn btn-secondary" onclick="navigate('blog')">All Posts →</a>
@@ -1412,8 +1405,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <p class="section-label">Our Work</p>
         <h2 class="section-title">Films</h2>
       </div>
-      <div class="apple-mosaic apple-mosaic-films" id="home-movies-grid">
-        <div class="loading" style="grid-column:1/-1;padding:40px">Loading films...</div>
+      <div class="home-carousel" id="home-movies-grid">
+        <div class="loading" style="padding:40px 0">Loading films...</div>
       </div>
       <div class="section-cta">
         <a class="btn btn-secondary" onclick="navigate('movies')">All Films →</a>
@@ -1558,14 +1551,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
     <p class="blog-detail-date" id="blog-detail-date"></p>
     <h1 class="blog-detail-title" id="blog-detail-title"></h1>
-    <!-- Section nav (shown only when sections exist) -->
-    <nav class="blog-sections-nav" id="blog-sections-nav" style="display:none"></nav>
-    <!-- Main content always shown -->
-    <div class="blog-content-section active" id="blog-section-main">
-      <div class="blog-detail-body" id="blog-detail-body"></div>
-    </div>
-    <!-- Dynamic extra sections injected here by JS -->
-    <div id="blog-extra-sections"></div>
+    <div class="blog-detail-body" id="blog-detail-body"></div>
   </div>
 </div>
 
@@ -2089,23 +2075,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <div id="blog-editor-content" contenteditable="true"></div>
     </div>
     <div class="form-group">
-      <label>Extra Sections</label>
-      <p style="font-size:12px;color:var(--grey);margin-bottom:10px">Add optional sections readers can navigate to. Each section gets its own tab on the blog detail page.</p>
-      <div id="blog-sections-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select id="blog-section-type-picker" style="flex:1;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--white);font-size:13px">
-          <option value="">— Add a section —</option>
-          <option value="Review">🎬 Review</option>
-          <option value="Our Take">💬 Our Take</option>
-          <option value="Industry Insider">🎥 Industry Insider</option>
-          <option value="Behind the Scenes">🎞 Behind the Scenes</option>
-          <option value="Interview">🎙 Interview</option>
-          <option value="Analysis">🔍 Analysis</option>
-        </select>
-        <button class="btn-sm" onclick="addBlogSection()" style="white-space:nowrap">+ Add</button>
-      </div>
-    </div>
-    <div class="form-group">
       <label>Status</label>
       <select id="blog-published"><option value="true">Published</option><option value="false">Draft</option></select>
     </div>
@@ -2577,20 +2546,18 @@ async function loadHomeData() {
       const ar=!!_hrs[a.id], br=!!_hrs[b.id];
       if(ar===br) return 0; return ar?1:-1;
     });
-    hbg.innerHTML = _hsorted.slice(0,4).map(b=>{
+    hbg.innerHTML = _hsorted.slice(0,6).map(b=>{
       const isRead = !!_hrs[b.id];
-      const badge = isRead
-        ? `<span class="apple-tile-read-badge is-read">✓ Read<\/span>`
-        : `<span class="apple-tile-read-badge">New<\/span>`;
+      const badge = isRead ? `<span class="hc-read-badge">✓ Read<\/span>` : `<span class="hc-read-badge">New<\/span>`;
       const imgHtml = b.cover_image
-        ? `<div class="apple-tile-img-wrap">${badge}<img class="apple-tile-img" src="${b.cover_image}" alt="" loading="lazy"><\/div>`
-        : `<div class="apple-tile-img-placeholder" style="position:relative">${badge}<\/div>`;
-      return `<div class="apple-blog-tile" onclick="openBlog('${b.id}')">
+        ? `<div class="hc-blog-img-wrap">${badge}<img class="hc-blog-img" src="${b.cover_image}" alt="" loading="lazy"><\/div>`
+        : `<div class="hc-blog-placeholder" style="position:relative">${badge}<\/div>`;
+      return `<div class="hc-blog-card ${isRead?'hc-read':'hc-unread'}" onclick="openBlog('${b.id}')">
         ${imgHtml}
-        <div class="apple-tile-body">
-          <div class="apple-tile-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
-          <div class="apple-tile-title">${b.title}<\/div>
-          <div class="apple-tile-excerpt">${b.excerpt||''}<\/div>
+        <div class="hc-blog-body">
+          <div class="hc-blog-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
+          <div class="hc-blog-title">${b.title}<\/div>
+          <div class="hc-blog-excerpt">${b.excerpt||''}<\/div>
         <\/div>
       <\/div>`;
     }).join('');
@@ -2621,16 +2588,19 @@ async function loadHomeData() {
   }
   const hmg = document.getElementById('home-movies-grid');
   if (movies && movies.length) {
-    hmg.innerHTML = movies.slice(0,4).map(m=>{
-      const rating = window._movieRatings && window._movieRatings[m.id];
-      const ratingHtml = rating
-        ? `<div class="apple-film-rating"><svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/><\/svg>${rating.avg.toFixed(1)}<span class="apple-film-rating-count">(${rating.count})<\/span><\/div>`
+    hmg.innerHTML = movies.slice(0,8).map(m=>{
+      const rt = window._movieRatings && window._movieRatings[m.id];
+      const ratingHtml = rt
+        ? `<div class="hc-film-rating"><svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/><\/svg>${rt.avg.toFixed(1)}<span class="hc-film-rating-count">(${rt.count})<\/span><\/div>`
         : '';
-      return `<div class="apple-film-tile" onclick="openMovie('${m.id}')">
-        ${m.poster_image ? `<div class="apple-film-poster-wrap"><img class="apple-film-poster" src="${m.poster_image}" alt="" loading="lazy"><\/div>` : `<div class="apple-film-poster-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3"><rect x="2" y="2" width="20" height="20" rx="2"><\/rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"><\/path><\/svg><\/div>`}
-        <div class="apple-film-info">
-          <div class="apple-film-title">${m.title}<\/div>
-          <div class="apple-film-meta">${[m.release_year, m.genre].filter(Boolean).join(' · ')}<\/div>
+      const posterHtml = m.poster_image
+        ? `<div class="hc-film-poster-wrap"><img class="hc-film-poster" src="${m.poster_image}" alt="" loading="lazy"><\/div>`
+        : `<div class="hc-film-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3"><rect x="2" y="2" width="20" height="20" rx="2"><\/rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"><\/path><\/svg><\/div>`;
+      return `<div class="hc-film-card" onclick="openMovie('${m.id}')">
+        ${posterHtml}
+        <div class="hc-film-info">
+          <div class="hc-film-title">${m.title}<\/div>
+          <div class="hc-film-meta">${[m.release_year, m.genre].filter(Boolean).join(' · ')}<\/div>
           ${ratingHtml}
         <\/div>
       <\/div>`;
@@ -2737,11 +2707,19 @@ async function openBlog(id) {
   if (!blog) return;
   // Mark as read and update card live
   markBlogRead(id);
+  // Update blog page card (data-blog-id)
   const card = document.querySelector('[data-blog-id="'+id+'"]');
   if (card) {
     card.classList.remove('unread'); card.classList.add('read');
     const badge = card.querySelector('.blog-read-badge');
     if (badge) badge.textContent = 'Read';
+  }
+  // Update home carousel card
+  const hcCard = document.querySelector('.hc-blog-card[onclick*="\''+id+'\'"]');
+  if (hcCard) {
+    hcCard.classList.remove('hc-unread'); hcCard.classList.add('hc-read');
+    const hcBadge = hcCard.querySelector('.hc-read-badge');
+    if (hcBadge) hcBadge.textContent = '✓ Read';
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.add('active');
@@ -2752,59 +2730,12 @@ async function openBlog(id) {
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
   document.getElementById('blog-detail-body').innerHTML = blog.content || '';
-  // Render sections nav
-  const nav = document.getElementById('blog-sections-nav');
-  const extraEl = document.getElementById('blog-extra-sections');
-  const mainSection = document.getElementById('blog-section-main');
-  nav.innerHTML = '';
-  extraEl.innerHTML = '';
-  mainSection.classList.add('active');
-  let sections = [];
-  try { sections = blog.sections ? (typeof blog.sections === 'string' ? JSON.parse(blog.sections) : blog.sections) : []; } catch(e) {}
-  if (Array.isArray(sections) && sections.length) {
-    nav.style.display = 'flex';
-    // Main tab
-    const mainTab = document.createElement('div');
-    mainTab.className = 'blog-section-tab active';
-    mainTab.textContent = 'Overview';
-    mainTab.onclick = () => switchBlogSection('main');
-    nav.appendChild(mainTab);
-    sections.forEach((s, i) => {
-      const tab = document.createElement('div');
-      tab.className = 'blog-section-tab';
-      tab.textContent = s.title;
-      tab.dataset.sectionId = 'extra-' + i;
-      tab.onclick = () => switchBlogSection('extra-' + i);
-      nav.appendChild(tab);
-      const sec = document.createElement('div');
-      sec.className = 'blog-content-section';
-      sec.id = 'blog-section-extra-' + i;
-      sec.innerHTML = `<div class="blog-section-label">${s.title}</div><div class="blog-detail-body">${s.content||'<p style="color:var(--grey)">No content yet.</p>'}</div>`;
-      extraEl.appendChild(sec);
-    });
-  } else {
-    nav.style.display = 'none';
-  }
   // Inject Recently Viewed below content
   renderRecentlyViewed(id);
   window.scrollTo({top:0,behavior:'instant'});
   history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
   hideScrollProgress();
   setTimeout(updateScrollProgress, 100);
-}
-
-function switchBlogSection(id) {
-  // Deactivate all sections and tabs
-  document.querySelectorAll('.blog-content-section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('#blog-sections-nav .blog-section-tab').forEach(t=>t.classList.remove('active'));
-  // Activate target
-  const target = id === 'main' ? document.getElementById('blog-section-main') : document.getElementById('blog-section-' + id);
-  if (target) target.classList.add('active');
-  // Activate tab
-  const tabs = document.querySelectorAll('#blog-sections-nav .blog-section-tab');
-  if (id === 'main') { tabs[0]?.classList.add('active'); }
-  else { const idx = id.replace('extra-',''); tabs[parseInt(idx)+1]?.classList.add('active'); }
-  window.scrollTo({top: document.getElementById('blog-sections-nav').offsetTop - 90, behavior:'smooth'});
 }
 
 function renderRecentlyViewed(currentId) {
@@ -3571,52 +3502,9 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
   document.getElementById('blog-cover').value='';
-  // Restore sections
-  const slist = document.getElementById('blog-sections-list');
-  slist.innerHTML = '';
-  window._blogSections = [];
-  if (blog?.sections) {
-    try {
-      const parsed = typeof blog.sections === 'string' ? JSON.parse(blog.sections) : blog.sections;
-      if (Array.isArray(parsed)) parsed.forEach(s => addBlogSectionEntry(s.title, s.content));
-    } catch(e) {}
-  }
 }
 function editBlog(blog) { openBlogModal(blog); }
 function closeBlogModal() { document.getElementById('blog-modal').classList.remove('open'); }
-
-function addBlogSection() {
-  const picker = document.getElementById('blog-section-type-picker');
-  const title = picker.value;
-  if (!title) return;
-  addBlogSectionEntry(title, '');
-  picker.value = '';
-}
-
-function addBlogSectionEntry(title, content) {
-  if (!window._blogSections) window._blogSections = [];
-  const idx = window._blogSections.length;
-  window._blogSections.push({ title, content: content || '' });
-  const slist = document.getElementById('blog-sections-list');
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden';
-  wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--border)">
-    <span style="font-size:13px;font-weight:600">${title}</span>
-    <button class="btn-sm" style="background:transparent;padding:2px 8px;font-size:11px;color:var(--grey)" onclick="this.closest('div').parentElement.remove();window._blogSections.splice(${idx},1)">✕ Remove</button>
-  </div>
-  <div class="editor-toolbar" style="border-radius:0;border-bottom:1px solid var(--border)">
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'bold')"><b>B</b></button>
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'italic')"><i>I</i></button>
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'formatBlock','h2')">H2</button>
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'formatBlock','h3')">H3</button>
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'insertUnorderedList')">• List</button>
-    <button class="editor-btn" onclick="execSectionCmd(${idx},'formatBlock','blockquote')">"Quote"</button>
-  </div>
-  <div contenteditable="true" data-section-idx="${idx}" style="min-height:120px;padding:14px;font-size:14px;line-height:1.7;outline:none" oninput="window._blogSections[${idx}].content=this.innerHTML">${content}</div>`;
-  slist.appendChild(wrap);
-}
-
-function execSectionCmd(idx, cmd, val) { document.execCommand(cmd, false, val||null); }
 
 async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
@@ -3625,7 +3513,6 @@ async function saveBlog() {
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
   fd.append('content', document.getElementById('blog-editor-content').innerHTML);
   fd.append('published', document.getElementById('blog-published').value);
-  fd.append('sections', JSON.stringify(window._blogSections || []));
   const cover = document.getElementById('blog-cover').files[0];
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
