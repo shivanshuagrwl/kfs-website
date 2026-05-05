@@ -320,7 +320,7 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 body.light-mode .hc-blog-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.18)}
 .hc-blog-card:active{transform:scale(.98)}
 /* read state: greyscale image like blog page */
-.hc-blog-card.hc-read .hc-blog-img{filter:grayscale(100%)}
+.hc-blog-card.hc-viewed .hc-blog-img{filter:grayscale(100%)}
 .hc-blog-card.hc-unread .hc-blog-img{filter:grayscale(0%)}
 .hc-blog-card:hover .hc-blog-img{filter:grayscale(0%)!important;transition:filter .3s,transform .5s}
 .hc-blog-img-wrap{width:100%;aspect-ratio:16/9;overflow:hidden;position:relative}
@@ -331,9 +331,9 @@ body.light-mode .hc-blog-card:hover{transform:translateY(-3px);box-shadow:0 12px
   letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:20px;
   backdrop-filter:blur(8px)}
 .hc-blog-card.hc-unread .hc-read-badge{background:rgba(255,255,255,.92);color:#0a0a0a}
-.hc-blog-card.hc-read .hc-read-badge{background:rgba(80,80,80,.75);color:rgba(255,255,255,.8)}
+.hc-blog-card.hc-viewed .hc-read-badge{background:rgba(80,80,80,.75);color:rgba(255,255,255,.8)}
 body.light-mode .hc-blog-card.hc-unread .hc-read-badge{background:rgba(10,10,10,.85);color:#fff}
-body.light-mode .hc-blog-card.hc-read .hc-read-badge{background:rgba(150,150,150,.7);color:#fff}
+body.light-mode .hc-blog-card.hc-viewed .hc-read-badge{background:rgba(150,150,150,.7);color:#fff}
 .hc-blog-body{padding:22px 20px 20px}
 .hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
 .hc-blog-title{font-size:18px;font-weight:600;line-height:1.3;margin-bottom:8px}
@@ -364,8 +364,7 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 /* ── BLOG PAGE SECTION NAV ───────────────────────────────────────────── */
 .blog-page-nav{position:sticky;top:64px;z-index:80;background:var(--black);
   border-bottom:1px solid var(--border);border-top:1px solid var(--border);
-  display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
-  padding-left:80px;
+  display:flex;gap:0;overflow-x:auto;scrollbar-width:none;padding-left:80px;
   transition:background .3s}
 @media(max-width:768px){.blog-page-nav{padding-left:24px}}
 .blog-page-nav::-webkit-scrollbar{display:none}
@@ -379,18 +378,13 @@ body.light-mode .blog-page-nav{background:#f0f0f0}
 body.light-mode .blog-page-nav-btn.active{color:#111;border-bottom-color:#111}
 body.light-mode .blog-page-nav-btn:hover{color:#111}
 /* Blog page section block */
-.blog-page-section{padding:60px 80px 20px}
-@media(max-width:768px){.blog-page-section{padding:40px 24px 16px}}
+.blog-page-section{padding:60px 80px 28px}
+@media(max-width:768px){.blog-page-section{padding:40px 24px 20px}}
 .blog-page-section-header{margin-bottom:32px}
 .blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--grey);margin-bottom:10px;font-weight:600}
 .blog-page-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em}
 .blog-page-divider{width:100%;height:1px;background:var(--border);margin:0}
-/* Blog page tag pill (section label on each card) */
-.blog-card-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;padding:3px 9px;border-radius:20px;
-  border:1px solid var(--border);color:var(--grey);margin-bottom:8px}
-body.light-mode .blog-card-tag{border-color:#ccc;color:#777}
 /* Scroll hint */
 .carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 20px 0;
   margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
@@ -454,10 +448,10 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 .blog-card.unread .blog-card-img{filter:grayscale(0%);transition:filter .4s var(--ease)}
 .blog-card.unread:hover{box-shadow:0 8px 32px rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.06)}
 .blog-card.unread:hover .blog-card-img{filter:grayscale(0%)}
-.blog-card.read .blog-card-img{filter:grayscale(100%);transition:filter .4s var(--ease)}
-.blog-card.read:hover{background:var(--card);box-shadow:0 8px 32px rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.06)}
-.blog-card.read:hover .blog-card-img{filter:grayscale(0%)}
-body.light-mode .blog-card.unread:hover,body.light-mode .blog-card.read:hover{box-shadow:0 8px 32px rgba(0,0,0,.13),0 0 0 1px rgba(0,0,0,.05)}
+.blog-card.viewed .blog-card-img{filter:grayscale(100%);transition:filter .4s var(--ease)}
+.blog-card.viewed:hover{background:var(--card);box-shadow:0 8px 32px rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.06)}
+.blog-card.viewed:hover .blog-card-img{filter:grayscale(0%)}
+body.light-mode .blog-card.unread:hover,body.light-mode .blog-card.viewed:hover{box-shadow:0 8px 32px rgba(0,0,0,.13),0 0 0 1px rgba(0,0,0,.05)}
 .blog-card-img-wrap{position:relative;width:100%;overflow:hidden}
 .blog-card-img{width:100%;aspect-ratio:16/9;object-fit:cover}
 .blog-card-img-placeholder{width:100%;aspect-ratio:16/9;background:var(--card);
@@ -468,12 +462,12 @@ body.light-mode .blog-card.unread:hover,body.light-mode .blog-card.read:hover{bo
 .blog-card-excerpt{font-size:13px;color:var(--grey);line-height:1.6}
 .blog-read-badge{position:absolute;top:10px;left:10px;font-size:9px;letter-spacing:.14em;
   text-transform:uppercase;padding:5px 11px;font-weight:800;pointer-events:none;border-radius:3px;transition:all .3s;z-index:2}
-/* UNREAD: bold white pill */
+/* UNREAD: bold white pill — stands out */
 .blog-card.unread .blog-read-badge{background:#fff;color:#0a0a0a;box-shadow:0 2px 10px rgba(0,0,0,.5)}
-/* READ: same style as unread */
-.blog-card.read .blog-read-badge{background:#fff;color:#0a0a0a;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+/* VIEWED: muted pill — clearly already seen */
+.blog-card.viewed .blog-read-badge{background:rgba(255,255,255,.18);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15);box-shadow:none}
 body.light-mode .blog-card.unread .blog-read-badge{background:#111;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-body.light-mode .blog-card.read .blog-read-badge{background:#111;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+body.light-mode .blog-card.viewed .blog-read-badge{background:rgba(0,0,0,.12);color:#888;border:1px solid rgba(0,0,0,.1);box-shadow:none}
 .recently-viewed{margin-top:52px;padding-top:36px;border-top:1px solid var(--border)}
 .recently-viewed-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--grey);margin-bottom:18px;font-weight:600}
@@ -975,7 +969,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
 .movie-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);border:1px solid var(--border);border-radius:12px}
 .movie-card:hover{background:var(--card);box-shadow:0 8px 32px rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.06)}
 body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.05)}
-.movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(0%);display:block;
+.movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(100%);display:block;
   transition:filter .4s var(--ease)}
 .movie-card:hover .movie-poster{filter:grayscale(0%)}
 .movie-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);
@@ -2633,16 +2627,16 @@ async function loadHomeData() {
     window._allBlogs = blogs;
     const _hrs = getBlogReadState();
     const _hsorted = [...blogs].sort((a,b)=>{
-      const ar=!!_hrs[a.id], br=!!_hrs[b.id];
-      if(ar===br) return 0; return ar?1:-1;
+      const av=!!_hrs[a.id], bv=!!_hrs[b.id];
+      if(av!==bv) return av?1:-1; return 0;
     });
     hbg.innerHTML = _hsorted.slice(0,6).map(b=>{
-      const isRead = !!_hrs[b.id];
-      const badge = isRead ? `<span class="hc-read-badge">✓ Read<\/span>` : `<span class="hc-read-badge">New<\/span>`;
+      const isViewed = !!_hrs[b.id];
+      const badge = isViewed ? `<span class="hc-read-badge">✓ Viewed<\/span>` : `<span class="hc-read-badge">New<\/span>`;
       const imgHtml = b.cover_image
         ? `<div class="hc-blog-img-wrap">${badge}<img class="hc-blog-img" src="${b.cover_image}" alt="" loading="lazy"><\/div>`
         : `<div class="hc-blog-placeholder" style="position:relative">${badge}<\/div>`;
-      return `<div class="hc-blog-card ${isRead?'hc-read':'hc-unread'}" onclick="openBlog('${b.id}')">
+      return `<div class="hc-blog-card ${isViewed?'hc-viewed':'hc-unread'}" onclick="openBlog('${b.id}')">
         ${imgHtml}
         <div class="hc-blog-body">
           <div class="hc-blog-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
@@ -2749,66 +2743,66 @@ async function loadBlog() {
   const nav = document.getElementById('blog-page-nav');
   if (!blogs || !blogs.length) {
     nav.style.display = 'none';
-    wrap.innerHTML = `<div class="blog-page-section"><div class="empty-state"><p>No posts yet.</p></div></div>`;
+    wrap.innerHTML = `<div style="padding:60px 80px"><div class="empty-state"><p>No posts yet.<\/p><\/div><\/div>`;
     return;
   }
   window._allBlogs = blogs;
   const _rs = getBlogReadState();
 
-  // Collect all section types that appear across blogs
+  // Collect all unique section types across all published blogs
   const sectionTypes = [];
   blogs.forEach(b => {
     let secs = [];
     try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
-    secs.forEach(s => { if (!sectionTypes.find(t=>t.id===s.id)) sectionTypes.push({id:s.id,label:s.label}); });
+    secs.forEach(s => {
+      if (s && s.id && s.label && !sectionTypes.find(t=>t.id===s.id))
+        sectionTypes.push({id:s.id, label:s.label});
+    });
   });
 
-  // Build nav buttons: All + one per section type
-  const navItems = [{id:'blog-all',label:'All Posts'}, ...sectionTypes.map(s=>({id:'blog-sec-'+s.id,label:s.label}))];
+  // Build sticky anchor nav: "All Posts" + one pill per section type
+  const navItems = [{id:'blog-all', label:'All Posts'}, ...sectionTypes.map(s=>({id:'blog-sec-'+s.id, label:s.label}))];
   nav.style.display = navItems.length > 1 ? 'flex' : 'none';
   nav.innerHTML = navItems.map((n,i)=>
-    `<button class="blog-page-nav-btn${i===0?' active':''}" onclick="scrollToBlogSection('${n.id}',this)">${n.label}</button>`
+    `<button class="blog-page-nav-btn${i===0?' active':''}" onclick="scrollToBlogSection('${n.id}',this)">${n.label}<\/button>`
   ).join('');
 
-  // Sort: unread first within each group
+  // Sort: unviewed first, then by date
   const sorted = [...blogs].sort((a,b)=>{
-    const ar=!!_rs[a.id], br=!!_rs[b.id];
-    if(ar===br) return 0; return ar?1:-1;
+    const av=!!_rs[a.id], bv=!!_rs[b.id];
+    if(av!==bv) return av?1:-1;
+    return 0;
   });
 
-  // Build HTML: "All Posts" block + one block per section type
+  // Build HTML: All Posts block + one block per section type that has posts
   let html = '';
 
-  // All Posts block
   html += `<div class="blog-page-section" id="blog-all">
     <div class="blog-page-section-header">
-      <p class="blog-page-section-label">From the Lens</p>
-      <h3 class="blog-page-section-title">All Posts</h3>
-    </div>
-    <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}</div>
-  </div>`;
+      <p class="blog-page-section-label">From the Lens<\/p>
+      <h3 class="blog-page-section-title">All Posts<\/h3>
+    <\/div>
+    <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}<\/div>
+  <\/div>`;
 
-  // Per-section blocks
   sectionTypes.forEach(st => {
     const tagged = sorted.filter(b => {
       let secs = [];
       try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
-      return secs.find(s=>s.id===st.id);
+      return secs.some(s=>s.id===st.id);
     });
     if (!tagged.length) return;
-    html += `<div class="blog-page-divider"></div>
+    html += `<div class="blog-page-divider"><\/div>
     <div class="blog-page-section" id="blog-sec-${st.id}">
       <div class="blog-page-section-header">
-        <p class="blog-page-section-label">Category</p>
-        <h3 class="blog-page-section-title">${st.label}</h3>
-      </div>
-      <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}</div>
-    </div>`;
+        <p class="blog-page-section-label">Category<\/p>
+        <h3 class="blog-page-section-title">${st.label}<\/h3>
+      <\/div>
+      <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}<\/div>
+    <\/div>`;
   });
 
   wrap.innerHTML = html;
-
-  // Highlight nav on scroll
   _setupBlogNavObserver(navItems);
 }
 
@@ -2858,14 +2852,14 @@ function getBlogHistory() {
 
 function renderBlogCard(b) {
   const readState = getBlogReadState();
-  const isRead = !!readState[b.id];
-  const cls = isRead ? 'read' : 'unread';
-  const badge = isRead ? 'Read' : 'Unread';
-  // Parse section tags
+  const isViewed = !!readState[b.id];
+  const cls = isViewed ? 'viewed' : 'unread';
+  const badge = isViewed ? 'Viewed' : 'Unread';
+  // Parse section tags to show as pills on card
   let secs = [];
   try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
   const tagPills = secs.length
-    ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${secs.map(s=>`<span class="blog-card-tag">${s.label}</span>`).join('')}</div>`
+    ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${secs.map(s=>`<span style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${s.label}<\/span>`).join('')}<\/div>`
     : '';
   return `<div class="blog-card ${cls}" onclick="openBlog('${b.id}')" data-blog-id="${b.id}">
     <div class="blog-card-img-wrap">
@@ -2886,20 +2880,20 @@ function renderBlogCard(b) {
 async function openBlog(id) {
   const blog = await apiFetch('/api/blogs/'+id);
   if (!blog) return;
-  // Mark as read and update card live
+  // Mark as viewed and update card live
   markBlogRead(id);
   // Update all blog page cards (post may appear in All + section block)
   document.querySelectorAll('[data-blog-id="'+id+'"]').forEach(card => {
-    card.classList.remove('unread'); card.classList.add('read');
+    card.classList.remove('unread'); card.classList.add('viewed');
     const badge = card.querySelector('.blog-read-badge');
-    if (badge) badge.textContent = 'Read';
+    if (badge) badge.textContent = 'Viewed';
   });
   // Update home carousel card
   const hcCard = document.querySelector('.hc-blog-card[onclick*="\''+id+'\'"]');
   if (hcCard) {
-    hcCard.classList.remove('hc-unread'); hcCard.classList.add('hc-read');
+    hcCard.classList.remove('hc-unread'); hcCard.classList.add('hc-viewed');
     const hcBadge = hcCard.querySelector('.hc-read-badge');
-    if (hcBadge) hcBadge.textContent = '✓ Read';
+    if (hcBadge) hcBadge.textContent = '✓ Viewed';
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.add('active');
@@ -2925,7 +2919,9 @@ async function openBlog(id) {
   // Inject Recently Viewed below content
   renderRecentlyViewed(id);
   window.scrollTo({top:0,behavior:'instant'});
-  history.pushState({page:'blog-detail', id}, '', '/blog/'+id);
+  // Use slug URL — no UUID exposed
+  const slug = blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
+  history.pushState({page:'blog-detail', id}, '', '/blog/'+slug);
   hideScrollProgress();
   setTimeout(updateScrollProgress, 100);
 }
@@ -3228,7 +3224,8 @@ async function openMovie(id) {
     spotifyLink.href = m.spotify_url;
   } else spotifySec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
-  history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
+  const mslug = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
+  history.pushState({page:'movie-detail', id}, '', '/movies/'+mslug);
   loadReviews(id);
   resetReviewForm();
 }
@@ -4145,8 +4142,9 @@ function checkRoute() {
   if (path === 'admin') { navigate('admin', false); return; }
   const blogMatch = path.match(/^blog\/(.+)/);
   const movieMatch = path.match(/^movies\/(.+)/);
-  if (blogMatch) { openBlog(blogMatch[1]); return; }
-  if (movieMatch) { openMovie(movieMatch[1]); return; }
+  // Slugs are for clean URLs — on direct load just go to listing page
+  if (blogMatch) { navigate('blog', false); return; }
+  if (movieMatch) { navigate('movies', false); return; }
   navigate(path, false);
 }
 
@@ -4859,22 +4857,21 @@ function doSearch(q) {
   });
   searchData.blogs.filter(b => {
     if (b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)) return true;
-    // Also match by section tags
     let secs = [];
     try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
     return secs.some(s => s.label.toLowerCase().includes(q));
   }).forEach(b => {
     let secs = [];
     try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
-    // Find all section tags that match the query
     const matchedSecs = secs.filter(s => s.label.toLowerCase().includes(q));
-    // Also show all tags even if matched by title
-    const allTagLabels = secs.map(s=>s.label).join(' · ');
     let sub = '';
     if (matchedSecs.length) {
-      sub = '[' + matchedSecs.map(s=>s.label).join(', ') + ']' + (b.excerpt ? ' — ' + b.excerpt : '');
+      // Tag match — show tags prominently then excerpt
+      sub = matchedSecs.map(s=>s.label).join(' · ') + (b.excerpt ? '  —  ' + b.excerpt : '');
     } else {
-      sub = (allTagLabels ? allTagLabels + ' — ' : '') + (b.excerpt || '');
+      // Title/excerpt match — show all tags as context
+      const allTags = secs.map(s=>s.label).join(' · ');
+      sub = (allTags ? allTags + '  —  ' : '') + (b.excerpt || '');
     }
     results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg>`, title: b.title, sub, action: ()=>{ closeSearch(); openBlog(b.id); } });
   });
