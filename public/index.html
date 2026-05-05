@@ -256,15 +256,18 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .btn-primary:hover{background:transparent;color:var(--white)}
 .btn-secondary{background:transparent;color:var(--white)}
 .btn-secondary:hover{background:var(--white);color:var(--black)}
-.hero-scroll{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
-  display:flex;flex-direction:column;align-items:center;gap:8px;
-  opacity:0;animation:fadeUp .8s 1.2s var(--ease) forwards}
-.hero-scroll span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey)}
-.scroll-line{width:1px;height:48px;background:linear-gradient(to bottom,var(--grey),transparent);animation:scrollLine 2s ease infinite}
+.hero-scroll{position:absolute;bottom:60px;right:80px;left:auto;transform:none;display:flex;flex-direction:row;align-items:center;gap:10px;opacity:0;animation:fadeUp .8s 1.2s var(--ease) forwards}
+.hero-scroll span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--grey);writing-mode:vertical-rl;font-weight:600}
+.scroll-line{width:1px;height:56px;background:linear-gradient(to bottom,var(--grey),transparent);animation:scrollLine 2s ease infinite}
+
+
+
+
+
 @keyframes scrollLine{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
 
 /* ── SECTIONS ─────────────────────────────────────────────────────────── */
-.section{padding:72px 80px}
+.section{padding:52px 80px}
 .section-inner{max-width:1200px;margin:0 auto}
 .section-label{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
 .section-title{font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1}
@@ -280,7 +283,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .stat-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-top:8px}
 
 /* ── ABOUT ────────────────────────────────────────────────────────────── */
-.about-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-top:80px}
+.about-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-top:48px}
 @media(max-width:768px){.about-layout{grid-template-columns:1fr;gap:40px}}
 .about-text{font-size:clamp(1rem,2vw,1.25rem);line-height:1.75;color:var(--grey)}
 .about-visual{position:relative;aspect-ratio:4/3;background:var(--card);border:1px solid var(--border);
@@ -301,10 +304,10 @@ body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 /* ── APPLE-STYLE FULL-BLEED GRID SECTIONS ────────────────────────────── */
 .apple-section{width:100%;overflow:hidden}
 .apple-section .section-inner{max-width:none;padding:0}
-.apple-section .section-header{max-width:1200px;margin:0 auto;padding:80px 80px 40px}
-@media(max-width:768px){.apple-section .section-header{padding:60px 24px 28px}}
-.apple-section .section-cta{max-width:1200px;margin:0 auto;padding:40px 80px 80px}
-@media(max-width:768px){.apple-section .section-cta{padding:28px 24px 60px}}
+.apple-section .section-header{max-width:1200px;margin:0 auto;padding:52px 80px 28px}
+@media(max-width:768px){.apple-section .section-header{padding:36px 24px 20px}}
+.apple-section .section-cta{max-width:1200px;margin:0 auto;padding:28px 80px 52px}
+@media(max-width:768px){.apple-section .section-cta{padding:20px 24px 36px}}
 /* Apple mosaic grid */
 .apple-mosaic{display:grid;gap:2px;background:var(--border)}
 .apple-mosaic-blog{grid-template-columns:repeat(3,1fr);grid-template-rows:auto}
@@ -389,9 +392,9 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 @media(max-width:480px){.cv-movies-grid{grid-template-columns:1fr}}
 
 /* ── BLOG GRID ────────────────────────────────────────────────────────── */
-.blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent;margin-top:60px}
+.blog-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:var(--border);margin-top:0;width:100%}
 @media(max-width:768px){.blog-grid{grid-template-columns:1fr}}
-.blog-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);position:relative;cursor:pointer;border:1px solid var(--border);border-radius:12px}
+.blog-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);position:relative;cursor:pointer;border:none;border-radius:0}
 .blog-card.unread .blog-card-img{filter:grayscale(0%);transition:filter .4s var(--ease)}
 .blog-card.unread:hover .blog-card-img{filter:grayscale(0%)}
 .blog-card.read .blog-card-img{filter:grayscale(100%);transition:filter .4s var(--ease)}
@@ -900,7 +903,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
 @media(max-width:600px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
 .movie-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);border:1px solid var(--border);border-radius:12px}
 .movie-card:hover{background:var(--card)}
-.movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(100%);display:block;
+.movie-poster{width:100%;aspect-ratio:2/3;object-fit:cover;filter:grayscale(0%);display:block;
   transition:filter .4s var(--ease)}
 .movie-card:hover .movie-poster{filter:grayscale(0%)}
 .movie-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);
@@ -948,7 +951,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   cursor:pointer;backdrop-filter:blur(6px);transition:all .2s;z-index:3;white-space:nowrap}
 .movie-watch-badge:hover{background:rgba(245,245,245,.18);color:#fff;border-color:rgba(255,255,255,.5)}
 .movie-watch-badge--done{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.5)}
-.movie-card.watched .movie-poster{filter:grayscale(30%) !important}
+.movie-card.watched .movie-poster{filter:grayscale(100%) !important}
 /* Description snippet on card */
 .movie-desc-snip{font-size:12px;color:var(--grey);line-height:1.5;margin-top:6px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -1512,7 +1515,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="section-inner">
       <p class="section-label">From the Lens</p>
       <h2 class="section-title">The Blog</h2>
-      <div class="blog-grid" id="blog-grid" style="margin-top:60px">
+      <div class="blog-grid" id="blog-grid">
         <div class="loading" style="grid-column:1/-1">Loading posts...</div>
       </div>
     </div>
