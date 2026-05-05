@@ -448,12 +448,12 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
     title, release_year, genre: genre||null, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
-    poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null,
+    poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'create', 'movie', title);
@@ -461,10 +461,10 @@ app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'),
 });
 
 app.put('/api/admin/movies/:id', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
   const updates = { title, release_year, genre: genre||null, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
-    trailer_url: trailer_url || null, watch_url: watch_url || null };
+    trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -714,7 +714,6 @@ app.get('*', (req, res) => {
 });
 
 // ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
-// Pings Supabase every 4 days to prevent free tier auto-pause
 setInterval(async () => {
   try {
     await supabase.from('settings').select('id').limit(1);
@@ -722,7 +721,7 @@ setInterval(async () => {
   } catch (e) {
     console.error('Supabase keepalive failed:', e.message);
   }
-}, 1000 * 60 * 60 * 24 * 4); // every 4 days
+}, 1000 * 60 * 60 * 24 * 4);
 
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {

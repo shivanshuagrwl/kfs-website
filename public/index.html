@@ -1175,8 +1175,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <li><a onclick="navigate('home');closeMenu()" class="active" data-page="home">Home</a></li>
     <li><a onclick="navigate('events');closeMenu()" data-page="events">Events</a></li>
     <li><a onclick="navigate('blog');closeMenu()" data-page="blog">Blog</a></li>
-    <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
     <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
+    <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
   </ul>
   <div class="nav-right">
     <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -1357,10 +1357,13 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
   <section class="section">
     <div class="section-inner">
-      <p class="section-label">Milestones</p>
-      <h2 class="section-title">Achievements</h2>
-      <div class="achievements-grid" id="achievements-grid">
-        <div class="loading">Loading achievements...</div>
+      <p class="section-label">What's On</p>
+      <h2 class="section-title">Upcoming Events</h2>
+      <div id="home-events" style="margin-top:40px">
+        <div class="loading">Loading events...</div>
+      </div>
+      <div style="margin-top:40px">
+        <a class="btn btn-secondary" onclick="navigate('events')">All Events →</a>
       </div>
     </div>
   </section>
@@ -1369,13 +1372,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
   <section class="section">
     <div class="section-inner">
-      <p class="section-label">What's On</p>
-      <h2 class="section-title">Upcoming Events</h2>
-      <div id="home-events" style="margin-top:40px">
-        <div class="loading">Loading events...</div>
-      </div>
-      <div style="margin-top:40px">
-        <a class="btn btn-secondary" onclick="navigate('events')">All Events →</a>
+      <p class="section-label">Milestones</p>
+      <h2 class="section-title">Achievements</h2>
+      <div class="achievements-grid" id="achievements-grid">
+        <div class="loading">Loading achievements...</div>
       </div>
     </div>
   </section>
@@ -1566,6 +1566,19 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <div class="movie-detail-section" id="movie-detail-support-section" style="display:none">
         <div class="movie-detail-section-title">Support Crew</div>
         <div class="movie-cast-list" id="movie-detail-support"></div>
+      </div>
+
+      <!-- SPOTIFY SOUNDTRACK -->
+      <div class="movie-detail-section" id="movie-detail-spotify-section" style="display:none">
+        <div class="movie-detail-section-title" style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          Soundtrack
+        </div>
+        <a id="movie-detail-spotify-link" href="" target="_blank" rel="noopener"
+          style="display:inline-flex;align-items:center;gap:10px;margin-top:10px;padding:10px 18px;border:1px solid var(--border);border-radius:24px;font-size:13px;color:var(--grey);text-decoration:none;transition:border-color .2s,color .2s">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          Listen on Spotify
+        </a>
       </div>
 
       <!-- REVIEWS SECTION -->
@@ -2116,6 +2129,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
     <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
     <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link)</span></label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..."></div>
+    <div class="form-group"><label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-spotify" placeholder="https://open.spotify.com/..."></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
       <button class="btn-sm btn-success" onclick="saveMovie()">Save Film</button>
@@ -2829,7 +2843,7 @@ function renderMovieCard(m, clickable=false) {
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
       <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}<\/span>` : ''}<\/div>
-      <div class="movie-director">${m.director ? 'Dir. '+m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : ''}<\/div>
+      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
   <\/div>`;
@@ -2914,6 +2928,12 @@ async function openMovie(id) {
     supportSec.style.display='block';
     supportEl.innerHTML = splitCrew(m.support_crew).map(s=>crewNameTag(s.trim())).join('');
   } else supportSec.style.display='none';
+  const spotifySec = document.getElementById('movie-detail-spotify-section');
+  const spotifyLink = document.getElementById('movie-detail-spotify-link');
+  if (m.spotify_url) {
+    spotifySec.style.display='block';
+    spotifyLink.href = m.spotify_url;
+  } else spotifySec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
   history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
   loadReviews(id);
@@ -3291,7 +3311,7 @@ async function loadAdminData(name) {
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}<\/td>
       <td style="font-weight:500">${m.title}<\/td>
       <td style="color:var(--grey)">${m.release_year||'—'}<\/td>
-      <td style="color:var(--grey)">${m.director ? m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : '—'}<\/td>
+      <td style="color:var(--grey)">${m.director||'—'}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete<\/button>
@@ -3505,6 +3525,7 @@ function openMovieModal(m=null) {
   document.getElementById('movie-description').value = m?.description||'';
   document.getElementById('movie-trailer').value = m?.trailer_url||'';
   document.getElementById('movie-watch').value = m?.watch_url||'';
+  document.getElementById('movie-spotify').value = m?.spotify_url||'';
   document.getElementById('movie-poster').value='';
   // init pickers (always re-init to reset state)
   initMoviePickers();
@@ -3543,6 +3564,7 @@ async function saveMovie() {
   fd.append('support_crew', _moviePickers['support'].getValue());
   fd.append('trailer_url', document.getElementById('movie-trailer').value.trim());
   fd.append('watch_url', document.getElementById('movie-watch').value.trim());
+  fd.append('spotify_url', document.getElementById('movie-spotify').value.trim());
   const poster = document.getElementById('movie-poster').files[0];
   if (poster) fd.append('poster', poster);
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
@@ -4493,7 +4515,7 @@ function doSearch(q) {
         if (name.toLowerCase().includes(q) && !m.title?.toLowerCase().includes(q)) matchedCrew.push(name);
       });
     });
-    const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split(';;').map(p=>p.split('||')[0].trim()).filter(Boolean).join(', ') : m.release_year||'');
+    const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
     results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
   });
   searchData.blogs.filter(b => b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)).forEach(b =>
