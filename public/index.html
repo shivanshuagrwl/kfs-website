@@ -67,19 +67,10 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
-#movie-watch-status-btn{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:10px 22px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
-  font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;
-  background:transparent;color:var(--white);border:1px solid var(--white)
-}
-#movie-watch-status-btn:hover{background:var(--white);color:var(--black)}
-#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black);border-color:var(--white)}
-#movie-watch-status-btn.is-watched:hover{background:transparent;color:var(--white)}
-body.light-mode #movie-watch-status-btn{color:#111;border-color:#111;background:transparent}
-body.light-mode #movie-watch-status-btn:hover{background:#111;color:#fff}
+#movie-watch-status-btn{border:1px solid var(--white);color:var(--white);background:transparent}
+#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black)}
+body.light-mode #movie-watch-status-btn{border-color:#111;color:#111}
 body.light-mode #movie-watch-status-btn.is-watched{background:#111;color:#fff;border-color:#111}
-body.light-mode #movie-watch-status-btn.is-watched:hover{background:transparent;color:#111}
 body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
@@ -140,6 +131,7 @@ body.light-mode .search-result-item{background:#fff;border-color:#e0e0e0;color:#
 body.light-mode .search-result-item:hover{background:#f5f5f5;border-color:#ccc}
 body.light-mode .search-result-title{color:#111}
 body.light-mode .search-result-sub{color:#888}
+body.light-mode .search-result-icon{background:rgba(0,0,0,.05)}
 /* smooth transitions */
 body,nav,.admin-sidebar,.admin-main,.admin-card,.modal,.modal-box,
 input,textarea,select,.ep-card,.film-card,.blog-card,.movie-card,
@@ -526,7 +518,7 @@ body.light-mode .rv-item-title{color:#111}
 .testimonial-author{display:flex;align-items:center;gap:12px}
 .testimonial-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;filter:grayscale(100%)}
 .testimonial-avatar-placeholder{width:40px;height:40px;border-radius:50%;background:var(--mid);
-  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--grey)}
+  display:flex;align-items:center;justify-content:center;color:var(--grey)}
 .testimonial-name{font-size:13px;font-weight:600}
 .testimonial-role{font-size:11px;color:var(--grey);letter-spacing:.06em}
 
@@ -579,7 +571,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
   border-radius:6px;margin-bottom:2px}
 .admin-sidebar-item:hover{color:var(--white);background:rgba(255,255,255,.06)}
 .admin-sidebar-item.active{color:var(--white);background:rgba(255,255,255,.08);font-weight:500}
-.admin-sidebar-item .icon{font-size:15px;width:20px;text-align:center}
+.admin-sidebar-item .icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.75}
 .admin-sidebar-bottom{margin-top:auto;padding-top:12px;border-top:1px solid var(--border)}
 
 .admin-main{margin-left:220px;padding:48px 64px;min-height:100vh;background:var(--black);flex:1;width:calc(100% - 220px)}
@@ -617,7 +609,7 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .search-result-group{padding:6px 4px 2px;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#888}
 .search-result-item{padding:12px 18px;cursor:pointer;border:1px solid #333;background:#1e1e1e;display:flex;align-items:center;gap:14px;transition:background .15s;border-radius:12px}
 .search-result-item:hover{background:#2a2a2a;border-color:#555}
-.search-result-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.search-result-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.06);border-radius:8px;color:var(--grey)}
 .search-result-title{font-size:14px;font-weight:500;color:#f0f0f0}
 .search-result-sub{font-size:11px;color:#888;margin-top:2px}
 .search-empty{padding:40px 20px;text-align:center;color:#444;font-size:14px}
@@ -1528,7 +1520,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div>
       <div style="position:relative">
         <img id="movie-detail-poster-img" class="movie-detail-poster" src="" alt="" style="display:none">
-        <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none">🎬</div>
+        <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>
         <div id="poster-play-overlay" class="movie-play-overlay" style="display:none" onclick="openTrailer()">
           <div class="movie-play-circle">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
@@ -1549,17 +1541,17 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <div id="movie-detail-genre-wrap" style="display:none;margin-bottom:16px">
         <span id="movie-detail-genre" style="display:inline-block;padding:4px 14px;border:1px solid var(--border);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);border-radius:20px"></span>
       </div>
+      <!-- Watch status -->
+      <div id="movie-watch-status-wrap" style="margin-bottom:24px">
+        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
+          <span id="movie-watch-status-icon">☐</span> Mark as Watched
+        </button>
+      </div>
       <div id="movie-detail-description-wrap" style="display:none;margin-bottom:28px">
         <div class="movie-detail-section-title">About</div>
         <p id="movie-detail-description" style="font-size:14px;color:var(--grey);line-height:1.7;margin-top:8px"></p>
       </div>
       <div class="movie-action-btns" id="movie-action-btns" style="display:none"></div>
-      <!-- Watch status — lives in same row as action buttons -->
-      <div id="movie-watch-status-wrap" style="margin-top:12px;margin-bottom:28px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()">
-          <span id="movie-watch-status-icon">☐</span> <span id="movie-watch-status-label">Mark as Watched</span>
-        </button>
-      </div>
       <div class="movie-detail-crew" id="movie-detail-crew"></div>
       <div class="movie-detail-section" id="movie-detail-actors-section" style="display:none">
         <div class="movie-detail-section-title">Cast</div>
@@ -1657,28 +1649,28 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <span id="sidebar-admin-role" style="margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555"></span>
     </div>
     <div class="admin-sidebar-group">Content</div>
-    <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon">✍️</span> Blog Posts</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon">🎬</span> Events</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon">👥</span> Members</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('movies')" data-section="movies"><span class="icon">🎬</span> Films</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('chitra-vichitra')" data-section="chitra-vichitra"><span class="icon">🎞️</span> Chitra Vichitra</div>
+    <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('movies')" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('chitra-vichitra')" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
     <div class="admin-sidebar-group">Extras</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon">💬</span> Testimonials</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon">🏆</span> Achievements</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
     <div class="admin-sidebar-group">Analytics</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon">📈</span> Traffic</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon">⭐</span> Reviews</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
     <div class="admin-sidebar-group">System</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon">🔔</span> Notifications</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon">⚙️</span> Settings</div>
-    <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon">🔐</span> Manage Admins</div>
-    <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon">📋</span> Activity Log</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
+    <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
+    <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
     <div class="admin-sidebar-bottom">
       <div class="admin-sidebar-item" onclick="toggleTheme()" style="justify-content:space-between">
         <span>Light Mode</span>
         <span id="admin-theme-label" style="font-size:11px;opacity:.45;letter-spacing:.04em">OFF</span>
       </div>
-      <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon">→</span> Log Out</div>
+      <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Log Out</div>
     </div>
   </div>
   <div class="admin-main">
@@ -1691,7 +1683,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <div id="bulk-bar-blogs" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-blogs" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('blogs')">🗑 Delete Selected</button>
+        <button class="btn-sm danger" onclick="bulkDelete('blogs')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
         <button class="btn-sm" onclick="clearBulkSelect('blogs')" style="margin-left:auto">Cancel</button>
       </div>
       <div class="admin-card">
@@ -1724,7 +1716,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <div id="bulk-bar-members" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-members" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('members')">🗑 Delete Selected</button>
+        <button class="btn-sm danger" onclick="bulkDelete('members')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
         <button class="btn-sm" onclick="clearBulkSelect('members')" style="margin-left:auto">Cancel</button>
       </div>
       <div class="member-search-wrap">
@@ -1748,7 +1740,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <div id="bulk-bar-movies" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-movies" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('movies')">🗑 Delete Selected</button>
+        <button class="btn-sm danger" onclick="bulkDelete('movies')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
         <button class="btn-sm" onclick="clearBulkSelect('movies')" style="margin-left:auto">Cancel</button>
       </div>
       <div class="admin-card">
@@ -2109,7 +2101,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="form-group"><label>Graphic Design</label><div class="mpicker-wrap" id="mpick-gd"></div></div>
     <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-actors"></div></div>
     <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
-    <div class="form-group"><label>🎬 Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
+    <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
     <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link)</span></label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..."></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
@@ -2144,7 +2136,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
   <div class="modal">
     <h3 id="achievement-modal-title">Add Achievement</h3>
     <input type="hidden" id="achievement-edit-id">
-    <div class="form-group"><label>Emoji Icon</label><input type="text" id="achievement-icon" placeholder="🏆" value="🏆"></div>
     <div class="form-group"><label>Title</label><input type="text" id="achievement-title"></div>
     <div class="form-group"><label>Year</label><input type="text" id="achievement-year" placeholder="2024"></div>
     <div class="form-group"><label>Description</label><textarea id="achievement-description" style="min-height:80px"></textarea></div>
@@ -2432,7 +2423,7 @@ async function loadHomeData() {
       <div>
         ${settings.spotlight_photo
           ? `<img class="spotlight-photo" src="${settings.spotlight_photo}" alt="${settings.spotlight_name}">`
-          : `<div class="spotlight-photo-placeholder">👤</div>`}
+          : `<div class="spotlight-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
       </div>
       <div>
         <div class="spotlight-label">Member Spotlight</div>
@@ -2447,7 +2438,7 @@ async function loadHomeData() {
   if (achievements && achievements.length) {
     ag.innerHTML = achievements.map(a=>`
       <div class="achievement-card">
-        <div class="achievement-icon">${a.icon||'🏆'}</div>
+        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}</div>
         <div class="achievement-title">${a.title}</div>
         <div class="achievement-year">${a.year||''}</div>
         <div class="achievement-desc">${a.description||''}</div>
@@ -2590,7 +2581,7 @@ function renderBlogCard(b) {
       <span class="blog-read-badge">${badge}</span>
       ${b.cover_image
         ? `<img class="blog-card-img" src="${b.cover_image}" alt="${b.title}">`
-        : `<div class="blog-card-img-placeholder">🎬</div>`}
+        : `<div class="blog-card-img-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
     </div>
     <div class="blog-card-body">
       <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}</p>
@@ -2647,7 +2638,7 @@ function renderRecentlyViewed(currentId) {
         <div class="rv-thumb-wrap">
           ${b.cover_image
             ? `<img src="${b.cover_image}" alt="${b.title}">`
-            : `<div class="rv-thumb-placeholder">🎬</div>`}
+            : `<div class="rv-thumb-placeholder"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
         </div>
         <div class="rv-item-info">
           <div class="rv-item-title">${b.title}</div>
@@ -2709,7 +2700,7 @@ function renderMemberSections(type) {
     return `<div class="member-card-photo" onclick="openMemberProfile(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="cursor:pointer">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
-        : `<div class="member-photo-sq-placeholder">👤</div>`}
+        : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
       <div class="member-info-sq">
         <div class="member-name-sq">${m.name}</div>
         ${subtitle ? `<div class="member-role-sq">${subtitle}</div>` : ''}
@@ -2815,7 +2806,7 @@ function renderMovieCard(m, clickable=false) {
     <div style="position:relative">
       ${m.poster_image
         ? `<img class="movie-poster" src="${m.poster_image}" alt="${m.title}">`
-        : `<div class="movie-poster-placeholder">🎬</div>`}
+        : `<div class="movie-poster-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
       ${ratingBadge}
       ${clickable ? `<div class="movie-watch-badge${watched?' movie-watch-badge--done':''}" onclick="event.stopPropagation();toggleWatchStatusCard('${m.id}',this.closest('.movie-card'))" title="${watched?'Watched':'Mark as Watched'}">
         ${watched ? '✓ Watched' : '+ Watchlist'}
@@ -2870,7 +2861,7 @@ async function openMovie(id) {
     actionBtns.style.display = 'flex';
     actionBtns.innerHTML = [
       m.watch_url ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now</a>` : '',
-      m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()">🎬 Trailer</button>` : '',
+      m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points='5 3 19 12 5 21 5 3'/></svg> Trailer</button>` : '',
     ].join('');
   } else {
     actionBtns.style.display = 'none';
@@ -3030,7 +3021,7 @@ async function submitReview() {
       body: JSON.stringify(body)
     });
     if (res.ok) {
-      document.getElementById('review-submit-msg').textContent = '🎬 Thanks for your review!';
+      document.getElementById('review-submit-msg').textContent = 'Thanks for your review!';
       resetReviewForm();
       loadReviews(currentMovieId);
       launchKonfetti();
@@ -3067,7 +3058,7 @@ function renderTestimonials(testimonials) {
     return `<div class="testimonial-card">
       <p class="testimonial-quote">"${t.quote}"</p>
       <div class="testimonial-author">
-        ${t.photo ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">` : `<div class="testimonial-avatar-placeholder">👤</div>`}
+        ${t.photo ? `<img class="testimonial-avatar" src="${t.photo}" alt="${t.name}">` : `<div class="testimonial-avatar-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
         <div>
           <div class="testimonial-name">${t.name}</div>
           <div class="testimonial-role">${t.role||''} ${t.batch?'· '+t.batch:''}</div>
@@ -3232,7 +3223,7 @@ async function loadAdminData(name) {
     if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`; return; }
     tbody.innerHTML = members.map(m=>`<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"></td>
-      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
+      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'</td>
       <td style="font-weight:500">${m.name}</td>
       <td style="color:var(--grey)">${m.role||'—'}</td>
       <td style="color:var(--grey)">${m.batch||'—'}</td>
@@ -3248,7 +3239,7 @@ async function loadAdminData(name) {
     const tbody = document.getElementById('admin-testimonials-tbody');
     if (!testimonials || !testimonials.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No testimonials yet.</td></tr>`; return; }
     tbody.innerHTML = testimonials.map(t=>`<tr>
-      <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:'👤'}</td>
+      <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'</td>
       <td style="font-weight:500">${t.name}</td>
       <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"</td>
       <td><div class="action-btns">
@@ -3262,7 +3253,7 @@ async function loadAdminData(name) {
     const tbody = document.getElementById('admin-achievements-tbody');
     if (!achievements || !achievements.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No achievements yet.</td></tr>`; return; }
     tbody.innerHTML = achievements.map(a=>`<tr>
-      <td style="font-size:24px">${a.icon||'🏆'}</td>
+      
       <td style="font-weight:500">${a.title}</td>
       <td style="color:var(--grey)">${a.year||'—'}</td>
       <td><div class="action-btns">
@@ -3278,7 +3269,7 @@ async function loadAdminData(name) {
     if (!movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`; return; }
     tbody.innerHTML = movies.map(m=>`<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"></td>
-      <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'🎬'}</td>
+      <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>'</td>
       <td style="font-weight:500">${m.title}</td>
       <td style="color:var(--grey)">${m.release_year||'—'}</td>
       <td style="color:var(--grey)">${m.director||'—'}</td>
@@ -3344,7 +3335,7 @@ async function loadAdminData(name) {
           : perms.map(p => `<span class="perm-badge">${SECTION_LABELS[p]||p}</span>`).join('');
       const actions = a.role === 'master'
         ? `<span style="color:var(--grey);font-size:12px">Protected</span>`
-        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')">✏️ Permissions</button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
+        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Permissions</button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
       return `<tr>
         <td style="font-weight:500">${a.name}</td>
         <td style="color:var(--grey);font-family:monospace;font-size:13px">${a.username}</td>
@@ -3585,7 +3576,7 @@ function openAchievementModal(a=null) {
   document.getElementById('achievement-modal').classList.add('open');
   document.getElementById('achievement-modal-title').textContent = a ? 'Edit Achievement' : 'Add Achievement';
   document.getElementById('achievement-edit-id').value = a?.id||'';
-  document.getElementById('achievement-icon').value = a?.icon||'🏆';
+  
   document.getElementById('achievement-title').value = a?.title||'';
   document.getElementById('achievement-year').value = a?.year||'';
   document.getElementById('achievement-description').value = a?.description||'';
@@ -3597,7 +3588,6 @@ function closeAchievementModal() { document.getElementById('achievement-modal').
 async function saveAchievement() {
   const id = document.getElementById('achievement-edit-id').value;
   const body = {
-    icon: document.getElementById('achievement-icon').value,
     title: document.getElementById('achievement-title').value,
     year: document.getElementById('achievement-year').value,
     description: document.getElementById('achievement-description').value,
@@ -3814,7 +3804,7 @@ function renderNotifTable() {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr>';
     return;
   }
-  const typeLabels = {announcement:'📢 Announcement',achievement:'🏆 Achievement',film:'🎬 Film',event:'🎪 Event'};
+  const typeLabels = {announcement:'Announcement',achievement:'Achievement',film:'Film',event:'Event'};
   tbody.innerHTML = allNotifications.map((n,i) => `
     <tr>
       <td style="font-weight:600">${n.title}</td>
@@ -3873,13 +3863,13 @@ async function saveNotif() {
   renderNotifTable();
   // Show a live preview popup so admin can see it immediately
   if (notif.active) {
-    const typeIcons = {announcement:'📢',achievement:'🏆',film:'🎬',event:'🎪'};
+    const typeIcons = {announcement:'',achievement:'',film:'',event:''};
     const overlay = document.createElement('div');
     overlay.className = 'notif-popup-overlay';
     overlay.innerHTML = `
       <div class="notif-popup-box">
         <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666;margin-bottom:8px">PREVIEW</div>
-        <div class="ep-label">${typeIcons[notif.type]||'📢'} ${(notif.type||'').charAt(0).toUpperCase()+(notif.type||'').slice(1)}</div>
+        <div class="ep-label">${(notif.type||'').charAt(0).toUpperCase()+(notif.type||'').slice(1)}</div>
         <div class="ep-title" style="font-size:20px;margin-bottom:10px;line-height:1.3">${notif.title}</div>
         ${notif.message ? `<div style="font-size:13px;color:#888;line-height:1.6;margin-bottom:20px">${notif.message}</div>` : ''}
         <div class="ep-actions">
@@ -4218,10 +4208,10 @@ async function bulkDelete(section) {
     <div class="form-group"><label>Title</label><input type="text" id="notif-title" placeholder="e.g. New Film Released!"></div>
     <div class="form-group"><label>Type</label>
       <select id="notif-type" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:12px 14px;font-family:inherit;font-size:14px">
-        <option value="announcement">📢 General Announcement</option>
-        <option value="achievement">🏆 Achievement</option>
-        <option value="film">🎬 New Film</option>
-        <option value="event">🎪 Event</option>
+        <option value="announcement">General Announcement</option>
+        <option value="achievement">Achievement</option>
+        <option value="film">New Film</option>
+        <option value="event">Event</option>
       </select>
     </div>
     <div class="form-group"><label>Message</label><textarea id="notif-message" style="min-height:80px" placeholder="Short description shown in the popup"></textarea></div>
@@ -4328,7 +4318,7 @@ class MemberPicker {
     if (!matches.length) { this._hideDropdown(); return; }
     this.dropdown.innerHTML = matches.map(m=>`
       <div class="mpicker-opt" data-id="${m.id}">
-        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder">👤</div>'}
+        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>'}
         <span class="mpicker-opt-name">${m.name}</span>
         <span class="mpicker-opt-role">${m.role||''}</span>
       </div>`).join('');
@@ -4356,7 +4346,7 @@ class MemberPicker {
   _renderTags() {
     this.tagsEl.innerHTML = this.selected.map(s=>`
       <span class="mpicker-tag">
-        ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder">👤</span>'}
+        ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>'}
         <span class="mpicker-tag-name">${s.name}</span>
         <span class="mpicker-tag-remove" data-name="${s.name}">×</span>
       </span>`).join('');
@@ -4402,7 +4392,7 @@ function openMemberProfile(member) {
   const photoWrap = document.getElementById('mprofile-photo-wrap');
   photoWrap.innerHTML = member.photo
     ? `<img class="member-profile-photo" src="${member.photo}" alt="${member.name}">`
-    : `<div class="member-profile-photo-placeholder">👤</div>`;
+    : `<div class="member-profile-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
 
   // find films this member is linked to
   const allMovies = window._allMoviesCache || [];
@@ -4430,7 +4420,7 @@ function openMemberProfile(member) {
     filmsWrap.style.display='block';
     filmsGrid.innerHTML = memberFilms.map(({movie:mv, role})=>`
       <div class="member-film-card" onclick="closeMemberProfile();openMovie('${mv.id}')">
-        ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph">🎬</div>`}
+        ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
         <div class="member-film-info">
           <div class="member-film-title">${mv.title}</div>
           <div class="member-film-role-label">${role}</div>
@@ -4471,19 +4461,19 @@ function doSearch(q) {
       });
     });
     const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
-    results.push({ type:'film', icon:'🎬', title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
+    results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
   });
   searchData.blogs.filter(b => b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)).forEach(b =>
-    results.push({ type:'blog', icon:'✍️', title: b.title, sub: b.excerpt||'', action: ()=>{ closeSearch(); openBlog(b.id); } })
+    results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`, title: b.title, sub: b.excerpt||'', action: ()=>{ closeSearch(); openBlog(b.id); } })
   );
   searchData.events.filter(e => e.title?.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q)).forEach(e =>
-    results.push({ type:'event', icon:'🎪', title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
+    results.push({ type:'event', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`, title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
   );
   searchData.members.filter(m => m.name?.toLowerCase().includes(q) || m.role?.toLowerCase().includes(q) || m.domain?.toLowerCase().includes(q)).forEach(m => {
     const allMovies = window._allMoviesCache || [];
     const filmCount = allMovies.filter(mv=>crewFields.some(f=>(mv[f]||'').split(',').some(p=>{ const [nm,id]=p.split('||'); return (id&&id.trim()==String(m.id))||nm.trim().toLowerCase()===m.name.toLowerCase(); }))).length;
     const sub = [m.role, m.domain, filmCount ? filmCount+' film'+(filmCount>1?'s':'') : ''].filter(Boolean).join(' · ');
-    results.push({ type:'member', icon:'👤', title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
+    results.push({ type:'member', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`, title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
   });
 
   if (!results.length) { out.innerHTML = '<div class="search-empty">No results for "'+q+'"</div>'; return; }
@@ -4527,7 +4517,7 @@ async function loadCVCards() {
     return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
       ${cv.cover_image
         ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
-        : `<div class="cv-year-card-placeholder">🎞️</div>`}
+        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg></div>`}
       <div class="cv-year-card-overlay"></div>
       <div class="cv-year-card-info">
         <div class="cv-year-badge">Chitra Vichitra</div>
@@ -4580,14 +4570,14 @@ async function loadAdminCV() {
       <div>
         ${cv.cover_image
           ? `<img src="${cv.cover_image}" alt="${cv.year}" style="width:80px;height:52px;object-fit:cover;border-radius:3px;border:1px solid var(--border)">`
-          : `<div style="width:80px;height:52px;background:var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px">🎞️</div>`}
+          : `<div style="width:80px;height:52px;background:var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg></div>`}
       </div>
       <div>
         <div style="font-weight:700;font-size:16px">Chitra Vichitra ${cv.year}</div>
         <div style="font-size:12px;color:var(--grey);margin-top:3px">${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')">🎬 Manage Films</button>
+        <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg> Manage Films</button>
         <button class="btn-sm" onclick="editCV(${JSON.stringify(cv).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn-sm danger" onclick="deleteCV('${cv.id}','${cv.year}')">Delete</button>
       </div>
@@ -4662,7 +4652,7 @@ async function refreshCVMoviesList() {
     <div style="display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:1px solid var(--border)">
       ${m.poster_image
         ? `<img src="${m.poster_image}" alt="${m.title}" style="width:44px;height:60px;object-fit:cover;border-radius:2px">`
-        : `<div style="width:44px;height:60px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:18px">🎬</div>`}
+        : `<div style="width:44px;height:60px;background:var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
       <div>
         <div style="font-size:13px;font-weight:600">${m.title}</div>
         <div style="font-size:11px;color:var(--grey)">${m.release_year||''}</div>
@@ -4885,12 +4875,11 @@ function updateDetailWatchBtn(id) {
   const btn = document.getElementById('movie-watch-status-btn');
   if (!btn) return;
   const watched = isMovieWatched(id);
-  const icon = document.getElementById('movie-watch-status-icon');
-  const label = document.getElementById('movie-watch-status-label');
-  if (icon) icon.textContent = watched ? '✓' : '☐';
-  if (label) label.textContent = watched ? 'Watched' : 'Mark as Watched';
+  btn.innerHTML = watched
+    ? '<span>✓</span> Watched'
+    : '<span>☐</span> Mark as Watched';
   btn.classList.toggle('is-watched', watched);
-  btn.style.cssText = '';
+  btn.style.cssText = ''; // clear any previously set inline styles
 }
 
 function toggleWatchStatusCard(id, cardEl) {
