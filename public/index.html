@@ -361,22 +361,34 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 .apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
 @media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr}}
 
-/* ── BLOG PAGE SECTION NAV ───────────────────────────────────────────── */
-.blog-page-nav{position:sticky;top:64px;z-index:80;background:var(--black);
-  border-bottom:1px solid var(--border);border-top:1px solid var(--border);
-  display:flex;gap:0;overflow-x:auto;scrollbar-width:none;padding-left:80px;
-  transition:background .3s}
-@media(max-width:768px){.blog-page-nav{padding-left:24px}}
-.blog-page-nav::-webkit-scrollbar{display:none}
-body.light-mode .blog-page-nav{background:#f0f0f0}
-.blog-page-nav-btn{flex:none;padding:12px 20px;font-size:11px;letter-spacing:.1em;
-  text-transform:uppercase;font-weight:600;background:none;border:none;color:var(--grey);
-  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
-  transition:color .2s,border-color .2s;white-space:nowrap}
-.blog-page-nav-btn.active{color:var(--white);border-bottom-color:var(--white)}
-.blog-page-nav-btn:hover{color:var(--white)}
-body.light-mode .blog-page-nav-btn.active{color:#111;border-bottom-color:#111}
-body.light-mode .blog-page-nav-btn:hover{color:#111}
+/* ── BLOG FILTER FLOATING BUTTON ─────────────────────────────────────── */
+.blog-filter-wrap{position:relative;display:inline-block}
+.blog-filter-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  background:none;border:1px solid var(--border);color:var(--grey);cursor:pointer;
+  font-family:inherit;border-radius:24px;transition:all .2s var(--ease)}
+.blog-filter-btn:hover,.blog-filter-btn.open{border-color:var(--white);color:var(--white)}
+body.light-mode .blog-filter-btn:hover,body.light-mode .blog-filter-btn.open{border-color:#111;color:#111}
+.blog-filter-btn svg{flex-shrink:0;transition:transform .2s}
+.blog-filter-btn.open svg.filter-chevron{transform:rotate(180deg)}
+.blog-filter-dropdown{position:absolute;top:calc(100% + 8px);left:0;min-width:210px;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:6px;z-index:200;display:none;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);animation:fadeUp .18s var(--ease) both}
+.blog-filter-dropdown.open{display:block}
+body.light-mode .blog-filter-dropdown{background:#fff;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.blog-filter-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;
+  font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+  background:none;border:none;color:var(--grey);cursor:pointer;text-align:left;
+  border-radius:9px;transition:background .15s,color .15s;font-family:inherit}
+.blog-filter-item:hover{background:rgba(255,255,255,.07);color:var(--white)}
+body.light-mode .blog-filter-item:hover{background:rgba(0,0,0,.06);color:#111}
+.blog-filter-item.active{color:var(--white);background:rgba(255,255,255,.1)}
+body.light-mode .blog-filter-item.active{color:#111;background:rgba(0,0,0,.08)}
+.blog-filter-item-dot{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .15s}
+.blog-filter-item.active .blog-filter-item-dot{background:var(--white)}
+body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
+.blog-filter-divider-line{height:1px;background:var(--border);margin:4px 6px}
 /* Blog page section block */
 .blog-page-section{padding:60px 80px 28px}
 @media(max-width:768px){.blog-page-section{padding:40px 24px 20px}}
@@ -462,12 +474,11 @@ body.light-mode .blog-card.unread:hover,body.light-mode .blog-card.viewed:hover{
 .blog-card-excerpt{font-size:13px;color:var(--grey);line-height:1.6}
 .blog-read-badge{position:absolute;top:10px;left:10px;font-size:9px;letter-spacing:.14em;
   text-transform:uppercase;padding:5px 11px;font-weight:800;pointer-events:none;border-radius:3px;transition:all .3s;z-index:2}
-/* UNREAD: bold white pill — stands out */
-.blog-card.unread .blog-read-badge{background:#fff;color:#0a0a0a;box-shadow:0 2px 10px rgba(0,0,0,.5)}
-/* VIEWED: muted pill — clearly already seen */
-.blog-card.viewed .blog-read-badge{background:rgba(255,255,255,.18);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15);box-shadow:none}
-body.light-mode .blog-card.unread .blog-read-badge{background:#111;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-body.light-mode .blog-card.viewed .blog-read-badge{background:rgba(0,0,0,.12);color:#888;border:1px solid rgba(0,0,0,.1);box-shadow:none}
+/* UNREAD + VIEWED: identical bold white pill */
+.blog-card.unread .blog-read-badge,
+.blog-card.viewed .blog-read-badge{background:#fff;color:#0a0a0a;box-shadow:0 2px 10px rgba(0,0,0,.5);border:none}
+body.light-mode .blog-card.unread .blog-read-badge,
+body.light-mode .blog-card.viewed .blog-read-badge{background:#111;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);border:none}
 .recently-viewed{margin-top:52px;padding-top:36px;border-top:1px solid var(--border)}
 .recently-viewed-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--grey);margin-bottom:18px;font-weight:600}
@@ -754,11 +765,11 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .analytics-tabs{display:flex;gap:0;margin-bottom:28px;border-bottom:1px solid var(--border)}
 .analytics-tab{padding:10px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:var(--grey);border-bottom:2px solid transparent;margin-bottom:-1px}
 .analytics-tab.active{color:var(--white);border-bottom-color:var(--white)}
-.admin-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:40px;
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:40px;
   padding-bottom:24px;border-bottom:1px solid var(--border);gap:24px;flex-wrap:wrap}
-.admin-header h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.admin-header h2{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .admin-header p{font-size:13px;color:var(--grey);margin-top:4px}
-.admin-header .btn{flex-shrink:0;align-self:flex-start;border-radius:20px}
+.admin-header .btn{flex-shrink:0;align-self:center;border-radius:20px}
 
 .admin-card{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:8px}
 .admin-table{width:100%;border-collapse:collapse}
@@ -1594,10 +1605,19 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
   <section class="section" style="padding-bottom:0">
     <div class="section-inner">
       <p class="section-label">From the Lens</p>
-      <h2 class="section-title">The Blog</h2>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+        <h2 class="section-title">The Blog</h2>
+        <div class="blog-filter-wrap" id="blog-filter-wrap" style="display:none;margin-bottom:6px">
+          <button class="blog-filter-btn" id="blog-filter-btn" onclick="toggleBlogFilter(this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Filter
+            <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="blog-filter-dropdown" id="blog-filter-dropdown"></div>
+        </div>
+      </div>
     </div>
   </section>
-  <nav class="blog-page-nav" id="blog-page-nav" style="display:none"></nav>
   <div id="blog-sections-wrap">
     <div class="section-inner" style="padding:60px 0">
       <div class="loading">Loading posts...</div>
@@ -2013,6 +2033,19 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
         </div>
         <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Blog Tag Management</p>
+        <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;max-width:480px">
+          <input type="text" id="new-tag-input" placeholder="e.g. Into the Stars Life" style="flex:1;border-radius:10px"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewTag()}">
+          <button class="btn btn-primary" style="border-radius:10px;white-space:nowrap;padding:10px 20px;font-size:12px" onclick="saveNewTag()">+ Add Tag</button>
+        </div>
+        <div id="tags-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--grey);padding:4px 0">Loading tags...</span>
+        </div>
+        <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
       </div>
     </div>
 
@@ -2147,20 +2180,20 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <select id="blog-published"><option value="true">Published</option><option value="false">Draft</option></select>
     </div>
     <div class="form-group">
-      <label>Extra Sections</label>
+      <label>Tags / Sections</label>
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <select id="blog-section-type" style="flex:1">
-          <option value="">— Add a section —</option>
-          <option value="Review">Review</option>
-          <option value="Our Take">Our Take</option>
-          <option value="Industry Insider">Industry Insider</option>
-          <option value="Behind the Scenes">Behind the Scenes</option>
-          <option value="Interview">Interview</option>
-          <option value="Analysis">Analysis</option>
+        <select id="blog-section-type" style="flex:1;border-radius:10px">
+          <option value="">— Select a tag —</option>
         </select>
-        <button class="btn-sm" onclick="addBlogSection()" style="white-space:nowrap">+ Add</button>
+        <button class="btn-sm" onclick="addBlogSection()" style="white-space:nowrap;border-radius:10px">+ Tag</button>
       </div>
-      <div id="blog-sections-list"><p style="font-size:12px;color:var(--grey);margin:0">No extra sections added.</p></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="blog-new-tag-inline" placeholder="Or type a new tag name…"
+          style="flex:1;border-radius:10px;font-size:13px;padding:8px 12px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:inherit;outline:none"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addBlogSectionInline()}">
+        <button class="btn-sm" onclick="addBlogSectionInline()" style="white-space:nowrap;border-radius:10px">+ New</button>
+      </div>
+      <div id="blog-sections-list"><p style="font-size:12px;color:var(--grey);margin:0">No tags added yet.</p></div>
     </div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeBlogModal()">Cancel</button>
@@ -2740,16 +2773,15 @@ function renderEventItem(e, full=false) {
 async function loadBlog() {
   const blogs = await apiFetch('/api/blogs');
   const wrap = document.getElementById('blog-sections-wrap');
-  const nav = document.getElementById('blog-page-nav');
+  const filterWrap = document.getElementById('blog-filter-wrap');
   if (!blogs || !blogs.length) {
-    nav.style.display = 'none';
+    if (filterWrap) filterWrap.style.display = 'none';
     wrap.innerHTML = `<div style="padding:60px 80px"><div class="empty-state"><p>No posts yet.<\/p><\/div><\/div>`;
     return;
   }
   window._allBlogs = blogs;
-  const _rs = getBlogReadState();
 
-  // Collect all unique section types across all published blogs
+  // Collect unique section types
   const sectionTypes = [];
   blogs.forEach(b => {
     let secs = [];
@@ -2759,82 +2791,118 @@ async function loadBlog() {
         sectionTypes.push({id:s.id, label:s.label});
     });
   });
+  window._blogSectionTypes = sectionTypes;
 
-  // Build sticky anchor nav: "All Posts" + one pill per section type
-  const navItems = [{id:'blog-all', label:'All Posts'}, ...sectionTypes.map(s=>({id:'blog-sec-'+s.id, label:s.label}))];
-  nav.style.display = navItems.length > 1 ? 'flex' : 'none';
-  nav.innerHTML = navItems.map((n,i)=>
-    `<button class="blog-page-nav-btn${i===0?' active':''}" onclick="scrollToBlogSection('${n.id}',this)">${n.label}<\/button>`
+  // Show/hide filter button
+  if (sectionTypes.length && filterWrap) {
+    filterWrap.style.display = 'inline-block';
+    _buildBlogFilterDropdown(sectionTypes);
+    // Reset to "All" state
+    const btn = document.getElementById('blog-filter-btn');
+    if (btn) {
+      const textNode = Array.from(btn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+      if (textNode) textNode.textContent = ' Filter ';
+    }
+    const badge = document.getElementById('blog-filter-badge');
+    if (badge) badge.style.display = 'none';
+  } else if (filterWrap) {
+    filterWrap.style.display = 'none';
+  }
+
+  _renderBlogSections(blogs, sectionTypes, null);
+}
+
+function _buildBlogFilterDropdown(sectionTypes) {
+  const dd = document.getElementById('blog-filter-dropdown');
+  if (!dd) return;
+  const allItem = `<button class="blog-filter-item active" id="bfi-all" onclick="applyBlogFilter(null,this)">
+    <span class="blog-filter-item-dot"></span>All Posts
+  <\/button>`;
+  const secItems = sectionTypes.map(st =>
+    `<button class="blog-filter-item" id="bfi-${st.id}" onclick="applyBlogFilter('${st.id}',this)">
+      <span class="blog-filter-item-dot"></span>${st.label}
+    <\/button>`
   ).join('');
+  dd.innerHTML = allItem + (sectionTypes.length ? '<div class="blog-filter-divider-line"><\/div>' + secItems : '');
+}
 
-  // Sort: unviewed first, then by date
-  const sorted = [...blogs].sort((a,b)=>{
-    const av=!!_rs[a.id], bv=!!_rs[b.id];
-    if(av!==bv) return av?1:-1;
-    return 0;
-  });
+function toggleBlogFilter(btn) {
+  const dd = document.getElementById('blog-filter-dropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const close = e => {
+      if (!btn.closest('.blog-filter-wrap').contains(e.target)) {
+        dd.classList.remove('open'); btn.classList.remove('open');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
 
-  // Build HTML: All Posts block + one block per section type that has posts
+function applyBlogFilter(sectionId, btn) {
+  document.querySelectorAll('.blog-filter-item').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('blog-filter-dropdown').classList.remove('open');
+  document.getElementById('blog-filter-btn')?.classList.remove('open');
+  // Update button label text
+  const filterBtn = document.getElementById('blog-filter-btn');
+  if (filterBtn) {
+    const st = (window._blogSectionTypes||[]).find(s=>s.id===sectionId);
+    const textNode = Array.from(filterBtn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+    if (textNode) textNode.textContent = st ? ` ${st.label} ` : ' Filter ';
+  }
+  _renderBlogSections(window._allBlogs || [], window._blogSectionTypes || [], sectionId);
+}
+
+function _renderBlogSections(blogs, sectionTypes, activeSection) {
+  const wrap = document.getElementById('blog-sections-wrap');
+  const _rs = getBlogReadState();
+  const sorted = [...blogs].sort((a,b) => { const av=!!_rs[a.id],bv=!!_rs[b.id]; return av===bv?0:av?1:-1; });
+
   let html = '';
-
-  html += `<div class="blog-page-section" id="blog-all">
-    <div class="blog-page-section-header">
-      <p class="blog-page-section-label">From the Lens<\/p>
-      <h3 class="blog-page-section-title">All Posts<\/h3>
-    <\/div>
-    <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}<\/div>
-  <\/div>`;
-
-  sectionTypes.forEach(st => {
-    const tagged = sorted.filter(b => {
-      let secs = [];
-      try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
-      return secs.some(s=>s.id===st.id);
+  if (!activeSection) {
+    html += `<div class="blog-page-section" id="blog-all">
+      <div class="blog-page-section-header">
+        <p class="blog-page-section-label">From the Lens<\/p>
+        <h3 class="blog-page-section-title">All Posts<\/h3>
+      <\/div>
+      <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}<\/div>
+    <\/div>`;
+    sectionTypes.forEach(st => {
+      const tagged = sorted.filter(b => {
+        let secs=[]; try{secs=b.sections?JSON.parse(b.sections):[]}catch(e){}
+        return secs.some(s=>s.id===st.id);
+      });
+      if (!tagged.length) return;
+      html += `<div class="blog-page-divider"><\/div>
+      <div class="blog-page-section" id="blog-sec-${st.id}">
+        <div class="blog-page-section-header">
+          <p class="blog-page-section-label">Category<\/p>
+          <h3 class="blog-page-section-title">${st.label}<\/h3>
+        <\/div>
+        <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}<\/div>
+      <\/div>`;
     });
-    if (!tagged.length) return;
-    html += `<div class="blog-page-divider"><\/div>
-    <div class="blog-page-section" id="blog-sec-${st.id}">
+  } else {
+    const st = sectionTypes.find(s=>s.id===activeSection);
+    const tagged = sorted.filter(b => {
+      let secs=[]; try{secs=b.sections?JSON.parse(b.sections):[]}catch(e){}
+      return secs.some(s=>s.id===activeSection);
+    });
+    html += `<div class="blog-page-section" id="blog-sec-${activeSection}">
       <div class="blog-page-section-header">
         <p class="blog-page-section-label">Category<\/p>
-        <h3 class="blog-page-section-title">${st.label}<\/h3>
+        <h3 class="blog-page-section-title">${st ? st.label : activeSection}<\/h3>
       <\/div>
-      <div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}<\/div>
+      ${tagged.length
+        ? `<div class="blog-grid">${tagged.map(b=>renderBlogCard(b)).join('')}<\/div>`
+        : `<div class="empty-state"><p>No posts in this category yet.<\/p><\/div>`}
     <\/div>`;
-  });
-
+  }
   wrap.innerHTML = html;
-  _setupBlogNavObserver(navItems);
-}
-
-function scrollToBlogSection(id, btn) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  // Offset for sticky nav + site header (~64+45px)
-  const navH = document.getElementById('blog-page-nav').offsetHeight || 44;
-  const top = el.getBoundingClientRect().top + window.scrollY - 64 - navH - 12;
-  window.scrollTo({top, behavior:'smooth'});
-  // Immediately update active nav btn
-  document.querySelectorAll('.blog-page-nav-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}
-
-function _setupBlogNavObserver(navItems) {
-  if (window._blogNavObserver) window._blogNavObserver.disconnect();
-  const opts = {rootMargin:'-70px 0px -60% 0px', threshold:0};
-  window._blogNavObserver = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id;
-        document.querySelectorAll('.blog-page-nav-btn').forEach(b => {
-          b.classList.toggle('active', b.getAttribute('onclick').includes("'"+id+"'"));
-        });
-      }
-    });
-  }, opts);
-  navItems.forEach(n => {
-    const el = document.getElementById(n.id);
-    if (el) window._blogNavObserver.observe(el);
-  });
 }
 
 function getBlogReadState() {
@@ -3643,6 +3711,8 @@ async function loadAdminData(name) {
       document.getElementById('set-instagram').value = settings.instagram||'';
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
+      // Load custom tags
+      loadTagsUI(settings);
     }
   }
   else if (name==='admins') {
@@ -3700,21 +3770,34 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
   document.getElementById('blog-cover').value='';
+  // Clear inline new-tag field
+  const inlineEl = document.getElementById('blog-new-tag-inline');
+  if (inlineEl) inlineEl.value = '';
   // Populate sections (tags only — id + label)
   let secs = [];
   try { secs = blog?.sections ? JSON.parse(blog.sections) : []; } catch(e){}
   window._blogSections = secs.map(s=>({id:s.id, label:s.label}));
   renderBlogSectionsList();
+  // Populate tag dropdown from custom tags
+  _populateBlogTagDropdown();
 }
 function editBlog(blog) { openBlogModal(blog); }
 function closeBlogModal() { document.getElementById('blog-modal').classList.remove('open'); }
+
+function _populateBlogTagDropdown() {
+  const sel = document.getElementById('blog-section-type');
+  if (!sel) return;
+  const tags = window._customBlogTags || [];
+  sel.innerHTML = '<option value="">— Select a tag —<\/option>'
+    + tags.map(t => `<option value="${t.label}">${t.label}<\/option>`).join('');
+}
 
 function renderBlogSectionsList() {
   const wrap = document.getElementById('blog-sections-list');
   if (!wrap) return;
   const secs = window._blogSections || [];
   if (!secs.length) {
-    wrap.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No sections tagged yet.</p>';
+    wrap.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No tags added yet.</p>';
     return;
   }
   wrap.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">`
@@ -3725,25 +3808,127 @@ function renderBlogSectionsList() {
         ${s.label}
         <button onclick="removeBlogSection(${i})" style="background:none;border:none;color:var(--grey);
           cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center"
-          title="Remove">×</button>
-      </span>`).join('')
-    + `</div>`;
+          title="Remove">×<\/button>
+      <\/span>`).join('')
+    + `<\/div>`;
 }
+
 function addBlogSection() {
   const sel = document.getElementById('blog-section-type');
   if (!sel || !sel.value) return;
   const label = sel.value;
-  const id = label.toLowerCase().replace(/\s+/g,'-');
+  const id = label.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
   if (!window._blogSections) window._blogSections = [];
-  if (window._blogSections.find(s=>s.id===id)) { alert('Section already tagged'); return; }
+  if (window._blogSections.find(s=>s.id===id)) { sel.value=''; return; }
   window._blogSections.push({id, label});
   renderBlogSectionsList();
   sel.value = '';
 }
+
+function addBlogSectionInline() {
+  const input = document.getElementById('blog-new-tag-inline');
+  if (!input || !input.value.trim()) return;
+  const label = input.value.trim();
+  const id = label.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  if (!window._blogSections) window._blogSections = [];
+  if (window._blogSections.find(s=>s.id===id)) { input.value=''; return; }
+  window._blogSections.push({id, label});
+  renderBlogSectionsList();
+  input.value = '';
+  // Also save this as a custom tag globally so others can reuse it
+  if (!window._customBlogTags) window._customBlogTags = [];
+  if (!window._customBlogTags.find(t=>t.id===id)) {
+    window._customBlogTags.push({id, label});
+    saveCustomTagsToServer();
+    _populateBlogTagDropdown();
+  }
+}
+
 function removeBlogSection(i) {
   window._blogSections.splice(i,1);
   renderBlogSectionsList();
 }
+
+// ── CUSTOM TAG MANAGEMENT ────────────────────────────────────────────────────
+async function loadCustomTags() {
+  try {
+    const settings = await apiFetch('/api/settings');
+    const raw = settings && settings.blog_tags;
+    window._customBlogTags = raw ? JSON.parse(raw) : _defaultTags();
+  } catch(e) {
+    window._customBlogTags = _defaultTags();
+  }
+}
+function _defaultTags() {
+  return [
+    {id:'review', label:'Review'},
+    {id:'our-take', label:'Our Take'},
+    {id:'industry-insider', label:'Industry Insider'},
+    {id:'behind-the-scenes', label:'Behind the Scenes'},
+    {id:'interview', label:'Interview'},
+    {id:'analysis', label:'Analysis'},
+  ];
+}
+async function saveCustomTagsToServer() {
+  await fetch('/api/admin/settings', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+(adminToken||'')},
+    body: JSON.stringify({ blog_tags: JSON.stringify(window._customBlogTags||[]) })
+  }).catch(()=>{});
+}
+function loadTagsUI(settings) {
+  const raw = settings && settings.blog_tags;
+  window._customBlogTags = raw ? JSON.parse(raw) : _defaultTags();
+  renderTagsAdminList();
+}
+function renderTagsAdminList() {
+  const list = document.getElementById('tags-list');
+  if (!list) return;
+  const tags = window._customBlogTags || [];
+  if (!tags.length) {
+    list.innerHTML = '<span style="font-size:12px;color:var(--grey)">No tags yet. Add one above.</span>';
+    return;
+  }
+  list.innerHTML = tags.map((t,i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--card);
+      border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;letter-spacing:.05em">
+      ${t.label}
+      <button onclick="deleteCustomTag(${i})" title="Delete tag"
+        style="background:none;border:none;cursor:pointer;color:#888;font-size:14px;line-height:1;padding:0;
+        display:flex;align-items:center;margin-left:2px;transition:color .15s"
+        onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#888'">×<\/button>
+    <\/span>`).join('');
+}
+async function saveNewTag() {
+  const input = document.getElementById('new-tag-input');
+  const msg = document.getElementById('tags-msg');
+  if (!input || !input.value.trim()) return;
+  const label = input.value.trim();
+  const id = label.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  if (!window._customBlogTags) window._customBlogTags = _defaultTags();
+  if (window._customBlogTags.find(t=>t.id===id)) {
+    msg.textContent = `"${label}" already exists.`; setTimeout(()=>msg.textContent='',2000); input.value=''; return;
+  }
+  window._customBlogTags.push({id, label});
+  await saveCustomTagsToServer();
+  renderTagsAdminList();
+  input.value='';
+  msg.style.color = 'var(--grey)';
+  msg.textContent = `Tag "${label}" added.`;
+  setTimeout(()=>msg.textContent='',2500);
+}
+async function deleteCustomTag(i) {
+  const tag = window._customBlogTags[i];
+  if (!tag) return;
+  if (!confirm(`Delete the tag "${tag.label}"?\n\nThis removes it from the tag manager but does NOT remove it from posts that already use it.`)) return;
+  window._customBlogTags.splice(i,1);
+  await saveCustomTagsToServer();
+  renderTagsAdminList();
+  const msg = document.getElementById('tags-msg');
+  if (msg) { msg.textContent = `Tag "${tag.label}" deleted.`; setTimeout(()=>msg.textContent='',2500); }
+}
+// Load tags on init so they're ready when blog modal opens
+loadCustomTags();
 
 async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
