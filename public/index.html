@@ -1091,6 +1091,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .movie-card:hover .movie-rating-badge{opacity:.85}
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -1714,7 +1715,14 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="admin-section" id="section-members">
       <div class="admin-header">
         <div><h2>Members</h2><p>Add and manage society members</p></div>
-        <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:8px 16px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="document.getElementById('member-xlsx-input').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import Excel
+          </button>
+          <input type="file" id="member-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="previewMemberImport(this)">
+          <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
+        </div>
       </div>
       <div id="bulk-bar-members" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-members" style="font-size:13px;color:var(--grey)">0 selected</span>
@@ -4900,6 +4908,120 @@ function toggleWatchStatusCard(id, cardEl) {
 }
 
 // Analytics auto-load is handled inside loadAdminData()
+</script>
+
+<!-- Member Excel Import Modal -->
+<div id="member-import-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeMemberImport()">
+  <div class="modal-inner" style="max-width:560px;width:100%;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0">
+      <h3 style="font-size:17px;font-weight:700;margin-bottom:4px">Import Members from Excel</h3>
+      <p style="font-size:12px;color:var(--grey);margin-bottom:20px">Column A should contain member names. Role defaults to <strong>Member</strong>. Photos can be added later.</p>
+      <div id="member-import-preview" style="overflow-y:auto;max-height:340px;border:1px solid var(--border);border-radius:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="position:sticky;top:0;background:var(--bg)">
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">#</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">Name</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">Status</th>
+            </tr>
+          </thead>
+          <tbody id="member-import-tbody"></tbody>
+        </table>
+      </div>
+      <p id="member-import-summary" style="font-size:12px;color:var(--grey);margin-top:12px"></p>
+    </div>
+    <div style="padding:20px 28px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);margin-top:20px">
+      <button class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);padding:9px 20px;border-radius:20px;font-size:13px;cursor:pointer" onclick="closeMemberImport()">Cancel</button>
+      <button id="member-import-btn" class="btn btn-primary" style="padding:9px 24px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer" onclick="runMemberImport()">Import All</button>
+    </div>
+  </div>
+</div>
+<script>
+// ── Member Excel Import ──────────────────────────────────────
+let _memberImportNames = [];
+
+function previewMemberImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    let names = [];
+    if (file.name.endsWith('.csv')) {
+      // CSV: one name per line
+      names = e.target.result.split(/\r?\n/).map(l => l.split(',')[0].trim()).filter(Boolean);
+    } else {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      // Use first column, skip header row if it looks like a label
+      rows.forEach((row, i) => {
+        const val = row[0] ? String(row[0]).trim() : '';
+        if (!val) return;
+        // Skip obvious header row
+        if (i === 0 && /name|member|sl\.?|no\.|s\.no/i.test(val)) return;
+        names.push(val);
+      });
+    }
+    _memberImportNames = names;
+    const tbody = document.getElementById('member-import-tbody');
+    tbody.innerHTML = names.map((n, i) => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:9px 14px;color:var(--grey)">${i + 1}</td>
+        <td style="padding:9px 14px;font-weight:500">${n}</td>
+        <td id="import-status-${i}" style="padding:9px 14px;color:var(--grey)">—</td>
+      </tr>`).join('');
+    document.getElementById('member-import-summary').textContent = `${names.length} name${names.length !== 1 ? 's' : ''} found — review and click Import All.`;
+    document.getElementById('member-import-btn').textContent = `Import ${names.length}`;
+    document.getElementById('member-import-modal').style.display = 'flex';
+  };
+  file.name.endsWith('.csv') ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+}
+
+function closeMemberImport() {
+  document.getElementById('member-import-modal').style.display = 'none';
+  _memberImportNames = [];
+}
+
+async function runMemberImport() {
+  if (!_memberImportNames.length) return;
+  const btn = document.getElementById('member-import-btn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  let ok = 0, fail = 0;
+  for (let i = 0; i < _memberImportNames.length; i++) {
+    const name = _memberImportNames[i];
+    const statusEl = document.getElementById(`import-status-${i}`);
+    try {
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('role', 'Member');
+      fd.append('batch', '');
+      fd.append('domain', '');
+      fd.append('bio', '');
+      fd.append('sort_order', '99');
+      fd.append('is_past', 'false');
+      const res = await fetch('/api/admin/members', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('kfs_token') },
+        body: fd
+      });
+      if (res.ok) {
+        ok++;
+        statusEl.innerHTML = '<span style="color:#4caf50">✓ Added</span>';
+      } else {
+        fail++;
+        statusEl.innerHTML = '<span style="color:#f44">Error</span>';
+      }
+    } catch {
+      fail++;
+      statusEl.innerHTML = '<span style="color:#f44">Error</span>';
+    }
+  }
+  document.getElementById('member-import-summary').textContent = `Done — ${ok} imported${fail ? ', ' + fail + ' failed' : ''}.`;
+  btn.textContent = 'Done';
+  if (ok > 0) loadAdminSection('members');
+}
 </script>
 </body>
 </html>
