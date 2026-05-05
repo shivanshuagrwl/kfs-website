@@ -64,6 +64,22 @@ function masterMiddleware(req, res, next) {
   } catch(e) { res.status(401).json({ error: 'Invalid token' }); }
 }
 
+// Section permission middleware — master bypasses, regular admins checked
+function requireSection(section) {
+  return (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'No token' });
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.admin = decoded;
+      if (decoded.role === 'master') return next(); // master always passes
+      const perms = decoded.permissions || [];
+      if (!perms.includes(section)) return res.status(403).json({ error: `No permission for section: ${section}` });
+      next();
+    } catch { res.status(401).json({ error: 'Invalid token' }); }
+  };
+}
+
 // ── Activity logger ───────────────────────────────────────────────────────────
 async function logActivity(adminId, adminName, action, entity, entityName) {
   try {
@@ -79,6 +95,9 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
+  // Ensure permissions column exists (safe to run on existing DBs)
+  await supabase.rpc('exec_sql', { sql: `ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions text DEFAULT '[]'` }).catch(() => {});
+
   const { data: master } = await supabase.from('admins').select('id').eq('role', 'master').single();
   if (!master) {
     const hash = await bcrypt.hash('KFS@master2024!', 10);
@@ -114,11 +133,12 @@ app.post('/api/admin/login', async (req, res) => {
   const valid = await bcrypt.compare(password, admin.password_hash);
   if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
+  const perms = (() => { try { return JSON.parse(admin.permissions || '[]'); } catch { return []; } })();
   const token = jwt.sign(
-    { id: admin.id, name: admin.name, username: admin.username, role: admin.role },
+    { id: admin.id, name: admin.name, username: admin.username, role: admin.role, permissions: perms },
     JWT_SECRET, { expiresIn: '7d' }
   );
-  res.json({ token, name: admin.name, role: admin.role });
+  res.json({ token, name: admin.name, role: admin.role, permissions: perms });
 });
 
 app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
@@ -132,32 +152,38 @@ app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
 // ── TOKEN REFRESH ─────────────────────────────────────────────────────────────
 app.post('/api/admin/refresh', authMiddleware, async (req, res) => {
   const { data: admin, error } = await supabase
-    .from('admins').select('id,name,username,role').eq('id', req.admin.id).single();
+    .from('admins').select('id,name,username,role,permissions').eq('id', req.admin.id).single();
   if (error || !admin) return res.status(401).json({ error: 'Admin not found' });
+  const perms = (() => { try { return JSON.parse(admin.permissions || '[]'); } catch { return []; } })();
   const token = jwt.sign(
-    { id: admin.id, name: admin.name, username: admin.username, role: admin.role },
+    { id: admin.id, name: admin.name, username: admin.username, role: admin.role, permissions: perms },
     JWT_SECRET, { expiresIn: '7d' }
   );
   console.log(`[refresh] ${admin.username} — role: ${admin.role}`);
-  res.json({ token, name: admin.name, role: admin.role });
+  res.json({ token, name: admin.name, role: admin.role, permissions: perms });
 });
 
 // ── MASTER: Admin management ──────────────────────────────────────────────────
 app.get('/api/master/admins', masterMiddleware, async (req, res) => {
-  const { data } = await supabase.from('admins').select('id,name,username,role,created_at').order('created_at');
-  res.json(data || []);
+  const { data } = await supabase.from('admins').select('id,name,username,role,permissions,created_at').order('created_at');
+  res.json((data || []).map(a => ({
+    ...a,
+    permissions: (() => { try { return JSON.parse(a.permissions || '[]'); } catch { return []; } })()
+  })));
 });
 
 app.post('/api/master/admins', masterMiddleware, async (req, res) => {
-  const { name, username, password } = req.body;
+  const { name, username, password, permissions } = req.body;
   if (!name || !username || !password) return res.status(400).json({ error: 'Name, username and password required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
   const hash = await bcrypt.hash(password, 10);
+  const permsArr = Array.isArray(permissions) ? permissions : [];
   const { data, error } = await supabase.from('admins').insert([{
-    name, username: username.trim().toLowerCase(), password_hash: hash, role: 'admin'
-  }]).select('id,name,username,role,created_at').single();
+    name, username: username.trim().toLowerCase(), password_hash: hash, role: 'admin',
+    permissions: JSON.stringify(permsArr)
+  }]).select('id,name,username,role,permissions,created_at').single();
   if (error) return res.status(400).json({ error: error.message.includes('unique') ? 'Username already taken' : error.message });
-  res.json(data);
+  res.json({ ...data, permissions: permsArr });
 });
 
 app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
@@ -166,6 +192,18 @@ app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
   if (target.role === 'master') return res.status(403).json({ error: 'Cannot delete master admin' });
   await supabase.from('admins').delete().eq('id', req.params.id);
   res.json({ success: true });
+});
+
+app.put('/api/master/admins/:id/permissions', masterMiddleware, async (req, res) => {
+  const { permissions } = req.body;
+  if (!Array.isArray(permissions)) return res.status(400).json({ error: 'permissions must be an array' });
+  const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).single();
+  if (!target) return res.status(404).json({ error: 'Admin not found' });
+  if (target.role === 'master') return res.status(403).json({ error: 'Cannot modify master permissions' });
+  const { error } = await supabase.from('admins').update({ permissions: JSON.stringify(permissions) }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  await logActivity(req.admin.id, req.admin.name, 'update', 'admin_permissions', `Permissions for admin ${req.params.id}`);
+  res.json({ success: true, permissions });
 });
 
 // ── MASTER: Activity log ──────────────────────────────────────────────────────
@@ -185,7 +223,7 @@ app.get('/api/settings', async (req, res) => {
   res.json(obj);
 });
 
-app.post('/api/admin/settings', authMiddleware, (req, res, next) => {
+app.post('/api/admin/settings', requireSection('settings'), (req, res, next) => {
   upload.single('team_photo')(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Photo too large — please use an image under 20MB' });
@@ -225,7 +263,7 @@ app.get('/api/blogs', async (req, res) => {
   res.json(data || []);
 });
 
-app.get('/api/admin/blogs', authMiddleware, async (req, res) => {
+app.get('/api/admin/blogs', requireSection('blogs'), async (req, res) => {
   const { data } = await supabase.from('blogs').select('*').order('created_at', { ascending: false });
   res.json(data || []);
 });
@@ -236,7 +274,7 @@ app.get('/api/blogs/:id', async (req, res) => {
   res.json(data);
 });
 
-app.post('/api/admin/blogs', authMiddleware, upload.single('cover'), async (req, res) => {
+app.post('/api/admin/blogs', requireSection('blogs'), upload.single('cover'), async (req, res) => {
   const { title, excerpt, content, published } = req.body;
   const coverUrl = await uploadImage(req.file, 'blogs');
   const { data, error } = await supabase.from('blogs').insert([{
@@ -247,7 +285,7 @@ app.post('/api/admin/blogs', authMiddleware, upload.single('cover'), async (req,
   res.json(data);
 });
 
-app.put('/api/admin/blogs/:id', authMiddleware, upload.single('cover'), async (req, res) => {
+app.put('/api/admin/blogs/:id', requireSection('blogs'), upload.single('cover'), async (req, res) => {
   const { title, excerpt, content, published } = req.body;
   const updates = { title, excerpt, content, published: published === 'true' };
   if (req.file) updates.cover_image = await uploadImage(req.file, 'blogs');
@@ -257,7 +295,7 @@ app.put('/api/admin/blogs/:id', authMiddleware, upload.single('cover'), async (r
   res.json(data);
 });
 
-app.delete('/api/admin/blogs/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/blogs/:id', requireSection('blogs'), async (req, res) => {
   const { data: b } = await supabase.from('blogs').select('title').eq('id', req.params.id).single();
   await supabase.from('blogs').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'blog', b?.title || req.params.id);
@@ -270,7 +308,7 @@ app.get('/api/events', async (req, res) => {
   res.json(data || []);
 });
 
-app.post('/api/admin/events', authMiddleware, upload.single('cover'), async (req, res) => {
+app.post('/api/admin/events', requireSection('events'), upload.single('cover'), async (req, res) => {
   const { title, description, event_date, event_time, location, is_upcoming } = req.body;
   const coverUrl = await uploadImage(req.file, 'events');
   const { data, error } = await supabase.from('events').insert([{
@@ -281,7 +319,7 @@ app.post('/api/admin/events', authMiddleware, upload.single('cover'), async (req
   res.json(data);
 });
 
-app.put('/api/admin/events/:id', authMiddleware, upload.single('cover'), async (req, res) => {
+app.put('/api/admin/events/:id', requireSection('events'), upload.single('cover'), async (req, res) => {
   const { title, description, event_date, event_time, location, is_upcoming } = req.body;
   const updates = { title, description, event_date, event_time, location, is_upcoming: is_upcoming === 'true' };
   if (req.file) updates.cover_image = await uploadImage(req.file, 'events');
@@ -291,7 +329,7 @@ app.put('/api/admin/events/:id', authMiddleware, upload.single('cover'), async (
   res.json(data);
 });
 
-app.delete('/api/admin/events/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/events/:id', requireSection('events'), async (req, res) => {
   const { data: e } = await supabase.from('events').select('title').eq('id', req.params.id).single();
   await supabase.from('events').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'event', e?.title || req.params.id);
@@ -304,7 +342,7 @@ app.get('/api/members', async (req, res) => {
   res.json(data || []);
 });
 
-app.post('/api/admin/members', authMiddleware, upload.single('photo'), async (req, res) => {
+app.post('/api/admin/members', requireSection('members'), upload.single('photo'), async (req, res) => {
   const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
   const photoUrl = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').insert([{
@@ -316,7 +354,7 @@ app.post('/api/admin/members', authMiddleware, upload.single('photo'), async (re
   res.json(data);
 });
 
-app.put('/api/admin/members/:id', authMiddleware, upload.single('photo'), async (req, res) => {
+app.put('/api/admin/members/:id', requireSection('members'), upload.single('photo'), async (req, res) => {
   const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
   const updates = { name, role, batch, bio, domain: domain||null, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
   if (req.file) updates.photo = await uploadImage(req.file, 'members');
@@ -326,7 +364,7 @@ app.put('/api/admin/members/:id', authMiddleware, upload.single('photo'), async 
   res.json(data);
 });
 
-app.delete('/api/admin/members/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/members/:id', requireSection('members'), async (req, res) => {
   const { data: m } = await supabase.from('members').select('name').eq('id', req.params.id).single();
   await supabase.from('members').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'member', m?.name || req.params.id);
@@ -339,7 +377,7 @@ app.get('/api/testimonials', async (req, res) => {
   res.json(data || []);
 });
 
-app.post('/api/admin/testimonials', authMiddleware, upload.single('photo'), async (req, res) => {
+app.post('/api/admin/testimonials', requireSection('testimonials'), upload.single('photo'), async (req, res) => {
   const { name, role, batch, quote } = req.body;
   const photoUrl = await uploadImage(req.file, 'testimonials');
   const { data, error } = await supabase.from('testimonials').insert([{ name, role, batch, quote, photo: photoUrl }]).select().single();
@@ -348,7 +386,7 @@ app.post('/api/admin/testimonials', authMiddleware, upload.single('photo'), asyn
   res.json(data);
 });
 
-app.put('/api/admin/testimonials/:id', authMiddleware, upload.single('photo'), async (req, res) => {
+app.put('/api/admin/testimonials/:id', requireSection('testimonials'), upload.single('photo'), async (req, res) => {
   const { name, role, batch, quote } = req.body;
   const updates = { name, role, batch, quote };
   if (req.file) updates.photo = await uploadImage(req.file, 'testimonials');
@@ -358,7 +396,7 @@ app.put('/api/admin/testimonials/:id', authMiddleware, upload.single('photo'), a
   res.json(data);
 });
 
-app.delete('/api/admin/testimonials/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/testimonials/:id', requireSection('testimonials'), async (req, res) => {
   const { data: t } = await supabase.from('testimonials').select('name').eq('id', req.params.id).single();
   await supabase.from('testimonials').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'testimonial', t?.name || req.params.id);
@@ -371,7 +409,7 @@ app.get('/api/achievements', async (req, res) => {
   res.json(data || []);
 });
 
-app.post('/api/admin/achievements', authMiddleware, async (req, res) => {
+app.post('/api/admin/achievements', requireSection('achievements'), async (req, res) => {
   const { title, description, year, icon, sort_order } = req.body;
   const { data, error } = await supabase.from('achievements').insert([{
     title, description, year, icon: icon || '🏆', sort_order: parseInt(sort_order) || 99
@@ -381,7 +419,7 @@ app.post('/api/admin/achievements', authMiddleware, async (req, res) => {
   res.json(data);
 });
 
-app.put('/api/admin/achievements/:id', authMiddleware, async (req, res) => {
+app.put('/api/admin/achievements/:id', requireSection('achievements'), async (req, res) => {
   const { title, description, year, icon, sort_order } = req.body;
   const { data, error } = await supabase.from('achievements').update({
     title, description, year, icon, sort_order: parseInt(sort_order) || 99
@@ -391,7 +429,7 @@ app.put('/api/admin/achievements/:id', authMiddleware, async (req, res) => {
   res.json(data);
 });
 
-app.delete('/api/admin/achievements/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/achievements/:id', requireSection('achievements'), async (req, res) => {
   const { data: a } = await supabase.from('achievements').select('title').eq('id', req.params.id).single();
   await supabase.from('achievements').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'achievement', a?.title || req.params.id);
@@ -410,7 +448,7 @@ app.get('/api/movies/:id', async (req, res) => {
   res.json(data);
 });
 
-app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (req, res) => {
+app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'), async (req, res) => {
   const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
@@ -423,7 +461,7 @@ app.post('/api/admin/movies', authMiddleware, upload.single('poster'), async (re
   res.json(data);
 });
 
-app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async (req, res) => {
+app.put('/api/admin/movies/:id', requireSection('movies'), upload.single('poster'), async (req, res) => {
   const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url } = req.body;
   const updates = { title, release_year, genre: genre||null, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
@@ -435,7 +473,7 @@ app.put('/api/admin/movies/:id', authMiddleware, upload.single('poster'), async 
   res.json(data);
 });
 
-app.delete('/api/admin/movies/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/movies/:id', requireSection('movies'), async (req, res) => {
   const { data: mv } = await supabase.from('movies').select('title').eq('id', req.params.id).single();
   await supabase.from('movies').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'movie', mv?.title || req.params.id);
@@ -487,7 +525,7 @@ app.get('/api/chitra-vichitra/:id/movies', async (req, res) => {
 
 // ── CHITRA VICHITRA — ADMIN ───────────────────────────────────────────────────
 // Create a new CV edition
-app.post('/api/admin/chitra-vichitra', authMiddleware, upload.single('cover'), async (req, res) => {
+app.post('/api/admin/chitra-vichitra', requireSection('chitra-vichitra'), upload.single('cover'), async (req, res) => {
   const { year, sort_order } = req.body;
   if (!year) return res.status(400).json({ error: 'Year is required' });
   const coverUrl = await uploadImage(req.file, 'chitra-vichitra');
@@ -502,7 +540,7 @@ app.post('/api/admin/chitra-vichitra', authMiddleware, upload.single('cover'), a
 });
 
 // Update a CV edition (year, cover, sort_order)
-app.put('/api/admin/chitra-vichitra/:id', authMiddleware, upload.single('cover'), async (req, res) => {
+app.put('/api/admin/chitra-vichitra/:id', requireSection('chitra-vichitra'), upload.single('cover'), async (req, res) => {
   const { year, sort_order } = req.body;
   const updates = {
     year: year?.trim(),
@@ -516,7 +554,7 @@ app.put('/api/admin/chitra-vichitra/:id', authMiddleware, upload.single('cover')
 });
 
 // Delete a CV edition (cascade deletes cv_movies via FK)
-app.delete('/api/admin/chitra-vichitra/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/chitra-vichitra/:id', requireSection('chitra-vichitra'), async (req, res) => {
   const { data: cv } = await supabase.from('chitra_vichitra').select('year').eq('id', req.params.id).single();
   await supabase.from('chitra_vichitra').delete().eq('id', req.params.id);
   await logActivity(req.admin.id, req.admin.name, 'delete', 'chitra_vichitra', `CV ${cv?.year || req.params.id}`);
@@ -524,7 +562,7 @@ app.delete('/api/admin/chitra-vichitra/:id', authMiddleware, async (req, res) =>
 });
 
 // Add a movie to a CV edition
-app.post('/api/admin/chitra-vichitra/:id/movies', authMiddleware, async (req, res) => {
+app.post('/api/admin/chitra-vichitra/:id/movies', requireSection('chitra-vichitra'), async (req, res) => {
   const { movie_id } = req.body;
   if (!movie_id) return res.status(400).json({ error: 'movie_id required' });
 
@@ -546,7 +584,7 @@ app.post('/api/admin/chitra-vichitra/:id/movies', authMiddleware, async (req, re
 });
 
 // Remove a movie from a CV edition (by chitra_vichitra_movies row id)
-app.delete('/api/admin/chitra-vichitra/movies/:cvMovieId', authMiddleware, async (req, res) => {
+app.delete('/api/admin/chitra-vichitra/movies/:cvMovieId', requireSection('chitra-vichitra'), async (req, res) => {
   await supabase.from('chitra_vichitra_movies').delete().eq('id', req.params.cvMovieId);
   res.json({ success: true });
 });
@@ -557,12 +595,12 @@ app.get('/api/notifications/active', async (req, res) => {
   res.json(data || null);
 });
 
-app.get('/api/admin/notifications', authMiddleware, async (req, res) => {
+app.get('/api/admin/notifications', requireSection('notifications'), async (req, res) => {
   const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
   res.json(data || []);
 });
 
-app.post('/api/admin/notifications', authMiddleware, async (req, res) => {
+app.post('/api/admin/notifications', requireSection('notifications'), async (req, res) => {
   const { title, type, message, btn_text, btn_link, active } = req.body;
   const { data, error } = await supabase.from('notifications').insert([{
     title, type, message, btn_text, btn_link, active: active === 'true' || active === true
@@ -571,7 +609,7 @@ app.post('/api/admin/notifications', authMiddleware, async (req, res) => {
   res.json(data);
 });
 
-app.put('/api/admin/notifications/:id', authMiddleware, async (req, res) => {
+app.put('/api/admin/notifications/:id', requireSection('notifications'), async (req, res) => {
   const { title, type, message, btn_text, btn_link, active } = req.body;
   const { data, error } = await supabase.from('notifications').update({
     title, type, message, btn_text, btn_link, active: active === 'true' || active === true
@@ -580,7 +618,7 @@ app.put('/api/admin/notifications/:id', authMiddleware, async (req, res) => {
   res.json(data);
 });
 
-app.delete('/api/admin/notifications/:id', authMiddleware, async (req, res) => {
+app.delete('/api/admin/notifications/:id', requireSection('notifications'), async (req, res) => {
   await supabase.from('notifications').delete().eq('id', req.params.id);
   res.json({ success: true });
 });
@@ -593,7 +631,7 @@ app.post('/api/track', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/admin/analytics/traffic', authMiddleware, async (req, res) => {
+app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req, res) => {
   const range = req.query.range || '7d';
   let fromDate = new Date();
   if (range === '7d') fromDate.setDate(fromDate.getDate()-7);
@@ -618,7 +656,7 @@ app.get('/api/admin/analytics/traffic', authMiddleware, async (req, res) => {
 });
 
 // ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────
-app.get('/api/admin/analytics/reviews', authMiddleware, async (req, res) => {
+app.get('/api/admin/analytics/reviews', requireSection('review-analytics'), async (req, res) => {
   const { data: reviews } = await supabase.from('reviews').select('*');
   const { data: movies } = await supabase.from('movies').select('id,title');
   if (!reviews || !movies) return res.json({ total:0 });
