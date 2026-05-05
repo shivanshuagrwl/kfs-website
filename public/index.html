@@ -66,7 +66,7 @@ body.light-mode .testimonial-role{color:#666}
 body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
-body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
+body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card{background:#fff;border-color:#e0e0e0}
 #movie-watch-status-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;border:1px solid var(--white);color:var(--white);background:transparent}
 #movie-watch-status-btn.is-watched{background:var(--white);color:var(--black);border-color:var(--white)}
 #movie-watch-status-btn:hover{opacity:.8}
@@ -271,10 +271,10 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 @media(max-width:768px){.section{padding:48px 24px}}
 
 /* ── STATS ────────────────────────────────────────────────────────────── */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:transparent;margin-top:0}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:transparent;margin-top:0}
 @media(max-width:768px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
-.stat-item{background:var(--black);padding:40px 32px;position:relative;overflow:hidden;border:1px solid var(--border);border-radius:12px}
-.stat-item::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--border)}
+.stat-item{background:transparent;padding:40px 32px;position:relative;overflow:hidden;border:none;border-radius:0}
+.stat-item::after{display:none}
 .stat-num{font-size:clamp(2.5rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;display:block}
 .stat-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-top:8px}
 
