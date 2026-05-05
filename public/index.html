@@ -4403,7 +4403,7 @@ function initMoviePickers() {
 // ══════════════════════════════════════════════════════════
 // MEMBER PROFILE MODAL
 // ══════════════════════════════════════════════════════════
-function openMemberProfile(member) {
+async function openMemberProfile(member) {
   const modal = document.getElementById('member-profile-modal');
   document.getElementById('mprofile-name').textContent = member.name;
   document.getElementById('mprofile-role').textContent = [member.role, member.domain].filter(Boolean).join(' · ');
@@ -4414,7 +4414,15 @@ function openMemberProfile(member) {
     ? `<img class="member-profile-photo" src="${member.photo}" alt="${member.name}">`
     : `<div class="member-profile-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`;
 
-  // find films this member is linked to
+  // find films this member is linked to — fetch if cache empty (e.g. direct /members visit)
+  if (!window._allMoviesCache || !window._allMoviesCache.length) {
+    const [mv, allReviews] = await Promise.all([
+      apiFetch('/api/movies'),
+      fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
+    ]);
+    window._allMoviesCache = mv || [];
+    window._movieRatings = window._movieRatings || {};
+  }
   const allMovies = window._allMoviesCache || [];
   const crewFields = ['director','producer','dop','screenwriter','video_editor','sound_design','management','graphic_design','actors','support_crew'];
   const memberFilms = [];
