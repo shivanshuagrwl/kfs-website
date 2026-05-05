@@ -407,21 +407,22 @@ app.get('/api/achievements', async (req, res) => {
   res.json(data || []);
 });
 
-app.post('/api/admin/achievements', requireSection('achievements'), async (req, res) => {
-  const { title, description, year, icon, sort_order } = req.body;
+app.post('/api/admin/achievements', requireSection('achievements'), upload.single('image'), async (req, res) => {
+  const { title, description, year, sort_order } = req.body;
+  const imageUrl = req.file ? await uploadImage(req.file, 'general') : null;
   const { data, error } = await supabase.from('achievements').insert([{
-    title, description, year, icon: icon || '🏆', sort_order: parseInt(sort_order) || 99
+    title, description, year, image: imageUrl, sort_order: parseInt(sort_order) || 99
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'create', 'achievement', title);
   res.json(data);
 });
 
-app.put('/api/admin/achievements/:id', requireSection('achievements'), async (req, res) => {
-  const { title, description, year, icon, sort_order } = req.body;
-  const { data, error } = await supabase.from('achievements').update({
-    title, description, year, icon, sort_order: parseInt(sort_order) || 99
-  }).eq('id', req.params.id).select().single();
+app.put('/api/admin/achievements/:id', requireSection('achievements'), upload.single('image'), async (req, res) => {
+  const { title, description, year, sort_order } = req.body;
+  const updates = { title, description, year, sort_order: parseInt(sort_order) || 99 };
+  if (req.file) updates.image = await uploadImage(req.file, 'general');
+  const { data, error } = await supabase.from('achievements').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'update', 'achievement', title);
   res.json(data);
