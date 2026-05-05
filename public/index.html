@@ -2906,13 +2906,13 @@ async function openMovie(id) {
   const actorsEl = document.getElementById('movie-detail-actors');
   if (m.actors) {
     actorsSec.style.display='block';
-    actorsEl.innerHTML = m.actors.split(',').map(a=>crewNameTag(a.trim())).join('');
+    actorsEl.innerHTML = splitCrew(m.actors).map(a=>crewNameTag(a.trim())).join('');
   } else actorsSec.style.display='none';
   const supportSec = document.getElementById('movie-detail-support-section');
   const supportEl = document.getElementById('movie-detail-support');
   if (m.support_crew) {
     supportSec.style.display='block';
-    supportEl.innerHTML = m.support_crew.split(',').map(s=>crewNameTag(s.trim())).join('');
+    supportEl.innerHTML = splitCrew(m.support_crew).map(s=>crewNameTag(s.trim())).join('');
   } else supportSec.style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
   history.pushState({page:'movie-detail', id}, '', '/movies/'+id);
@@ -4287,9 +4287,15 @@ function closeSearch() {
 // ══════════════════════════════════════════════════════════
 // CREW NAME HELPERS — parse "Name||memberId" format
 // ══════════════════════════════════════════════════════════
+function splitCrew(val) {
+  // Support both new separator (;;) and legacy comma-separated data
+  if (!val) return [];
+  return val.includes(';;') ? val.split(';;').map(s=>s.trim()).filter(Boolean)
+                             : val.split(',').map(s=>s.trim()).filter(Boolean);
+}
 function renderCrewNames(val) {
   if (!val) return '';
-  return val.split(',').map(p => {
+  return splitCrew(val).map(p => {
     const [name, id] = p.trim().split('||');
     const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
     if (member) return `<span style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}<\/span>`;
@@ -4376,12 +4382,12 @@ class MemberPicker {
   _hideDropdown() { this.dropdown.style.display='none'; }
   getValue() {
     // returns comma-separated names (with id suffix for linked members)
-    return this.selected.map(s=>s.id ? `${s.name}||${s.id}` : s.name).join(', ');
+    return this.selected.map(s=>s.id ? `${s.name}||${s.id}` : s.name).join(';;');
   }
   setValue(str) {
     this.selected = [];
     if (!str) return;
-    str.split(',').map(s=>s.trim()).filter(Boolean).forEach(part=>{
+    splitCrew(str).forEach(part=>{
       const [name, id] = part.split('||');
       const member = id && allMembers ? allMembers.find(m=>m.id==id) : null;
       this.selected.push(member ? {id:member.id,name:member.name,photo:member.photo,role:member.role} : {id:null,name:name.trim(),photo:null,role:''});
@@ -4393,7 +4399,7 @@ class MemberPicker {
 let _moviePickers = {};
 function initMoviePickers() {
   const fields = ['director','producer','dop','screenwriter','editor','sound','management','gd','actors','support'];
-  const multi = ['actors','support'];
+  const multi = ['director','producer','dop','screenwriter','editor','sound','management','gd','actors','support'];
   fields.forEach(f=>{
     _moviePickers[f] = new MemberPicker('mpick-'+f, multi.includes(f));
   });
@@ -4429,7 +4435,7 @@ async function openMemberProfile(member) {
     let roleLabel = '';
     crewFields.forEach(f=>{
       const val = m[f]||'';
-      const parts = val.split(',').map(p=>p.trim());
+      const parts = splitCrew(val);
       parts.forEach(p=>{
         const [name, id] = p.split('||');
         if ((id && id.trim()==String(member.id)) || name.trim().toLowerCase()===member.name.toLowerCase()) {
@@ -4477,12 +4483,12 @@ function doSearch(q) {
     if (m.title?.toLowerCase().includes(q)) return true;
     return crewFields.some(f => {
       const val = m[f]||'';
-      return val.split(',').some(p=>p.split('||')[0].trim().toLowerCase().includes(q));
+      return splitCrew(val).some(p=>p.split('||')[0].trim().toLowerCase().includes(q));
     });
   }).forEach(m => {
     const matchedCrew = [];
     crewFields.forEach(f=>{
-      (m[f]||'').split(',').forEach(p=>{
+      splitCrew(m[f]||'').forEach(p=>{
         const name = p.split('||')[0].trim();
         if (name.toLowerCase().includes(q) && !m.title?.toLowerCase().includes(q)) matchedCrew.push(name);
       });
@@ -4498,7 +4504,7 @@ function doSearch(q) {
   );
   searchData.members.filter(m => m.name?.toLowerCase().includes(q) || m.role?.toLowerCase().includes(q) || m.domain?.toLowerCase().includes(q)).forEach(m => {
     const allMovies = window._allMoviesCache || [];
-    const filmCount = allMovies.filter(mv=>crewFields.some(f=>(mv[f]||'').split(',').some(p=>{ const [nm,id]=p.split('||'); return (id&&id.trim()==String(m.id))||nm.trim().toLowerCase()===m.name.toLowerCase(); }))).length;
+    const filmCount = allMovies.filter(mv=>crewFields.some(f=>splitCrew(mv[f]||'').some(p=>{ const [nm,id]=p.split('||'); return (id&&id.trim()==String(m.id))||nm.trim().toLowerCase()===m.name.toLowerCase(); }))).length;
     const sub = [m.role, m.domain, filmCount ? filmCount+' film'+(filmCount>1?'s':'') : ''].filter(Boolean).join(' · ');
     results.push({ type:'member', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg>`, title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
   });
