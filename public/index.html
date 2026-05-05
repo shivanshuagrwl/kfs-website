@@ -67,9 +67,14 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
-#movie-watch-status-btn{border:1px solid var(--white);color:var(--white);background:transparent}
-#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black)}
-body.light-mode #movie-watch-status-btn{border-color:#111;color:#111}
+#movie-watch-status-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;
+  border:1px solid var(--white);color:var(--white);background:transparent
+}
+#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black);border-color:var(--white)}
+body.light-mode #movie-watch-status-btn{border-color:#111;color:#111;background:transparent}
 body.light-mode #movie-watch-status-btn.is-watched{background:#111;color:#fff;border-color:#111}
 body.light-mode .section-divider{background:#ddd}
 /* blog detail */
@@ -1542,7 +1547,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
+        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()">
           <span id="movie-watch-status-icon">☐</span> Mark as Watched
         </button>
       </div>
