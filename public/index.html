@@ -67,8 +67,10 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 /* general cards */
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card,body.light-mode .stat-item{background:#fff;border-color:#e0e0e0}
-body.light-mode #movie-watch-status-btn{border-color:#111 !important;color:#111 !important;background:transparent !important}
-body.light-mode #movie-watch-status-btn.is-watched{background:#111 !important;color:#fff !important;border-color:#111 !important}
+#movie-watch-status-btn{border:1px solid var(--white);color:var(--white);background:transparent}
+#movie-watch-status-btn.is-watched{background:var(--white);color:var(--black)}
+body.light-mode #movie-watch-status-btn{border-color:#111;color:#111}
+body.light-mode #movie-watch-status-btn.is-watched{background:#111;color:#fff;border-color:#111}
 body.light-mode .section-divider{background:#ddd}
 /* blog detail */
 body.light-mode #blog-detail,body.light-mode #movie-detail{background:#f0f0f0}
@@ -1077,8 +1079,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
-  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden">
-    <div style="padding:28px 28px 0"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button class="modal-close" onclick="closeAddAdminModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button class="modal-close" onclick="closeAddAdminModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FULL NAME</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma" style="border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">USERNAME</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase;border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PASSWORD</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters" style="border-radius:12px"></div>
@@ -1109,8 +1111,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- EDIT PERMISSIONS MODAL -->
 <div class="modal-overlay" id="edit-perms-modal">
-  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden">
-    <div style="padding:28px 28px 0"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button class="modal-close" onclick="closeEditPermsModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button class="modal-close" onclick="closeEditPermsModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
     <input type="hidden" id="edit-perms-admin-id">
     <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Admin: <strong id="edit-perms-admin-name" style="color:var(--white)"></strong></p>
     <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
@@ -1523,7 +1525,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;border:1px solid currentColor;background:transparent;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
+        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px">
           <span id="movie-watch-status-icon">☐</span> Mark as Watched
         </button>
       </div>
@@ -4800,11 +4802,8 @@ function updateDetailWatchBtn(id) {
   btn.innerHTML = watched
     ? '<span>✓</span> Watched'
     : '<span>☐</span> Mark as Watched';
-  const isLight = document.body.classList.contains('light-mode');
-  btn.style.background = watched ? (isLight ? '#111' : 'var(--white)') : 'transparent';
-  btn.style.color = watched ? (isLight ? '#fff' : 'var(--black)') : (isLight ? '#111' : 'var(--white)');
-  btn.style.borderColor = isLight ? '#111' : 'var(--white)';
   btn.classList.toggle('is-watched', watched);
+  btn.style.cssText = ''; // clear any previously set inline styles
 }
 
 function toggleWatchStatusCard(id, cardEl) {
