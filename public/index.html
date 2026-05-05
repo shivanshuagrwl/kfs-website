@@ -1043,6 +1043,30 @@ body.light-mode .member-film-poster-ph{background:#eee}
   background:none;border:none;color:#555;cursor:pointer;font-size:16px;
   display:none;padding:0;line-height:1}
 .member-search-clear.visible{display:block}
+
+/* Admin permissions badges */
+.perm-badge{display:inline-flex;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:2px 9px;font-size:10px;color:var(--grey);white-space:nowrap;margin:2px 2px 2px 0}
+.perm-badge.full-badge{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e}
+.perm-badge.master-badge{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#f59e0b}
+body.light-mode .perm-badge{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#555}
+body.light-mode .perm-badge.full-badge{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.25);color:#16a34a}
+body.light-mode .perm-badge.master-badge{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.25);color:#d97706}
+/* Admin action buttons */
+.admin-action-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;border:1px solid var(--border);background:transparent;cursor:pointer;transition:all .18s;color:var(--white);margin:2px}
+.admin-action-btn:hover{background:rgba(255,255,255,.08)}
+.admin-action-btn.del-btn:hover{border-color:#e74c3c;color:#e74c3c;background:rgba(231,76,60,.07)}
+.admin-action-btn.perm-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(100,100,255,.07)}
+body.light-mode .admin-action-btn{color:#333;border-color:#ddd}
+body.light-mode .admin-action-btn:hover{background:rgba(0,0,0,.05)}
+body.light-mode .admin-action-btn.del-btn:hover{border-color:#e74c3c;color:#e74c3c}
+/* Permission modal checkboxes */
+.perm-check-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.perm-check-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .15s;font-size:13px;font-weight:400;color:var(--white)}
+.perm-check-item:hover{background:rgba(255,255,255,.05)}
+.perm-check-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;border-radius:4px}
+body.light-mode .perm-check-item{color:#222}
+body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
+
 </style>
 </head>
 <body>
@@ -1052,53 +1076,58 @@ body.light-mode .member-film-poster-ph{background:#eee}
 
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header"><h3>Add Admin</h3><button class="modal-close" onclick="closeAddAdminModal()">✕</button></div>
-    <div class="form-group"><label>Full Name</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma"></div>
-    <div class="form-group"><label>Username</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase"></div>
-    <div class="form-group"><label>Password</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters"></div>
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden">
+    <div style="padding:28px 28px 0"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button class="modal-close" onclick="closeAddAdminModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FULL NAME</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma" style="border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">USERNAME</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase;border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PASSWORD</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters" style="border-radius:12px"></div>
     <div class="form-group">
-      <label style="margin-bottom:10px;display:block">Section Access <span style="font-size:11px;color:var(--grey);font-weight:400">(uncheck to restrict)</span></label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="blogs" checked> Blog Posts</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="events" checked> Events</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="members" checked> Members</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="movies" checked> Films</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="chitra-vichitra" checked> Chitra Vichitra</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="testimonials" checked> Testimonials</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="achievements" checked> Achievements</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="notifications" checked> Notifications</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="settings" checked> Settings</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600;margin:0">SECTION ACCESS</label>
+        <span style="font-size:11px;color:var(--grey)">Uncheck to restrict</span>
+      </div>
+      <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="blogs" checked> Blog Posts</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="events" checked> Events</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="members" checked> Members</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="movies" checked> Films</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="chitra-vichitra" checked> Chitra Vichitra</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="testimonials" checked> Testimonials</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="achievements" checked> Achievements</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="notifications" checked> Notifications</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="settings" checked> Settings</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
+        <label class="perm-check-item"></label>
       </div>
     </div>
-    <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewAdmin()">Create Admin</button></div>
+    <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" onclick="saveNewAdmin()">Create Admin</button></div>
   </div>
 </div>
 
 <!-- EDIT PERMISSIONS MODAL -->
 <div class="modal-overlay" id="edit-perms-modal">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header"><h3>Edit Permissions — <span id="edit-perms-admin-name"></span></h3><button class="modal-close" onclick="closeEditPermsModal()">✕</button></div>
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden">
+    <div style="padding:28px 28px 0"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button class="modal-close" onclick="closeEditPermsModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
     <input type="hidden" id="edit-perms-admin-id">
-    <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Check the sections this admin is allowed to manage.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="blogs"> Blog Posts</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="events"> Events</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="members"> Members</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="movies"> Films</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="chitra-vichitra"> Chitra Vichitra</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="testimonials"> Testimonials</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="achievements"> Achievements</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="notifications"> Notifications</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="settings"> Settings</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
+    <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Admin: <strong id="edit-perms-admin-name" style="color:var(--white)"></strong></p>
+    <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="blogs"> Blog Posts</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="events"> Events</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="members"> Members</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="movies"> Films</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="chitra-vichitra"> Chitra Vichitra</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="testimonials"> Testimonials</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="achievements"> Achievements</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="notifications"> Notifications</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="settings"> Settings</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
+      <label class="perm-check-item"></label>
     </div>
-    <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
+    <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
   </div>
 </div>
 
@@ -3213,21 +3242,25 @@ async function loadAdminData(name) {
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.</td></tr>`; return; }
     const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics'};
+    // Store perms in a global map so onclick can look up safely (avoids JSON-in-attribute quoting bugs)
+    window._adminPermsMap = {};
+    admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
     tbody.innerHTML = admins.map(a => {
-      const perms = Array.isArray(a.permissions) ? a.permissions : [];
+      const perms = window._adminPermsMap[a.id];
+      const isFullAccess = perms.length === 0;
       const permsDisplay = a.role === 'master'
-        ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Full Access</span>'
-        : perms.length === 0
-          ? '<span style="color:#22c55e;font-size:11px;font-weight:600">Full Access</span>'
-          : perms.map(p => `<span style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:2px 6px;font-size:10px;color:var(--grey);white-space:nowrap">${SECTION_LABELS[p]||p}</span>`).join(' ');
+        ? '<span class="perm-badge master-badge">All Sections</span>'
+        : isFullAccess
+          ? '<span class="perm-badge full-badge">Full Access</span>'
+          : perms.map(p => `<span class="perm-badge">${SECTION_LABELS[p]||p}</span>`).join('');
       const actions = a.role === 'master'
-        ? `<span style="color:#555;font-size:12px">Protected</span>`
-        : `<button class="btn-sm" style="margin-right:4px" onclick="openEditPermsModal('${a.id}','${a.name.replace(/'/g,"\\'")}',${JSON.stringify(perms)})">Permissions</button><button class="btn-sm danger" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
+        ? `<span style="color:var(--grey);font-size:12px">Protected</span>`
+        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')">✏️ Permissions</button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove</button>`;
       return `<tr>
         <td style="font-weight:500">${a.name}</td>
-        <td style="color:var(--grey);font-family:monospace">${a.username}</td>
+        <td style="color:var(--grey);font-family:monospace;font-size:13px">${a.username}</td>
         <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}</span></td>
-        <td style="max-width:200px">${permsDisplay}</td>
+        <td style="max-width:220px">${permsDisplay}</td>
         <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
         <td>${actions}</td>
       </tr>`;
@@ -3979,11 +4012,20 @@ async function saveNewAdmin() {
   }
 }
 
-function openEditPermsModal(id, name, currentPerms) {
+function openEditPermsModal(id) {
+  const allAdminRows = document.querySelectorAll('#admins-tbody tr');
+  // Get admin name from the table row
+  let adminName = '';
+  allAdminRows.forEach(row => {
+    const btn = row.querySelector('.perm-btn');
+    if (btn && btn.getAttribute('onclick').includes("'" + id + "'")) {
+      adminName = row.cells[0].textContent;
+    }
+  });
   document.getElementById('edit-perms-admin-id').value = id;
-  document.getElementById('edit-perms-admin-name').textContent = name;
+  document.getElementById('edit-perms-admin-name').textContent = adminName;
   document.getElementById('edit-perms-error').textContent = '';
-  const permsArr = Array.isArray(currentPerms) ? currentPerms : [];
+  const permsArr = (window._adminPermsMap && window._adminPermsMap[id]) || [];
   document.querySelectorAll('.edit-perm-cb').forEach(cb => {
     cb.checked = permsArr.length === 0 || permsArr.includes(cb.value);
   });
