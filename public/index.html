@@ -289,14 +289,52 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
 
 /* ── ACHIEVEMENTS ─────────────────────────────────────────────────────── */
-.achievements-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent;margin-top:60px}
+.achievements-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border);margin-top:60px}
 @media(max-width:768px){.achievements-grid{grid-template-columns:1fr}}
-.achievement-card{background:var(--black);padding:40px;transition:background .3s var(--ease);border:1px solid var(--border);border-radius:12px}
+.achievement-card{background:var(--black);padding:40px;transition:background .3s var(--ease);}
 .achievement-card:hover{background:var(--card)}
 .achievement-icon{font-size:32px;margin-bottom:16px}
 .achievement-title{font-size:18px;font-weight:600;margin-bottom:8px}
 .achievement-year{font-size:12px;letter-spacing:.1em;color:var(--grey);margin-bottom:12px}
 .achievement-desc{font-size:14px;color:var(--grey);line-height:1.6}
+
+/* ── APPLE-STYLE FULL-BLEED GRID SECTIONS ────────────────────────────── */
+.apple-section{width:100%;overflow:hidden}
+.apple-section .section-inner{max-width:none;padding:0}
+.apple-section .section-header{max-width:1200px;margin:0 auto;padding:80px 80px 40px}
+@media(max-width:768px){.apple-section .section-header{padding:60px 24px 28px}}
+.apple-section .section-cta{max-width:1200px;margin:0 auto;padding:40px 80px 80px}
+@media(max-width:768px){.apple-section .section-cta{padding:28px 24px 60px}}
+/* Apple mosaic grid */
+.apple-mosaic{display:grid;gap:2px;background:var(--border)}
+.apple-mosaic-blog{grid-template-columns:repeat(3,1fr);grid-template-rows:auto}
+.apple-mosaic-films{grid-template-columns:repeat(4,1fr);grid-template-rows:auto}
+@media(max-width:900px){.apple-mosaic-films{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.apple-mosaic-blog,.apple-mosaic-films{grid-template-columns:1fr}}
+/* blog tile */
+.apple-blog-tile{background:var(--black);cursor:pointer;overflow:hidden;transition:background .3s var(--ease);position:relative}
+.apple-blog-tile:hover{background:var(--card)}
+.apple-blog-tile:hover .apple-tile-img{transform:scale(1.04)}
+.apple-tile-img-wrap{overflow:hidden;width:100%;aspect-ratio:16/9}
+.apple-tile-img{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
+.apple-tile-img-placeholder{width:100%;aspect-ratio:16/9;background:var(--card)}
+.apple-tile-body{padding:28px}
+.apple-tile-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
+.apple-tile-title{font-size:17px;font-weight:600;line-height:1.3;margin-bottom:8px}
+.apple-tile-excerpt{font-size:13px;color:var(--grey);line-height:1.6}
+/* film tile */
+.apple-film-tile{background:var(--black);cursor:pointer;overflow:hidden;transition:background .3s var(--ease);position:relative}
+.apple-film-tile:hover{background:var(--card)}
+.apple-film-tile:hover .apple-film-poster{transform:scale(1.04)}
+.apple-film-poster-wrap{overflow:hidden;width:100%;aspect-ratio:2/3}
+.apple-film-poster{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}
+.apple-film-poster-placeholder{width:100%;aspect-ratio:2/3;background:var(--card);display:flex;align-items:center;justify-content:center}
+.apple-film-info{padding:20px}
+.apple-film-title{font-size:15px;font-weight:600;margin-bottom:4px;line-height:1.3}
+.apple-film-meta{font-size:12px;color:var(--grey)}
+/* achievement apple grid */
+.apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
+@media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr}}
 
 /* ── EVENTS ──────────────────────────────────────────────────────────── */
 .events-tabs{display:flex;gap:0;margin-top:60px;border-bottom:1px solid var(--border)}
@@ -1325,29 +1363,33 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <section class="section">
+  <section class="section apple-section">
     <div class="section-inner">
-      <p class="section-label">From the Lens</p>
-      <h2 class="section-title">Latest Posts</h2>
-      <div class="blog-grid" id="home-blog-grid">
-        <div class="loading" style="grid-column:1/-1">Loading posts...</div>
+      <div class="section-header">
+        <p class="section-label">From the Lens</p>
+        <h2 class="section-title">Latest Posts</h2>
       </div>
-      <div style="margin-top:40px">
+      <div class="apple-mosaic apple-mosaic-blog" id="home-blog-grid">
+        <div class="loading" style="grid-column:1/-1;padding:40px">Loading posts...</div>
+      </div>
+      <div class="section-cta">
         <a class="btn btn-secondary" onclick="navigate('blog')">All Posts →</a>
       </div>
     </div>
   </section>
 
-  <div class="section-divider" style="margin:0 80px"></div>
+  <div class="section-divider"></div>
 
-  <section class="section">
+  <section class="section apple-section">
     <div class="section-inner">
-      <p class="section-label">Our Work</p>
-      <h2 class="section-title">Films</h2>
-      <div class="movies-home-grid" id="home-movies-grid">
-        <div class="loading" style="grid-column:1/-1">Loading films...</div>
+      <div class="section-header">
+        <p class="section-label">Our Work</p>
+        <h2 class="section-title">Films</h2>
       </div>
-      <div style="margin-top:40px">
+      <div class="apple-mosaic apple-mosaic-films" id="home-movies-grid">
+        <div class="loading" style="grid-column:1/-1;padding:40px">Loading films...</div>
+      </div>
+      <div class="section-cta">
         <a class="btn btn-secondary" onclick="navigate('movies')">All Films →</a>
       </div>
     </div>
@@ -1370,12 +1412,14 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
   <div class="section-divider" style="margin:0 80px"></div>
 
-  <section class="section">
+  <section class="section apple-section">
     <div class="section-inner">
-      <p class="section-label">Milestones</p>
-      <h2 class="section-title">Achievements</h2>
-      <div class="achievements-grid" id="achievements-grid">
-        <div class="loading">Loading achievements...</div>
+      <div class="section-header">
+        <p class="section-label">Milestones</p>
+        <h2 class="section-title">Achievements</h2>
+      </div>
+      <div class="apple-achievement-grid" id="achievements-grid">
+        <div class="loading" style="padding:40px">Loading achievements...</div>
       </div>
     </div>
   </section>
@@ -1571,13 +1615,13 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <!-- SPOTIFY SOUNDTRACK -->
       <div class="movie-detail-section" id="movie-detail-spotify-section" style="display:none">
         <div class="movie-detail-section-title" style="display:flex;align-items:center;gap:8px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           Soundtrack
         </div>
         <a id="movie-detail-spotify-link" href="" target="_blank" rel="noopener"
           style="display:inline-flex;align-items:center;gap:10px;margin-top:10px;padding:10px 18px;border:1px solid var(--border);border-radius:24px;font-size:13px;color:var(--grey);text-decoration:none;transition:border-color .2s,color .2s">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-          Listen on Spotify
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          Listen to Soundtrack
         </a>
       </div>
 
@@ -2456,7 +2500,7 @@ async function loadHomeData() {
   if (achievements && achievements.length) {
     ag.innerHTML = achievements.map(a=>`
       <div class="achievement-card">
-        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}<\/div>
+        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : (a.icon||'🏆')}<\/div>
         <div class="achievement-title">${a.title}<\/div>
         <div class="achievement-year">${a.year||''}<\/div>
         <div class="achievement-desc">${a.description||''}<\/div>
@@ -2483,7 +2527,15 @@ async function loadHomeData() {
       const ar=!!_hrs[a.id], br=!!_hrs[b.id];
       if(ar===br) return 0; return ar?1:-1;
     });
-    hbg.innerHTML = _hsorted.slice(0,3).map(b=>renderBlogCard(b)).join('');
+    hbg.innerHTML = _hsorted.slice(0,3).map(b=>`
+      <div class="apple-blog-tile" onclick="openBlog('${b.id}')">
+        ${b.cover_image ? `<div class="apple-tile-img-wrap"><img class="apple-tile-img" src="${b.cover_image}" alt="" loading="lazy"><\/div>` : `<div class="apple-tile-img-placeholder"><\/div>`}
+        <div class="apple-tile-body">
+          <div class="apple-tile-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
+          <div class="apple-tile-title">${b.title}<\/div>
+          <div class="apple-tile-excerpt">${b.excerpt||''}<\/div>
+        <\/div>
+      <\/div>`).join('');
   } else {
     hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.<\/p><\/div>`;
   }
@@ -2511,7 +2563,14 @@ async function loadHomeData() {
   }
   const hmg = document.getElementById('home-movies-grid');
   if (movies && movies.length) {
-    hmg.innerHTML = movies.slice(0,4).map(m=>renderMovieCard(m,true)).join('');
+    hmg.innerHTML = movies.slice(0,4).map(m=>`
+      <div class="apple-film-tile" onclick="openMovie('${m.id}')">
+        ${m.poster_image ? `<div class="apple-film-poster-wrap"><img class="apple-film-poster" src="${m.poster_image}" alt="" loading="lazy"><\/div>` : `<div class="apple-film-poster-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3"><rect x="2" y="2" width="20" height="20" rx="2"><\/rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"><\/path><\/svg><\/div>`}
+        <div class="apple-film-info">
+          <div class="apple-film-title">${m.title}<\/div>
+          <div class="apple-film-meta">${[m.release_year, m.genre].filter(Boolean).join(' · ')}<\/div>
+        <\/div>
+      <\/div>`).join('');
   } else {
     hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.<\/p><\/div>`;
   }
