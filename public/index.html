@@ -2644,7 +2644,7 @@ function toggleDomainField() {
   const group = document.getElementById('domain-group');
   const label = document.getElementById('domain-label');
   if (!group) return;
-  const show = role === 'Lead' || role === 'Core Member' || role === 'Member';
+  const show = role === 'Lead' || role === 'Member';
   group.style.display = show ? 'block' : 'none';
   if (label) label.textContent = role === 'Member' ? 'Domain (optional)' : 'Domain';
 }
@@ -3289,7 +3289,7 @@ async function saveMember() {
   fd.append('name', document.getElementById('member-name').value);
   fd.append('role', document.getElementById('member-role').value);
   const _role = document.getElementById('member-role').value;
-  fd.append('domain', (_role === 'Lead' || _role === 'Core Member' || _role === 'Member') ? (document.getElementById('member-domain').value||'') : '');
+  fd.append('domain', (_role === 'Lead' || _role === 'Member') ? (document.getElementById('member-domain').value||'') : '');
   fd.append('batch', document.getElementById('member-batch').value);
   fd.append('bio', document.getElementById('member-bio').value);
   fd.append('sort_order', document.getElementById('member-sort').value);
