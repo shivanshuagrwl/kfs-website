@@ -2261,10 +2261,10 @@ function toggleTheme() {
 })();
 
 // Pre-load members so linked member lookups work on any page
-(async function prefetchMembers(){
+document.addEventListener('DOMContentLoaded', async function prefetchMembers(){
   const data = await apiFetch('/api/members');
   if (data) allMembers = data;
-})();
+});
 
 function animateCounters() {
   document.querySelectorAll('.counter').forEach(el=>{
