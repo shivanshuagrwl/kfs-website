@@ -13,7 +13,26 @@ const PORT = process.env.PORT || 3000;
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://agxsilmugsrzxgerpaqm.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneHNpbG11Z3NyenhnZXJwYXFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Nzc3NzYwNSwiZXhwIjoyMDkzMzUzNjA1fQ.CUZSCcBFdJn_XWuzqbPLA4dOZGjd8QuikaRRXlajUDI';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false },
+  db: { schema: 'public' },
+  global: {
+    headers: { 'x-application-name': 'kfs-server' },
+  },
+});
+
+// Retry wrapper for transient Supabase failures (network blips, cold starts)
+async function sbQuery(fn, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const isLast = i === retries - 1;
+      if (isLast) throw e;
+      await new Promise(r => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'kfs@KIIT#filmSociety$2024!secret';
 
@@ -96,36 +115,60 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
-  const { data: master } = await supabase.from('admins').select('id').eq('role', 'master').single();
-  if (!master) {
-    const hash = await bcrypt.hash('KFS@master2024!', 10);
-    await supabase.from('admins').insert([{
-      name: 'KFS Master',
-      username: 'kfsmaster',
-      password_hash: hash,
-      role: 'master',
-    }]);
-    console.log('Master admin created: username=kfsmaster password=KFS@master2024!');
-  }
+  try {
+    // Use maybeSingle() — returns null (not an error) when no row exists
+    const { data: master, error: masterErr } = await supabase
+      .from('admins').select('id').eq('role', 'master').maybeSingle();
+    if (masterErr) throw new Error('admins table query failed: ' + masterErr.message);
 
-  const { data: settings } = await supabase.from('settings').select('*').eq('key', 'admin_password').single();
-  if (!settings) {
-    await supabase.from('settings').insert([
-      { key: 'site_tagline', value: 'Lights. Camera. KFS.' },
-      { key: 'about_text', value: 'KIIT Film Society is a student-run collective passionate about cinema.' },
-      { key: 'instagram', value: '' },
-      { key: 'youtube', value: '' },
-      { key: 'email', value: 'kfs@kiit.ac.in' },
-    ]).then(() => {}).catch(() => {});
+    if (!master) {
+      const hash = await bcrypt.hash('KFS@master2024!', 10);
+      const { error: insertErr } = await supabase.from('admins').insert([{
+        name: 'KFS Master',
+        username: 'kfsmaster',
+        password_hash: hash,
+        role: 'master',
+      }]);
+      if (insertErr) throw new Error('Master admin insert failed: ' + insertErr.message);
+      console.log('Master admin created: username=kfsmaster password=KFS@master2024!');
+    }
+
+    // Check if settings are seeded (use maybeSingle to avoid crash on missing row)
+    const { data: tagline } = await supabase
+      .from('settings').select('key').eq('key', 'site_tagline').maybeSingle();
+    if (!tagline) {
+      await supabase.from('settings').insert([
+        { key: 'site_tagline', value: 'Lights. Camera. KFS.' },
+        { key: 'about_text', value: 'KIIT Film Society is a student-run collective passionate about cinema.' },
+        { key: 'instagram', value: '' },
+        { key: 'youtube', value: '' },
+        { key: 'email', value: 'kfs@kiit.ac.in' },
+      ]).then(() => {}).catch(() => {});
+    }
+  } catch (e) {
+    console.error('initDB error:', e.message);
+    // Don't crash the server — Supabase may be temporarily unreachable
   }
 }
+
+// ── HEALTH CHECK ──────────────────────────────────────────────────────────────
+app.get('/api/health', async (req, res) => {
+  const start = Date.now();
+  try {
+    const { error } = await supabase.from('settings').select('key').limit(1);
+    if (error) throw new Error(error.message);
+    res.json({ status: 'ok', db: 'connected', latencyMs: Date.now() - start });
+  } catch (e) {
+    res.status(503).json({ status: 'error', db: 'unreachable', error: e.message, latencyMs: Date.now() - start });
+  }
+});
 
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-  const { data: admin } = await supabase.from('admins').select('*').eq('username', username.trim()).single();
+  const { data: admin } = await supabase.from('admins').select('*').eq('username', username.trim()).maybeSingle();
   if (!admin) return res.status(401).json({ error: 'Invalid credentials' });
 
   const valid = await bcrypt.compare(password, admin.password_hash);
@@ -150,7 +193,7 @@ app.post('/api/admin/change-password', authMiddleware, async (req, res) => {
 // ── TOKEN REFRESH ─────────────────────────────────────────────────────────────
 app.post('/api/admin/refresh', authMiddleware, async (req, res) => {
   const { data: admin, error } = await supabase
-    .from('admins').select('id,name,username,role,permissions').eq('id', req.admin.id).single();
+    .from('admins').select('id,name,username,role,permissions').eq('id', req.admin.id).maybeSingle();
   if (error || !admin) return res.status(401).json({ error: 'Admin not found' });
   const perms = (() => { try { return JSON.parse(admin.permissions || '[]'); } catch { return []; } })();
   const token = jwt.sign(
@@ -454,40 +497,61 @@ app.delete('/api/admin/achievements/:id', requireSection('achievements'), async 
 });
 
 // ── MOVIES ────────────────────────────────────────────────────────────────────
+// Helper: parse genre field (stored as JSON array or legacy string)
+function parseGenre(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { const p = JSON.parse(raw); return Array.isArray(p) ? p : [p]; } catch { return [raw]; }
+}
+
 app.get('/api/movies', async (req, res) => {
-  const { data } = await supabase.from('movies').select('*').order('release_year', { ascending: false });
-  res.json(data || []);
+  let query = supabase.from('movies').select('*').order('release_year', { ascending: false });
+  const { data } = await query;
+  let movies = data || [];
+  // Genre filter: ?genre=Drama
+  if (req.query.genre) {
+    const filterGenre = req.query.genre.toLowerCase();
+    movies = movies.filter(m => parseGenre(m.genre).some(g => g.toLowerCase() === filterGenre));
+  }
+  // Parse genre array for each movie before sending
+  movies = movies.map(m => ({ ...m, genre: parseGenre(m.genre) }));
+  res.json(movies);
 });
 
 app.get('/api/movies/:id', async (req, res) => {
   const { data } = await supabase.from('movies').select('*').eq('id', req.params.id).single();
   if (!data) return res.status(404).json({ error: 'Not found' });
-  res.json(data);
+  res.json({ ...data, genre: parseGenre(data.genre) });
 });
 
 app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'), async (req, res) => {
   const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
+  // genre arrives as JSON string array from frontend
+  let genreVal = null;
+  if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
   const posterUrl = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').insert([{
-    title, release_year, genre: genre||null, description: description||null,
+    title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'create', 'movie', title);
-  res.json(data);
+  res.json({ ...data, genre: parseGenre(data.genre) });
 });
 
 app.put('/api/admin/movies/:id', requireSection('movies'), upload.single('poster'), async (req, res) => {
   const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
-  const updates = { title, release_year, genre: genre||null, description: description||null,
+  let genreVal = null;
+  if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
+  const updates = { title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'update', 'movie', title);
-  res.json(data);
+  res.json({ ...data, genre: parseGenre(data.genre) });
 });
 
 app.delete('/api/admin/movies/:id', requireSection('movies'), async (req, res) => {
@@ -506,14 +570,19 @@ app.get('/api/chitra-vichitra', async (req, res) => {
     .order('sort_order', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
 
-  // Attach movie counts
-  const result = await Promise.all((editions || []).map(async (cv) => {
-    const { count } = await supabase
-      .from('chitra_vichitra_movies')
-      .select('*', { count: 'exact', head: true })
-      .eq('cv_id', cv.id);
-    return { ...cv, movie_count: count || 0 };
-  }));
+  if (!editions || editions.length === 0) return res.json([]);
+
+  // Fetch all CV-movie rows in one query instead of N+1 individual count queries
+  const { data: allCvMovies } = await supabase
+    .from('chitra_vichitra_movies')
+    .select('cv_id');
+
+  const countMap = {};
+  (allCvMovies || []).forEach(row => {
+    countMap[row.cv_id] = (countMap[row.cv_id] || 0) + 1;
+  });
+
+  const result = editions.map(cv => ({ ...cv, movie_count: countMap[cv.id] || 0 }));
   res.json(result);
 });
 
@@ -608,7 +677,7 @@ app.delete('/api/admin/chitra-vichitra/movies/:cvMovieId', requireSection('chitr
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 app.get('/api/notifications/active', async (req, res) => {
-  const { data } = await supabase.from('notifications').select('*').eq('active', true).limit(1).single();
+  const { data } = await supabase.from('notifications').select('*').eq('active', true).limit(1).maybeSingle();
   res.json(data || null);
 });
 
@@ -732,14 +801,15 @@ app.get('*', (req, res) => {
 });
 
 // ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
+// Ping every 4 minutes to prevent connection from going cold
 setInterval(async () => {
   try {
-    await supabase.from('settings').select('id').limit(1);
-    console.log('Supabase keepalive ping OK');
+    await supabase.from('settings').select('key').limit(1);
+    // Silent success — log only on failure
   } catch (e) {
     console.error('Supabase keepalive failed:', e.message);
   }
-}, 1000 * 60 * 60 * 24 * 4);
+}, 1000 * 60 * 4);
 
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
