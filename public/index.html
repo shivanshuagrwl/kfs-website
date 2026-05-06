@@ -5429,7 +5429,7 @@ function doSearch(q) {
   const matched = customEggs.find(e => e.keyword && e.keyword.toLowerCase() === q);
   if (matched) {
     if (matched.image_url) {
-      out.innerHTML = `<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>${matched.heading||matched.subtext ? `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>` : ''}`;
+      out.innerHTML = `${matched.heading||matched.subtext ? `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>` : ''}<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>`;
     } else {
       out.innerHTML = `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>`;
     }
