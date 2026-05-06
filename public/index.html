@@ -273,7 +273,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-grain{position:absolute;inset:0;opacity:.03;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-size:256px;pointer-events:none}
-.hero-reel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.06;pointer-events:none}
+.hero-reel{display:none!important}
 .hero-reel-circle{width:600px;height:600px;border:1px solid var(--white);border-radius:50%;animation:spin 60s linear infinite}
 .hero-reel-circle::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:400px;height:400px;border:1px solid var(--white);border-radius:50%}
@@ -2621,7 +2621,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <select id="member-special-tag">
         <option value="">— None —</option>
         <option value="admin-developer">⚙ Admin-Developer</option>
-        <option value="developer">{ } Developer</option>
+        <option value="developer">&lt;/&gt; Developer</option>
       </select>
     </div>
     <div class="form-group"><label>Bio (optional)</label><textarea id="member-bio" style="min-height:80px"></textarea></div>
@@ -3487,7 +3487,7 @@ function renderMemberSections(type) {
         : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
       <div class="member-info-sq">
         <div class="member-name-sq">${m.name}<\/div>
-        ${m.special_tag ? `<div class="member-special-tag tag-${m.special_tag}">${m.special_tag === 'admin-developer' ? '⚙ Admin-Dev' : '{ } Developer'}<\/div>` : ''}
+        ${m.special_tag ? `<div class="member-special-tag tag-${m.special_tag}">${m.special_tag === 'admin-developer' ? '⚙ Admin-Dev' : '</> Developer'}<\/div>` : ''}
         ${subtitle ? `<div class="member-role-sq">${subtitle}<\/div>` : ''}
         ${m.batch ? `<div class="member-batch-sq">${m.batch}<\/div>` : ''}
       <\/div>
