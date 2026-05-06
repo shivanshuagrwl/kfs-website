@@ -419,10 +419,11 @@ app.get('/api/members', async (req, res) => {
 });
 
 app.post('/api/admin/members', requireSection('members'), upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
+  const { name, role, batch, bio, sort_order, is_past, domain, special_tag } = req.body;
   const photoUrl = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').insert([{
     name, role, batch, bio, domain: domain||null, photo: photoUrl,
+    special_tag: special_tag || null,
     sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true',
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -431,8 +432,8 @@ app.post('/api/admin/members', requireSection('members'), upload.single('photo')
 });
 
 app.put('/api/admin/members/:id', requireSection('members'), upload.single('photo'), async (req, res) => {
-  const { name, role, batch, bio, sort_order, is_past, domain } = req.body;
-  const updates = { name, role, batch, bio, domain: domain||null, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
+  const { name, role, batch, bio, sort_order, is_past, domain, special_tag } = req.body;
+  const updates = { name, role, batch, bio, domain: domain||null, special_tag: special_tag || null, sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true' };
   if (req.file) updates.photo = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
