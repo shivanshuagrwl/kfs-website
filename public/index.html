@@ -1672,19 +1672,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <circle cx="137" cy="116" r="10" fill="none" stroke="white" stroke-width="1.5"/>
       </svg>
 
-      <!-- Camera 7: video camera -->
-      <svg class="bg-camera cam-7" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
-        <rect x="20" y="45" width="120" height="80" rx="8" fill="none" stroke="white" stroke-width="2"/>
-        <polygon points="140,65 180,45 180,115 140,95" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="72" cy="85" r="24" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="72" cy="85" r="14" fill="none" stroke="white" stroke-width="1.5"/>
-        <circle cx="72" cy="85" r="5" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="32" y="30" width="40" height="16" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="20" y="125" width="30" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="60" y="125" width="30" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <circle cx="118" cy="57" r="5" fill="none" stroke="white" stroke-width="1.5"/>
-      </svg>
-
       <!-- Camera 8: polaroid camera -->
       <svg class="bg-camera cam-8" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
         <rect x="25" y="50" width="148" height="110" rx="10" fill="none" stroke="white" stroke-width="2"/>
@@ -1698,7 +1685,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </svg>
     </div>
 
-    <div class="hero-reel"><div class="hero-reel-circle"></div></div>
     <h1 class="hero-tagline" id="hero-tagline">
       <span class="glow-word" id="glow-lights">Lights.</span><br>
       <em><span class="glow-word" id="glow-camera">Camera.</span></em><br>
@@ -2620,7 +2606,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <label>Special Tag (optional)</label>
       <select id="member-special-tag">
         <option value="">— None —</option>
-        <option value="admin-developer">⚙ Admin-Developer</option>
+        <option value="admin-developer"></> Admin-Developer</option>
         <option value="developer">&lt;/&gt; Developer</option>
       </select>
     </div>
@@ -3487,7 +3473,7 @@ function renderMemberSections(type) {
         : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
       <div class="member-info-sq">
         <div class="member-name-sq">${m.name}<\/div>
-        ${m.special_tag ? `<div class="member-special-tag tag-${m.special_tag}">${m.special_tag === 'admin-developer' ? '⚙ Admin-Dev' : '</> Developer'}<\/div>` : ''}
+        ${m.special_tag ? `<div class="member-special-tag tag-${m.special_tag}">${m.special_tag === 'admin-developer' ? '</> Admin-Dev' : '</> Developer'}<\/div>` : ''}
         ${subtitle ? `<div class="member-role-sq">${subtitle}<\/div>` : ''}
         ${m.batch ? `<div class="member-batch-sq">${m.batch}<\/div>` : ''}
       <\/div>
