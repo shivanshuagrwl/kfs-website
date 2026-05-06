@@ -738,6 +738,12 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .search-result-title{font-size:14px;font-weight:500;color:#f0f0f0}
 .search-result-sub{font-size:11px;color:#888;margin-top:2px}
 .search-empty{padding:40px 20px;text-align:center;color:#444;font-size:14px}
+/* Easter egg panels */
+.search-egg-noshorts{padding:20px;text-align:center;color:#666;font-size:13px;letter-spacing:.04em;line-height:1.6}
+.search-egg-noshorts strong{display:block;font-size:22px;font-weight:800;color:#f5f5f5;letter-spacing:-.02em;margin-bottom:6px}
+.search-egg-img{width:100%;max-height:340px;object-fit:contain;border-radius:12px;display:block;margin:0 auto;animation:eggReveal .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes eggReveal{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+body.light-mode .search-egg-noshorts strong{color:#111}
 .search-hint{position:fixed;top:12vh;right:calc(50% - 320px);transform:translateY(-100%);font-size:11px;color:#444;padding-bottom:8px;letter-spacing:.05em}
 /* ── ANALYTICS ── */
 .analytics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
@@ -2024,6 +2030,22 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
         <div style="margin-top:8px">
           <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+        </div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">🥚 Easter Egg — "No Shorts" Image</p>
+        <p class="settings-section-desc">When a visitor types <strong>"no shorts"</strong> in the search bar, this image appears. Upload anything — a still, a meme, a frame. Leave blank to show a text message instead.</p>
+        <div class="form-group">
+          <div id="egg-img-preview" style="margin-bottom:12px;display:none">
+            <img id="egg-img-thumb" src="" alt="Easter egg" style="max-width:280px;max-height:180px;object-fit:contain;border-radius:10px;border:1px solid var(--border)">
+          </div>
+          <input type="file" id="set-egg-img-file" accept="image/*" style="display:none" onchange="previewEggImg(this)">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary" style="border-radius:10px" onclick="document.getElementById('set-egg-img-file').click()">Choose Image</button>
+            <span id="egg-img-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
+            <button type="button" class="btn btn-secondary" id="egg-img-clear-btn" onclick="clearEggImg()" style="display:none;border-radius:10px">Remove</button>
+          </div>
+          <input type="hidden" id="set-egg-img-url" value="">
         </div>
 
         <div class="settings-divider"></div>
@@ -3721,6 +3743,15 @@ async function loadAdminData(name) {
       document.getElementById('set-instagram').value = settings.instagram||'';
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
+      // Easter egg image
+      if (settings.easter_egg_img) {
+        document.getElementById('set-egg-img-url').value = settings.easter_egg_img;
+        document.getElementById('egg-img-thumb').src = settings.easter_egg_img;
+        document.getElementById('egg-img-preview').style.display = 'block';
+        document.getElementById('egg-img-clear-btn').style.display = 'inline-flex';
+        document.getElementById('egg-img-filename').textContent = 'Current image';
+        window._easterEggImg = settings.easter_egg_img;
+      }
       // Load custom tags
       loadTagsUI(settings);
     }
@@ -4197,6 +4228,12 @@ async function saveSettings() {
     // Team photo file (if a new one was chosen)
     const photoFile = document.getElementById('set-team-photo-file').files[0];
     if (photoFile) fd.append('team_photo', photoFile);
+    // Easter egg image
+    const eggFile = document.getElementById('set-egg-img-file').files[0];
+    if (eggFile) fd.append('easter_egg_img', eggFile);
+    // If cleared (url blank and no new file), send empty string to remove
+    if (!eggFile && !document.getElementById('set-egg-img-url').value)
+      fd.append('easter_egg_img_clear', '1');
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + adminToken },
@@ -4271,6 +4308,28 @@ function clearTeamPhoto() {
   document.getElementById('team-photo-preview').style.display = 'none';
   document.getElementById('team-photo-clear-btn').style.display = 'none';
   document.getElementById('team-photo-filename').textContent = 'No file chosen';
+}
+
+function previewEggImg(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  document.getElementById('egg-img-filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('egg-img-thumb').src = e.target.result;
+    document.getElementById('egg-img-preview').style.display = 'block';
+    document.getElementById('egg-img-clear-btn').style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+function clearEggImg() {
+  document.getElementById('set-egg-img-file').value = '';
+  document.getElementById('set-egg-img-url').value = '';
+  document.getElementById('egg-img-thumb').src = '';
+  document.getElementById('egg-img-preview').style.display = 'none';
+  document.getElementById('egg-img-clear-btn').style.display = 'none';
+  document.getElementById('egg-img-filename').textContent = 'No file chosen';
+  window._easterEggImg = '';
 }
 
 async function apiFetch(url, method='GET', body=null) {
@@ -4888,11 +4947,13 @@ let searchLoaded = false;
 
 async function loadSearchData() {
   if (searchLoaded) return;
-  const [movies, blogs, events, members] = await Promise.all([
+  const [movies, blogs, events, members, settings] = await Promise.all([
     apiFetch('/api/movies'), apiFetch('/api/blogs'),
-    apiFetch('/api/events'), apiFetch('/api/members')
+    apiFetch('/api/events'), apiFetch('/api/members'),
+    apiFetch('/api/settings')
   ]);
   searchData = { movies: movies||[], blogs: blogs||[], events: events||[], members: members||[] };
+  if (settings && settings.easter_egg_img) window._easterEggImg = settings.easter_egg_img;
   searchLoaded = true;
 }
 
@@ -5112,6 +5173,24 @@ function doSearch(q) {
   q = q.trim().toLowerCase();
   const out = document.getElementById('search-results');
   if (!q) { out.innerHTML = ''; return; }
+
+  // ── EASTER EGG: "shorts" → "No Shorts." ──────────────────────────────
+  if (q === 'shorts') {
+    out.innerHTML = `<div class="search-egg-noshorts">
+      <strong>No Shorts.</strong>
+      we only make films that last
+    </div>`;
+    return;
+  }
+
+  // ── EASTER EGG: "no shorts" → reveal the image ───────────────────────
+  if (q === 'no shorts') {
+    const imgUrl = window._easterEggImg || '';
+    out.innerHTML = imgUrl
+      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div>`
+      : `<div class="search-egg-noshorts"><strong>No Shorts.</strong>that's the spirit 🎬</div>`;
+    return;
+  }
 
   const results = [];
   const crewFields = ['director','producer','dop','screenwriter','video_editor','sound_design','management','graphic_design','actors','support_crew'];

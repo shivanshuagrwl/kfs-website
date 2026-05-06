@@ -222,7 +222,7 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.post('/api/admin/settings', requireSection('settings'), (req, res, next) => {
-  upload.single('team_photo')(req, res, (err) => {
+  upload.fields([{ name: 'team_photo', maxCount: 1 }, { name: 'easter_egg_img', maxCount: 1 }])(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Photo too large — please use an image under 20MB' });
       return res.status(400).json({ error: 'Upload error: ' + err.message });
@@ -231,9 +231,12 @@ app.post('/api/admin/settings', requireSection('settings'), (req, res, next) => 
   });
 }, async (req, res) => {
   try {
-    if (req.file) {
-      console.log('[settings] uploading team photo:', req.file.originalname, req.file.size);
-      const photoUrl = await uploadImage(req.file, 'general');
+    const files = req.files || {};
+    // Team photo
+    if (files.team_photo && files.team_photo[0]) {
+      const f = files.team_photo[0];
+      console.log('[settings] uploading team photo:', f.originalname, f.size);
+      const photoUrl = await uploadImage(f, 'general');
       console.log('[settings] photo upload result:', photoUrl);
       if (photoUrl) {
         await supabase.from('settings').upsert({ key: 'team_photo', value: photoUrl }, { onConflict: 'key' });
@@ -241,7 +244,21 @@ app.post('/api/admin/settings', requireSection('settings'), (req, res, next) => 
         return res.status(500).json({ error: 'Photo upload to storage failed — check Supabase storage bucket permissions' });
       }
     }
+    // Easter egg image
+    if (files.easter_egg_img && files.easter_egg_img[0]) {
+      const f = files.easter_egg_img[0];
+      console.log('[settings] uploading easter egg img:', f.originalname, f.size);
+      const eggUrl = await uploadImage(f, 'general');
+      if (eggUrl) {
+        await supabase.from('settings').upsert({ key: 'easter_egg_img', value: eggUrl }, { onConflict: 'key' });
+      }
+    }
     const body = req.body || {};
+    // Handle easter egg clear
+    if (body.easter_egg_img_clear === '1') {
+      await supabase.from('settings').delete().eq('key', 'easter_egg_img');
+      delete body.easter_egg_img_clear;
+    }
     const entries = Object.entries(body);
     for (const [key, value] of entries) {
       if (value === '' || value === null || value === undefined) continue;
