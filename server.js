@@ -228,7 +228,7 @@ app.post('/api/master/admins', masterMiddleware, async (req, res) => {
 });
 
 app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
-  const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).single();
+  const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).maybeSingle();
   if (!target) return res.status(404).json({ error: 'Not found' });
   if (target.role === 'master') return res.status(403).json({ error: 'Cannot delete master admin' });
   await supabase.from('admins').delete().eq('id', req.params.id);
@@ -238,7 +238,7 @@ app.delete('/api/master/admins/:id', masterMiddleware, async (req, res) => {
 app.put('/api/master/admins/:id/permissions', masterMiddleware, async (req, res) => {
   const { permissions } = req.body;
   if (!Array.isArray(permissions)) return res.status(400).json({ error: 'permissions must be an array' });
-  const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).single();
+  const { data: target } = await supabase.from('admins').select('role').eq('id', req.params.id).maybeSingle();
   if (!target) return res.status(404).json({ error: 'Admin not found' });
   if (target.role === 'master') return res.status(403).json({ error: 'Cannot modify master permissions' });
   const { error } = await supabase.from('admins').update({ permissions: JSON.stringify(permissions) }).eq('id', req.params.id);
@@ -315,7 +315,24 @@ app.post('/api/admin/settings', requireSection('settings'), (req, res, next) => 
   }
 });
 
-// ── BLOGS ─────────────────────────────────────────────────────────────────────
+// ── CUSTOM SEARCH EASTER EGGS ─────────────────────────────────────────────────
+// Get all custom eggs
+app.get('/api/settings/custom-eggs', async (req, res) => {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'custom_search_eggs').maybeSingle();
+  try { res.json(JSON.parse(data?.value || '[]')); } catch { res.json([]); }
+});
+
+// Save all custom eggs (admin only)
+app.post('/api/admin/settings/custom-eggs', requireSection('settings'), async (req, res) => {
+  const { eggs } = req.body;
+  if (!Array.isArray(eggs)) return res.status(400).json({ error: 'eggs must be an array' });
+  const value = JSON.stringify(eggs);
+  await supabase.from('settings').upsert({ key: 'custom_search_eggs', value }, { onConflict: 'key' });
+  await logActivity(req.admin.id, req.admin.name, 'update', 'settings', 'Custom Search Easter Eggs');
+  res.json({ success: true });
+});
+
+
 app.get('/api/blogs', async (req, res) => {
   const { data } = await supabase.from('blogs').select('*').eq('published', true).order('created_at', { ascending: false });
   res.json(data || []);
@@ -327,7 +344,7 @@ app.get('/api/admin/blogs', requireSection('blogs'), async (req, res) => {
 });
 
 app.get('/api/blogs/:id', async (req, res) => {
-  const { data } = await supabase.from('blogs').select('*').eq('id', req.params.id).single();
+  const { data } = await supabase.from('blogs').select('*').eq('id', req.params.id).maybeSingle();
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json(data);
 });
@@ -519,7 +536,7 @@ app.get('/api/movies', async (req, res) => {
 });
 
 app.get('/api/movies/:id', async (req, res) => {
-  const { data } = await supabase.from('movies').select('*').eq('id', req.params.id).single();
+  const { data } = await supabase.from('movies').select('*').eq('id', req.params.id).maybeSingle();
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json({ ...data, genre: parseGenre(data.genre) });
 });
@@ -658,7 +675,7 @@ app.post('/api/admin/chitra-vichitra/:id/movies', requireSection('chitra-vichitr
     .select('id')
     .eq('cv_id', req.params.id)
     .eq('movie_id', movie_id)
-    .single();
+    .maybeSingle();
   if (existing) return res.status(400).json({ error: 'This film is already in this CV edition' });
 
   const { data, error } = await supabase.from('chitra_vichitra_movies').insert([{

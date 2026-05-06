@@ -745,6 +745,14 @@ body:has(#admin-panel.active) #main-nav{display:none}
 @keyframes eggReveal{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
 body.light-mode .search-egg-noshorts strong{color:#111}
 .search-hint{position:fixed;top:12vh;right:calc(50% - 320px);transform:translateY(-100%);font-size:11px;color:#444;padding-bottom:8px;letter-spacing:.05em}
+/* Custom eggs admin list */
+.cegg-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.cegg-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+.cegg-kw{font-weight:600;font-size:13px;min-width:90px;color:var(--white)}
+.cegg-text{flex:1;font-size:12px;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cegg-del{background:none;border:none;color:var(--grey);cursor:pointer;font-size:18px;padding:2px 6px;line-height:1;transition:color .15s}
+.cegg-del:hover{color:#e05}
+.cegg-has-img{font-size:10px;color:var(--grey);opacity:.7;margin-left:4px}
 /* ── ANALYTICS ── */
 .analytics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
 @media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,1fr)}}
@@ -2088,6 +2096,26 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           </div>
           <input type="hidden" id="set-egg-img-url" value="">
         </div>
+
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">🥚 Custom Search Easter Eggs</p>
+        <p class="settings-section-desc">Add your own keywords — when someone types an exact match in search, show a custom heading, subtext, and optional image instead of normal results.</p>
+        <div id="cegg-list" class="cegg-list"><span style="font-size:12px;color:var(--grey)">Loading…</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Keyword (exact match)</label><input type="text" id="cegg-kw" placeholder="e.g. work" style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0"><label>Heading</label><input type="text" id="cegg-head" placeholder="e.g. We Work." style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0"><label>Subtext</label><input type="text" id="cegg-sub" placeholder="e.g. day and night for the craft" style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0">
+            <label>Image (optional)</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button type="button" class="btn btn-secondary" style="border-radius:10px;font-size:12px;padding:8px 14px" onclick="document.getElementById('cegg-img-file').click()">Choose Image</button>
+              <span id="cegg-img-name" style="font-size:12px;color:var(--grey)">No file</span>
+            </div>
+            <input type="file" id="cegg-img-file" accept="image/*" style="display:none" onchange="document.getElementById('cegg-img-name').textContent=this.files[0]?.name||'No file'">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="border-radius:10px" onclick="addCustomEgg()">+ Add Easter Egg</button>
+        <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
 
         <div class="settings-divider"></div>
         <p class="settings-section-title">Change Your Password</p>
@@ -3835,6 +3863,8 @@ async function loadAdminData(name) {
       document.getElementById('set-egg-noshorts-fallback').value = settings.easter_egg_noshorts_fallback || '';
       // Load custom tags
       loadTagsUI(settings);
+      // Load custom search easter eggs
+      loadCustomEggsUI();
     }
   }
   else if (name==='admins') {
@@ -4460,6 +4490,91 @@ function clearEggImg() {
   document.getElementById('egg-img-filename').textContent = 'No file chosen';
   window._easterEggImg = '';
 }
+
+// ── CUSTOM SEARCH EASTER EGGS ────────────────────────────────────────────────
+window._customSearchEggs = [];
+
+async function loadCustomEggsUI() {
+  const list = document.getElementById('cegg-list');
+  if (!list) return;
+  try {
+    const eggs = await apiFetch('/api/settings/custom-eggs');
+    window._customSearchEggs = Array.isArray(eggs) ? eggs : [];
+  } catch(e) { window._customSearchEggs = []; }
+  renderCustomEggsUI();
+}
+
+function renderCustomEggsUI() {
+  const list = document.getElementById('cegg-list');
+  if (!list) return;
+  const eggs = window._customSearchEggs || [];
+  if (!eggs.length) {
+    list.innerHTML = '<span style="font-size:12px;color:var(--grey)">No custom easter eggs yet.</span>';
+    return;
+  }
+  list.innerHTML = eggs.map((e, i) => `
+    <div class="cegg-item">
+      <span class="cegg-kw">"${e.keyword}"</span>
+      <span class="cegg-text">${e.heading||''}${e.subtext ? ' — '+e.subtext : ''}${e.image_url ? '<span class="cegg-has-img"> 🖼</span>' : ''}</span>
+      <button class="cegg-del" onclick="deleteCustomEgg(${i})" title="Delete">×</button>
+    </div>
+  `).join('');
+}
+
+async function addCustomEgg() {
+  const kw = document.getElementById('cegg-kw').value.trim().toLowerCase();
+  const head = document.getElementById('cegg-head').value.trim();
+  const sub = document.getElementById('cegg-sub').value.trim();
+  const imgFile = document.getElementById('cegg-img-file').files[0];
+  const msg = document.getElementById('cegg-msg');
+
+  if (!kw) { msg.textContent = 'Keyword is required.'; return; }
+  if (!head && !imgFile) { msg.textContent = 'Heading or an image is required.'; return; }
+  if (window._customSearchEggs.some(e => e.keyword === kw)) {
+    msg.textContent = `Keyword "${kw}" already exists. Delete the old one first.`; return;
+  }
+
+  msg.textContent = 'Saving…';
+  let image_url = null;
+  if (imgFile) {
+    // Upload via the existing settings image upload route
+    const fd = new FormData();
+    fd.append('easter_egg_img', imgFile);
+    try {
+      const r = await apiFetch('/api/admin/settings', 'POST', fd);
+      // Get the uploaded URL from settings
+      const fresh = await apiFetch('/api/settings');
+      image_url = fresh.easter_egg_img || null;
+    } catch(e) { msg.textContent = 'Image upload failed: ' + e.message; return; }
+  }
+
+  const newEgg = { keyword: kw, heading: head, subtext: sub, image_url };
+  const eggs = [...(window._customSearchEggs || []), newEgg];
+  try {
+    await apiFetch('/api/admin/settings/custom-eggs', 'POST', { eggs });
+    window._customSearchEggs = eggs;
+    renderCustomEggsUI();
+    document.getElementById('cegg-kw').value = '';
+    document.getElementById('cegg-head').value = '';
+    document.getElementById('cegg-sub').value = '';
+    document.getElementById('cegg-img-file').value = '';
+    document.getElementById('cegg-img-name').textContent = 'No file';
+    msg.textContent = 'Easter egg added!';
+    setTimeout(() => { msg.textContent = ''; }, 2000);
+  } catch(e) { msg.textContent = 'Save failed: ' + e.message; }
+}
+
+async function deleteCustomEgg(idx) {
+  const eggs = (window._customSearchEggs || []).filter((_, i) => i !== idx);
+  try {
+    await apiFetch('/api/admin/settings/custom-eggs', 'POST', { eggs });
+    window._customSearchEggs = eggs;
+    renderCustomEggsUI();
+  } catch(e) { alert('Delete failed: ' + e.message); }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 
 async function apiFetch(url, method='GET', body=null) {
   const opts = { method, headers:{} };
@@ -5088,6 +5203,11 @@ async function loadSearchData() {
     window._eggShortsSub      = settings.easter_egg_shorts_sub      || 'we only make films that last';
     window._eggNoShortsFallback = settings.easter_egg_noshorts_fallback || "that's the spirit 🎬";
   }
+  // Load custom search easter eggs
+  try {
+    const eggs = await apiFetch('/api/settings/custom-eggs');
+    window._customSearchEggs = Array.isArray(eggs) ? eggs : [];
+  } catch(e) { window._customSearchEggs = []; }
   searchLoaded = true;
 }
 
@@ -5308,6 +5428,18 @@ function doSearch(q) {
   const out = document.getElementById('search-results');
   if (!q) { out.innerHTML = ''; return; }
 
+  // ── CUSTOM EASTER EGGS (admin-configurable) ───────────────────────────
+  const customEggs = window._customSearchEggs || [];
+  const matched = customEggs.find(e => e.keyword && e.keyword.toLowerCase() === q);
+  if (matched) {
+    if (matched.image_url) {
+      out.innerHTML = `<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>`;
+    } else {
+      out.innerHTML = `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>`;
+    }
+    return;
+  }
+
   // ── EASTER EGG: "shorts" → "No Shorts." ──────────────────────────────
   if (q === 'shorts') {
     const h = window._eggShortsHeading || 'No Shorts.';
@@ -5332,19 +5464,26 @@ function doSearch(q) {
 
   searchData.movies.filter(m => {
     if (m.title?.toLowerCase().includes(q)) return true;
+    // Genre tag search
+    const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
+    if (genres.some(g => g.toLowerCase().includes(q))) return true;
     return crewFields.some(f => {
       const val = m[f]||'';
       return splitCrew(val).some(p=>p.split('||')[0].trim().toLowerCase().includes(q));
     });
   }).forEach(m => {
     const matchedCrew = [];
+    const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
+    const matchedGenres = genres.filter(g => g.toLowerCase().includes(q));
     crewFields.forEach(f=>{
       splitCrew(m[f]||'').forEach(p=>{
         const name = p.split('||')[0].trim();
         if (name.toLowerCase().includes(q) && !m.title?.toLowerCase().includes(q)) matchedCrew.push(name);
       });
     });
-    const sub = matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
+    const sub = matchedGenres.length && !m.title?.toLowerCase().includes(q)
+      ? 'Genre: '+matchedGenres.join(', ')+(m.director ? ' · Dir. '+m.director.split('||')[0].trim() : '')
+      : matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
     results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
   });
   searchData.blogs.filter(b => {
