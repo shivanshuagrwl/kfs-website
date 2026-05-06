@@ -161,103 +161,93 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   text-transform:uppercase;font-weight:500;transition:color .2s}
 .nav-links a:hover,.nav-links a.active{color:var(--white)}
 .nav-right{display:flex;align-items:center;gap:4px;justify-self:end}
-.nav-hamburger{display:none;flex-direction:column;gap:5px;padding:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.nav-hamburger{display:none;flex-direction:column;gap:5px;padding:4px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .nav-hamburger span{width:22px;height:1.5px;background:var(--white);transition:all .3s var(--ease)}
 
 /* ── MOBILE NAV ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
+  /* Nav bar — raised to 2000 so its children (drawer) can stack above ALL page content */
   nav{
     padding:16px 24px;
-    z-index:1000;
+    z-index:2000;
     background:rgba(10,10,10,.98);
-    border-bottom:1px solid rgba(255,255,255,.10);
-    display:flex;
-    justify-content:space-between;
-    align-items:center}
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.12);
+    display:flex;justify-content:space-between;
+    /* ensure nav itself creates a stacking context */
+    isolation:isolate}
   .nav-right{gap:2px}
+
+  /* Hamburger: always tappable, above drawer */
   .nav-hamburger{
-    display:flex !important;
-    z-index:1010;
-    position:relative;
+    display:flex;
+    position:relative;z-index:10;/* relative inside nav stacking context */
     cursor:pointer;
     min-width:44px;min-height:44px;
     align-items:center;justify-content:center;
     -webkit-tap-highlight-color:transparent;
-    user-select:none}
+    touch-action:manipulation}
 
-  /* ── Drawer: slides in from right, fully opaque dark bg ── */
+  /* Side drawer — fixed, slides in from right */
   .nav-links{
-    position:fixed;
-    top:0;right:0;bottom:0;
-    width:75vw;max-width:300px;
-    background:#0d0d0d;
+    position:fixed;top:0;right:0;bottom:0;
+    width:72vw;max-width:300px;
+    background:rgba(10,10,10,.97);
+    -webkit-backdrop-filter:blur(28px);backdrop-filter:blur(28px);
     border-left:1px solid rgba(255,255,255,.12);
     display:flex;flex-direction:column;
-    list-style:none;
-    padding:88px 0 40px;
-    margin:0;gap:0;
-    transform:translateX(110%);
-    transition:transform .3s cubic-bezier(.4,0,.2,1);
-    z-index:1002;
-    /* CRITICAL: block all pointer events when hidden */
+    list-style:none;padding:80px 0 40px;margin:0;gap:0;
+    transform:translateX(100%);
+    transition:transform .32s cubic-bezier(.4,0,.2,1),
+               box-shadow .32s ease,
+               visibility 0s linear .32s;
+    z-index:5;/* inside nav stacking context, above backdrop */
     pointer-events:none;
-    visibility:hidden}
-
+    visibility:hidden;
+    box-shadow:none}
   .nav-links.open{
     transform:translateX(0);
     pointer-events:auto;
     visibility:visible;
+    transition:transform .32s cubic-bezier(.4,0,.2,1),
+               box-shadow .32s ease,
+               visibility 0s linear 0s;
     box-shadow:-16px 0 60px rgba(0,0,0,.8)}
 
-  /* ── Nav items: hidden until drawer opens ── */
+  /* Each nav item */
   .nav-links li{
-    display:block;
-    opacity:0;
-    transform:translateX(20px);
+    display:block;opacity:0;transform:translateX(18px);
     pointer-events:none;
-    transition:opacity .2s ease,transform .2s ease}
-
+    transition:opacity .22s ease,transform .22s ease}
   .nav-links.open li{pointer-events:auto}
-  .nav-links.open li:nth-child(1){opacity:1;transform:translateX(0);transition-delay:.06s}
-  .nav-links.open li:nth-child(2){opacity:1;transform:translateX(0);transition-delay:.10s}
-  .nav-links.open li:nth-child(3){opacity:1;transform:translateX(0);transition-delay:.14s}
-  .nav-links.open li:nth-child(4){opacity:1;transform:translateX(0);transition-delay:.18s}
-  .nav-links.open li:nth-child(5){opacity:1;transform:translateX(0);transition-delay:.22s}
+  .nav-links.open li:nth-child(1){opacity:1;transform:none;transition-delay:.06s}
+  .nav-links.open li:nth-child(2){opacity:1;transform:none;transition-delay:.11s}
+  .nav-links.open li:nth-child(3){opacity:1;transform:none;transition-delay:.16s}
+  .nav-links.open li:nth-child(4){opacity:1;transform:none;transition-delay:.21s}
+  .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
 
-  /* ── Links: explicit click target ── */
+  /* Nav links — explicitly tappable */
   .nav-links a{
-    display:block;
-    width:100%;
-    padding:17px 28px;
-    font-size:13px;font-weight:600;
-    letter-spacing:.1em;text-transform:uppercase;
-    color:#777;text-decoration:none;
-    border-left:2px solid transparent;
+    display:flex;align-items:center;padding:18px 28px;
+    font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:#888;text-decoration:none;border-left:2px solid transparent;
     cursor:pointer;
-    pointer-events:auto;
     -webkit-tap-highlight-color:transparent;
-    transition:color .15s,background .15s,border-color .15s}
-  .nav-links a.active{
-    color:#f5f5f5;
-    border-left-color:#f5f5f5;
-    background:rgba(255,255,255,.05)}
-  .nav-links a:active{
-    color:#ffffff;
-    background:rgba(255,255,255,.08)}
+    touch-action:manipulation;
+    transition:color .18s,background .18s,border-color .18s}
+  .nav-links a.active{color:#f5f5f5;border-left-color:#f5f5f5;background:rgba(255,255,255,.06)}
+  .nav-links a:active{color:#f5f5f5;background:rgba(255,255,255,.08)}
 
-  /* ── Backdrop ── */
+  /* Backdrop — sits between nav bar and drawer (z-index 3) */
   .nav-backdrop{
-    display:block;
-    position:fixed;inset:0;
+    display:block;position:fixed;inset:0;
     background:rgba(0,0,0,0);
-    z-index:1001;
+    z-index:1999;/* just below nav (2000) */
     pointer-events:none;
-    transition:background .3s ease}
-  .nav-backdrop.open{
-    background:rgba(0,0,0,.65);
-    pointer-events:auto}
+    transition:background .32s ease}
+  .nav-backdrop.open{background:rgba(0,0,0,.65);pointer-events:auto}
 
-  /* ── Hamburger → X ── */
+  /* Hamburger → X animation */
   .nav-hamburger.open span:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
   .nav-hamburger.open span:nth-child(2){opacity:0;transform:scaleX(0)}
   .nav-hamburger.open span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
@@ -265,10 +255,11 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 
 /* Light mode drawer */
 @media(max-width:768px){
-  body.light-mode .nav-links{background:#f0f0f0;border-left-color:rgba(0,0,0,.10)}
-  body.light-mode .nav-links a{color:#888}
-  body.light-mode .nav-links a.active{color:#111;border-left-color:#111;background:rgba(0,0,0,.04)}
-  body.light-mode .nav-links a:active{color:#000;background:rgba(0,0,0,.07)}
+  body.light-mode nav{background:rgba(245,245,245,.98);border-bottom-color:rgba(0,0,0,.12)}
+  body.light-mode .nav-links{background:rgba(245,245,245,.97);-webkit-backdrop-filter:blur(28px);backdrop-filter:blur(28px);border-left-color:rgba(0,0,0,.10)}
+  body.light-mode .nav-links a{color:#999}
+  body.light-mode .nav-links a.active{color:#111;border-left-color:#111;background:rgba(0,0,0,.05)}
+  body.light-mode .nav-links a:active{color:#111;background:rgba(0,0,0,.07)}
 }
 
 /* ── PAGE SYSTEM ─────────────────────────────────────────────────────── */
@@ -342,8 +333,11 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .stat-item{background:transparent;padding:56px 40px;position:relative;overflow:hidden;border:none;border-radius:0;text-align:center}
 .stat-item::after{display:none}
 .stat-num{
-  font-size:clamp(4rem,7vw,7rem);font-weight:900;letter-spacing:-.04em;display:block;
-  line-height:1;padding-right:.12em;
+  font-size:clamp(4rem,7vw,7rem);font-weight:900;letter-spacing:-.04em;
+  display:inline-block;
+  line-height:1;
+  padding-right:.25em;/* extra room for trailing + */
+  overflow:visible;
   background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
   background-clip:text;
@@ -1007,7 +1001,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   /* stats */
   .stats-grid{margin-top:0;grid-template-columns:repeat(2,1fr)}
   .stat-item{padding:32px 16px;text-align:center}
-  .stat-num{font-size:clamp(2.8rem,11vw,3.8rem)}
+  .stat-num{font-size:clamp(2.8rem,11vw,3.8rem);display:inline-block;padding-right:.25em;overflow:visible}
 
   /* about */
   .about-layout{margin-top:32px;gap:28px;grid-template-columns:1fr}
