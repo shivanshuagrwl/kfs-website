@@ -283,31 +283,25 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-cameras{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .bg-camera{position:absolute;opacity:.04}
 body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
-.cam-1{width:340px;bottom:-40px;left:-60px;transform:rotate(-15deg);animation:camFloat1 18s ease-in-out infinite}
-.cam-2{width:240px;top:10%;right:-30px;transform:rotate(12deg);animation:camFloat2 22s ease-in-out infinite}
-.cam-3{width:180px;bottom:10%;right:8%;transform:rotate(-8deg);animation:camFloat3 16s ease-in-out infinite}
-.cam-4{width:200px;top:5%;left:8%;transform:rotate(20deg);animation:camFloat4 20s ease-in-out infinite}
 
-@keyframes camFloat1{
-  0%,100%{transform:rotate(-15deg) translate(0,0)}
-  33%{transform:rotate(-13deg) translate(6px,-10px)}
-  66%{transform:rotate(-17deg) translate(-4px,8px)}
-}
-@keyframes camFloat2{
-  0%,100%{transform:rotate(12deg) translate(0,0)}
-  40%{transform:rotate(10deg) translate(-8px,12px)}
-  70%{transform:rotate(14deg) translate(5px,-6px)}
-}
-@keyframes camFloat3{
-  0%,100%{transform:rotate(-8deg) translate(0,0)}
-  30%{transform:rotate(-6deg) translate(-6px,-8px)}
-  65%{transform:rotate(-10deg) translate(8px,6px)}
-}
-@keyframes camFloat4{
-  0%,100%{transform:rotate(20deg) translate(0,0)}
-  45%{transform:rotate(18deg) translate(10px,8px)}
-  75%{transform:rotate(22deg) translate(-6px,-10px)}
-}
+/* positions */
+.cam-1{width:340px;bottom:-40px;left:-60px;animation:camFloat1 18s ease-in-out infinite}
+.cam-2{width:240px;top:10%;right:-30px;animation:camFloat2 22s ease-in-out infinite}
+.cam-3{width:180px;bottom:10%;right:8%;animation:camFloat3 16s ease-in-out infinite}
+.cam-4{width:200px;top:5%;left:8%;animation:camFloat4 20s ease-in-out infinite}
+.cam-5{width:160px;top:45%;left:2%;animation:camFloat5 24s ease-in-out infinite}
+.cam-6{width:140px;bottom:5%;left:35%;animation:camFloat6 19s ease-in-out infinite}
+.cam-7{width:170px;top:20%;left:42%;animation:camFloat7 26s ease-in-out infinite}
+.cam-8{width:150px;bottom:25%;right:28%;animation:camFloat8 21s ease-in-out infinite}
+
+@keyframes camFloat1{0%,100%{transform:rotate(-15deg) translate(0,0)}40%{transform:rotate(-13deg) translate(7px,-12px)}70%{transform:rotate(-17deg) translate(-5px,9px)}}
+@keyframes camFloat2{0%,100%{transform:rotate(12deg) translate(0,0)}35%{transform:rotate(10deg) translate(-9px,13px)}70%{transform:rotate(14deg) translate(6px,-7px)}}
+@keyframes camFloat3{0%,100%{transform:rotate(-8deg) translate(0,0)}30%{transform:rotate(-6deg) translate(-7px,-9px)}65%{transform:rotate(-10deg) translate(9px,7px)}}
+@keyframes camFloat4{0%,100%{transform:rotate(20deg) translate(0,0)}45%{transform:rotate(18deg) translate(11px,9px)}75%{transform:rotate(22deg) translate(-7px,-11px)}}
+@keyframes camFloat5{0%,100%{transform:rotate(-25deg) translate(0,0)}40%{transform:rotate(-23deg) translate(8px,-10px)}75%{transform:rotate(-27deg) translate(-6px,8px)}}
+@keyframes camFloat6{0%,100%{transform:rotate(5deg) translate(0,0)}35%{transform:rotate(3deg) translate(-10px,8px)}70%{transform:rotate(7deg) translate(8px,-10px)}}
+@keyframes camFloat7{0%,100%{transform:rotate(-5deg) translate(0,0)}50%{transform:rotate(-3deg) translate(6px,10px)}80%{transform:rotate(-7deg) translate(-8px,-6px)}}
+@keyframes camFloat8{0%,100%{transform:rotate(15deg) translate(0,0)}40%{transform:rotate(13deg) translate(-8px,7px)}72%{transform:rotate(17deg) translate(9px,-9px)}}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
 .hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
   box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
@@ -1014,6 +1008,10 @@ body.light-mode .member-film-poster-ph{background:#eee}
   .cam-2{width:110px;top:8%;right:-10px}
   .cam-3{width:90px;bottom:12%;right:3%}
   .cam-4{width:100px;top:4%;left:3%}
+  .cam-5{width:80px;top:45%;left:1%}
+  .cam-6{width:70px;bottom:5%;left:30%}
+  .cam-7{display:none}
+  .cam-8{display:none}
 
   /* sections */
   .section{padding:56px 20px}
@@ -1539,6 +1537,58 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
         <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
         <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 5: clapperboard -->
+      <svg class="bg-camera cam-5" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="55" width="155" height="110" rx="5" fill="none" stroke="white" stroke-width="2"/>
+        <rect x="20" y="30" width="155" height="28" rx="5" fill="none" stroke="white" stroke-width="2"/>
+        <line x1="20" y1="55" x2="175" y2="55" stroke="white" stroke-width="2"/>
+        <line x1="53" y1="30" x2="42" y2="55" stroke="white" stroke-width="1.5"/>
+        <line x1="86" y1="30" x2="75" y2="55" stroke="white" stroke-width="1.5"/>
+        <line x1="119" y1="30" x2="108" y2="55" stroke="white" stroke-width="1.5"/>
+        <line x1="152" y1="30" x2="141" y2="55" stroke="white" stroke-width="1.5"/>
+        <circle cx="97" cy="115" r="32" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="97" cy="115" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="97" cy="115" r="6" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 6: film reel -->
+      <svg class="bg-camera cam-6" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="90" cy="90" r="70" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="22" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="38" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="90" cy="142" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="43" cy="64" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="43" cy="116" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="137" cy="64" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="137" cy="116" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 7: video camera -->
+      <svg class="bg-camera cam-7" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="45" width="120" height="80" rx="8" fill="none" stroke="white" stroke-width="2"/>
+        <polygon points="140,65 180,45 180,115 140,95" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="72" cy="85" r="24" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="72" cy="85" r="14" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="72" cy="85" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="32" y="30" width="40" height="16" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="20" y="125" width="30" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="125" width="30" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="118" cy="57" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+      </svg>
+
+      <!-- Camera 8: polaroid camera -->
+      <svg class="bg-camera cam-8" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="25" y="50" width="148" height="110" rx="10" fill="none" stroke="white" stroke-width="2"/>
+        <rect x="25" y="150" width="148" height="30" rx="0" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="99" cy="105" r="30" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="99" cy="105" r="18" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="99" cy="105" r="7" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="60" y="32" width="50" height="20" rx="5" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="155" cy="68" r="8" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="35" y="62" width="18" height="12" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
       </svg>
     </div>
 
