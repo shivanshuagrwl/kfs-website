@@ -192,8 +192,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   .nav-links{
     position:fixed;top:0;right:0;bottom:0;
     width:72vw;max-width:300px;
-    background:rgba(10,10,10,.97);
-    -webkit-backdrop-filter:blur(28px);backdrop-filter:blur(28px);
+    background:#0a0a0a;
     border-left:1px solid rgba(255,255,255,.12);
     display:flex;flex-direction:column;
     list-style:none;padding:80px 0 40px;margin:0;gap:0;
@@ -256,7 +255,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 /* Light mode drawer */
 @media(max-width:768px){
   body.light-mode nav{background:rgba(245,245,245,.98);border-bottom-color:rgba(0,0,0,.12)}
-  body.light-mode .nav-links{background:rgba(245,245,245,.97);-webkit-backdrop-filter:blur(28px);backdrop-filter:blur(28px);border-left-color:rgba(0,0,0,.10)}
+  body.light-mode .nav-links{background:#f0f0f0;border-left-color:rgba(0,0,0,.10)}
   body.light-mode .nav-links a{color:#999}
   body.light-mode .nav-links a.active{color:#111;border-left-color:#111;background:rgba(0,0,0,.05)}
   body.light-mode .nav-links a:active{color:#111;background:rgba(0,0,0,.07)}
@@ -330,19 +329,20 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 /* ── STATS ────────────────────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:transparent;margin-top:0}
 @media(max-width:768px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
-.stat-item{background:transparent;padding:56px 40px;position:relative;overflow:hidden;border:none;border-radius:0;text-align:center}
+.stat-item{background:transparent;padding:56px 24px 56px 40px;position:relative;overflow:visible;border:none;border-radius:0;text-align:center}
 .stat-item::after{display:none}
 .stat-num{
   font-size:clamp(4rem,7vw,7rem);font-weight:900;letter-spacing:-.04em;
   display:inline-block;
   line-height:1;
-  padding-right:.25em;/* extra room for trailing + */
-  overflow:visible;
+  /* generous padding on both sides so the gradient paint covers the full glyph including + */
+  padding:0 .4em 0 .1em;
   background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
   background-clip:text;
   filter:drop-shadow(0 2px 24px rgba(255,255,255,.10))}
 .stat-label{
+  display:block;
   font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-top:14px;
   font-weight:600;
   background:linear-gradient(135deg,#aaaaaa 0%,#555555 100%);
@@ -1001,7 +1001,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   /* stats */
   .stats-grid{margin-top:0;grid-template-columns:repeat(2,1fr)}
   .stat-item{padding:32px 16px;text-align:center}
-  .stat-num{font-size:clamp(2.8rem,11vw,3.8rem);display:inline-block;padding-right:.25em;overflow:visible}
+  .stat-num{font-size:clamp(2.8rem,11vw,3.8rem);padding:0 .4em 0 .1em}
 
   /* about */
   .about-layout{margin-top:32px;gap:28px;grid-template-columns:1fr}
