@@ -1025,6 +1025,27 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-cast-tag{padding:6px 14px;border:1px solid var(--border);font-size:12px;
   letter-spacing:.04em;border-radius:20px;color:var(--grey)}
 
+/* genre tags */
+.genre-tag{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border:1px solid var(--border);
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);border-radius:20px;
+  cursor:pointer;transition:border-color .2s,color .2s,background .2s}
+.genre-tag:hover{border-color:var(--white);color:var(--white)}
+.genre-tag.active-filter{background:var(--white);color:var(--black);border-color:var(--white)}
+.genre-tag .tag-x{font-size:11px;line-height:1;opacity:.6;transition:opacity .15s}
+.genre-tag .tag-x:hover{opacity:1}
+.genre-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;align-items:center}
+.genre-filter-bar-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-right:4px}
+/* tag pill input */
+.tag-input-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border:1px solid var(--border);
+  border-radius:6px;background:var(--black);min-height:42px;align-items:center;cursor:text}
+.tag-input-wrap:focus-within{border-color:var(--grey)}
+.tag-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:var(--mid);
+  border-radius:20px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--white)}
+.tag-pill button{background:none;border:none;color:var(--grey);cursor:pointer;padding:0;font-size:13px;line-height:1}
+.tag-pill button:hover{color:var(--white)}
+.tag-bare-input{background:transparent;border:none;outline:none;color:var(--white);font-size:13px;
+  font-family:inherit;min-width:80px;flex:1}
+
 /* home movies section */
 .movies-home-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:transparent;margin-top:40px}
 @media(max-width:900px){.movies-home-grid{grid-template-columns:repeat(2,1fr)}}
@@ -1671,7 +1692,11 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="section-inner">
       <p class="section-label">Our Work</p>
       <h2 class="section-title">Films</h2>
-      <div class="movies-grid" id="movies-grid" style="margin-top:60px">
+      <div id="movie-genre-filter-bar" class="genre-filter-bar" style="margin-top:32px;display:none">
+        <span class="genre-filter-bar-label">Filter:</span>
+        <!-- genre filter chips injected by JS -->
+      </div>
+      <div class="movies-grid" id="movies-grid" style="margin-top:24px">
         <div class="loading" style="grid-column:1/-1">Loading films...</div>
       </div>
     </div>
@@ -1702,8 +1727,8 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
-      <div id="movie-detail-genre-wrap" style="display:none;margin-bottom:16px">
-        <span id="movie-detail-genre" style="display:inline-block;padding:4px 14px;border:1px solid var(--border);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);border-radius:20px"></span>
+      <div id="movie-detail-genre-wrap" style="display:none;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:6px">
+        <!-- genre tags injected by JS -->
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
@@ -2334,7 +2359,12 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="form-group"><label>Movie Poster</label><input type="file" id="movie-poster" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group"><label>Title</label><input type="text" id="movie-title"></div>
     <div class="form-group"><label>Release Year</label><input type="text" id="movie-year" placeholder="2024"></div>
-    <div class="form-group"><label>Genre <span style="font-weight:400;color:var(--grey)">(e.g. Drama, Short Film, Documentary)</span></label><input type="text" id="movie-genre" placeholder="Drama"></div>
+    <div class="form-group"><label>Genre Tags <span style="font-weight:400;color:var(--grey)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
+      <div class="tag-input-wrap" id="movie-genre-wrap" onclick="document.getElementById('movie-genre-input').focus()">
+        <input type="hidden" id="movie-genre">
+        <input class="tag-bare-input" id="movie-genre-input" placeholder="Add genre…" autocomplete="off">
+      </div>
+    </div>
     <div class="form-group"><label>Description</label><textarea id="movie-description" style="min-height:80px" placeholder="A brief synopsis or description of the film..."></textarea></div>
     <div class="form-group"><label>Director</label><div class="mpicker-wrap" id="mpick-director"></div></div>
     <div class="form-group"><label>Producer</label><div class="mpicker-wrap" id="mpick-producer"></div></div>
@@ -2764,7 +2794,7 @@ async function loadHomeData() {
         ${posterHtml}
         <div class="hc-film-info">
           <div class="hc-film-title">${m.title}<\/div>
-          <div class="hc-film-meta">${[m.release_year, m.genre].filter(Boolean).join(' · ')}<\/div>
+          <div class="hc-film-meta">${[m.release_year, (Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).join(', ')].filter(Boolean).join(' · ')}<\/div>
           ${ratingHtml}
         <\/div>
       <\/div>`;
@@ -3221,6 +3251,34 @@ async function loadMovies() {
       window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
     });
   }
+
+  // Build genre filter bar
+  window._activeGenreFilter = null;
+  const allGenres = [...new Set((movies||[]).flatMap(m => Array.isArray(m.genre) ? m.genre : []).filter(Boolean))].sort();
+  const filterBar = document.getElementById('movie-genre-filter-bar');
+  if (allGenres.length > 1 && filterBar) {
+    filterBar.style.display = 'flex';
+    filterBar.innerHTML = '<span class="genre-filter-bar-label">Filter:</span>' +
+      allGenres.map(g => `<span class="genre-tag" data-genre="${g}" onclick="filterMoviesByGenre('${g}')">${g}</span>`).join('');
+  } else if (filterBar) { filterBar.style.display = 'none'; }
+
+  renderMoviesGrid(movies || []);
+}
+
+function filterMoviesByGenre(genre) {
+  const active = window._activeGenreFilter === genre;
+  window._activeGenreFilter = active ? null : genre;
+  document.querySelectorAll('#movie-genre-filter-bar .genre-tag').forEach(el => {
+    el.classList.toggle('active-filter', el.dataset.genre === window._activeGenreFilter);
+  });
+  const movies = window._allMoviesCache || [];
+  const filtered = window._activeGenreFilter
+    ? movies.filter(m => (Array.isArray(m.genre) ? m.genre : []).map(g=>g.toLowerCase()).includes(window._activeGenreFilter.toLowerCase()))
+    : movies;
+  renderMoviesGrid(filtered);
+}
+
+function renderMoviesGrid(movies) {
   const grid = document.getElementById('movies-grid');
   if (movies && movies.length) {
     grid.innerHTML = movies.map(m=>renderMovieCard(m,true)).join('');
@@ -3247,7 +3305,7 @@ function renderMovieCard(m, clickable=false) {
     <\/div>
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
-      <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}<\/span>` : ''}<\/div>
+      <div class="movie-year">${m.release_year||''}${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${(Array.isArray(m.genre)?m.genre:[m.genre]).join(', ')<\/span>` : ''}<\/div>
       <div class="movie-director">${m.director ? 'Dir. '+splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
@@ -3277,9 +3335,13 @@ async function openMovie(id) {
 
   // Genre
   const genreWrap = document.getElementById('movie-detail-genre-wrap');
-  const genreEl = document.getElementById('movie-detail-genre');
-  if (m.genre) { genreEl.textContent = m.genre; genreWrap.style.display = 'block'; }
-  else genreWrap.style.display = 'none';
+  const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
+  if (genres.length) {
+    genreWrap.style.display = 'flex';
+    genreWrap.innerHTML = genres.map(g =>
+      `<span class="genre-tag" onclick="filterMoviesByGenre('${g}');navigate('movies')" title="Filter by ${g}">${g}<\/span>`
+    ).join('');
+  } else { genreWrap.style.display = 'none'; genreWrap.innerHTML = ''; }
 
   // Description
   const descWrap = document.getElementById('movie-detail-description-wrap');
@@ -4092,13 +4154,58 @@ async function deleteMember(id) {
   loadAdminData('members');
 }
 
+// ── GENRE TAG-PILL INPUT ──────────────────────────────────────────────────────
+function initGenreTagInput(initialTags = []) {
+  const wrap = document.getElementById('movie-genre-wrap');
+  const hidden = document.getElementById('movie-genre');
+  const input = document.getElementById('movie-genre-input');
+  if (!wrap || !hidden || !input) return;
+
+  let tags = [...initialTags.map(t => t.trim()).filter(Boolean)];
+
+  function syncHidden() { hidden.value = JSON.stringify(tags); }
+  function renderPills() {
+    wrap.querySelectorAll('.tag-pill').forEach(p => p.remove());
+    tags.forEach((tag, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.innerHTML = `${tag} <button type="button" onclick="removeGenreTag(${i})" title="Remove">×</button>`;
+      wrap.insertBefore(pill, input);
+    });
+    syncHidden();
+  }
+
+  window._genreTags = tags;
+  window.removeGenreTag = function(i) { tags.splice(i, 1); renderPills(); };
+
+  input.value = '';
+  input.onkeydown = function(e) {
+    if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
+      e.preventDefault();
+      const val = input.value.replace(/,/g,'').trim();
+      if (val && !tags.map(t=>t.toLowerCase()).includes(val.toLowerCase())) { tags.push(val); renderPills(); }
+      input.value = '';
+    } else if (e.key === 'Backspace' && !input.value && tags.length) {
+      tags.pop(); renderPills();
+    }
+  };
+  input.onblur = function() {
+    const val = input.value.replace(/,/g,'').trim();
+    if (val && !tags.map(t=>t.toLowerCase()).includes(val.toLowerCase())) { tags.push(val); renderPills(); }
+    input.value = '';
+  };
+  renderPills();
+}
+
 function openMovieModal(m=null) {
   document.getElementById('movie-modal').classList.add('open');
   document.getElementById('movie-modal-title').textContent = m ? 'Edit Film' : 'Add Film';
   document.getElementById('movie-edit-id').value = m?.id||'';
   document.getElementById('movie-title').value = m?.title||'';
   document.getElementById('movie-year').value = m?.release_year||'';
-  document.getElementById('movie-genre').value = m?.genre||'';
+  // Init genre tag-pill input
+  const existingGenres = Array.isArray(m?.genre) ? m.genre : (m?.genre ? [m.genre] : []);
+  initGenreTagInput(existingGenres);
   document.getElementById('movie-description').value = m?.description||'';
   document.getElementById('movie-trailer').value = m?.trailer_url||'';
   document.getElementById('movie-watch').value = m?.watch_url||'';
@@ -4127,7 +4234,7 @@ async function saveMovie() {
   const fd = new FormData();
   fd.append('title', document.getElementById('movie-title').value);
   fd.append('release_year', document.getElementById('movie-year').value);
-  fd.append('genre', document.getElementById('movie-genre').value);
+  fd.append('genre', document.getElementById('movie-genre').value); // set by tag input as JSON array string
   fd.append('description', document.getElementById('movie-description').value);
   fd.append('director', _moviePickers['director'].getValue());
   fd.append('producer', _moviePickers['producer'].getValue());
