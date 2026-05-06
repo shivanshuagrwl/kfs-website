@@ -283,10 +283,31 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 .hero-cameras{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .bg-camera{position:absolute;opacity:.04}
 body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
-.cam-1{width:340px;bottom:-40px;left:-60px;transform:rotate(-15deg)}
-.cam-2{width:240px;top:10%;right:-30px;transform:rotate(12deg)}
-.cam-3{width:180px;bottom:10%;right:8%;transform:rotate(-8deg)}
-.cam-4{width:200px;top:5%;left:8%;transform:rotate(20deg)}
+.cam-1{width:340px;bottom:-40px;left:-60px;transform:rotate(-15deg);animation:camFloat1 18s ease-in-out infinite}
+.cam-2{width:240px;top:10%;right:-30px;transform:rotate(12deg);animation:camFloat2 22s ease-in-out infinite}
+.cam-3{width:180px;bottom:10%;right:8%;transform:rotate(-8deg);animation:camFloat3 16s ease-in-out infinite}
+.cam-4{width:200px;top:5%;left:8%;transform:rotate(20deg);animation:camFloat4 20s ease-in-out infinite}
+
+@keyframes camFloat1{
+  0%,100%{transform:rotate(-15deg) translate(0,0)}
+  33%{transform:rotate(-13deg) translate(6px,-10px)}
+  66%{transform:rotate(-17deg) translate(-4px,8px)}
+}
+@keyframes camFloat2{
+  0%,100%{transform:rotate(12deg) translate(0,0)}
+  40%{transform:rotate(10deg) translate(-8px,12px)}
+  70%{transform:rotate(14deg) translate(5px,-6px)}
+}
+@keyframes camFloat3{
+  0%,100%{transform:rotate(-8deg) translate(0,0)}
+  30%{transform:rotate(-6deg) translate(-6px,-8px)}
+  65%{transform:rotate(-10deg) translate(8px,6px)}
+}
+@keyframes camFloat4{
+  0%,100%{transform:rotate(20deg) translate(0,0)}
+  45%{transform:rotate(18deg) translate(10px,8px)}
+  75%{transform:rotate(22deg) translate(-6px,-10px)}
+}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
 .hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
   box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
