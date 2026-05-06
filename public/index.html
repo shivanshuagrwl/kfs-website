@@ -2835,6 +2835,8 @@ async function loadHomeData() {
 }
 
 async function loadEvents() {
+  const list = document.getElementById('events-list');
+  if (list) list.innerHTML = '<div class="empty-state"><p>Loading events…</p></div>';
   allEvents = await apiFetch('/api/events') || [];
   filterEvents('upcoming', document.querySelector('#page-events .events-tab'));
 }
@@ -2876,8 +2878,9 @@ function renderEventItem(e, full=false) {
 }
 
 async function loadBlog() {
-  const blogs = await apiFetch('/api/blogs');
   const wrap = document.getElementById('blog-sections-wrap');
+  if (wrap) wrap.innerHTML = '<div style="padding:60px 80px"><div class="empty-state"><p>Loading posts…</p></div></div>';
+  const blogs = await apiFetch('/api/blogs');
   const filterWrap = document.getElementById('blog-filter-wrap');
   if (!blogs || !blogs.length) {
     if (filterWrap) filterWrap.style.display = 'none';
@@ -3248,19 +3251,8 @@ function toggleDomainField() {
 }
 
 async function loadMovies() {
-  // Ensure ratings cache is built if not already (e.g. direct navigation to /movies)
-  if (!window._movieRatings) {
-    window._movieRatings = {};
-    const allReviews = await fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[]);
-    if (Array.isArray(allReviews)) {
-      const grouped = {};
-      allReviews.forEach(r => { if (!grouped[r.movie_id]) grouped[r.movie_id]=[];  grouped[r.movie_id].push(r.overall); });
-      Object.keys(grouped).forEach(id => {
-        const vals = grouped[id].filter(Boolean);
-        window._movieRatings[id] = { avg: vals.reduce((a,b)=>a+b,0)/vals.length, count: vals.length };
-      });
-    }
-  }
+  const grid = document.getElementById('movies-grid');
+  if (grid) grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Loading films…</p></div>';
   const [movies, allReviews] = await Promise.all([
     apiFetch('/api/movies'),
     fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
@@ -3333,7 +3325,7 @@ function renderMovieCard(m, clickable=false) {
     <\/div>
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
-      <div class="movie-year">${m.release_year||''}${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${(Array.isArray(m.genre)?m.genre:[m.genre]).join(', ')<\/span>` : ''}<\/div>
+      <div class="movie-year">${m.release_year||''}${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${(Array.isArray(m.genre)?m.genre:[m.genre]).join(', ')}<\/span>` : ''}<\/div>
       <div class="movie-director">${m.director ? 'Dir. '+splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
@@ -4615,16 +4607,20 @@ async function apiFetch(url, method='GET', body=null) {
 }
 
 function showAdminError(msg) {
-  if (!document.getElementById('admin-panel')?.classList.contains('active')) return;
+  const isAdmin = document.getElementById('admin-panel')?.classList.contains('active');
   let bar = document.getElementById('admin-error-bar');
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'admin-error-bar';
-    bar.style.cssText = 'position:fixed;top:0;left:220px;right:0;z-index:9999;background:#c0392b;color:#fff;padding:10px 20px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-family:inherit';
     document.body.appendChild(bar);
   }
-  const close = bar.querySelector('button') || document.createElement('button');
-  close.textContent = 'x';
+  if (isAdmin) {
+    bar.style.cssText = 'position:fixed;top:0;left:220px;right:0;z-index:9999;background:#c0392b;color:#fff;padding:10px 20px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-family:inherit';
+  } else {
+    bar.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:9999;background:#c0392b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:16px;font-family:inherit;box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90vw';
+  }
+  const close = document.createElement('button');
+  close.textContent = '×';
   close.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:16px;opacity:.8;font-family:inherit;flex-shrink:0';
   close.onclick = () => bar.remove();
   bar.innerHTML = '';
