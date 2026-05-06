@@ -583,10 +583,10 @@ body.light-mode .rv-item:hover{background:#ebebeb}
 body.light-mode .rv-item-title{color:#111}
 
 /* ── BLOG DETAIL ─────────────────────────────────────────────────────── */
-#blog-detail{display:none;min-height:100vh;padding-top:72px}
-#blog-detail.active{display:block;animation:fadeUp .6s var(--ease) both}
+#blog-detail{display:none;min-height:100vh;padding-top:72px;width:100%}
+#blog-detail.active{display:block;animation:fadeUp .6s var(--ease) both;width:100%}
 .blog-detail-hero{width:100%;max-height:500px;object-fit:cover;filter:grayscale(100%)}
-.blog-detail-content{max-width:1400px;width:100%;margin:0 auto;padding:60px 120px}
+.blog-detail-content{max-width:1400px;width:100%;margin:0 auto;padding:60px 80px}
 .blog-detail-back{display:inline-flex;align-items:center;gap:8px;font-size:13px;
   letter-spacing:.08em;text-transform:uppercase;color:var(--grey);
   transition:color .2s;margin-bottom:40px}
@@ -3171,7 +3171,16 @@ async function openBlog(id) {
   document.getElementById('blog-detail-date').textContent = blog.created_at
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
-  document.getElementById('blog-detail-body').innerHTML = blog.content || '';
+  // Render content: if it has no block-level HTML tags, treat as plain text and wrap paragraphs
+  let content = blog.content || '';
+  if (content && !/<(p|h[1-6]|ul|ol|blockquote|div|br)[^>]*>/i.test(content)) {
+    // Plain text — split on double newlines for paragraphs, single newlines become spaces
+    content = content
+      .split(/\n{2,}/)
+      .map(block => '<p>' + block.replace(/\n/g, ' ') + '</p>')
+      .join('');
+  }
+  document.getElementById('blog-detail-body').innerHTML = content;
   // Show section tags as pills below the title (tags only, no content switching)
   const navWrap = document.getElementById('blog-section-nav-wrap');
   let parsedSections = [];
