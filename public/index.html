@@ -5429,7 +5429,7 @@ function doSearch(q) {
   const matched = customEggs.find(e => e.keyword && e.keyword.toLowerCase() === q);
   if (matched) {
     if (matched.image_url) {
-      out.innerHTML = `<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>`;
+      out.innerHTML = `<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>${matched.heading||matched.subtext ? `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>` : ''}`;
     } else {
       out.innerHTML = `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>`;
     }
@@ -5449,8 +5449,9 @@ function doSearch(q) {
     const imgUrl = window._easterEggImg || '';
     const fallback = window._eggNoShortsFallback || "that's the spirit 🎬";
     const h = window._eggShortsHeading || 'No Shorts.';
+    const s = window._eggShortsSub || 'we only make films that last';
     out.innerHTML = imgUrl
-      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div>`
+      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div><div class="search-egg-noshorts"><strong>${h}</strong>${s}</div>`
       : `<div class="search-egg-noshorts"><strong>${h}</strong>${fallback}</div>`;
     return;
   }
