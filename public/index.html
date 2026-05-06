@@ -293,91 +293,104 @@ body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
 .cam-7{animation-delay:-22s}
 .cam-8{animation-delay:-2s}
 
-/* positions */
-.cam-1{width:340px;bottom:-40px;left:-60px;animation:camFloat1 22s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-2{width:240px;top:10%;right:-30px;animation:camFloat2 28s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-3{width:180px;bottom:10%;right:8%;animation:camFloat3 19s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-4{width:200px;top:5%;left:8%;animation:camFloat4 25s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-5{width:160px;top:45%;left:2%;animation:camFloat5 31s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-6{width:140px;bottom:5%;left:35%;animation:camFloat6 23s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-7{width:170px;top:20%;left:42%;animation:camFloat7 33s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
-.cam-8{width:150px;bottom:25%;right:28%;animation:camFloat8 27s cubic-bezier(.45,.05,.55,.95) infinite;transform-origin:center center}
+/* positions — smoother easing, longer durations, gentle opacity pulse layered in */
+.cam-1{width:340px;bottom:-40px;left:-60px;animation:camFloat1 32s ease-in-out infinite,camPulse 9s ease-in-out infinite;transform-origin:center center}
+.cam-2{width:240px;top:10%;right:-30px;animation:camFloat2 38s ease-in-out infinite,camPulse 12s ease-in-out 2s infinite;transform-origin:center center}
+.cam-3{width:180px;bottom:10%;right:8%;animation:camFloat3 28s ease-in-out infinite,camPulse 10s ease-in-out 5s infinite;transform-origin:center center}
+.cam-4{width:200px;top:5%;left:8%;animation:camFloat4 35s ease-in-out infinite,camPulse 11s ease-in-out 1s infinite;transform-origin:center center}
+.cam-5{width:160px;top:45%;left:2%;animation:camFloat5 42s ease-in-out infinite,camPulse 13s ease-in-out 7s infinite;transform-origin:center center}
+.cam-6{width:140px;bottom:5%;left:35%;animation:camFloat6 30s ease-in-out infinite,camPulse 8s ease-in-out 3s infinite;transform-origin:center center}
+.cam-7{width:170px;top:20%;left:42%;animation:camFloat7 44s ease-in-out infinite,camPulse 14s ease-in-out 6s infinite;transform-origin:center center}
+.cam-8{width:150px;bottom:25%;right:28%;animation:camFloat8 36s ease-in-out infinite,camPulse 10s ease-in-out 4s infinite;transform-origin:center center}
+
+@keyframes camPulse{
+  0%,100%{opacity:.04}
+  50%{opacity:.075}
+}
 
 /* Fluid multi-keyframe drift — each camera has its own unique orbital path */
 @keyframes camFloat1{
-  0%    {transform:rotate(-15deg) translate(0px, 0px)    scale(1)}
-  15%   {transform:rotate(-12deg) translate(14px,-18px)  scale(1.04)}
-  30%   {transform:rotate(-16deg) translate(22px,  6px)  scale(1.01)}
-  48%   {transform:rotate(-11deg) translate( 8px, 20px)  scale(1.06)}
-  63%   {transform:rotate(-18deg) translate(-10px, 14px) scale(0.98)}
-  78%   {transform:rotate(-13deg) translate(-18px, -5px) scale(1.03)}
-  90%   {transform:rotate(-16deg) translate( -6px,-16px) scale(1.01)}
-  100%  {transform:rotate(-15deg) translate(0px, 0px)    scale(1)}
+  0%   {transform:rotate(-15deg) translate(  0px,  0px) scale(1)}
+  12%  {transform:rotate(-12deg) translate( 18px,-22px) scale(1.03)}
+  25%  {transform:rotate(-17deg) translate( 30px,  4px) scale(1.01)}
+  38%  {transform:rotate(-11deg) translate( 14px, 26px) scale(1.05)}
+  52%  {transform:rotate(-16deg) translate( -6px, 28px) scale(1.02)}
+  65%  {transform:rotate(-19deg) translate(-22px, 12px) scale(0.98)}
+  78%  {transform:rotate(-13deg) translate(-28px, -8px) scale(1.03)}
+  90%  {transform:rotate(-16deg) translate(-10px,-20px) scale(1.01)}
+  100% {transform:rotate(-15deg) translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat2{
-  0%    {transform:rotate(12deg)  translate(0px,  0px)   scale(1)}
-  18%   {transform:rotate( 9deg)  translate(-16px, 20px) scale(1.05)}
-  35%   {transform:rotate(14deg)  translate(-24px,  6px) scale(0.97)}
-  52%   {transform:rotate(10deg)  translate( -8px,-18px) scale(1.04)}
-  67%   {transform:rotate(15deg)  translate( 18px,-12px) scale(1.02)}
-  82%   {transform:rotate( 8deg)  translate( 20px,  8px) scale(0.98)}
-  92%   {transform:rotate(13deg)  translate(  6px, 18px) scale(1.03)}
-  100%  {transform:rotate(12deg)  translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(12deg)  translate(  0px,  0px) scale(1)}
+  14%  {transform:rotate( 8deg)  translate(-20px, 24px) scale(1.04)}
+  28%  {transform:rotate(15deg)  translate(-32px,  8px) scale(0.97)}
+  42%  {transform:rotate( 9deg)  translate(-16px,-20px) scale(1.05)}
+  57%  {transform:rotate(14deg)  translate( 12px,-26px) scale(1.02)}
+  71%  {transform:rotate( 7deg)  translate( 28px,-10px) scale(0.98)}
+  85%  {transform:rotate(13deg)  translate( 24px, 14px) scale(1.03)}
+  93%  {transform:rotate(10deg)  translate(  8px, 22px) scale(1.01)}
+  100% {transform:rotate(12deg)  translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat3{
-  0%    {transform:rotate(-8deg)  translate(0px,  0px)   scale(1)}
-  20%   {transform:rotate(-5deg)  translate(-12px,-16px) scale(1.05)}
-  38%   {transform:rotate(-10deg) translate( 16px,-10px) scale(0.96)}
-  55%   {transform:rotate(-6deg)  translate( 18px, 12px) scale(1.04)}
-  72%   {transform:rotate(-11deg) translate(  4px, 18px) scale(1.01)}
-  88%   {transform:rotate(-7deg)  translate(-14px,  8px) scale(0.99)}
-  100%  {transform:rotate(-8deg)  translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(-8deg)  translate(  0px,  0px) scale(1)}
+  16%  {transform:rotate(-4deg)  translate(-16px,-20px) scale(1.04)}
+  31%  {transform:rotate(-11deg) translate( 20px,-16px) scale(0.97)}
+  47%  {transform:rotate(-5deg)  translate( 26px, 10px) scale(1.05)}
+  62%  {transform:rotate(-12deg) translate( 10px, 24px) scale(1.01)}
+  76%  {transform:rotate(-7deg)  translate(-14px, 18px) scale(0.99)}
+  90%  {transform:rotate(-10deg) translate(-22px,  2px) scale(1.03)}
+  100% {transform:rotate(-8deg)  translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat4{
-  0%    {transform:rotate(20deg)  translate(0px,  0px)   scale(1)}
-  22%   {transform:rotate(18deg)  translate( 20px, 14px) scale(1.06)}
-  40%   {transform:rotate(23deg)  translate(  8px,-20px) scale(0.97)}
-  57%   {transform:rotate(17deg)  translate(-16px,-14px) scale(1.04)}
-  73%   {transform:rotate(22deg)  translate(-22px,  4px) scale(0.99)}
-  88%   {transform:rotate(19deg)  translate( -6px, 18px) scale(1.03)}
-  100%  {transform:rotate(20deg)  translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(20deg)  translate(  0px,  0px) scale(1)}
+  18%  {transform:rotate(16deg)  translate( 24px, 18px) scale(1.05)}
+  34%  {transform:rotate(23deg)  translate( 10px,-24px) scale(0.97)}
+  49%  {transform:rotate(17deg)  translate(-18px,-20px) scale(1.04)}
+  63%  {transform:rotate(24deg)  translate(-28px,  2px) scale(0.99)}
+  78%  {transform:rotate(18deg)  translate(-12px, 22px) scale(1.03)}
+  91%  {transform:rotate(21deg)  translate(  6px, 16px) scale(1.01)}
+  100% {transform:rotate(20deg)  translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat5{
-  0%    {transform:rotate(-25deg) translate(0px,  0px)   scale(1)}
-  16%   {transform:rotate(-22deg) translate( 18px,-14px) scale(1.04)}
-  33%   {transform:rotate(-27deg) translate( 26px,  4px) scale(0.97)}
-  50%   {transform:rotate(-23deg) translate( 10px, 22px) scale(1.06)}
-  66%   {transform:rotate(-28deg) translate(-14px, 16px) scale(0.99)}
-  82%   {transform:rotate(-21deg) translate(-22px, -4px) scale(1.03)}
-  93%   {transform:rotate(-26deg) translate( -8px,-18px) scale(1.01)}
-  100%  {transform:rotate(-25deg) translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(-25deg) translate(  0px,  0px) scale(1)}
+  13%  {transform:rotate(-21deg) translate( 22px,-18px) scale(1.04)}
+  27%  {transform:rotate(-28deg) translate( 34px,  2px) scale(0.97)}
+  42%  {transform:rotate(-22deg) translate( 16px, 26px) scale(1.06)}
+  56%  {transform:rotate(-29deg) translate(-10px, 22px) scale(0.99)}
+  70%  {transform:rotate(-20deg) translate(-28px,  8px) scale(1.03)}
+  84%  {transform:rotate(-26deg) translate(-20px,-16px) scale(1.01)}
+  94%  {transform:rotate(-23deg) translate( -4px,-22px) scale(1.02)}
+  100% {transform:rotate(-25deg) translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat6{
-  0%    {transform:rotate(5deg)   translate(0px,  0px)   scale(1)}
-  20%   {transform:rotate(2deg)   translate(-18px, 12px) scale(1.05)}
-  38%   {transform:rotate(7deg)   translate(-10px,-14px) scale(0.97)}
-  54%   {transform:rotate(3deg)   translate( 14px,-18px) scale(1.04)}
-  70%   {transform:rotate(8deg)   translate( 20px,  6px) scale(0.98)}
-  85%   {transform:rotate(4deg)   translate(  6px, 16px) scale(1.03)}
-  100%  {transform:rotate(5deg)   translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(5deg)   translate(  0px,  0px) scale(1)}
+  16%  {transform:rotate(1deg)   translate(-22px, 16px) scale(1.05)}
+  32%  {transform:rotate(8deg)   translate(-14px,-18px) scale(0.97)}
+  48%  {transform:rotate(2deg)   translate( 18px,-22px) scale(1.04)}
+  63%  {transform:rotate(9deg)   translate( 26px,  4px) scale(0.98)}
+  78%  {transform:rotate(3deg)   translate( 10px, 20px) scale(1.03)}
+  91%  {transform:rotate(6deg)   translate(-10px, 14px) scale(1.01)}
+  100% {transform:rotate(5deg)   translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat7{
-  0%    {transform:rotate(-5deg)  translate(0px,  0px)   scale(1)}
-  17%   {transform:rotate(-2deg)  translate( 10px, 18px) scale(1.05)}
-  34%   {transform:rotate(-7deg)  translate( 20px,  2px) scale(0.98)}
-  51%   {transform:rotate(-3deg)  translate( 12px,-16px) scale(1.04)}
-  68%   {transform:rotate(-8deg)  translate(-12px,-12px) scale(0.97)}
-  84%   {transform:rotate(-4deg)  translate(-18px,  8px) scale(1.03)}
-  95%   {transform:rotate(-6deg)  translate( -4px, 14px) scale(1.01)}
-  100%  {transform:rotate(-5deg)  translate(0px,  0px)   scale(1)}
+  0%   {transform:rotate(-5deg)  translate(  0px,  0px) scale(1)}
+  14%  {transform:rotate(-1deg)  translate( 14px, 22px) scale(1.05)}
+  29%  {transform:rotate(-8deg)  translate( 26px,  4px) scale(0.98)}
+  44%  {transform:rotate(-2deg)  translate( 18px,-20px) scale(1.04)}
+  59%  {transform:rotate(-9deg)  translate(-10px,-18px) scale(0.97)}
+  73%  {transform:rotate(-3deg)  translate(-24px,  4px) scale(1.03)}
+  87%  {transform:rotate(-7deg)  translate(-16px, 18px) scale(1.01)}
+  95%  {transform:rotate(-5deg)  translate( -4px, 10px) scale(1.02)}
+  100% {transform:rotate(-5deg)  translate(  0px,  0px) scale(1)}
 }
 @keyframes camFloat8{
-  0%    {transform:rotate(15deg)  translate(0px,  0px)   scale(1)}
-  19%   {transform:rotate(12deg)  translate(-14px, 16px) scale(1.06)}
-  37%   {transform:rotate(17deg)  translate( -8px,-12px) scale(0.97)}
-  54%   {transform:rotate(13deg)  translate( 16px,-16px) scale(1.04)}
-  70%   {transform:rotate(18deg)  translate( 20px,  8px) scale(0.99)}
-  86%   {transform:rotate(14deg)  translate(  4px, 20px) scale(1.03)}
+  0%   {transform:rotate(15deg)  translate(  0px,  0px) scale(1)}
+  15%  {transform:rotate(11deg)  translate(-18px, 20px) scale(1.06)}
+  30%  {transform:rotate(18deg)  translate(-10px,-16px) scale(0.97)}
+  46%  {transform:rotate(12deg)  translate( 20px,-20px) scale(1.04)}
+  61%  {transform:rotate(19deg)  translate( 26px,  6px) scale(0.99)}
+  75%  {transform:rotate(13deg)  translate( 12px, 22px) scale(1.03)}
+  89%  {transform:rotate(16deg)  translate( -4px, 18px) scale(1.01)}
   100%  {transform:rotate(15deg)  translate(0px,  0px)   scale(1)}
 }
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
@@ -776,20 +789,20 @@ body.light-mode .member-card:hover{box-shadow:0 8px 28px rgba(0,0,0,.12),0 0 0 1
 }
 .member-special-tag{
   display:inline-flex;align-items:center;gap:4px;
-  font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-  padding:2px 7px;border-radius:20px;margin-bottom:4px;width:fit-content;
+  font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 10px;border-radius:20px;margin-bottom:6px;width:fit-content;
 }
 .member-special-tag.tag-admin-developer{
-  background:rgba(255,200,50,.12);color:#f5c842;border:1px solid rgba(245,200,66,.3);
+  background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.3);
 }
 .member-special-tag.tag-developer{
-  background:rgba(100,180,255,.1);color:#6db8ff;border:1px solid rgba(109,184,255,.25);
+  background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.3);
 }
 body.light-mode .member-special-tag.tag-admin-developer{
-  background:rgba(200,140,0,.1);color:#a07800;border-color:rgba(200,140,0,.25);
+  background:rgba(0,0,0,.07);color:#111;border-color:rgba(0,0,0,.25);
 }
 body.light-mode .member-special-tag.tag-developer{
-  background:rgba(0,100,200,.08);color:#0060c0;border-color:rgba(0,100,200,.2);
+  background:rgba(0,0,0,.07);color:#111;border-color:rgba(0,0,0,.25);
 }
 
 /* Plain member list */
@@ -1583,55 +1596,53 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
       </svg>
 
-      <!-- Camera 2: medium, right -->
-      <svg class="bg-camera cam-2" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
-        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
-        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
-        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
-        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      <!-- Camera 2: rangefinder/compact camera -->
+      <svg class="bg-camera cam-2" viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="40" width="155" height="85" rx="10" fill="none" stroke="white" stroke-width="2"/>
+        <rect x="20" y="28" width="60" height="14" rx="4" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="88" cy="82" r="30" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="88" cy="82" r="20" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="88" cy="82" r="10" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="88" cy="82" r="3" fill="white"/>
+        <rect x="135" y="55" width="22" height="14" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="155" cy="52" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="38" y1="58" x2="38" y2="68" stroke="white" stroke-width="2"/>
+        <line x1="46" y1="55" x2="46" y2="71" stroke="white" stroke-width="1.5"/>
+        <line x1="54" y1="58" x2="54" y2="68" stroke="white" stroke-width="1.5"/>
       </svg>
 
-      <!-- Camera 3: small, bottom right -->
-      <svg class="bg-camera cam-3" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
-        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
-        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
-        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
-        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      <!-- Camera 3: film strip -->
+      <svg class="bg-camera cam-3" viewBox="0 0 220 100" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="15" width="200" height="70" rx="4" fill="none" stroke="white" stroke-width="2"/>
+        <rect x="10" y="15" width="22" height="70" rx="0" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="188" y="15" width="22" height="70" rx="0" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="15" y="22" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="15" y="38" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="15" y="54" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="15" y="68" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="193" y="22" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="193" y="38" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="193" y="54" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="193" y="68" width="12" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="40" y="22" width="34" height="56" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="83" y="22" width="34" height="56" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="126" y="22" width="34" height="56" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
       </svg>
 
-      <!-- Camera 4: top right, rotated -->
-      <svg class="bg-camera cam-4" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
-        <rect x="30" y="50" width="120" height="80" rx="6" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="28" fill="none" stroke="white" stroke-width="2"/>
-        <circle cx="90" cy="90" r="18" fill="none" stroke="white" stroke-width="1.5"/>
-        <circle cx="90" cy="90" r="8" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="150" y="62" width="30" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="55" y="35" width="50" height="16" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="58" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="72" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="30" y="86" width="12" height="8" rx="1" fill="none" stroke="white" stroke-width="1.5"/>
-        <line x1="55" y1="43" x2="55" y2="50" stroke="white" stroke-width="1.5"/>
-        <line x1="105" y1="43" x2="105" y2="50" stroke="white" stroke-width="1.5"/>
-        <rect x="60" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
-        <rect x="100" y="125" width="20" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/>
+      <!-- Camera 4: cinema projector -->
+      <svg class="bg-camera cam-4" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
+        <rect x="30" y="55" width="100" height="65" rx="6" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="80" cy="87" r="24" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="80" cy="87" r="14" fill="none" stroke="white" stroke-width="1.5"/>
+        <circle cx="80" cy="87" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="130" y="70" width="55" height="14" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <polygon points="130,63 185,56 185,70 130,70" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="185" y1="63" x2="205" y2="48" stroke="white" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <line x1="185" y1="77" x2="205" y2="92" stroke="white" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <rect x="50" y="38" width="30" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="90" y="38" width="20" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <rect x="42" y="120" width="18" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/>
+        <line x1="51" y1="120" x2="51" y2="138" stroke="white" stroke-width="1.5"/>
       </svg>
 
       <!-- Camera 5: clapperboard -->
@@ -3491,8 +3502,11 @@ function renderMemberSections(type) {
   }
 
   let html = '';
+  function tagRank(m){return m.special_tag==='admin-developer'?0:m.special_tag==='developer'?1:2;}
+  function sortByTag(arr){return [...arr].sort((a,b)=>tagRank(a)-tagRank(b));}
+
   photoGroups.forEach(group => {
-    const combined = group.roles.flatMap(r => sections[r] || []);
+    const combined = sortByTag(group.roles.flatMap(r => sections[r] || []));
     if (!combined.length) return;
     html += `<div class="members-section">
       <div class="members-section-title">${group.label}<\/div>
@@ -3500,7 +3514,7 @@ function renderMemberSections(type) {
     <\/div>`;
   });
   plainGroups.forEach(group => {
-    const combined = group.roles.flatMap(r => sections[r] || []);
+    const combined = sortByTag(group.roles.flatMap(r => sections[r] || []));
     if (!combined.length) return;
     html += `<div class="members-section">
       <div class="members-section-title">${group.label}<\/div>
