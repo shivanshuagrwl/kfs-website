@@ -950,10 +950,22 @@ body.light-mode .member-film-poster-ph{background:#eee}
   .section-title{font-size:clamp(1.8rem,8vw,2.8rem)}
   .section-label{margin-bottom:16px}
 
-  /* stats */
-  .stats-grid{margin-top:40px}
-  .stat-item{padding:24px 16px}
-  .stat-num{font-size:2.2rem}
+  /* stats — Apple-style stacked layout on mobile */
+  .stats-divider-top,.stats-divider-bottom{margin:0}
+  .stats-grid{
+    margin-top:0;
+    grid-template-columns:1fr;
+    gap:0}
+  .stat-item{
+    padding:28px 20px;
+    border-bottom:1px solid var(--border);
+    display:flex;flex-direction:column;gap:6px}
+  .stat-item:last-child{border-bottom:none}
+  .stat-label{
+    font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--grey);
+    margin-top:0;order:-1}
+  .stat-num{font-size:clamp(2.8rem,12vw,3.8rem);font-weight:700;letter-spacing:-.03em}
 
   /* about */
   .about-layout{margin-top:32px;gap:28px;grid-template-columns:1fr}
@@ -1482,6 +1494,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
+  <div class="section-divider stats-divider-top"></div>
   <section class="section" style="padding-top:0;padding-bottom:0">
     <div class="section-inner">
       <div class="stats-grid" id="stats-grid">
@@ -1492,6 +1505,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
     </div>
   </section>
+  <div class="section-divider stats-divider-bottom"></div>
 
   <section class="section">
     <div class="section-inner">
