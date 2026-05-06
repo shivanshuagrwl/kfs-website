@@ -371,10 +371,11 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 body.light-mode .blog-filter-btn:hover,body.light-mode .blog-filter-btn.open{border-color:#111;color:#111}
 .blog-filter-btn svg{flex-shrink:0;transition:transform .2s}
 .blog-filter-btn.open svg.filter-chevron{transform:rotate(180deg)}
-.blog-filter-dropdown{position:absolute;top:calc(100% + 8px);left:0;min-width:210px;
+.blog-filter-dropdown{position:absolute;top:calc(100% + 8px);left:auto;right:0;min-width:210px;
   background:var(--card);border:1px solid var(--border);border-radius:14px;
   padding:6px;z-index:200;display:none;
   box-shadow:0 12px 40px rgba(0,0,0,.45);animation:fadeUp .18s var(--ease) both}
+@media(min-width:600px){.blog-filter-dropdown{left:0;right:auto}}
 .blog-filter-dropdown.open{display:block}
 body.light-mode .blog-filter-dropdown{background:#fff;box-shadow:0 8px 32px rgba(0,0,0,.15)}
 .blog-filter-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;
@@ -392,6 +393,8 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 /* Blog page section block */
 .blog-page-section{padding:60px 80px 28px}
 @media(max-width:768px){.blog-page-section{padding:40px 24px 20px}}
+/* Blog page top header matches section padding exactly */
+@media(max-width:768px){#page-blog > div:first-child{padding:40px 24px 0 !important}}
 .blog-page-section-header{margin-bottom:32px}
 .blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--grey);margin-bottom:10px;font-weight:600}
@@ -1602,26 +1605,22 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- ── BLOG PAGE ── -->
 <div class="page" id="page-blog">
-  <section class="section" style="padding-bottom:0">
-    <div class="section-inner">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <p class="section-label" style="margin-bottom:10px">From the Lens</p>
-          <h2 class="section-title">The Blog</h2>
-        </div>
-        <div class="blog-filter-wrap" id="blog-filter-wrap" style="display:none;margin-bottom:4px">
-          <button class="blog-filter-btn" id="blog-filter-btn" onclick="toggleBlogFilter(this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-            Filter
-            <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="blog-filter-dropdown" id="blog-filter-dropdown"></div>
-        </div>
+  <div style="padding:60px 80px 0">
+    <p class="blog-page-section-label">From the Lens</p>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <h2 style="font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1">The Blog</h2>
+      <div class="blog-filter-wrap" id="blog-filter-wrap" style="display:none;margin-bottom:4px">
+        <button class="blog-filter-btn" id="blog-filter-btn" onclick="toggleBlogFilter(this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filter
+          <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="blog-filter-dropdown" id="blog-filter-dropdown"></div>
       </div>
     </div>
-  </section>
+  </div>
   <div id="blog-sections-wrap">
-    <div class="section-inner" style="padding:60px 0">
+    <div style="padding:60px 80px">
       <div class="loading">Loading posts...</div>
     </div>
   </div>
