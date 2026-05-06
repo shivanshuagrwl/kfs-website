@@ -282,6 +282,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
 /* ── BG CAMERAS ───────────────────────────────────────────────────────── */
 .hero-cameras{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .bg-camera{position:absolute;opacity:.04}
+body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
 .cam-1{width:340px;bottom:-40px;left:-60px;transform:rotate(-15deg)}
 .cam-2{width:240px;top:10%;right:-30px;transform:rotate(12deg)}
 .cam-3{width:180px;bottom:10%;right:8%;transform:rotate(-8deg)}
@@ -1675,9 +1676,9 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span></p>
     </div>
     <div class="footer-links">
-      <a id="footer-instagram" style="display:none">Instagram</a>
-      <a id="footer-youtube" style="display:none">YouTube</a>
-      <a id="footer-email">Contact</a>
+      <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
+      <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
     </div>
   </footer>
 </div>
