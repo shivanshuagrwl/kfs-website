@@ -2034,7 +2034,23 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
         <div class="settings-divider"></div>
         <p class="settings-section-title">🥚 Easter Egg — "No Shorts" Image</p>
-        <p class="settings-section-desc">When a visitor types <strong>"no shorts"</strong> in the search bar, this image appears. Upload anything — a still, a meme, a frame. Leave blank to show a text message instead.</p>
+        <p class="settings-section-desc">When a visitor types <strong>"shorts"</strong> or <strong>"no shorts"</strong> in the search bar, these messages appear instead of normal results.</p>
+        <div class="settings-grid">
+          <div class="form-group">
+            <label>"Shorts" search — Heading</label>
+            <input type="text" id="set-egg-shorts-heading" placeholder="No Shorts." style="border-radius:10px">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Shown bold at the top when someone searches "shorts"</p>
+          </div>
+          <div class="form-group">
+            <label>"Shorts" search — Subtext</label>
+            <input type="text" id="set-egg-shorts-sub" placeholder="we only make films that last" style="border-radius:10px">
+          </div>
+          <div class="form-group">
+            <label>"No Shorts" search — Fallback text (if no image set)</label>
+            <input type="text" id="set-egg-noshorts-fallback" placeholder="that's the spirit 🎬" style="border-radius:10px">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Shown if no image is uploaded</p>
+          </div>
+        </div>
         <div class="form-group">
           <div id="egg-img-preview" style="margin-bottom:12px;display:none">
             <img id="egg-img-thumb" src="" alt="Easter egg" style="max-width:280px;max-height:180px;object-fit:contain;border-radius:10px;border:1px solid var(--border)">
@@ -3752,6 +3768,9 @@ async function loadAdminData(name) {
         document.getElementById('egg-img-filename').textContent = 'Current image';
         window._easterEggImg = settings.easter_egg_img;
       }
+      document.getElementById('set-egg-shorts-heading').value = settings.easter_egg_shorts_heading || '';
+      document.getElementById('set-egg-shorts-sub').value = settings.easter_egg_shorts_sub || '';
+      document.getElementById('set-egg-noshorts-fallback').value = settings.easter_egg_noshorts_fallback || '';
       // Load custom tags
       loadTagsUI(settings);
     }
@@ -4234,6 +4253,9 @@ async function saveSettings() {
     // If cleared (url blank and no new file), send empty string to remove
     if (!eggFile && !document.getElementById('set-egg-img-url').value)
       fd.append('easter_egg_img_clear', '1');
+    fd.append('easter_egg_shorts_heading', document.getElementById('set-egg-shorts-heading').value);
+    fd.append('easter_egg_shorts_sub', document.getElementById('set-egg-shorts-sub').value);
+    fd.append('easter_egg_noshorts_fallback', document.getElementById('set-egg-noshorts-fallback').value);
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + adminToken },
@@ -4954,6 +4976,11 @@ async function loadSearchData() {
   ]);
   searchData = { movies: movies||[], blogs: blogs||[], events: events||[], members: members||[] };
   if (settings && settings.easter_egg_img) window._easterEggImg = settings.easter_egg_img;
+  if (settings) {
+    window._eggShortsHeading  = settings.easter_egg_shorts_heading  || 'No Shorts.';
+    window._eggShortsSub      = settings.easter_egg_shorts_sub      || 'we only make films that last';
+    window._eggNoShortsFallback = settings.easter_egg_noshorts_fallback || "that's the spirit 🎬";
+  }
   searchLoaded = true;
 }
 
@@ -5176,19 +5203,20 @@ function doSearch(q) {
 
   // ── EASTER EGG: "shorts" → "No Shorts." ──────────────────────────────
   if (q === 'shorts') {
-    out.innerHTML = `<div class="search-egg-noshorts">
-      <strong>No Shorts.</strong>
-      we only make films that last
-    </div>`;
+    const h = window._eggShortsHeading || 'No Shorts.';
+    const s = window._eggShortsSub || 'we only make films that last';
+    out.innerHTML = `<div class="search-egg-noshorts"><strong>${h}</strong>${s}</div>`;
     return;
   }
 
   // ── EASTER EGG: "no shorts" → reveal the image ───────────────────────
   if (q === 'no shorts') {
     const imgUrl = window._easterEggImg || '';
+    const fallback = window._eggNoShortsFallback || "that's the spirit 🎬";
+    const h = window._eggShortsHeading || 'No Shorts.';
     out.innerHTML = imgUrl
       ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div>`
-      : `<div class="search-egg-noshorts"><strong>No Shorts.</strong>that's the spirit 🎬</div>`;
+      : `<div class="search-egg-noshorts"><strong>${h}</strong>${fallback}</div>`;
     return;
   }
 
