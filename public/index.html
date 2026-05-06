@@ -2556,7 +2556,15 @@ function toggleTheme() {
 // Pre-load members so linked member lookups work on any page
 document.addEventListener('DOMContentLoaded', async function prefetchMembers(){
   const data = await apiFetch('/api/members');
-  if (data) allMembers = data;
+  if (data) {
+    allMembers = data;
+    // Pre-populate registry so indices are stable
+    if (!window._memberRegistry) window._memberRegistry = [];
+    data.forEach(m => {
+      if (!window._memberRegistry.find(r => r.id === m.id))
+        window._memberRegistry.push(m);
+    });
+  }
 });
 
 function animateCounters() {
@@ -3087,7 +3095,8 @@ function renderMemberSections(type) {
 
   function photoCard(m) {
     const subtitle = m.domain ? m.domain : (m.role === 'Member' ? '' : (m.role||''));
-    return `<div class="member-card-photo" onclick="openMemberProfile(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="cursor:pointer">
+    const idx = _memberIdx(m);
+    return `<div class="member-card-photo" data-member-idx="${idx}" style="cursor:pointer">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
         : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
@@ -3100,7 +3109,7 @@ function renderMemberSections(type) {
   }
 
   function plainRow(m) {
-    return `<div class="member-row" onclick="openMemberProfile(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+    return `<div class="member-row" data-member-idx="${_memberIdx(m)}">
       <div class="member-row-name">${m.name}<\/div>
       ${m.batch ? `<div class="member-row-batch">${m.batch}<\/div>` : ''}
     <\/div>`;
@@ -3201,7 +3210,7 @@ function renderMovieCard(m, clickable=false) {
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
       <div class="movie-year">${m.release_year||''}${m.genre ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${m.genre}<\/span>` : ''}<\/div>
-      <div class="movie-director">${m.director ? 'Dir. '+m.director : ''}<\/div>
+      <div class="movie-director">${m.director ? 'Dir. '+splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
   <\/div>`;
@@ -3670,7 +3679,7 @@ async function loadAdminData(name) {
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}<\/td>
       <td style="font-weight:500">${m.title}<\/td>
       <td style="color:var(--grey)">${m.release_year||'—'}<\/td>
-      <td style="color:var(--grey)">${m.director||'—'}<\/td>
+      <td style="color:var(--grey)">${m.director ? splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : '—'}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete<\/button>
@@ -4375,6 +4384,41 @@ document.querySelectorAll('.modal-overlay').forEach(overlay=>{
   });
 });
 
+// ── DELEGATED CLICK HANDLER — no UUIDs in HTML ───────────────────────────
+document.addEventListener('click', function(e) {
+  // Member profile open (crew names, cast tags, member cards, member rows)
+  const memberEl = e.target.closest('[data-member-idx]');
+  if (memberEl) {
+    const idx = parseInt(memberEl.dataset.memberIdx, 10);
+    const member = window._memberRegistry && window._memberRegistry[idx];
+    if (member) openMemberProfile(member);
+    return;
+  }
+  // Movie open from member profile film grid
+  const filmEl = e.target.closest('[data-open-movie]');
+  if (filmEl) {
+    const id = filmEl.dataset.openMovie;
+    closeMemberProfile();
+    openMovie(id);
+    return;
+  }
+  // Movie card click (films grid)
+  const movieCard = e.target.closest('[data-movie-id]');
+  if (movieCard && !e.target.closest('[data-watch-id]')) {
+    openMovie(movieCard.dataset.movieId);
+    return;
+  }
+  // Watchlist badge click
+  const watchEl = e.target.closest('[data-watch-id]');
+  if (watchEl) {
+    e.stopPropagation();
+    const id = watchEl.dataset.watchId;
+    const card = watchEl.closest('.movie-card');
+    toggleWatchStatusCard(id, card);
+    return;
+  }
+});
+
 checkRoute();
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
@@ -4873,19 +4917,32 @@ function splitCrew(val) {
   return val.includes(';;') ? val.split(';;').map(s=>s.trim()).filter(Boolean)
                              : val.split(',').map(s=>s.trim()).filter(Boolean);
 }
+function _memberIdx(member) {
+  // Store member in a global registry and return a clean integer index
+  if (!window._memberRegistry) window._memberRegistry = [];
+  let idx = window._memberRegistry.findIndex(m => m.id === member.id);
+  if (idx === -1) { idx = window._memberRegistry.length; window._memberRegistry.push(member); }
+  return idx;
+}
 function renderCrewNames(val) {
   if (!val) return '';
   return splitCrew(val).map(p => {
     const [name, id] = p.trim().split('||');
     const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
-    if (member) return `<span style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}<\/span>`;
+    if (member) {
+      const idx = _memberIdx(member);
+      return `<span data-member-idx="${idx}" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555">${name.trim()}<\/span>`;
+    }
     return name.trim();
   }).join(', ');
 }
 function crewNameTag(part) {
   const [name, id] = part.split('||');
   const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
-  if (member) return `<span class="movie-cast-tag" style="cursor:pointer" onclick="openMemberProfile(${JSON.stringify(member).replace(/"/g,'&quot;')})">${name.trim()}<\/span>`;
+  if (member) {
+    const idx = _memberIdx(member);
+    return `<span class="movie-cast-tag" data-member-idx="${idx}" style="cursor:pointer">${name.trim()}<\/span>`;
+  }
   return `<span class="movie-cast-tag">${name.trim()}<\/span>`;
 }
 
@@ -5032,7 +5089,7 @@ async function openMemberProfile(member) {
   if (memberFilms.length) {
     filmsWrap.style.display='block';
     filmsGrid.innerHTML = memberFilms.map(({movie:mv, role})=>`
-      <div class="member-film-card" onclick="closeMemberProfile();openMovie('${mv.id}')">
+      <div class="member-film-card" data-open-movie="${mv.id}" style="cursor:pointer">
         ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
         <div class="member-film-info">
           <div class="member-film-title">${mv.title}<\/div>
