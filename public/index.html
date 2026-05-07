@@ -701,7 +701,10 @@ body.light-mode .rv-item-title{color:#111}
 .blog-detail-title{font-size:clamp(2rem,4vw,3rem);font-weight:700;letter-spacing:-.03em;line-height:1.1;margin-bottom:20px;text-align:center}
 .blog-detail-author{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);text-align:center;margin-bottom:36px;margin-top:0}
 .blog-detail-author span{color:rgba(245,245,245,.7);font-weight:600}
+.blog-author-link{transition:color .2s,border-color .2s}
+.blog-author-link:hover{color:#fff!important;border-bottom-color:rgba(245,245,245,.7)!important}
 body.light-mode .blog-detail-author span{color:#333}
+body.light-mode .blog-author-link:hover{color:#000!important}
 .blog-detail-body{font-size:16.5px;line-height:1.9;color:rgba(245,245,245,.82);width:100%;text-align:left}
 .blog-detail-body h2,.blog-detail-body h3{color:var(--white);margin:2em 0 .5em;font-weight:600}
 .blog-detail-body p{margin-bottom:1.5em;font-size:16.5px;line-height:1.9;font-weight:400}
@@ -3328,6 +3331,11 @@ function renderBlogCard(b) {
 async function openBlog(id) {
   const blog = await apiFetch('/api/blogs/'+id);
   if (!blog) return;
+  // Ensure members are loaded for author linking
+  if (!allMembers || !allMembers.length) {
+    const mdata = await apiFetch('/api/members');
+    if (mdata) allMembers = mdata;
+  }
   // Mark as viewed and update card live
   markBlogRead(id);
   // Update all blog page cards (post may appear in All + section block)
@@ -3354,7 +3362,16 @@ async function openBlog(id) {
   // Author
   const authorEl = document.getElementById('blog-detail-author');
   if (blog.author) {
-    authorEl.innerHTML = `By <span>${blog.author}</span>`;
+    // Try to match author name against members (case-insensitive)
+    const matchedMember = allMembers && allMembers.find(
+      m => m.name && m.name.trim().toLowerCase() === blog.author.trim().toLowerCase()
+    );
+    if (matchedMember) {
+      authorEl.innerHTML = `By <span class="blog-author-link" style="cursor:pointer;border-bottom:1px solid rgba(245,245,245,.3);padding-bottom:1px" onclick="openMemberProfile(window._blogAuthorMember)">${blog.author}</span>`;
+      window._blogAuthorMember = matchedMember;
+    } else {
+      authorEl.innerHTML = `By <span>${blog.author}</span>`;
+    }
     authorEl.style.display = 'block';
   } else {
     authorEl.style.display = 'none';
