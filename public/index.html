@@ -486,7 +486,7 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 
 /* ── APPLE-STYLE FULL-BLEED GRID SECTIONS ────────────────────────────── */
 /* ── HOME CAROUSEL SECTIONS ─────────────────────────────────────────── */
-.apple-section{width:100%;overflow:hidden}
+.apple-section{width:100%;overflow:hidden;padding-left:0!important;padding-right:0!important}
 .apple-section .section-inner{max-width:none;padding:0}
 .apple-section .section-header{padding:52px 40px 20px}
 .apple-section .section-cta{padding:16px 40px 48px}
@@ -546,8 +546,8 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 .hc-film-rating{display:flex;align-items:center;gap:3px;margin-top:6px;font-size:12px;font-weight:600;color:#f59e0b}
 .hc-film-rating-count{font-size:10px;font-weight:400;color:var(--grey)}
 /* achievement apple grid */
-.apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
-@media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr}}
+.apple-achievement-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border);margin:0 40px}
+@media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr;margin:0 20px}}
 
 /* ── BLOG FILTER FLOATING BUTTON ─────────────────────────────────────── */
 .blog-filter-wrap{position:relative;display:inline-block}
@@ -591,8 +591,7 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 /* Scroll hint */
 .carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 40px 0;
   margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
-@media(max-width:768px){.carousel-scroll-hint{padding:0 20px 0}}
-.carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
+@media(max-width:768px){.carousel-scroll-hint{padding:0 20px 0}}.carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
 .events-tabs{display:flex;gap:0;margin-top:60px;border-bottom:1px solid var(--border)}
 .events-tab{padding:12px 24px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--grey);transition:color .2s;border-bottom:2px solid transparent;margin-bottom:-1px}
