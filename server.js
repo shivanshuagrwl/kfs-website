@@ -943,6 +943,35 @@ app.post('/api/events/:id/form/submit', upload.any(), async (req, res) => {
     }
   }
 
+  // 3b. Duplicate check — block if same email or phone already submitted for this event
+  const dedupeTypes = ['email', 'phone'];
+  const dedupeKeys = questions
+    .filter(q => dedupeTypes.includes(q.type))
+    .map(q => ({ id: q.id, label: q.label || q.type, type: q.type }));
+
+  if (dedupeKeys.length > 0) {
+    // Fetch existing responses for this event
+    const { data: existing } = await supabase
+      .from('form_responses')
+      .select('answers')
+      .eq('event_id', req.params.id);
+
+    for (const key of dedupeKeys) {
+      const submitted = (answers[key.id] || '').trim().toLowerCase();
+      if (!submitted) continue;
+      const isDup = (existing || []).some(row => {
+        try {
+          const prev = JSON.parse(row.answers || '{}');
+          return (prev[key.id] || '').trim().toLowerCase() === submitted;
+        } catch { return false; }
+      });
+      if (isDup) {
+        const label = key.type === 'email' ? 'Email' : 'Mobile number';
+        return res.status(409).json({ error: `${label} already registered for this event.` });
+      }
+    }
+  }
+
   // 4. Upload any image files to Supabase Storage
   const imageUrls = {};
   for (const file of (req.files || [])) {

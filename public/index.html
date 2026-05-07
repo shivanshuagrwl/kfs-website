@@ -7368,7 +7368,16 @@ async function submitRegForm() {
     } else {
       const err = await res.json().catch(() => ({}));
       console.error('Form submit failed:', res.status, err);
-      alert(err.error || `Submission failed (${res.status}). Please try again.`);
+      const errMsg = err.error || `Submission failed (${res.status}). Please try again.`;
+      let errEl = document.getElementById('rf-submit-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'rf-submit-error';
+        errEl.style.cssText = 'color:#ff453a;font-size:13px;text-align:center;margin-top:10px;padding:10px 16px;background:rgba(255,69,58,.1);border-radius:10px;border:1px solid rgba(255,69,58,.25)';
+        document.getElementById('rf-submit-row').after(errEl);
+      }
+      errEl.textContent = errMsg;
+      errEl.style.display = 'block';
       btn.disabled = false;
       btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
     }
