@@ -7235,7 +7235,7 @@ function buildRegField(q) {
     const ph = q.type === 'email' ? 'you@example.com' : q.type === 'phone' ? '+91 XXXXX XXXXX' : 'Your answer';
     return `<div class="reg-field" data-qid="${q.id}">
       ${label}
-      <input class="reg-input" type="${t}" placeholder="${ph}" data-qid="${q.id}" ${q.required?'required':''}>
+      <input class="reg-input" type="${t}" placeholder="${ph}" data-qid="${q.id}" ${q.required?'required':''} oninput="(function(){var e=document.getElementById('rf-submit-error');if(e)e.style.display='none';})()">
     </div>`;
   }
   if (q.type === 'textarea') {
@@ -7344,6 +7344,10 @@ async function submitRegForm() {
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg> Submitting…';
 
+  // Clear any previous duplicate/error message before each attempt
+  const prevErr = document.getElementById('rf-submit-error');
+  if (prevErr) prevErr.style.display = 'none';
+
   try {
     const fd = new FormData();
     fd.append('answers', JSON.stringify(answers));
@@ -7356,6 +7360,8 @@ async function submitRegForm() {
     if (res.ok) {
       document.querySelector('.reg-form-header').style.display = 'none';
       document.getElementById('rf-submit-row').style.display = 'none';
+      const errEl2 = document.getElementById('rf-submit-error');
+      if (errEl2) errEl2.style.display = 'none';
 
       // Build Google Calendar URL from stored event variables
       const _gcTitle = encodeURIComponent(_rfEventTitle);
