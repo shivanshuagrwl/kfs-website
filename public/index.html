@@ -6658,6 +6658,14 @@ async function runMemberImport() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Responses
         </button>
+        <button class="fb-dl-btn" onclick="clearFormResponses()" id="fb-clear-btn" title="Delete all responses (keeps form schema)" style="border-color:rgba(255,69,58,.3);color:rgba(255,130,120,.85)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Clear Responses
+        </button>
+        <button class="fb-dl-btn" onclick="deleteEntireForm()" id="fb-del-form-btn" title="Delete form and all responses permanently" style="border-color:rgba(255,69,58,.4);color:rgba(255,80,68,.9)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Delete Form
+        </button>
         <button class="btn-sm btn-success" onclick="saveFormBuilder()" id="fb-save-btn">Save Form</button>
         <button class="btn-sm" onclick="closeFormBuilder()">✕</button>
       </div>
@@ -6753,9 +6761,10 @@ async function openFormBuilder(eventId, eventTitle) {
   } catch(e){}
 
   renderFBQuestions();
-  document.getElementById('fb-is-open').addEventListener('change', function() {
+  const isOpenEl = document.getElementById('fb-is-open');
+  isOpenEl.onchange = function() {
     document.getElementById('fb-open-label').textContent = this.checked ? 'Form is Open' : 'Form is Closed';
-  });
+  };
   document.getElementById('form-builder-overlay').classList.add('open');
 }
 
@@ -6860,17 +6869,83 @@ async function saveFormBuilder() {
   const is_open = document.getElementById('fb-is-open').checked;
   const btn = document.getElementById('fb-save-btn');
   btn.textContent = 'Saving…'; btn.disabled = true;
-  const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-    body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
-  });
-  btn.textContent = 'Save Form'; btn.disabled = false;
-  if (res.ok) {
-    btn.textContent = '✓ Saved';
-    setTimeout(() => btn.textContent = 'Save Form', 2000);
-  } else {
-    alert('Error saving form');
+  try {
+    const token = adminToken || localStorage.getItem('kfs_token');
+    const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
+    });
+    if (res.ok) {
+      btn.textContent = '✓ Saved'; btn.disabled = false;
+      setTimeout(() => btn.textContent = 'Save Form', 2000);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Error saving form: ' + (err.error || res.status));
+      btn.textContent = 'Save Form'; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Error saving form: ' + e.message);
+    btn.textContent = 'Save Form'; btn.disabled = false;
+  }
+}
+
+async function clearFormResponses() {
+  if (!_fbEventId) return;
+  if (!confirm(`Clear ALL responses for "${_fbEventTitle}"?\n\nThis frees up Supabase storage but cannot be undone. The form schema will be kept.`)) return;
+  const btn = document.getElementById('fb-clear-btn');
+  const origHtml = btn.innerHTML;
+  btn.textContent = 'Clearing…'; btn.disabled = true;
+  try {
+    const token = adminToken || localStorage.getItem('kfs_token');
+    const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.ok) {
+      _fbResponseCount = 0;
+      document.getElementById('fb-response-count').textContent = '0 responses';
+      btn.textContent = '✓ Cleared';
+      setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 2000);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed to clear responses: ' + (err.error || res.status));
+      btn.innerHTML = origHtml; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.innerHTML = origHtml; btn.disabled = false;
+  }
+}
+
+async function deleteEntireForm() {
+  if (!_fbEventId) return;
+  if (!confirm(`Delete the ENTIRE form for "${_fbEventTitle}"?\n\nThis removes the form schema AND all responses permanently. This frees up Supabase space and cannot be undone.`)) return;
+  const btn = document.getElementById('fb-del-form-btn');
+  const origHtml = btn.innerHTML;
+  btn.textContent = 'Deleting…'; btn.disabled = true;
+  try {
+    const token = adminToken || localStorage.getItem('kfs_token');
+    const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.ok) {
+      btn.textContent = '✓ Deleted';
+      setTimeout(() => {
+        closeFormBuilder();
+        // Reset form builder state
+        _fbQuestions = [];
+        _fbResponseCount = 0;
+      }, 1200);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed to delete form: ' + (err.error || res.status));
+      btn.innerHTML = origHtml; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.innerHTML = origHtml; btn.disabled = false;
   }
 }
 
