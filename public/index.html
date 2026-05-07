@@ -868,8 +868,8 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .cv-cards-row{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;background:transparent}
 @media(max-width:600px){.cv-cards-row{grid-template-columns:1fr}}
 .cv-year-card{position:relative;overflow:hidden;cursor:pointer;background:var(--card);aspect-ratio:3/2;display:flex;align-items:flex-end}
-.cv-year-card:hover .cv-year-card-img{transform:scale(1.04);filter:grayscale(0%)}
-.cv-year-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(60%);transition:transform .5s var(--ease),filter .4s var(--ease)}
+.cv-year-card:hover .cv-year-card-img{transform:scale(1.06)}
+.cv-year-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(0%);transition:transform .5s var(--ease)}
 .cv-year-card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.2) 60%,transparent 100%)}
 .cv-year-card-placeholder{position:absolute;inset:0;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.15}
 .cv-year-card-info{position:relative;z-index:2;padding:24px;width:100%}
@@ -879,7 +879,7 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .cv-year-arrow{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6);transition:color .2s}
 .cv-year-card:hover .cv-year-arrow{color:#fff}
 body.light-mode .cv-year-card{background:#e8e8e8}
-body.light-mode .cv-year-card-img{filter:grayscale(40%)}
+body.light-mode .cv-year-card-img{filter:grayscale(0%)}
 body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 
 /* CV Detail view */
@@ -2389,7 +2389,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('change-password')" data-section="change-password"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg></span> Change Password</div>
     <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
     <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
     <div class="admin-sidebar-bottom">
@@ -2641,7 +2640,17 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <button class="btn btn-primary" style="border-radius:10px" onclick="addCustomEgg()">+ Add Easter Egg</button>
         <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
 
-        <!-- ── SECTION 7: Blog Tag Management ── -->
+        <!-- ── SECTION 7: Change Password ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Change Your Password</p>
+        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords.</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>New Password</label><input type="password" id="new-password"></div>
+          <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
+        </div>
+        <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
+
+        <!-- ── SECTION 8: Blog Tag Management ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Blog Tag Management</p>
         <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
@@ -2655,27 +2664,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         </div>
         <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
 
-        <!-- ── SAVE SETTINGS BUTTON (bottom) ── -->
-        <div style="margin-top:32px;padding:20px 0 8px;border-top:1px solid var(--border)">
-          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- CHANGE PASSWORD (always accessible) -->
-    <div class="admin-section" id="section-change-password">
-      <div class="admin-header">
-        <div><h2>Change Password</h2><p>Update your own admin login password</p></div>
-      </div>
-      <div class="settings-form" style="max-width:520px">
-        <p class="settings-section-title">Change Your Password</p>
-        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords.</p>
-        <div class="settings-grid">
-          <div class="form-group"><label>New Password</label><input type="password" id="new-password" placeholder="Min. 6 characters"></div>
-          <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password" placeholder="Repeat new password"></div>
-        </div>
-        <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
       </div>
     </div>
 
@@ -4314,10 +4302,7 @@ function showAdminPanel() {
   document.querySelectorAll('.admin-sidebar-item[data-section]').forEach(el => {
     const sec = el.dataset.section;
     const masterOnly = ['admins','activity'].includes(sec);
-    const alwaysVisible = ['change-password'].includes(sec);
-    if (alwaysVisible) {
-      el.style.display = 'flex';
-    } else if (masterOnly) {
+    if (masterOnly) {
       el.style.display = currentAdminRole === 'master' ? 'flex' : 'none';
     } else {
       el.style.display = hasPermission(sec) ? 'flex' : 'none';
