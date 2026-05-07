@@ -931,6 +931,7 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .event-info h3{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:900;letter-spacing:-.03em;margin-bottom:6px;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-info p{font-size:13px;color:var(--grey)}
 .event-location{font-size:12px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase}
+.event-time-display{font-size:15px;font-weight:700;letter-spacing:.04em;color:var(--white);text-transform:none}
 .event-cover{width:100%;height:280px;object-fit:cover;margin-top:20px;border-radius:4px;filter:grayscale(0%)}
 
 /* ── CHITRA VICHITRA SECTION ─────────────────────────────────────────── */
@@ -3530,14 +3531,28 @@ function filterEvents(type, tabEl) {
 }
 
 function renderEventItem(e, full=false) {
+  // Parse date as IST (UTC+5:30) so it's correct regardless of server timezone
   const d = e.event_date ? new Date(e.event_date + 'T00:00:00+05:30') : null;
   const day = d ? d.getDate() : '--';
   const month = d ? d.toLocaleString('default',{month:'short'}).toUpperCase() : '';
-  // Countdown
+  // Countdown — count down to exact event time (IST), not just midnight
   let countdownHtml = '';
   if (e.is_upcoming && d) {
+    let eventMs = d.getTime(); // defaults to midnight IST
+    if (e.event_time) {
+      const tm = e.event_time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*[AP]M)?$/i);
+      if (tm) {
+        let h = parseInt(tm[1]), mn = parseInt(tm[2]), ap = tm[4] ? tm[4].trim().toUpperCase() : null;
+        if (!ap) { /* treat as 24h */ }
+        else if (ap === 'PM' && h !== 12) h += 12;
+        else if (ap === 'AM' && h === 12) h = 0;
+        // Build IST datetime string
+        const pad = n => String(n).padStart(2,'0');
+        eventMs = new Date(e.event_date + `T${pad(h)}:${pad(mn)}:00+05:30`).getTime();
+      }
+    }
     const now = new Date();
-    const diff = d - now;
+    const diff = eventMs - now.getTime();
     if (diff > 0) {
       const days = Math.floor(diff / (1000*60*60*24));
       const hrs  = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
@@ -3560,14 +3575,14 @@ function renderEventItem(e, full=false) {
       <span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span>
       <h3>${e.title}<\/h3>
       <p>${e.description||''}<\/p>
-      ${full && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
+      ${(full || e.cover_image) && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
       ${countdownHtml}
       <div class="event-action-row">
         ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}','${e.event_date||''}','${e.event_time||''}','${(e.location||'').replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
         ${shareHtml}
       <\/div>
     <\/div>
-    <div class="event-location">${e.location||''}<br><span style="font-size:11px">${e.event_time||''}<\/span><\/div>
+    <div class="event-location">${e.location||''}<br><span class="event-time-display">${e.event_time ? (()=>{ const m=e.event_time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*[AP]M)?$/i); if(!m) return e.event_time; let h=parseInt(m[1]),mn=m[2],ap=m[4]?m[4].trim().toUpperCase():null; if(!ap){ap=h<12?'AM':'PM';if(h===0)h=12;else if(h>12)h-=12;} return h+':'+mn+' '+ap; })() : ''}<\/span><\/div>
   <\/div>`;
 }
 
