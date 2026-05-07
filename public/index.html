@@ -692,19 +692,19 @@ body.light-mode .rv-item-title{color:#111}
 #blog-detail{display:none;min-height:100vh;padding-top:72px;width:100%}
 #blog-detail.active{display:block;animation:fadeUp .6s var(--ease) both;width:100%}
 .blog-detail-hero{width:100%;max-height:500px;object-fit:cover;filter:grayscale(100%)}
-.blog-detail-content{max-width:760px;width:100%;margin:0 auto;padding:60px 40px}
+.blog-detail-content{max-width:680px;width:100%;margin:0 auto;padding:60px 40px}
 .blog-detail-back{display:inline-flex;align-items:center;gap:8px;font-size:13px;
   letter-spacing:.08em;text-transform:uppercase;color:var(--grey);
   transition:color .2s;margin-bottom:40px}
 .blog-detail-back:hover{color:var(--white)}
-.blog-detail-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:16px;text-align:center}
-.blog-detail-title{font-size:clamp(2rem,4vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-bottom:24px;text-align:center}
-.blog-detail-author{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);text-align:center;margin-bottom:32px;margin-top:0}
+.blog-detail-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:12px;text-align:center}
+.blog-detail-title{font-size:clamp(2rem,4vw,3rem);font-weight:700;letter-spacing:-.03em;line-height:1.1;margin-bottom:20px;text-align:center}
+.blog-detail-author{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);text-align:center;margin-bottom:36px;margin-top:0}
 .blog-detail-author span{color:rgba(245,245,245,.7);font-weight:600}
 body.light-mode .blog-detail-author span{color:#333}
-.blog-detail-body{font-size:17px;line-height:1.9;color:rgba(245,245,245,.85);width:100%;text-align:left}
+.blog-detail-body{font-size:16.5px;line-height:1.9;color:rgba(245,245,245,.82);width:100%;text-align:left}
 .blog-detail-body h2,.blog-detail-body h3{color:var(--white);margin:2em 0 .5em;font-weight:600}
-.blog-detail-body p{margin-bottom:1.6em;font-size:17px;line-height:1.9;font-weight:400}
+.blog-detail-body p{margin-bottom:1.5em;font-size:16.5px;line-height:1.9;font-weight:400}
 .blog-detail-body strong,.blog-detail-body b{font-weight:600;color:var(--white)}
 .blog-detail-body img{width:100%;margin:2em 0;filter:grayscale(100%)}
 .blog-detail-body blockquote{border-left:2px solid var(--grey);padding-left:24px;color:var(--grey);font-style:italic;margin:2em 0}
@@ -1933,6 +1933,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <h1 class="blog-detail-title" id="blog-detail-title"></h1>
     <div id="blog-section-nav-wrap"></div>
     <p class="blog-detail-author" id="blog-detail-author" style="display:none"></p>
+    <hr style="border:none;border-top:1px solid var(--border);margin:0 0 36px">
     <div class="blog-detail-body" id="blog-detail-body"></div>
   </div>
 </div>
@@ -3358,14 +3359,26 @@ async function openBlog(id) {
   } else {
     authorEl.style.display = 'none';
   }
-  // Render content: strip heading tags → replace with bold paragraph style, keep text as paragraphs
+  // Render content: clean up contenteditable editor artifacts into proper paragraphs
   let content = blog.content || '';
-  // Convert h1-h6 tags to styled paragraphs so content doesn't look like headers
+  // Convert h1-h6 → bold paragraph
   content = content.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '<p><strong>$1</strong></p>');
-  if (content && !/<(p|ul|ol|blockquote|div|br)[^>]*>/i.test(content)) {
+  // Collapse <br> and <div> line breaks from contenteditable into spaces within a sentence,
+  // but treat double <br><br> or </div><div> as paragraph breaks
+  content = content
+    .replace(/<div><br\s*\/?><\/div>/gi, '\n\n')          // empty div = paragraph break
+    .replace(/<\/div>\s*<div>/gi, '\n\n')                  // div-to-div = paragraph break
+    .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '\n\n')          // double br = paragraph break
+    .replace(/<br\s*\/?>/gi, ' ')                           // single br = space (not a new line)
+    .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n\n') // remaining divs
+    .replace(/&nbsp;/gi, ' ');
+  // If no <p> tags yet, wrap paragraph blocks
+  if (content && !/<p[^>]*>/i.test(content)) {
     content = content
       .split(/\n{2,}/)
-      .map(block => '<p>' + block.replace(/\n/g, ' ') + '</p>')
+      .map(block => block.trim())
+      .filter(Boolean)
+      .map(block => '<p>' + block + '</p>')
       .join('');
   }
   document.getElementById('blog-detail-body').innerHTML = content;
