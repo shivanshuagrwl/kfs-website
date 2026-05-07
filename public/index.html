@@ -698,10 +698,14 @@ body.light-mode .rv-item-title{color:#111}
   transition:color .2s;margin-bottom:40px}
 .blog-detail-back:hover{color:var(--white)}
 .blog-detail-date{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:16px;text-align:center}
-.blog-detail-title{font-size:clamp(2rem,4vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-bottom:32px;text-align:center}
-.blog-detail-body{font-size:17px;line-height:1.85;color:rgba(245,245,245,.85);width:100%;max-width:none;text-align:center}
+.blog-detail-title{font-size:clamp(2rem,4vw,3.5rem);font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-bottom:24px;text-align:center}
+.blog-detail-author{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);text-align:center;margin-bottom:32px;margin-top:0}
+.blog-detail-author span{color:rgba(245,245,245,.7);font-weight:600}
+body.light-mode .blog-detail-author span{color:#333}
+.blog-detail-body{font-size:17px;line-height:1.85;color:rgba(245,245,245,.85);width:100%;max-width:none;text-align:left}
 .blog-detail-body h2,.blog-detail-body h3{color:var(--white);margin:2em 0 .5em;font-weight:600}
-.blog-detail-body p{margin-bottom:1.5em}
+.blog-detail-body p{margin-bottom:1.6em;font-size:17px;line-height:1.85;font-weight:400}
+.blog-detail-body strong,.blog-detail-body b{font-weight:600;color:var(--white)}
 .blog-detail-body img{width:100%;margin:2em 0;filter:grayscale(100%)}
 .blog-detail-body blockquote{border-left:2px solid var(--grey);padding-left:24px;color:var(--grey);font-style:italic;margin:2em 0}
 .blog-detail-body ul,.blog-detail-body ol{padding-left:24px;margin-bottom:1.5em}
@@ -1926,6 +1930,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <p class="blog-detail-date" id="blog-detail-date"></p>
     <h1 class="blog-detail-title" id="blog-detail-title"></h1>
     <div id="blog-section-nav-wrap"></div>
+    <p class="blog-detail-author" id="blog-detail-author" style="display:none"></p>
     <div class="blog-detail-body" id="blog-detail-body"></div>
   </div>
 </div>
@@ -2502,6 +2507,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <h3 id="blog-modal-title">New Blog Post</h3>
     <input type="hidden" id="blog-edit-id">
     <div class="form-group"><label>Title</label><input type="text" id="blog-title"></div>
+    <div class="form-group"><label>Author</label><input type="text" id="blog-author" placeholder="e.g. Shivanshu Agarwal"></div>
     <div class="form-group"><label>Excerpt (short summary)</label><input type="text" id="blog-excerpt"></div>
     <div class="form-group"><label>Cover Image</label><input type="file" id="blog-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
@@ -3342,10 +3348,19 @@ async function openBlog(id) {
   document.getElementById('blog-detail-date').textContent = blog.created_at
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
-  // Render content: if it has no block-level HTML tags, treat as plain text and wrap paragraphs
+  // Author
+  const authorEl = document.getElementById('blog-detail-author');
+  if (blog.author) {
+    authorEl.innerHTML = `By <span>${blog.author}</span>`;
+    authorEl.style.display = 'block';
+  } else {
+    authorEl.style.display = 'none';
+  }
+  // Render content: strip heading tags → replace with bold paragraph style, keep text as paragraphs
   let content = blog.content || '';
-  if (content && !/<(p|h[1-6]|ul|ol|blockquote|div|br)[^>]*>/i.test(content)) {
-    // Plain text — split on double newlines for paragraphs, single newlines become spaces
+  // Convert h1-h6 tags to styled paragraphs so content doesn't look like headers
+  content = content.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '<p><strong>$1</strong></p>');
+  if (content && !/<(p|ul|ol|blockquote|div|br)[^>]*>/i.test(content)) {
     content = content
       .split(/\n{2,}/)
       .map(block => '<p>' + block.replace(/\n/g, ' ') + '</p>')
@@ -4186,6 +4201,7 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-modal-title').textContent = blog ? 'Edit Post' : 'New Blog Post';
   document.getElementById('blog-edit-id').value = blog?.id||'';
   document.getElementById('blog-title').value = blog?.title||'';
+  document.getElementById('blog-author').value = blog?.author||'';
   document.getElementById('blog-excerpt').value = blog?.excerpt||'';
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
@@ -4354,6 +4370,7 @@ async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
   const fd = new FormData();
   fd.append('title', document.getElementById('blog-title').value);
+  fd.append('author', document.getElementById('blog-author').value);
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
   fd.append('content', document.getElementById('blog-editor-content').innerHTML);
   fd.append('published', document.getElementById('blog-published').value);
