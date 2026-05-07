@@ -579,8 +579,8 @@ body.light-mode .blog-filter-item.active{color:#111;background:rgba(0,0,0,.08)}
 body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .blog-filter-divider-line{height:1px;background:var(--border);margin:4px 6px}
 /* Blog page section block */
-.blog-page-section{padding:60px 40px 28px}
-@media(max-width:768px){.blog-page-section{padding:40px 20px 20px}}
+.blog-page-section{padding:40px 80px 28px}
+@media(max-width:768px){.blog-page-section{padding:24px 20px 20px}}
 /* Blog page top header matches section padding exactly */
 @media(max-width:768px){#page-blog > div:first-child{padding:40px 20px 0 !important}}
 .blog-page-section-header{margin-bottom:32px}
@@ -1861,7 +1861,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 <div class="page" id="page-events">
   <section class="section">
     <div class="section-inner" id="events-main-view">
-      <p class="section-label">Program</p>
       <h2 class="section-title">Events</h2>
       <div class="events-tabs">
         <div class="events-tab active" onclick="filterEvents('upcoming',this)">Upcoming</div>
@@ -3246,10 +3245,6 @@ function _renderBlogSections(blogs, sectionTypes, activeSection) {
   let html = '';
   if (!activeSection) {
     html += `<div class="blog-page-section" id="blog-all">
-      <div class="blog-page-section-header">
-        <p class="blog-page-section-label">From the Lens<\/p>
-        <h3 class="blog-page-section-title">All Posts<\/h3>
-      <\/div>
       <div class="blog-grid">${sorted.map(b=>renderBlogCard(b)).join('')}<\/div>
     <\/div>`;
     sectionTypes.forEach(st => {
