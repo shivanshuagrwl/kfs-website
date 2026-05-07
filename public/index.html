@@ -230,8 +230,14 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-radio-group,.reg-check-group{display:flex;flex-direction:column;gap:10px}
 .reg-radio-item,.reg-check-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,background .2s;user-select:none;font-size:14px}
 .reg-radio-item:hover,.reg-check-item:hover{border-color:rgba(245,245,245,.2)}
-.reg-radio-item input,.reg-check-item input{accent-color:var(--white);width:16px;height:16px;flex-shrink:0;cursor:pointer}
-.reg-radio-item.selected,.reg-check-item.selected{border-color:rgba(245,245,245,.35);background:rgba(245,245,245,.05)}
+.reg-radio-item.selected,.reg-check-item.selected{border-color:rgba(245,245,245,.35);background:rgba(245,245,245,.07)}
+.reg-radio-item input[type=radio],.reg-check-item input[type=checkbox]{appearance:none;-webkit-appearance:none;flex-shrink:0;cursor:pointer;position:relative;transition:background .15s,border-color .15s}
+.reg-radio-item input[type=radio]{width:18px;height:18px;border-radius:50%;border:2px solid rgba(245,245,245,.35);background:transparent}
+.reg-radio-item input[type=radio]:checked{border-color:#fff;background:#fff}
+.reg-radio-item input[type=radio]:checked::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:#111}
+.reg-check-item input[type=checkbox]{width:18px;height:18px;border-radius:5px;border:2px solid rgba(245,245,245,.35);background:transparent}
+.reg-check-item input[type=checkbox]:checked{border-color:#fff;background:#fff}
+.reg-check-item input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5px;width:5px;height:9px;border:2px solid #111;border-top:none;border-left:none;transform:rotate(45deg)}
 .reg-image-upload{border:1.5px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
 .reg-image-upload:hover{border-color:var(--grey);background:rgba(255,255,255,.02)}
 .reg-image-upload input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -254,6 +260,12 @@ body.light-mode .reg-form-panel,.body.light-mode .form-builder-panel{background:
 body.light-mode .reg-input,body.light-mode .reg-textarea,body.light-mode .reg-select{background:#fff;border-color:#ddd;color:#111}
 body.light-mode .reg-radio-item,body.light-mode .reg-check-item{background:#fff;border-color:#ddd;color:#111}
 body.light-mode .reg-radio-item.selected,body.light-mode .reg-check-item.selected{border-color:#999;background:#f3f3f3}
+body.light-mode .reg-radio-item input[type=radio]{border-color:#bbb}
+body.light-mode .reg-radio-item input[type=radio]:checked{border-color:#111;background:#111}
+body.light-mode .reg-radio-item input[type=radio]:checked::after{background:#fff}
+body.light-mode .reg-check-item input[type=checkbox]{border-color:#bbb}
+body.light-mode .reg-check-item input[type=checkbox]:checked{border-color:#111;background:#111}
+body.light-mode .reg-check-item input[type=checkbox]:checked::after{border-color:#fff}
 body.light-mode .reg-image-upload{border-color:#ddd}
 body.light-mode .reg-submit-btn{background:#111;color:#fff}
 body.light-mode .fb-meta input,body.light-mode .fb-meta textarea{background:#fff;border-color:#ddd;color:#111}
