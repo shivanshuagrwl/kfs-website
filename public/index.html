@@ -424,12 +424,12 @@ body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
 @keyframes scrollLine{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
 
 /* ── SECTIONS ─────────────────────────────────────────────────────────── */
-.section{padding:52px 80px}
+.section{padding:52px 40px}
 .section-inner{max-width:1200px;margin:0 auto}
 .section-label{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
 .section-title{font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1}
 .section-divider{width:100%;height:1px;background:var(--border);margin:0}
-@media(max-width:768px){.section{padding:48px 24px}}
+@media(max-width:768px){.section{padding:48px 20px}}
 
 /* ── STATS ────────────────────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:transparent;margin-top:0}
@@ -488,12 +488,17 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 /* ── HOME CAROUSEL SECTIONS ─────────────────────────────────────────── */
 .apple-section{width:100%;overflow:hidden}
 .apple-section .section-inner{max-width:none;padding:0}
-.apple-section .section-header{padding:52px 20px 20px}
-.apple-section .section-cta{padding:16px 20px 48px}
+.apple-section .section-header{padding:52px 40px 20px}
+.apple-section .section-cta{padding:16px 40px 48px}
 /* Carousel scroll track */
-.home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 20px 24px;
+.home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 40px 24px;
   scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .home-carousel::-webkit-scrollbar{display:none}
+@media(max-width:768px){
+  .apple-section .section-header{padding:40px 20px 16px}
+  .apple-section .section-cta{padding:12px 20px 40px}
+  .home-carousel{padding:0 20px 20px}
+}
 /* Blog carousel card */
 .hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
@@ -574,18 +579,19 @@ body.light-mode .blog-filter-item.active{color:#111;background:rgba(0,0,0,.08)}
 body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .blog-filter-divider-line{height:1px;background:var(--border);margin:4px 6px}
 /* Blog page section block */
-.blog-page-section{padding:60px 80px 28px}
-@media(max-width:768px){.blog-page-section{padding:40px 24px 20px}}
+.blog-page-section{padding:60px 40px 28px}
+@media(max-width:768px){.blog-page-section{padding:40px 20px 20px}}
 /* Blog page top header matches section padding exactly */
-@media(max-width:768px){#page-blog > div:first-child{padding:40px 24px 0 !important}}
+@media(max-width:768px){#page-blog > div:first-child{padding:40px 20px 0 !important}}
 .blog-page-section-header{margin-bottom:32px}
 .blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--grey);margin-bottom:10px;font-weight:600}
 .blog-page-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em}
 .blog-page-divider{width:100%;height:1px;background:var(--border);margin:0}
 /* Scroll hint */
-.carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 20px 0;
+.carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 40px 0;
   margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+@media(max-width:768px){.carousel-scroll-hint{padding:0 20px 0}}
 .carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
 .events-tabs{display:flex;gap:0;margin-top:60px;border-bottom:1px solid var(--border)}
 .events-tab{padding:12px 24px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
@@ -855,7 +861,7 @@ body.light-mode .member-special-tag.tag-developer{
 .testimonial-role{font-size:11px;color:var(--grey);letter-spacing:.06em}
 
 /* ── FOOTER ──────────────────────────────────────────────────────────── */
-footer{border-top:1px solid var(--border);padding:60px 80px;
+footer{border-top:1px solid var(--border);padding:60px 40px;
   display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px}
 @media(max-width:768px){footer{padding:40px 24px;grid-template-columns:1fr}}
 .footer-logo{display:flex;align-items:center;gap:12px;margin-bottom:16px}
@@ -1736,7 +1742,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
-  <div class="section-divider" style="margin:0 80px"></div>
+  <div class="section-divider" style="margin:0 40px"></div>
 
   <section class="section apple-section">
     <div class="section-inner">
@@ -1784,7 +1790,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
-  <div class="section-divider" style="margin:0 80px"></div>
+  <div class="section-divider" style="margin:0 40px"></div>
 
   <section class="section">
     <div class="section-inner">
@@ -1799,7 +1805,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
-  <div class="section-divider" style="margin:0 80px"></div>
+  <div class="section-divider" style="margin:0 40px"></div>
 
   <section class="section apple-section">
     <div class="section-inner">
@@ -1813,7 +1819,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
-  <div class="section-divider" style="margin:0 80px"></div>
+  <div class="section-divider" style="margin:0 40px"></div>
 
   <section class="section" id="spotlight-section" style="display:none">
     <div class="section-inner">
@@ -1823,7 +1829,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     </div>
   </section>
 
-  <div class="section-divider" id="spotlight-divider" style="margin:0 80px;display:none"></div>
+  <div class="section-divider" id="spotlight-divider" style="margin:0 40px;display:none"></div>
 
   <section class="section">
     <div class="section-inner">
