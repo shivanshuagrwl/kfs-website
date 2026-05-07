@@ -3530,7 +3530,7 @@ function filterEvents(type, tabEl) {
 }
 
 function renderEventItem(e, full=false) {
-  const d = e.event_date ? new Date(e.event_date) : null;
+  const d = e.event_date ? new Date(e.event_date + 'T00:00:00+05:30') : null;
   const day = d ? d.getDate() : '--';
   const month = d ? d.toLocaleString('default',{month:'short'}).toUpperCase() : '';
   // Countdown
