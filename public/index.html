@@ -2529,11 +2529,12 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <div><h2>Site Settings</h2><p>Edit homepage content and links</p></div>
       </div>
       <div class="settings-form">
-        <p class="settings-section-title">Hero & About</p>
+
+        <!-- ── SECTION 1: Hero & About ── -->
+        <p class="settings-section-title">Hero &amp; About</p>
         <p class="settings-section-desc">Content shown on the homepage</p>
         <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline" placeholder="Lights. Camera. KFS."></div>
         <div class="form-group"><label>About Text</label><textarea id="set-about" style="min-height:120px"></textarea></div>
-
         <div class="form-group">
           <label>Team Group Photo</label>
           <div id="team-photo-preview" style="margin-bottom:10px;display:none">
@@ -2548,6 +2549,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <input type="hidden" id="set-team-photo-url" value="">
         </div>
 
+        <!-- ── SECTION 2: Stats Counter ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Stats Counter</p>
         <p class="settings-section-desc">Numbers shown on the homepage hero</p>
@@ -2558,6 +2560,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <div class="form-group"><label>Years Active</label><input type="number" id="set-stat-years" placeholder="5"></div>
         </div>
 
+        <!-- ── SECTION 3: Member Spotlight ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Member Spotlight</p>
         <p class="settings-section-desc">Featured member shown on the homepage</p>
@@ -2568,6 +2571,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <div class="form-group"><label>Quote / Highlight</label><textarea id="set-spotlight-quote" style="min-height:80px" placeholder="A quote or achievement to feature..."></textarea></div>
         <div class="form-group"><label>Photo URL (optional — paste a member's uploaded photo URL)</label><input type="text" id="set-spotlight-photo" placeholder="https://..."></div>
 
+        <!-- ── SECTION 4: Social Links ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Social Links</p>
         <p class="settings-section-desc">Links shown in the footer</p>
@@ -2577,10 +2581,12 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <div class="form-group"><label>Contact Email</label><input type="text" id="set-email" placeholder="kfs@kiit.ac.in"></div>
         </div>
 
-        <div style="margin-top:8px">
+        <!-- ── SAVE SETTINGS BUTTON (covers Hero, Stats, Spotlight, Social) ── -->
+        <div style="margin-top:8px;padding:20px 0 4px">
           <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
         </div>
 
+        <!-- ── SECTION 5: Easter Egg — No Shorts ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">🥚 Easter Egg — "No Shorts" Image</p>
         <p class="settings-section-desc">When a visitor types <strong>"shorts"</strong> or <strong>"no shorts"</strong> in the search bar, these messages appear instead of normal results.</p>
@@ -2613,6 +2619,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <input type="hidden" id="set-egg-img-url" value="">
         </div>
 
+        <!-- ── SECTION 6: Custom Search Easter Eggs ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">🥚 Custom Search Easter Eggs</p>
         <p class="settings-section-desc">Add your own keywords — when someone types an exact match in search, show a custom heading, subtext, and optional image instead of normal results.</p>
@@ -2633,6 +2640,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <button class="btn btn-primary" style="border-radius:10px" onclick="addCustomEgg()">+ Add Easter Egg</button>
         <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
 
+        <!-- ── SECTION 7: Change Password ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Change Your Password</p>
         <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords.</p>
@@ -2642,6 +2650,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         </div>
         <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
 
+        <!-- ── SECTION 8: Blog Tag Management ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Blog Tag Management</p>
         <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
@@ -2654,6 +2663,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <span style="font-size:12px;color:var(--grey);padding:4px 0">Loading tags...</span>
         </div>
         <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
+
       </div>
     </div>
 
