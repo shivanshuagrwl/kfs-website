@@ -170,6 +170,46 @@ body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .b
 .fb-response-chip-dot{width:6px;height:6px;border-radius:50%;background:rgba(245,245,245,.25)}
 .fb-response-chip-dot.has-responses{background:#34c759}
 
+/* Response Viewer */
+.fb-resp-viewer{position:absolute;inset:0;background:rgba(18,18,20,.98);border-radius:22px;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s;z-index:10}
+.fb-resp-viewer.open{opacity:1;pointer-events:auto}
+.fb-rv-header{display:flex;align-items:center;gap:12px;padding:20px 26px;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
+.fb-rv-back{background:rgba(255,255,255,.08);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;color:rgba(245,245,245,.7);display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.fb-rv-back:hover{background:rgba(255,255,255,.16);color:#fff}
+.fb-rv-title{flex:1;font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--white)}
+.fb-rv-count{font-size:11px;color:rgba(245,245,245,.4);font-weight:500;flex-shrink:0}
+.fb-rv-dl-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:20px;color:rgba(245,245,245,.85);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .2s;flex-shrink:0}
+.fb-rv-dl-btn:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);color:#fff}
+.fb-rv-body{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:12px}
+.fb-rv-body::-webkit-scrollbar{width:4px}
+.fb-rv-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+.fb-rv-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:rgba(245,245,245,.3);font-size:14px;padding:60px 0}
+.fb-rv-loading{flex:1;display:flex;align-items:center;justify-content:center;color:rgba(245,245,245,.35);font-size:13px;padding:60px 0}
+.fb-rv-row{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.fb-rv-row-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fb-rv-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(245,245,245,.45);flex-shrink:0}
+.fb-rv-time{font-size:11px;color:rgba(245,245,245,.3);font-weight:500}
+.fb-rv-answers{display:flex;flex-direction:column;gap:8px}
+.fb-rv-answer{display:flex;flex-direction:column;gap:3px}
+.fb-rv-q{font-size:11px;color:rgba(245,245,245,.4);font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.fb-rv-a{font-size:13px;color:rgba(245,245,245,.85);line-height:1.5;word-break:break-word}
+
+/* light mode response viewer */
+body.light-mode .fb-resp-viewer{background:rgba(248,248,250,.98)}
+body.light-mode .fb-rv-header{border-bottom-color:rgba(0,0,0,.07)}
+body.light-mode .fb-rv-back{background:rgba(0,0,0,.06);color:rgba(0,0,0,.6)}
+body.light-mode .fb-rv-back:hover{background:rgba(0,0,0,.12);color:#111}
+body.light-mode .fb-rv-title{color:#111}
+body.light-mode .fb-rv-count{color:rgba(0,0,0,.35)}
+body.light-mode .fb-rv-dl-btn{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.75)}
+body.light-mode .fb-rv-dl-btn:hover{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.18);color:#111}
+body.light-mode .fb-rv-row{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.08)}
+body.light-mode .fb-rv-num{background:rgba(0,0,0,.07);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.4)}
+body.light-mode .fb-rv-time{color:rgba(0,0,0,.35)}
+body.light-mode .fb-rv-q{color:rgba(0,0,0,.4)}
+body.light-mode .fb-rv-a{color:rgba(0,0,0,.8)}
+body.light-mode .fb-rv-empty{color:rgba(0,0,0,.25)}
+
 /* Light mode adaptations */
 body.light-mode .form-builder-panel{background:rgba(250,250,252,.97);border-color:rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.2)}
 body.light-mode .fb-header{background:rgba(0,0,0,.015);border-bottom-color:rgba(0,0,0,.07)}
@@ -249,7 +289,7 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-submit-btn:hover{opacity:.88;transform:scale(.98)}
 .reg-submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .reg-success{text-align:center;padding:60px 32px}
-.reg-success-icon{font-size:48px;margin-bottom:16px}
+.reg-success-icon{display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--white)}
 .reg-success-title{font-size:20px;font-weight:700;margin-bottom:8px}
 .reg-success-sub{font-size:14px;color:var(--grey)}
 .event-register-btn{margin-top:14px;display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
@@ -6659,15 +6699,33 @@ async function runMemberImport() {
 
 <!-- ── FORM BUILDER MODAL (Admin) ──────────────────────────────────────────── -->
 <div class="form-builder-overlay" id="form-builder-overlay" onclick="if(event.target===this)closeFormBuilder()">
-  <div class="form-builder-panel">
+  <div class="form-builder-panel" style="position:relative">
+    <!-- Response Viewer (slides over the form builder) -->
+    <div class="fb-resp-viewer" id="fb-resp-viewer">
+      <div class="fb-rv-header">
+        <button class="fb-rv-back" onclick="closeResponseViewer()" title="Back to form">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="fb-rv-title">Responses</div>
+        <span class="fb-rv-count" id="fb-rv-count"></span>
+        <button class="fb-rv-dl-btn" onclick="downloadFormResponsesFromViewer()" id="fb-rv-dl-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+      <div class="fb-rv-body" id="fb-rv-body">
+        <div class="fb-rv-loading">Loading responses…</div>
+      </div>
+    </div>
+
     <div class="fb-header">
       <div>
         <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:4px" id="fb-event-label">Event Form</div>
         <h3 id="fb-title">Registration Form</h3>
       </div>
       <div class="fb-header-actions">
-        <button class="fb-dl-btn" onclick="downloadFormResponses()" id="fb-dl-btn">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <button class="fb-dl-btn" onclick="openResponseViewer()" id="fb-dl-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           Responses
         </button>
         <button class="fb-dl-btn" onclick="clearFormResponses()" id="fb-clear-btn" title="Delete all responses (keeps form schema)" style="border-color:rgba(255,69,58,.3);color:rgba(255,130,120,.85)">
@@ -6961,6 +7019,95 @@ async function deleteEntireForm() {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// RESPONSE VIEWER
+// ════════════════════════════════════════════════════════════════════════════
+let _fbResponsesCache = null; // cache fetched responses for download
+
+async function openResponseViewer() {
+  const viewer = document.getElementById('fb-resp-viewer');
+  const body = document.getElementById('fb-rv-body');
+  const countEl = document.getElementById('fb-rv-count');
+  viewer.classList.add('open');
+  body.innerHTML = '<div class="fb-rv-loading">Loading responses…</div>';
+  countEl.textContent = '';
+
+  try {
+    const token = adminToken || localStorage.getItem('kfs_token');
+    const [formRes, respRes] = await Promise.all([
+      fetch('/api/events/' + _fbEventId + '/form'),
+      fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+    ]);
+
+    if (!respRes.ok) {
+      body.innerHTML = '<div class="fb-rv-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Failed to load responses.</span></div>';
+      return;
+    }
+
+    const responses = await respRes.json();
+    _fbResponsesCache = responses;
+
+    let questions = _fbQuestions;
+    if (formRes.ok) {
+      const form = await formRes.json();
+      try { questions = JSON.parse(form.questions || '[]'); } catch(e) {}
+    }
+
+    countEl.textContent = responses.length + ' response' + (responses.length !== 1 ? 's' : '');
+
+    if (!responses.length) {
+      body.innerHTML = `<div class="fb-rv-empty">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>
+        <span>No responses yet</span>
+      </div>`;
+      return;
+    }
+
+    body.innerHTML = responses.map((r, i) => {
+      let answers = {};
+      try { answers = JSON.parse(r.answers || '{}'); } catch(e) {}
+      const time = r.submitted_at ? new Date(r.submitted_at).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      const answerRows = questions.map(q => {
+        const val = answers[q.id] || answers[q.label] || '';
+        const display = Array.isArray(val) ? val.join(', ') : String(val);
+        if (!display) return '';
+        return `<div class="fb-rv-answer">
+          <div class="fb-rv-q">${q.label || q.id}</div>
+          <div class="fb-rv-a">${display.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        </div>`;
+      }).filter(Boolean).join('');
+
+      return `<div class="fb-rv-row">
+        <div class="fb-rv-row-header">
+          <div class="fb-rv-num">${i + 1}</div>
+          <div class="fb-rv-time">${time}</div>
+        </div>
+        <div class="fb-rv-answers">${answerRows || '<div class="fb-rv-a" style="opacity:.4">No text answers</div>'}</div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    body.innerHTML = '<div class="fb-rv-empty"><span>Error: ' + e.message + '</span></div>';
+  }
+}
+
+function closeResponseViewer() {
+  document.getElementById('fb-resp-viewer').classList.remove('open');
+}
+
+async function downloadFormResponsesFromViewer() {
+  const btn = document.getElementById('fb-rv-dl-btn');
+  const origHtml = btn.innerHTML;
+  btn.textContent = 'Loading…'; btn.disabled = true;
+  try {
+    await downloadFormResponses();
+  } finally {
+    btn.innerHTML = origHtml; btn.disabled = false;
+  }
+}
+
 async function downloadFormResponses() {
   if (!_fbEventId) return;
   const btn = document.getElementById('fb-dl-btn');
@@ -7112,7 +7259,7 @@ function buildRegField(q) {
       ${label}
       <div class="reg-image-upload" id="img-upload-${q.id}">
         <input type="file" accept="image/*" data-qid="${q.id}" onchange="previewRegImage(this,'${q.id}')">
-        <div class="reg-image-upload-icon">🖼</div>
+        <div class="reg-image-upload-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
         <div class="reg-image-upload-text">Click to upload image<br><span style="font-size:11px;opacity:.6">JPEG, PNG — max 10MB</span></div>
         <img class="reg-image-preview" id="img-preview-${q.id}" src="" alt="">
       </div>
@@ -7205,7 +7352,15 @@ async function submitRegForm() {
       document.getElementById('rf-submit-row').style.display = 'none';
       document.getElementById('rf-body').innerHTML = `
         <div class="reg-success">
-          <div class="reg-success-icon">🎬</div>
+          <div class="reg-success-icon">
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="26" cy="26" r="25" stroke="rgba(245,245,245,0.15)" stroke-width="1.5"/>
+              <rect x="12" y="17" width="28" height="20" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/>
+              <path d="M12 21h28M12 29h28M20 17v20M32 17v20" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="38" cy="14" r="6" fill="#34c759"/>
+              <path d="M35.5 14l1.8 1.8 3-3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
           <div class="reg-success-title">You're registered!</div>
           <div class="reg-success-sub">We'll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
           <button onclick="closeRegForm()" style="margin-top:24px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
