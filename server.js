@@ -11,8 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://agxsilmugsrzxgerpaqm.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneHNpbG11Z3NyenhnZXJwYXFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Nzc3NzYwNSwiZXhwIjoyMDkzMzUzNjA1fQ.CUZSCcBFdJn_XWuzqbPLA4dOZGjd8QuikaRRXlajUDI';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
   db: { schema: 'public' },
@@ -34,7 +34,7 @@ async function sbQuery(fn, retries = 3) {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'kfs@KIIT#filmSociety$2024!secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // ── File uploads ──────────────────────────────────────────────────────────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -150,6 +150,73 @@ async function initDB() {
     // Don't crash the server — Supabase may be temporarily unreachable
   }
 }
+
+// ── ROBOTS.TXT ────────────────────────────────────────────────────────────────
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(
+    'User-agent: *\n' +
+    'Allow: /\n' +
+    'Disallow: /api/\n' +
+    '\n' +
+    'Sitemap: https://kfsociety.in/sitemap.xml\n'
+  );
+});
+
+// ── SITEMAP.XML ───────────────────────────────────────────────────────────────
+app.get('/sitemap.xml', async (req, res) => {
+  // Fetch published events from DB to include in sitemap
+  let eventUrls = '';
+  try {
+    const { data: events } = await supabase
+      .from('events')
+      .select('id, updated_at')
+      .eq('published', true)
+      .order('date', { ascending: false })
+      .limit(50);
+
+    if (events && events.length > 0) {
+      eventUrls = events.map(ev => {
+        const lastmod = ev.updated_at ? ev.updated_at.split('T')[0] : new Date().toISOString().split('T')[0];
+        return `  <url>\n    <loc>https://kfsociety.in/#events</loc>\n    <lastmod>${lastmod}</lastmod>\n    <priority>0.7</priority>\n  </url>`;
+      }).slice(0, 1).join('\n'); // one canonical events URL, dated to latest event
+    }
+  } catch (e) {
+    // Non-fatal — sitemap still works without events
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  res.header('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://kfsociety.in/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://kfsociety.in/#events</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kfsociety.in/#films</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kfsociety.in/#about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://kfsociety.in/#team</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+</urlset>`);
+});
 
 // ── HEALTH CHECK ──────────────────────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
