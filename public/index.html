@@ -921,7 +921,7 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
   color:var(--grey);transition:color .2s;border-bottom:2px solid transparent;margin-bottom:-1px}
 .events-tab.active{color:var(--white);border-bottom-color:var(--white)}
 .events-list{margin-top:0}
-.event-item{display:grid;grid-template-columns:auto 1fr auto;gap:32px;align-items:center;
+.event-item{display:grid;grid-template-columns:auto 1fr auto auto;gap:32px;align-items:center;
   padding:32px 0;border-bottom:1px solid var(--border);transition:all .3s var(--ease)}
 .event-item:hover{padding-left:16px}
 @media(max-width:768px){.event-item{grid-template-columns:1fr;gap:12px}}
@@ -932,7 +932,12 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .event-info p{font-size:13px;color:var(--grey)}
 .event-location{font-size:12px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase}
 .event-time-display{font-size:15px;font-weight:700;letter-spacing:.04em;color:var(--white);text-transform:none}
+.event-cover-col{flex-shrink:0;width:320px;height:200px;overflow:hidden;border-radius:6px}
+.event-cover-col img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}
 .event-cover{width:100%;height:280px;object-fit:cover;margin-top:20px;border-radius:4px;filter:grayscale(0%)}
+.event-item-no-img{grid-template-columns:auto 1fr auto}
+@media(max-width:1024px){.event-cover-col{width:220px;height:150px}}
+@media(max-width:768px){.event-cover-col{width:100%;height:200px}}
 
 /* ── CHITRA VICHITRA SECTION ─────────────────────────────────────────── */
 .cv-section{margin-bottom:60px;padding-bottom:40px;border-bottom:1px solid var(--border)}
@@ -3531,28 +3536,34 @@ function filterEvents(type, tabEl) {
 }
 
 function renderEventItem(e, full=false) {
-  // Parse date as IST (UTC+5:30) so it's correct regardless of server timezone
+  // Parse date as IST (UTC+5:30)
   const d = e.event_date ? new Date(e.event_date + 'T00:00:00+05:30') : null;
   const day = d ? d.getDate() : '--';
   const month = d ? d.toLocaleString('default',{month:'short'}).toUpperCase() : '';
-  // Countdown — count down to exact event time (IST), not just midnight
+  // Format time with AM/PM
+  const fmtTime = (t) => {
+    if (!t) return '';
+    const m = t.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*[AP]M)?$/i);
+    if (!m) return t;
+    let h = parseInt(m[1]), mn = m[2], ap = m[4] ? m[4].trim().toUpperCase() : null;
+    if (!ap) { ap = h < 12 ? 'AM' : 'PM'; if (h === 0) h = 12; else if (h > 12) h -= 12; }
+    return h + ':' + mn + ' ' + ap;
+  };
+  // Countdown — count down to exact event time (IST)
   let countdownHtml = '';
   if (e.is_upcoming && d) {
-    let eventMs = d.getTime(); // defaults to midnight IST
+    let eventMs = d.getTime();
     if (e.event_time) {
       const tm = e.event_time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*[AP]M)?$/i);
       if (tm) {
         let h = parseInt(tm[1]), mn = parseInt(tm[2]), ap = tm[4] ? tm[4].trim().toUpperCase() : null;
-        if (!ap) { /* treat as 24h */ }
-        else if (ap === 'PM' && h !== 12) h += 12;
+        if (ap === 'PM' && h !== 12) h += 12;
         else if (ap === 'AM' && h === 12) h = 0;
-        // Build IST datetime string
         const pad = n => String(n).padStart(2,'0');
         eventMs = new Date(e.event_date + `T${pad(h)}:${pad(mn)}:00+05:30`).getTime();
       }
     }
-    const now = new Date();
-    const diff = eventMs - now.getTime();
+    const diff = eventMs - Date.now();
     if (diff > 0) {
       const days = Math.floor(diff / (1000*60*60*24));
       const hrs  = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
@@ -3561,12 +3572,13 @@ function renderEventItem(e, full=false) {
       countdownHtml = `<div class="event-countdown"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${label}<\/div>`;
     }
   }
-  // Share URL
-  const shareUrl = `https://kfsociety.in/events`;
-  const shareText = encodeURIComponent(`Check out "${e.title}" by KFS — KIIT Film Society! Register here:`);
-  const waUrl = `https://wa.me/?text=${shareText}%20${encodeURIComponent(shareUrl)}`;
+  // Share
   const shareHtml = `<button class="event-share-btn" onclick="event.stopPropagation();shareEvent('${e.id}','${e.title.replace(/'/g,"\\'")}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/><\/svg>Share<\/button>`;
-  return `<div class="event-item">
+  // Image column — always show if cover_image exists
+  const imgCol = e.cover_image
+    ? `<div class="event-cover-col"><img src="${e.cover_image}" alt="${e.title}"><\/div>`
+    : `<div class="event-cover-col" style="display:none"><\/div>`;
+  return `<div class="event-item${e.cover_image ? '' : ' event-item-no-img'}">
     <div class="event-date-block">
       <span class="event-day">${day}<\/span>
       <span class="event-month">${month}<\/span>
@@ -3575,14 +3587,14 @@ function renderEventItem(e, full=false) {
       <span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span>
       <h3>${e.title}<\/h3>
       <p>${e.description||''}<\/p>
-      ${(full || e.cover_image) && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
       ${countdownHtml}
       <div class="event-action-row">
         ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}','${e.event_date||''}','${e.event_time||''}','${(e.location||'').replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
         ${shareHtml}
       <\/div>
     <\/div>
-    <div class="event-location">${e.location||''}<br><span class="event-time-display">${e.event_time ? (()=>{ const m=e.event_time.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*[AP]M)?$/i); if(!m) return e.event_time; let h=parseInt(m[1]),mn=m[2],ap=m[4]?m[4].trim().toUpperCase():null; if(!ap){ap=h<12?'AM':'PM';if(h===0)h=12;else if(h>12)h-=12;} return h+':'+mn+' '+ap; })() : ''}<\/span><\/div>
+    ${imgCol}
+    <div class="event-location">${e.location||''}<br><span class="event-time-display">${fmtTime(e.event_time||'')}<\/span><\/div>
   <\/div>`;
 }
 
