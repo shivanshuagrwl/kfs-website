@@ -396,6 +396,7 @@ body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
 .hero-logo-wrap{margin-bottom:40px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
 .hero-logo{width:90px;height:90px;object-fit:contain;filter:invert(1);border-radius:50%;
   box-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.12),0 0 120px rgba(255,255,255,0.05)}
+body.light-mode .hero-logo{filter:invert(0);box-shadow:0 0 40px rgba(0,0,0,0.18),0 0 80px rgba(0,0,0,0.08)}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(3.2rem,8.5vw,7.8rem);font-weight:900;letter-spacing:-.05em;
   line-height:.92;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
@@ -1696,6 +1697,9 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </svg>
     </div>
 
+    <div class="hero-logo-wrap">
+      <img class="hero-logo" src="/images/KFS_CLEAN_LOGO.png" alt="KFS" onerror="this.style.display='none'">
+    </div>
     <h1 class="hero-tagline" id="hero-tagline">
       <span class="glow-word" id="glow-lights">Lights.</span><br>
       <em><span class="glow-word" id="glow-camera">Camera.</span></em><br>
@@ -3753,7 +3757,7 @@ async function openMovie(id) {
     const match = m.spotify_url.match(/spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/);
     if (match) {
       const [, type, id] = match;
-      const embedUrl = `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`;
+      const embedUrl = `https://open.spotify.com/embed/${type}/${id}?utm_source=generator`;
       const height = type === 'track' ? '152' : '352';
       spotifyEmbed.innerHTML = `<iframe
         src="${embedUrl}"
