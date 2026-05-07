@@ -1272,7 +1272,12 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .genre-tag .tag-x{font-size:11px;line-height:1;opacity:.6;transition:opacity .15s}
 .genre-tag .tag-x:hover{opacity:1}
 .genre-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;align-items:center}
-.genre-filter-bar-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-right:4px}
+.genre-filter-bar-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-right:4px;flex-shrink:0}
+@media(max-width:768px){
+  .genre-filter-bar{flex-direction:column;align-items:flex-start}
+  .genre-filter-bar-label{margin-bottom:4px;margin-right:0}
+  .genre-filter-bar .chips-row{display:flex;flex-wrap:wrap;gap:8px}
+}
 /* tag pill input */
 .tag-input-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border:1px solid var(--border);
   border-radius:6px;background:var(--black);min-height:42px;align-items:center;cursor:text}
@@ -3616,7 +3621,7 @@ async function loadMovies() {
   if (allGenres.length > 1 && filterBar) {
     filterBar.style.display = 'flex';
     filterBar.innerHTML = '<span class="genre-filter-bar-label">Filter:</span>' +
-      allGenres.map(g => `<span class="genre-tag" data-genre="${g}" onclick="filterMoviesByGenre('${g}')">${g}</span>`).join('');
+      '<div class="chips-row">' + allGenres.map(g => `<span class="genre-tag" data-genre="${g}" onclick="filterMoviesByGenre('${g}')">${g}</span>`).join('') + '</div>';
   } else if (filterBar) { filterBar.style.display = 'none'; }
 
   renderMoviesGrid(movies || []);
