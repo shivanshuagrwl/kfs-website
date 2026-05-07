@@ -705,9 +705,10 @@ body.light-mode .rv-item-title{color:#111}
 .blog-author-link:hover{color:#fff!important;border-bottom-color:rgba(245,245,245,.7)!important}
 body.light-mode .blog-detail-author span{color:#333}
 body.light-mode .blog-author-link:hover{color:#000!important}
-.blog-detail-body{font-size:16.5px;line-height:1.9;color:rgba(245,245,245,.82);width:100%;text-align:left}
+.blog-detail-body{font-size:17px;line-height:1.85;color:rgba(245,245,245,.85);width:100%;text-align:left}
 .blog-detail-body h2,.blog-detail-body h3{color:var(--white);margin:2em 0 .5em;font-weight:600}
-.blog-detail-body p{margin-bottom:1.5em;font-size:16.5px;line-height:1.9;font-weight:400}
+.blog-detail-body p{margin:0 0 1.3em 0;font-size:17px;line-height:1.85;font-weight:400}
+.blog-detail-body p:last-child{margin-bottom:0}
 .blog-detail-body strong,.blog-detail-body b{font-weight:600;color:var(--white)}
 .blog-detail-body img{width:100%;margin:2em 0;filter:grayscale(100%)}
 .blog-detail-body blockquote{border-left:2px solid var(--grey);padding-left:24px;color:var(--grey);font-style:italic;margin:2em 0}
@@ -1163,8 +1164,8 @@ body.light-mode .member-film-poster-ph{background:#eee}
   .blog-card-title{font-size:16px}
   .blog-detail-content{padding:20px 16px}
   .blog-detail-title{font-size:clamp(1.4rem,6vw,2rem)}
-  .blog-detail-body{font-size:14px;line-height:1.75}
-  .blog-detail-body p{font-size:14px;line-height:1.75;margin-bottom:1.2em}
+  .blog-detail-body{font-size:15px;line-height:1.8}
+  .blog-detail-body p{font-size:15px;line-height:1.8;margin-bottom:1.1em}
   .blog-detail-author{font-size:11px}
 
   /* members */
@@ -3378,43 +3379,40 @@ async function openBlog(id) {
   }
   // Render content: clean up contenteditable editor artifacts into proper paragraphs
   let content = blog.content || '';
-  // Convert h1-h6 → bold paragraph
-  content = content.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '<p><strong>$1</strong></p>');
-  // Normalise div-based line breaks from contenteditable into paragraph markers
-  content = content
-    .replace(/<div><br\s*\/?><\/div>/gi, '\n\n')
-    .replace(/<\/div>\s*<div>/gi, '\n\n')
-    .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n\n')
-    .replace(/&nbsp;/gi, ' ');
-  // Strip ALL <br> — they're editor soft-wraps, never real breaks
-  content = content.replace(/<br\s*\/?>/gi, ' ');
-  content = content.replace(/ {2,}/g, ' ');
-  // Remove empty <p> tags
-  content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
-  // If has <p> tags, merge consecutive ones that are mid-sentence
-  // (i.e. the paragraph doesn't end with . ! ? " ' — or a closing tag)
-  if (/<p[^>]*>/i.test(content)) {
-    let merged = true;
-    while (merged) {
-      const before = content;
-      // If a </p> is NOT preceded by sentence-ending punctuation, merge it with the next <p>
-      content = content.replace(/<\/p>\s*<p[^>]*>/gi, (match, offset) => {
-        // Get text before this closing tag
-        const preceding = content.substring(0, offset).replace(/<[^>]+>/g, '');
-        const lastChar = preceding.trimEnd().slice(-1);
-        const sentenceEnd = /[.!?'"»\u2019\u201d]/.test(lastChar);
-        return sentenceEnd ? match : ' ';
-      });
-      merged = content !== before;
+  // Step 1: extract plain text from whatever HTML the editor produced
+  const tmp = document.createElement('div');
+  tmp.innerHTML = content;
+  // Treat block-level elements as paragraph separators
+  tmp.querySelectorAll('p,div,br,h1,h2,h3,h4,h5,h6,li').forEach(el => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'br') { el.replaceWith(' '); }
+    else {
+      const txt = el.innerText || el.textContent || '';
+      el.replaceWith(txt.trim() + '\n\n');
     }
-  } else {
-    // Plain text fallback
-    content = content
-      .split(/\n{2,}/)
-      .map(b => b.trim()).filter(Boolean)
-      .map(b => '<p>' + b + '</p>')
-      .join('');
+  });
+  let plainText = (tmp.textContent || tmp.innerText || '')
+    .replace(/\u00a0/g, ' ')       // &nbsp; → space
+    .replace(/[ \t]+/g, ' ')       // collapse inline spaces
+    .replace(/\n[ \t]+/g, '\n')    // trim leading space per line
+    .replace(/[ \t]+\n/g, '\n')    // trim trailing space per line
+    .replace(/\n{3,}/g, '\n\n')    // max 2 newlines
+    .trim();
+  // Step 2: split into paragraphs on double newlines, then rejoin fragments
+  // that don't end a sentence (no . ! ? at end) with the next fragment
+  const rawBlocks = plainText.split(/\n\n+/).map(b => b.replace(/\n/g, ' ').trim()).filter(Boolean);
+  const paragraphs = [];
+  let current = '';
+  for (const block of rawBlocks) {
+    current = current ? current + ' ' + block : block;
+    // If this block ends with sentence-closing punctuation, commit it
+    if (/[.!?'"\u2019\u201d]\s*$/.test(current)) {
+      paragraphs.push(current);
+      current = '';
+    }
   }
+  if (current) paragraphs.push(current); // flush remainder
+  content = paragraphs.map(p => `<p>${p}</p>`).join('');
   document.getElementById('blog-detail-body').innerHTML = content;
   // Show section tags as pills below the title (tags only, no content switching)
   const navWrap = document.getElementById('blog-section-nav-wrap');
