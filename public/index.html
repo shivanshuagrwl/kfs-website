@@ -230,14 +230,14 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-radio-group,.reg-check-group{display:flex;flex-direction:column;gap:10px}
 .reg-radio-item,.reg-check-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,background .2s;user-select:none;font-size:14px}
 .reg-radio-item:hover,.reg-check-item:hover{border-color:rgba(245,245,245,.2)}
-.reg-radio-item.selected,.reg-check-item.selected{border-color:rgba(245,245,245,.35);background:rgba(245,245,245,.07)}
 .reg-radio-item input[type=radio],.reg-check-item input[type=checkbox]{appearance:none;-webkit-appearance:none;flex-shrink:0;cursor:pointer;position:relative;transition:background .15s,border-color .15s}
 .reg-radio-item input[type=radio]{width:18px;height:18px;border-radius:50%;border:2px solid rgba(245,245,245,.35);background:transparent}
 .reg-radio-item input[type=radio]:checked{border-color:#fff;background:#fff}
-.reg-radio-item input[type=radio]:checked::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:#111}
+.reg-radio-item input[type=radio]:checked::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:#111}
 .reg-check-item input[type=checkbox]{width:18px;height:18px;border-radius:5px;border:2px solid rgba(245,245,245,.35);background:transparent}
 .reg-check-item input[type=checkbox]:checked{border-color:#fff;background:#fff}
-.reg-check-item input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5px;width:5px;height:9px;border:2px solid #111;border-top:none;border-left:none;transform:rotate(45deg)}
+.reg-check-item input[type=checkbox]:checked::after{content:"";position:absolute;top:2px;left:5px;width:5px;height:9px;border:2px solid #111;border-top:none;border-left:none;transform:rotate(45deg)}
+.reg-radio-item.selected,.reg-check-item.selected{border-color:rgba(245,245,245,.35);background:rgba(245,245,245,.05)}
 .reg-image-upload{border:1.5px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
 .reg-image-upload:hover{border-color:var(--grey);background:rgba(255,255,255,.02)}
 .reg-image-upload input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -7156,11 +7156,13 @@ async function submitRegForm() {
   // Collect answers
   const answers = {};
   let valid = true;
+  let firstInvalid = null;
   for (const q of questions) {
     if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
-      const el = document.querySelector(`[data-qid="${q.id}"]`);
+      // Target the actual input/textarea, NOT the wrapper div
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
       const val = el ? el.value.trim() : '';
-      if (q.required && !val) { el && el.focus(); valid = false; break; }
+      if (q.required && !val) { firstInvalid = el; valid = false; break; }
       answers[q.id] = val;
     } else if (q.type === 'radio') {
       const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
@@ -7171,12 +7173,12 @@ async function submitRegForm() {
       if (q.required && !checked.length) { valid = false; break; }
       answers[q.id] = checked;
     } else if (q.type === 'image') {
-      // Image uploaded separately, just mark presence
       if (q.required && !_rfImageFiles[q.id]) { valid = false; break; }
     }
   }
 
   if (!valid) {
+    if (firstInvalid) firstInvalid.focus();
     const btn = document.getElementById('rf-submit-btn');
     const orig = btn.innerHTML;
     btn.innerHTML = 'Please fill all required fields';
@@ -7189,29 +7191,35 @@ async function submitRegForm() {
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg> Submitting…';
 
-  const fd = new FormData();
-  fd.append('answers', JSON.stringify(answers));
-  // Append image files
-  for (const [qid, file] of Object.entries(_rfImageFiles)) {
-    fd.append(qid, file);
-  }
+  try {
+    const fd = new FormData();
+    fd.append('answers', JSON.stringify(answers));
+    for (const [qid, file] of Object.entries(_rfImageFiles)) {
+      fd.append(qid, file);
+    }
 
-  const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', body: fd });
+    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', body: fd });
 
-  if (res.ok) {
-    // Show success
-    document.querySelector('.reg-form-header').style.display = 'none';
-    document.getElementById('rf-submit-row').style.display = 'none';
-    document.getElementById('rf-body').innerHTML = `
-      <div class="reg-success">
-        <div class="reg-success-icon">🎬</div>
-        <div class="reg-success-title">You're registered!</div>
-        <div class="reg-success-sub">We'll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
-        <button onclick="closeRegForm()" style="margin-top:24px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
-      </div>`;
-  } else {
-    const err = await res.json().catch(() => ({}));
-    alert(err.error || 'Submission failed. Please try again.');
+    if (res.ok) {
+      document.querySelector('.reg-form-header').style.display = 'none';
+      document.getElementById('rf-submit-row').style.display = 'none';
+      document.getElementById('rf-body').innerHTML = `
+        <div class="reg-success">
+          <div class="reg-success-icon">🎬</div>
+          <div class="reg-success-title">You're registered!</div>
+          <div class="reg-success-sub">We'll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
+          <button onclick="closeRegForm()" style="margin-top:24px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+        </div>`;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.error('Form submit failed:', res.status, err);
+      alert(err.error || `Submission failed (${res.status}). Please try again.`);
+      btn.disabled = false;
+      btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+    }
+  } catch(err) {
+    console.error('Form submit error:', err);
+    alert('Network error. Please check your connection and try again.');
     btn.disabled = false;
     btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
   }
