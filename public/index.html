@@ -348,6 +348,22 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .event-register-btn:hover{background:var(--white);color:var(--black);border-color:var(--white)}
 body.light-mode .event-register-btn{border-color:#ccc;color:#111}
 body.light-mode .event-register-btn:hover{background:#111;color:#fff;border-color:#111}
+/* ── EVENT COUNTDOWN ── */
+.event-countdown{display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#f59e0b}
+.event-countdown svg{flex-shrink:0;opacity:.8}
+/* ── EVENT ACTION ROW ── */
+.event-action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+.event-share-btn{display:inline-flex;align-items:center;gap:5px;padding:9px 16px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--grey);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.event-share-btn:hover{border-color:var(--white);color:var(--white)}
+body.light-mode .event-share-btn{border-color:#ddd;color:#666}
+body.light-mode .event-share-btn:hover{border-color:#333;color:#111}
+/* ── FILM SORT PILLS ── */
+.film-sort-bar{display:flex;align-items:center;gap:8px;padding:0 40px;margin-bottom:12px;flex-wrap:wrap}
+.film-sort-pill{padding:6px 16px;border-radius:20px;font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--grey);transition:all .2s}
+.film-sort-pill.active,.film-sort-pill:hover{background:var(--white);color:var(--black);border-color:var(--white)}
+body.light-mode .film-sort-pill{border-color:#ddd;color:#666}
+body.light-mode .film-sort-pill.active,body.light-mode .film-sort-pill:hover{background:#111;color:#fff;border-color:#111}
+@media(max-width:768px){.film-sort-bar{padding:0 20px}}
 body.light-mode .reg-form-panel,.body.light-mode .form-builder-panel{background:#f8f8f8;border-color:#ddd}
 body.light-mode .reg-input,body.light-mode .reg-textarea,body.light-mode .reg-select{background:#fff;border-color:#ddd;color:#111}
 body.light-mode .reg-radio-item,body.light-mode .reg-check-item{background:#fff;border-color:#ddd;color:#111}
@@ -795,12 +811,12 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 .apple-section .section-cta{padding:16px 40px 48px}
 /* Carousel scroll track */
 .home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 40px 24px;
-  scroll-snap-type:x mandatory;scroll-padding-left:40px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .home-carousel::-webkit-scrollbar{display:none}
 @media(max-width:768px){
   .apple-section .section-header{padding:40px 20px 16px}
   .apple-section .section-cta{padding:12px 20px 40px}
-  .home-carousel{padding:0 20px 20px;scroll-padding-left:20px}
+  .home-carousel{padding:0 20px 20px}
 }
 /* Blog carousel card */
 .hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
@@ -2089,6 +2105,11 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <path d="M12 6L17 6M17 6L14.5 3.5M17 6L14.5 8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>Scroll to explore</span>
+      </div>
+      <div class="film-sort-bar">
+        <button class="film-sort-pill active" onclick="sortHomeFilms('latest',this)">Latest</button>
+        <button class="film-sort-pill" onclick="sortHomeFilms('top',this)">Top Rated</button>
+        <button class="film-sort-pill" onclick="sortHomeFilms('loved',this)">Most Loved</button>
       </div>
       <div class="home-carousel" id="home-movies-grid">
         <div class="loading" style="padding:40px 0">Loading films...</div>
@@ -3431,6 +3452,7 @@ async function loadHomeData() {
   }
   const hmg = document.getElementById('home-movies-grid');
   if (movies && movies.length) {
+    _allHomeMovies = movies;
     hmg.innerHTML = movies.slice(0,8).map(m=>{
       const rt = window._movieRatings && window._movieRatings[m.id];
       const ratingHtml = rt
@@ -3483,6 +3505,24 @@ function renderEventItem(e, full=false) {
   const d = e.event_date ? new Date(e.event_date) : null;
   const day = d ? d.getDate() : '--';
   const month = d ? d.toLocaleString('default',{month:'short'}).toUpperCase() : '';
+  // Countdown
+  let countdownHtml = '';
+  if (e.is_upcoming && d) {
+    const now = new Date();
+    const diff = d - now;
+    if (diff > 0) {
+      const days = Math.floor(diff / (1000*60*60*24));
+      const hrs  = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+      const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
+      const label = days > 0 ? `${days}d ${hrs}h left` : hrs > 0 ? `${hrs}h ${mins}m left` : `${mins}m left`;
+      countdownHtml = `<div class="event-countdown"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${label}<\/div>`;
+    }
+  }
+  // Share URL
+  const shareUrl = `https://kfsociety.in/#events`;
+  const shareText = encodeURIComponent(`Check out "${e.title}" by KFS — KIIT Film Society! Register here:`);
+  const waUrl = `https://wa.me/?text=${shareText}%20${encodeURIComponent(shareUrl)}`;
+  const shareHtml = `<button class="event-share-btn" onclick="event.stopPropagation();shareEvent('${e.id}','${e.title.replace(/'/g,"\\'")}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/><\/svg>Share<\/button>`;
   return `<div class="event-item">
     <div class="event-date-block">
       <span class="event-day">${day}<\/span>
@@ -3493,7 +3533,11 @@ function renderEventItem(e, full=false) {
       <h3>${e.title}<\/h3>
       <p>${e.description||''}<\/p>
       ${full && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
-      ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}','${e.event_date||''}','${e.event_time||''}','${(e.location||'').replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
+      ${countdownHtml}
+      <div class="event-action-row">
+        ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}','${e.event_date||''}','${e.event_time||''}','${(e.location||'').replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
+        ${shareHtml}
+      <\/div>
     <\/div>
     <div class="event-location">${e.location||''}<br><span style="font-size:11px">${e.event_time||''}<\/span><\/div>
   <\/div>`;
@@ -6485,6 +6529,11 @@ document.getElementById('cv-cover').addEventListener('change', function() {
 // ══════════════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+  // Press / to open search (skip if typing in an input)
+  if (e.key === '/' && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    openSearch();
+  }
   if (e.key === 'Escape') closeSearch();
 });
 document.getElementById('search-overlay').addEventListener('click', e => {
@@ -7543,6 +7592,7 @@ async function submitRegForm() {
           <div class="reg-success-sub">We\'ll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
           <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
             ${_rfEventDate ? `<a href="${_gcUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(255,255,255,.1);color:var(--white);border:1px solid rgba(255,255,255,.2);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(255,255,255,.18)\'" onmouseout="this.style.background=\'rgba(255,255,255,.1)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Add to Google Calendar</a>` : ''}
+            <a href="https://wa.me/?text=${encodeURIComponent('I just registered for ' + _rfEventTitle + ' by KFS — KIIT Film Society! Join me: https://kfsociety.in/#events')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(37,211,102,.2)\'" onmouseout="this.style.background=\'rgba(37,211,102,.12)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Share on WhatsApp</a>
             <button onclick="closeRegForm()" style="padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
           </div>
         </div>`;
@@ -7568,6 +7618,61 @@ async function submitRegForm() {
     btn.disabled = false;
     btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
   }
+}
+
+// ── SHARE EVENT ──────────────────────────────────────────────────────────────
+function shareEvent(id, title) {
+  const url = 'https://kfsociety.in/#events';
+  const text = `Check out "${title}" by KFS — KIIT Film Society! Register here: ${url}`;
+  if (navigator.share) {
+    navigator.share({ title, text, url }).catch(()=>{});
+  } else {
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  }
+}
+
+// ── SORT HOME FILMS ───────────────────────────────────────────────────────────
+let _allHomeMovies = [];
+function sortHomeFilms(type, btn) {
+  document.querySelectorAll('.film-sort-pill').forEach(p=>p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (!_allHomeMovies.length) return;
+  let sorted = [..._allHomeMovies];
+  if (type === 'top') {
+    sorted.sort((a,b) => {
+      const ra = window._movieRatings?.[a.id]?.avg || 0;
+      const rb = window._movieRatings?.[b.id]?.avg || 0;
+      return rb - ra;
+    });
+  } else if (type === 'loved') {
+    sorted.sort((a,b) => {
+      const ca = window._movieRatings?.[a.id]?.count || 0;
+      const cb = window._movieRatings?.[b.id]?.count || 0;
+      return cb - ca;
+    });
+  } else {
+    sorted.sort((a,b) => (b.release_year||0) - (a.release_year||0));
+  }
+  const hmg = document.getElementById('home-movies-grid');
+  if (!hmg) return;
+  hmg.innerHTML = sorted.slice(0,8).map(m => {
+    const rt = window._movieRatings && window._movieRatings[m.id];
+    const ratingHtml = rt
+      ? `<div class="hc-film-rating"><svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${rt.avg.toFixed(1)}<span class="hc-film-rating-count">(${rt.count})</span></div>`
+      : '';
+    const posterHtml = m.poster_image
+      ? `<div class="hc-film-poster-wrap"><img class="hc-film-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy"></div>`
+      : `<div class="hc-film-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3"><rect x="2" y="2" width="20" height="20" rx="2"></rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"></path></svg></div>`;
+    return `<div class="hc-film-card" onclick="openMovie('${m.id}')">
+      ${posterHtml}
+      <div class="hc-film-info">
+        <div class="hc-film-title">${m.title}</div>
+        <div class="hc-film-meta">${[m.release_year,(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).join(', ')].filter(Boolean).join(' · ')}</div>
+        ${ratingHtml}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function closeRegForm() {
