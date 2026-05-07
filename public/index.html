@@ -3386,19 +3386,30 @@ async function openBlog(id) {
     .replace(/<\/div>\s*<div>/gi, '\n\n')
     .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n\n')
     .replace(/&nbsp;/gi, ' ');
-  // If already has <p> tags: strip ALL <br> inside them (editor inserts these for soft wraps)
+  // Strip ALL <br> — they're editor soft-wraps, never real breaks
+  content = content.replace(/<br\s*\/?>/gi, ' ');
+  content = content.replace(/ {2,}/g, ' ');
+  // Remove empty <p> tags
+  content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
+  // If has <p> tags, merge consecutive ones that are mid-sentence
+  // (i.e. the paragraph doesn't end with . ! ? " ' — or a closing tag)
   if (/<p[^>]*>/i.test(content)) {
-    // Remove every <br> — they're visual line breaks from the editor, not real paragraph breaks
-    content = content.replace(/<br\s*\/?>/gi, ' ');
-    // Collapse multiple spaces
-    content = content.replace(/ {2,}/g, ' ');
-    // Remove empty <p> tags
-    content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
+    let merged = true;
+    while (merged) {
+      const before = content;
+      // If a </p> is NOT preceded by sentence-ending punctuation, merge it with the next <p>
+      content = content.replace(/<\/p>\s*<p[^>]*>/gi, (match, offset) => {
+        // Get text before this closing tag
+        const preceding = content.substring(0, offset).replace(/<[^>]+>/g, '');
+        const lastChar = preceding.trimEnd().slice(-1);
+        const sentenceEnd = /[.!?'"»\u2019\u201d]/.test(lastChar);
+        return sentenceEnd ? match : ' ';
+      });
+      merged = content !== before;
+    }
   } else {
-    // Plain text — treat double-br or double-newline as paragraph break, single as space
+    // Plain text fallback
     content = content
-      .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '\n\n')
-      .replace(/<br\s*\/?>/gi, ' ')
       .split(/\n{2,}/)
       .map(b => b.trim()).filter(Boolean)
       .map(b => '<p>' + b + '</p>')
