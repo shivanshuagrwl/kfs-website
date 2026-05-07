@@ -2391,6 +2391,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('change-password')" data-section="change-password" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Change Password</div>
     <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
     <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
     <div class="admin-sidebar-bottom">
@@ -2583,11 +2584,6 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           <div class="form-group"><label>Contact Email</label><input type="text" id="set-email" placeholder="kfs@kiit.ac.in"></div>
         </div>
 
-        <!-- ── SAVE SETTINGS BUTTON (covers Hero, Stats, Spotlight, Social) ── -->
-        <div style="margin-top:8px;padding:20px 0 4px">
-          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-        </div>
-
         <!-- ── SECTION 5: Easter Egg — No Shorts ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">🥚 Easter Egg — "No Shorts" Image</p>
@@ -2620,6 +2616,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
           </div>
           <input type="hidden" id="set-egg-img-url" value="">
         </div>
+        <div style="margin-top:8px;padding:12px 0 4px">
+          <button class="btn btn-primary" onclick="saveNoShortsEgg()">Save No Shorts Easter Egg</button>
+          <p id="noshorts-egg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
+        </div>
 
         <!-- ── SECTION 6: Custom Search Easter Eggs ── -->
         <div class="settings-divider"></div>
@@ -2642,17 +2642,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <button class="btn btn-primary" style="border-radius:10px" onclick="addCustomEgg()">+ Add Easter Egg</button>
         <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
 
-        <!-- ── SECTION 7: Change Password ── -->
-        <div class="settings-divider"></div>
-        <p class="settings-section-title">Change Your Password</p>
-        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords.</p>
-        <div class="settings-grid">
-          <div class="form-group"><label>New Password</label><input type="password" id="new-password"></div>
-          <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password"></div>
-        </div>
-        <button class="btn btn-secondary" onclick="changePassword()">Update Password</button>
-
-        <!-- ── SECTION 8: Blog Tag Management ── -->
+        <!-- ── SECTION 7: Blog Tag Management ── -->
         <div class="settings-divider"></div>
         <p class="settings-section-title">Blog Tag Management</p>
         <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
@@ -2666,6 +2656,30 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         </div>
         <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
 
+        <!-- ── SAVE ALL SETTINGS ── -->
+        <div class="settings-divider"></div>
+        <div style="padding:8px 0 20px">
+          <button class="btn btn-primary" onclick="saveSettings()" id="save-settings-btn">Save Settings</button>
+          <p style="font-size:12px;color:var(--grey);margin-top:8px">Saves: Hero &amp; About, Stats, Member Spotlight, and Social Links.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CHANGE PASSWORD (always accessible, every admin) -->
+    <div class="admin-section" id="section-change-password">
+      <div class="admin-header">
+        <div><h2>Change Password</h2><p>Update your own admin login password</p></div>
+      </div>
+      <div class="settings-form">
+        <p class="settings-section-title">Change Your Password</p>
+        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords from here.</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>New Password</label><input type="password" id="new-password" placeholder="Min. 6 characters"></div>
+          <div class="form-group"><label>Confirm Password</label><input type="password" id="confirm-password" placeholder="Re-enter new password"></div>
+        </div>
+        <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
+        <p id="change-pw-msg" style="font-size:12px;color:var(--grey);margin-top:10px"></p>
       </div>
     </div>
 
@@ -3048,7 +3062,7 @@ let adminToken = localStorage.getItem('kfs_token');
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access
@@ -4304,15 +4318,18 @@ function showAdminPanel() {
   document.querySelectorAll('.admin-sidebar-item[data-section]').forEach(el => {
     const sec = el.dataset.section;
     const masterOnly = ['admins','activity'].includes(sec);
+    const alwaysVisible = ['change-password'].includes(sec);
     if (masterOnly) {
       el.style.display = currentAdminRole === 'master' ? 'flex' : 'none';
+    } else if (alwaysVisible) {
+      el.style.display = 'flex'; // always show, regardless of permissions
     } else {
       el.style.display = hasPermission(sec) ? 'flex' : 'none';
     }
   });
 
-  // Navigate to first allowed section
-  const firstAllowed = ALL_SECTIONS.find(s => hasPermission(s)) || 'blogs';
+  // Navigate to first allowed section (excluding always-visible non-content sections)
+  const firstAllowed = ALL_SECTIONS.filter(s => s !== 'change-password').find(s => hasPermission(s)) || 'blogs';
   loadAdminData(firstAllowed);
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   const secEl = document.getElementById('section-'+firstAllowed);
@@ -4984,7 +5001,7 @@ async function deleteAchievement(id) {
 }
 
 async function saveSettings() {
-  const saveBtn = document.querySelector('#section-settings .btn-primary');
+  const saveBtn = document.getElementById('save-settings-btn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   try {
     const fd = new FormData();
@@ -5005,15 +5022,6 @@ async function saveSettings() {
     // Team photo file (if a new one was chosen)
     const photoFile = document.getElementById('set-team-photo-file').files[0];
     if (photoFile) fd.append('team_photo', photoFile);
-    // Easter egg image
-    const eggFile = document.getElementById('set-egg-img-file').files[0];
-    if (eggFile) fd.append('easter_egg_img', eggFile);
-    // If cleared (url blank and no new file), send empty string to remove
-    if (!eggFile && !document.getElementById('set-egg-img-url').value)
-      fd.append('easter_egg_img_clear', '1');
-    fd.append('easter_egg_shorts_heading', document.getElementById('set-egg-shorts-heading').value);
-    fd.append('easter_egg_shorts_sub', document.getElementById('set-egg-shorts-sub').value);
-    fd.append('easter_egg_noshorts_fallback', document.getElementById('set-egg-noshorts-fallback').value);
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + adminToken },
@@ -5043,15 +5051,69 @@ async function saveSettings() {
   }
 }
 
+async function saveNoShortsEgg() {
+  const btn = document.querySelector('[onclick="saveNoShortsEgg()"]');
+  const msg = document.getElementById('noshorts-egg-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  try {
+    const fd = new FormData();
+    const eggFile = document.getElementById('set-egg-img-file').files[0];
+    if (eggFile) fd.append('easter_egg_img', eggFile);
+    if (!eggFile && !document.getElementById('set-egg-img-url').value)
+      fd.append('easter_egg_img_clear', '1');
+    fd.append('easter_egg_shorts_heading', document.getElementById('set-egg-shorts-heading').value);
+    fd.append('easter_egg_shorts_sub', document.getElementById('set-egg-shorts-sub').value);
+    fd.append('easter_egg_noshorts_fallback', document.getElementById('set-egg-noshorts-fallback').value);
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+      body: fd
+    });
+    if (res.ok) {
+      if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ No Shorts Easter Egg saved!'; setTimeout(()=>{ msg.textContent=''; msg.style.color=''; }, 4000); }
+      else alert('Easter Egg saved!');
+      // Refresh egg image preview if a new one was uploaded
+      if (eggFile) {
+        const fresh = await apiFetch('/api/settings');
+        if (fresh && fresh.easter_egg_img) {
+          document.getElementById('set-egg-img-url').value = fresh.easter_egg_img;
+          document.getElementById('egg-img-thumb').src = fresh.easter_egg_img;
+          document.getElementById('egg-img-preview').style.display = 'block';
+          window._easterEggImg = fresh.easter_egg_img;
+        }
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ Save failed: ' + (err.error || res.status); }
+      else alert('Save failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    if (msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ Save failed: ' + e.message; }
+    else alert('Save failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save No Shorts Easter Egg'; }
+  }
+}
+
 async function changePassword() {
   const np = document.getElementById('new-password').value;
   const cp = document.getElementById('confirm-password').value;
-  if (np !== cp) { alert('Passwords do not match'); return; }
-  if (np.length < 6) { alert('Password must be at least 6 characters'); return; }
+  const msg = document.getElementById('change-pw-msg');
+  if (np !== cp) { if(msg) msg.textContent = '❌ Passwords do not match'; else alert('Passwords do not match'); return; }
+  if (np.length < 6) { if(msg) msg.textContent = '❌ Password must be at least 6 characters'; else alert('Password must be at least 6 characters'); return; }
   const res = await fetch('/api/admin/change-password',{method:'POST',
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
     body:JSON.stringify({newPassword:np})});
-  if (res.ok) { alert('Password changed!'); document.getElementById('new-password').value=''; document.getElementById('confirm-password').value=''; }
+  if (res.ok) {
+    document.getElementById('new-password').value='';
+    document.getElementById('confirm-password').value='';
+    if(msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Password changed successfully!'; setTimeout(()=>{ msg.textContent=''; msg.style.color=''; }, 4000); }
+    else alert('Password changed!');
+  } else {
+    const err = await res.json().catch(()=>({}));
+    if(msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ ' + (err.error || 'Failed to change password'); }
+    else alert('Failed: ' + (err.error || 'Unknown error'));
+  }
 }
 
 function execCmd(cmd, val=null) {
