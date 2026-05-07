@@ -69,6 +69,199 @@ body.light-mode .testimonial-avatar-placeholder{background:#ddd;color:#888}
 body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card{background:#fff;border-color:#e0e0e0}
 #movie-watch-status-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;border:1px solid var(--white);color:var(--white);background:transparent}
+
+/* ══ FORM BUILDER — Apple-grade redesign ══════════════════════════════════════ */
+.form-builder-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:20px 16px 40px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .3s cubic-bezier(.4,0,.2,1)}
+.form-builder-overlay.open{opacity:1;pointer-events:auto}
+.form-builder-panel{background:rgba(18,18,20,.96);border:1px solid rgba(255,255,255,.1);border-radius:22px;width:100%;max-width:820px;min-height:400px;display:flex;flex-direction:column;overflow:hidden;transform:translateY(28px) scale(.98);transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s;box-shadow:0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06) inset;margin:auto}
+.form-builder-overlay.open .form-builder-panel{transform:translateY(0) scale(1)}
+.fb-header{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 20px;border-bottom:1px solid rgba(255,255,255,.07);gap:12px;background:rgba(255,255,255,.02)}
+.fb-header-left{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.fb-event-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(245,245,245,.45);font-weight:600;margin-bottom:2px}
+.fb-event-chip svg{opacity:.6}
+.fb-header h3{font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.fb-close-btn{background:rgba(255,255,255,.08);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(245,245,245,.6);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.fb-close-btn:hover{background:rgba(255,255,255,.15);color:var(--white)}
+.fb-save-btn{padding:8px 18px;background:var(--white);color:#0a0a0a;border:none;border-radius:20px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.fb-save-btn:hover{opacity:.88;transform:scale(.97)}
+.fb-save-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.fb-dl-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:20px;color:rgba(245,245,245,.8);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.fb-dl-btn:hover{background:rgba(255,255,255,.13);color:var(--white);border-color:rgba(255,255,255,.2)}
+
+.fb-body{padding:24px 26px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.fb-body::-webkit-scrollbar{width:4px}
+.fb-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+
+/* Meta section */
+.fb-meta{display:flex;flex-direction:column;gap:10px;margin-bottom:22px;padding:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px}
+.fb-meta-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(245,245,245,.35);font-weight:600;margin-bottom:4px}
+.fb-meta input,.fb-meta textarea{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.12);padding:7px 0;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s;width:100%}
+.fb-meta input:focus,.fb-meta textarea:focus{border-bottom-color:rgba(245,245,245,.4)}
+.fb-meta input::placeholder,.fb-meta textarea::placeholder{color:rgba(245,245,245,.25)}
+.fb-meta textarea{resize:none;height:52px;font-size:13px;color:rgba(245,245,245,.75)}
+
+/* Question list */
+.fb-questions{display:flex;flex-direction:column;gap:10px}
+
+/* Question card */
+.fb-question-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;position:relative;transition:border-color .2s,box-shadow .2s;cursor:default}
+.fb-question-card:hover{border-color:rgba(255,255,255,.14)}
+.fb-question-card.fb-dragging{opacity:.4;border-color:rgba(255,255,255,.3);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+
+/* Drag handle */
+.fb-drag-handle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:grab;color:rgba(245,245,245,.22);flex-shrink:0;margin-top:2px;transition:color .15s}
+.fb-drag-handle:active{cursor:grabbing}
+.fb-drag-handle:hover{color:rgba(245,245,245,.5)}
+
+/* Question number badge */
+.fb-q-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(245,245,245,.4);flex-shrink:0;margin-top:1px}
+
+.fb-q-row{display:flex;gap:10px;align-items:center}
+.fb-q-label{flex:1;background:transparent;border:none;padding:4px 0;color:var(--white);font:inherit;font-size:14px;font-weight:500;outline:none;min-width:0}
+.fb-q-label::placeholder{color:rgba(245,245,245,.25)}
+
+/* Type pill selector */
+.fb-q-type{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:5px 10px;color:rgba(245,245,245,.8);font:inherit;font-size:11.5px;font-weight:600;outline:none;cursor:pointer;transition:all .15s;min-width:0;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(245,245,245,.5)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:26px}
+.fb-q-type:focus{border-color:rgba(255,255,255,.3);background-color:rgba(255,255,255,.12)}
+
+/* Required toggle */
+.fb-q-req-wrap{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(245,245,245,.4);cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0}
+.fb-q-req-wrap:hover{color:rgba(245,245,245,.7)}
+.fb-q-req-toggle{position:relative;width:28px;height:16px;cursor:pointer;flex-shrink:0}
+.fb-q-req-toggle input{opacity:0;width:0;height:0;position:absolute}
+.fb-q-req-track{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:20px;transition:background .2s}
+.fb-q-req-toggle input:checked~.fb-q-req-track{background:#34c759}
+.fb-q-req-thumb{position:absolute;width:10px;height:10px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.fb-q-req-toggle input:checked~.fb-q-req-thumb{transform:translateX(12px)}
+
+.fb-q-delete{background:none;border:none;color:rgba(245,245,245,.25);cursor:pointer;padding:4px;font-size:13px;line-height:1;border-radius:6px;transition:color .15s,background .15s;flex-shrink:0;display:flex;align-items:center;justify-content:center;width:24px;height:24px}
+.fb-q-delete:hover{color:#ff453a;background:rgba(255,69,58,.12)}
+
+/* Options */
+.fb-options-wrap{display:flex;flex-direction:column;gap:6px;padding-left:32px}
+.fb-option-row{display:flex;gap:8px;align-items:center}
+.fb-option-icon{color:rgba(245,245,245,.25);font-size:12px;width:16px;flex-shrink:0;text-align:center}
+.fb-option-input{flex:1;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:var(--white);font:inherit;font-size:13px;outline:none;transition:border-color .2s}
+.fb-option-input:focus{border-color:rgba(255,255,255,.3)}
+.fb-option-input::placeholder{color:rgba(245,245,245,.25)}
+.fb-option-del{background:none;border:none;color:rgba(245,245,245,.2);cursor:pointer;font-size:12px;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}
+.fb-option-del:hover{color:#ff453a}
+.fb-add-option{background:none;border:1px dashed rgba(255,255,255,.12);border-radius:8px;padding:6px 12px;color:rgba(245,245,245,.35);font:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;width:100%}
+.fb-add-option:hover{border-color:rgba(255,255,255,.3);color:rgba(245,245,245,.7);background:rgba(255,255,255,.04)}
+
+/* Image hint */
+.fb-image-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.4);padding:8px 12px;background:rgba(255,255,255,.04);border-radius:10px;margin-left:32px}
+
+/* Add question button */
+.fb-add-q-btn{margin-top:12px;background:none;border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:14px;color:rgba(245,245,245,.35);font:inherit;font-size:13px;font-weight:500;cursor:pointer;width:100%;text-align:center;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.fb-add-q-btn:hover{border-color:rgba(255,255,255,.3);color:rgba(245,245,245,.7);background:rgba(255,255,255,.03)}
+
+/* Status bar */
+.fb-status-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.2);gap:12px;flex-wrap:wrap}
+.fb-toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.5);font-weight:500}
+.fb-toggle{position:relative;width:36px;height:20px;cursor:pointer;flex-shrink:0}
+.fb-toggle input{opacity:0;width:0;height:0;position:absolute}
+.fb-toggle-track{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:20px;transition:background .2s}
+.fb-toggle input:checked~.fb-toggle-track{background:#34c759}
+.fb-toggle-thumb{position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.fb-toggle input:checked~.fb-toggle-thumb{transform:translateX(16px)}
+.fb-response-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:rgba(245,245,245,.4);font-weight:500}
+.fb-response-chip-dot{width:6px;height:6px;border-radius:50%;background:rgba(245,245,245,.25)}
+.fb-response-chip-dot.has-responses{background:#34c759}
+
+/* Light mode adaptations */
+body.light-mode .form-builder-panel{background:rgba(250,250,252,.97);border-color:rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.2)}
+body.light-mode .fb-header{background:rgba(0,0,0,.015);border-bottom-color:rgba(0,0,0,.07)}
+body.light-mode .fb-event-chip{color:rgba(0,0,0,.4)}
+body.light-mode .fb-header h3{color:#111}
+body.light-mode .fb-close-btn{background:rgba(0,0,0,.06);color:rgba(0,0,0,.5)}
+body.light-mode .fb-close-btn:hover{background:rgba(0,0,0,.1);color:#111}
+body.light-mode .fb-save-btn{background:#111;color:#fff}
+body.light-mode .fb-dl-btn{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.7)}
+body.light-mode .fb-meta{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
+body.light-mode .fb-meta-label{color:rgba(0,0,0,.35)}
+body.light-mode .fb-meta input,.fb-meta textarea{color:#111;border-bottom-color:rgba(0,0,0,.12)}
+body.light-mode .fb-meta input::placeholder,.fb-meta textarea::placeholder{color:rgba(0,0,0,.2)}
+body.light-mode .fb-question-card{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.08)}
+body.light-mode .fb-question-card:hover{border-color:rgba(0,0,0,.14)}
+body.light-mode .fb-drag-handle{color:rgba(0,0,0,.2)}
+body.light-mode .fb-drag-handle:hover{color:rgba(0,0,0,.45)}
+body.light-mode .fb-q-num{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.08);color:rgba(0,0,0,.35)}
+body.light-mode .fb-q-label{color:#111}
+body.light-mode .fb-q-label::placeholder{color:rgba(0,0,0,.22)}
+body.light-mode .fb-q-type{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.8);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,.5)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")}
+body.light-mode .fb-q-req-wrap{color:rgba(0,0,0,.4)}
+body.light-mode .fb-q-req-track{background:rgba(0,0,0,.12)}
+body.light-mode .fb-q-delete{color:rgba(0,0,0,.2)}
+body.light-mode .fb-option-input{border-color:rgba(0,0,0,.1);color:#111}
+body.light-mode .fb-option-input::placeholder{color:rgba(0,0,0,.22)}
+body.light-mode .fb-option-del{color:rgba(0,0,0,.2)}
+body.light-mode .fb-option-icon{color:rgba(0,0,0,.25)}
+body.light-mode .fb-add-option{border-color:rgba(0,0,0,.12);color:rgba(0,0,0,.35)}
+body.light-mode .fb-add-option:hover{border-color:rgba(0,0,0,.3);color:rgba(0,0,0,.65)}
+body.light-mode .fb-image-hint{background:rgba(0,0,0,.04);color:rgba(0,0,0,.4)}
+body.light-mode .fb-add-q-btn{border-color:rgba(0,0,0,.12);color:rgba(0,0,0,.35)}
+body.light-mode .fb-add-q-btn:hover{border-color:rgba(0,0,0,.3);color:rgba(0,0,0,.65)}
+body.light-mode .fb-status-bar{background:rgba(0,0,0,.03);border-top-color:rgba(0,0,0,.07)}
+body.light-mode .fb-toggle-row{color:rgba(0,0,0,.45)}
+body.light-mode .fb-toggle-track{background:rgba(0,0,0,.12)}
+body.light-mode .fb-response-chip{color:rgba(0,0,0,.4)}
+body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
+
+/* ── PUBLIC REGISTRATION FORM ─────────────────────────────────────────────── */
+.reg-form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2500;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(8px)}
+.reg-form-overlay.open{opacity:1;pointer-events:auto}
+.reg-form-panel{background:var(--black);border:1px solid var(--border);border-radius:22px;width:100%;max-width:600px;overflow:hidden;transform:translateY(24px);transition:transform .35s var(--ease);margin:auto}
+.reg-form-overlay.open .reg-form-panel{transform:translateY(0)}
+.reg-form-header{padding:32px 32px 24px;border-bottom:1px solid var(--border);position:relative}
+.reg-form-event-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
+.reg-form-title{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.reg-form-desc{font-size:14px;color:var(--grey);margin-top:8px;line-height:1.6}
+.reg-form-close{position:absolute;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.reg-form-close:hover{color:var(--white);border-color:var(--grey)}
+.reg-form-body{padding:28px 32px}
+.reg-field{margin-bottom:24px}
+.reg-field-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:.03em;margin-bottom:10px}
+.reg-field-label .req-dot{color:#ff453a;font-size:16px;line-height:1}
+.reg-input,.reg-textarea,.reg-select{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:13px 16px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
+.reg-input:focus,.reg-textarea:focus,.reg-select:focus{border-color:rgba(245,245,245,.35);box-shadow:0 0 0 3px rgba(245,245,245,.06)}
+.reg-textarea{resize:vertical;min-height:80px;line-height:1.6}
+.reg-radio-group,.reg-check-group{display:flex;flex-direction:column;gap:10px}
+.reg-radio-item,.reg-check-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,background .2s;user-select:none;font-size:14px}
+.reg-radio-item:hover,.reg-check-item:hover{border-color:rgba(245,245,245,.2)}
+.reg-radio-item input,.reg-check-item input{accent-color:var(--white);width:16px;height:16px;flex-shrink:0;cursor:pointer}
+.reg-radio-item.selected,.reg-check-item.selected{border-color:rgba(245,245,245,.35);background:rgba(245,245,245,.05)}
+.reg-image-upload{border:1.5px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+.reg-image-upload:hover{border-color:var(--grey);background:rgba(255,255,255,.02)}
+.reg-image-upload input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.reg-image-upload-icon{font-size:28px;margin-bottom:8px;opacity:.5}
+.reg-image-upload-text{font-size:13px;color:var(--grey);line-height:1.5}
+.reg-image-preview{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:12px;display:none}
+.reg-submit-row{padding:0 32px 32px;display:flex;justify-content:flex-end}
+.reg-submit-btn{padding:14px 36px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
+.reg-submit-btn:hover{opacity:.88;transform:scale(.98)}
+.reg-submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.reg-success{text-align:center;padding:60px 32px}
+.reg-success-icon{font-size:48px;margin-bottom:16px}
+.reg-success-title{font-size:20px;font-weight:700;margin-bottom:8px}
+.reg-success-sub{font-size:14px;color:var(--grey)}
+.event-register-btn{margin-top:14px;display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.event-register-btn:hover{background:var(--white);color:var(--black);border-color:var(--white)}
+body.light-mode .event-register-btn{border-color:#ccc;color:#111}
+body.light-mode .event-register-btn:hover{background:#111;color:#fff;border-color:#111}
+body.light-mode .reg-form-panel,.body.light-mode .form-builder-panel{background:#f8f8f8;border-color:#ddd}
+body.light-mode .reg-input,body.light-mode .reg-textarea,body.light-mode .reg-select{background:#fff;border-color:#ddd;color:#111}
+body.light-mode .reg-radio-item,body.light-mode .reg-check-item{background:#fff;border-color:#ddd;color:#111}
+body.light-mode .reg-radio-item.selected,body.light-mode .reg-check-item.selected{border-color:#999;background:#f3f3f3}
+body.light-mode .reg-image-upload{border-color:#ddd}
+body.light-mode .reg-submit-btn{background:#111;color:#fff}
+body.light-mode .fb-meta input,body.light-mode .fb-meta textarea{background:#fff;border-color:#ddd;color:#111}
+body.light-mode .fb-question-card{background:#fff;border-color:#ddd}
+body.light-mode .fb-q-type{background:#f3f3f3;border-color:#ddd;color:#111}
+body.light-mode .fb-option-input{color:#111;border-color:#ddd}
+body.light-mode .fb-q-label{color:#111;border-bottom-color:#ddd}
+
 #movie-watch-status-btn.is-watched{background:var(--white);color:var(--black);border-color:var(--white)}
 #movie-watch-status-btn:hover{opacity:.8}
 body.light-mode #movie-watch-status-btn{border-color:#111;color:#111;background:transparent}
@@ -3156,6 +3349,7 @@ function renderEventItem(e, full=false) {
       <h3>${e.title}<\/h3>
       <p>${e.description||''}<\/p>
       ${full && e.cover_image ? `<img class="event-cover" src="${e.cover_image}" alt="${e.title}">` : ''}
+      ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
     <\/div>
     <div class="event-location">${e.location||''}<br><span style="font-size:11px">${e.event_time||''}<\/span><\/div>
   <\/div>`;
@@ -4102,6 +4296,7 @@ async function loadAdminData(name) {
       <td style="color:var(--grey)">${e.location||'—'}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,"\\'")}')">Form<\/button>
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`).join('');
@@ -6447,6 +6642,507 @@ async function runMemberImport() {
   btn.textContent = 'Done';
   if (ok > 0) loadAdminSection('members');
 }
+
+</script>
+
+<!-- ── FORM BUILDER MODAL (Admin) ──────────────────────────────────────────── -->
+<div class="form-builder-overlay" id="form-builder-overlay" onclick="if(event.target===this)closeFormBuilder()">
+  <div class="form-builder-panel">
+    <div class="fb-header">
+      <div>
+        <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:4px" id="fb-event-label">Event Form</div>
+        <h3 id="fb-title">Registration Form</h3>
+      </div>
+      <div class="fb-header-actions">
+        <button class="fb-dl-btn" onclick="downloadFormResponses()" id="fb-dl-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Responses
+        </button>
+        <button class="btn-sm btn-success" onclick="saveFormBuilder()" id="fb-save-btn">Save Form</button>
+        <button class="btn-sm" onclick="closeFormBuilder()">✕</button>
+      </div>
+    </div>
+    <div class="fb-body" id="fb-body">
+      <div class="fb-meta">
+        <input type="text" id="fb-form-title" placeholder="Form title (e.g. KFS Screening Registration)">
+        <textarea id="fb-form-desc" placeholder="Short description or instructions (optional)"></textarea>
+      </div>
+      <div class="fb-questions" id="fb-questions"></div>
+      <button class="fb-add-q-btn" onclick="addFBQuestion()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Question
+      </button>
+    </div>
+    <div class="fb-status-bar">
+      <label class="fb-toggle-row">
+        <span class="fb-toggle" id="fb-open-toggle">
+          <input type="checkbox" id="fb-is-open" checked>
+          <div class="fb-toggle-track"></div>
+          <div class="fb-toggle-thumb"></div>
+        </span>
+        <span id="fb-open-label">Form is Open</span>
+      </label>
+      <span style="font-size:12px;color:var(--grey)" id="fb-response-count">0 responses</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── REGISTRATION FORM MODAL (Public) ────────────────────────────────────── -->
+<div class="reg-form-overlay" id="reg-form-overlay" onclick="if(event.target===this)closeRegForm()">
+  <div class="reg-form-panel">
+    <div class="reg-form-header">
+      <div class="reg-form-event-label" id="rf-event-label">KFS Event</div>
+      <div class="reg-form-title" id="rf-title">Registration</div>
+      <div class="reg-form-desc" id="rf-desc"></div>
+      <button class="reg-form-close" onclick="closeRegForm()">✕</button>
+    </div>
+    <div class="reg-form-body" id="rf-body"></div>
+    <div class="reg-submit-row" id="rf-submit-row">
+      <button class="reg-submit-btn" id="rf-submit-btn" onclick="submitRegForm()">
+        Submit
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// FORM BUILDER (Admin)
+// ════════════════════════════════════════════════════════════════════════════
+let _fbEventId = null;
+let _fbEventTitle = '';
+let _fbQuestions = [];
+let _fbResponseCount = 0;
+
+async function openFormBuilder(eventId, eventTitle) {
+  _fbEventId = eventId;
+  _fbEventTitle = eventTitle;
+  _fbQuestions = [];
+  document.getElementById('fb-event-label').textContent = eventTitle;
+  document.getElementById('fb-title').textContent = 'Registration Form';
+  document.getElementById('fb-form-title').value = '';
+  document.getElementById('fb-form-desc').value = '';
+  document.getElementById('fb-is-open').checked = true;
+  document.getElementById('fb-open-label').textContent = 'Form is Open';
+  document.getElementById('fb-response-count').textContent = '0 responses';
+  document.getElementById('fb-questions').innerHTML = '';
+
+  // Try to load existing form
+  try {
+    const res = await fetch('/api/events/' + eventId + '/form');
+    if (res.ok) {
+      const form = await res.json();
+      document.getElementById('fb-form-title').value = form.title || '';
+      document.getElementById('fb-form-desc').value = form.description || '';
+      document.getElementById('fb-is-open').checked = form.is_open !== false;
+      document.getElementById('fb-open-label').textContent = form.is_open !== false ? 'Form is Open' : 'Form is Closed';
+      try { _fbQuestions = JSON.parse(form.questions || '[]'); } catch(e){ _fbQuestions = []; }
+      // Load response count
+      try {
+        const rRes = await fetch('/api/admin/events/' + eventId + '/form/responses', {
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (rRes.ok) {
+          const rs = await rRes.json();
+          _fbResponseCount = rs.length;
+          document.getElementById('fb-response-count').textContent = rs.length + (rs.length === 1 ? ' response' : ' responses');
+        }
+      } catch(e){}
+    }
+  } catch(e){}
+
+  renderFBQuestions();
+  document.getElementById('fb-is-open').addEventListener('change', function() {
+    document.getElementById('fb-open-label').textContent = this.checked ? 'Form is Open' : 'Form is Closed';
+  });
+  document.getElementById('form-builder-overlay').classList.add('open');
+}
+
+function closeFormBuilder() {
+  document.getElementById('form-builder-overlay').classList.remove('open');
+}
+
+function addFBQuestion(q=null) {
+  const id = 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  _fbQuestions.push(q || { id, label: '', type: 'text', required: false, options: [] });
+  renderFBQuestions();
+  // Scroll to new question
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.fb-question-card');
+    if (cards.length) cards[cards.length-1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 60);
+}
+
+function removeFBQuestion(idx) {
+  _fbQuestions.splice(idx, 1);
+  renderFBQuestions();
+}
+
+function fbQuestionTypeChange(idx, val) {
+  _fbQuestions[idx].type = val;
+  if ((val === 'radio' || val === 'checkbox') && !_fbQuestions[idx].options.length) {
+    _fbQuestions[idx].options = ['Option 1', 'Option 2'];
+  }
+  renderFBQuestions();
+}
+
+function addFBOption(idx) {
+  _fbQuestions[idx].options.push('');
+  renderFBQuestions();
+}
+
+function removeFBOption(qIdx, oIdx) {
+  _fbQuestions[qIdx].options.splice(oIdx, 1);
+  renderFBQuestions();
+}
+
+function syncFBState() {
+  // Sync all live input values back to _fbQuestions before re-render
+  document.querySelectorAll('.fb-question-card').forEach((card, i) => {
+    if (!_fbQuestions[i]) return;
+    const labelEl = card.querySelector('.fb-q-label');
+    const typeEl = card.querySelector('.fb-q-type');
+    const reqEl = card.querySelector('.fb-q-req');
+    if (labelEl) _fbQuestions[i].label = labelEl.value;
+    if (typeEl) _fbQuestions[i].type = typeEl.value;
+    if (reqEl) _fbQuestions[i].required = reqEl.checked;
+    const optInputs = card.querySelectorAll('.fb-option-input');
+    optInputs.forEach((inp, j) => {
+      if (_fbQuestions[i].options && _fbQuestions[i].options[j] !== undefined)
+        _fbQuestions[i].options[j] = inp.value;
+    });
+  });
+}
+
+function renderFBQuestions() {
+  const wrap = document.getElementById('fb-questions');
+  const TYPE_LABELS = { text:'Short Text', email:'Email', phone:'Phone Number', textarea:'Long Text', radio:'Multiple Choice', checkbox:'Checkboxes', image:'Image Upload' };
+
+  wrap.innerHTML = _fbQuestions.map((q, i) => `
+    <div class="fb-question-card" data-idx="${i}">
+      <div class="fb-q-row">
+        <input class="fb-q-label" placeholder="Question label..." value="${(q.label||'').replace(/"/g,'&quot;')}"
+          oninput="syncFBFieldLabel(${i},this.value)">
+        <select class="fb-q-type" onchange="fbQuestionTypeChange(${i},this.value)">
+          ${Object.entries(TYPE_LABELS).map(([v,l])=>`<option value="${v}" ${q.type===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <label class="fb-q-required"><input type="checkbox" class="fb-q-req" ${q.required?'checked':''} onchange="syncFBFieldReq(${i},this.checked)"> Required</label>
+        <button class="fb-q-delete" onclick="syncFBState();removeFBQuestion(${i})" title="Remove">✕</button>
+      </div>
+      ${(q.type === 'radio' || q.type === 'checkbox') ? `
+        <div class="fb-options-wrap">
+          ${(q.options||[]).map((opt,j) => `
+            <div class="fb-option-row">
+              <span style="color:var(--grey);font-size:12px;width:16px;text-align:center">${q.type==='radio'?'◯':'☐'}</span>
+              <input class="fb-option-input" placeholder="Option ${j+1}" value="${(opt||'').replace(/"/g,'&quot;')}"
+                oninput="syncFBOptionVal(${i},${j},this.value)">
+              <button class="fb-option-del" onclick="syncFBState();removeFBOption(${i},${j})">✕</button>
+            </div>
+          `).join('')}
+          <button class="fb-add-option" onclick="syncFBState();addFBOption(${i})">+ Add option</button>
+        </div>` : ''}
+      ${q.type === 'image' ? `<div class="fb-image-hint">Respondents will upload an image file (JPEG, PNG, max 10MB)</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function syncFBFieldLabel(idx, val) { _fbQuestions[idx].label = val; }
+function syncFBFieldReq(idx, val) { _fbQuestions[idx].required = val; }
+function syncFBOptionVal(idx, oIdx, val) {
+  if (_fbQuestions[idx].options) _fbQuestions[idx].options[oIdx] = val;
+}
+
+async function saveFormBuilder() {
+  syncFBState();
+  const title = document.getElementById('fb-form-title').value.trim() || _fbEventTitle + ' Registration';
+  const desc = document.getElementById('fb-form-desc').value.trim();
+  const is_open = document.getElementById('fb-is-open').checked;
+  const btn = document.getElementById('fb-save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+    body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
+  });
+  btn.textContent = 'Save Form'; btn.disabled = false;
+  if (res.ok) {
+    btn.textContent = '✓ Saved';
+    setTimeout(() => btn.textContent = 'Save Form', 2000);
+  } else {
+    alert('Error saving form');
+  }
+}
+
+async function downloadFormResponses() {
+  if (!_fbEventId) return;
+  const btn = document.getElementById('fb-dl-btn');
+  btn.textContent = 'Loading…'; btn.disabled = true;
+
+  try {
+    const [formRes, respRes] = await Promise.all([
+      fetch('/api/events/' + _fbEventId + '/form'),
+      fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
+        headers: { 'Authorization': 'Bearer ' + adminToken }
+      })
+    ]);
+
+    if (!respRes.ok) { alert('Failed to load responses'); return; }
+    const responses = await respRes.json();
+
+    if (!responses.length) { alert('No responses yet.'); return; }
+
+    // Parse form questions for headers
+    let questions = _fbQuestions;
+    if (formRes.ok) {
+      const form = await formRes.json();
+      try { questions = JSON.parse(form.questions || '[]'); } catch(e){}
+    }
+
+    // Build CSV
+    const headers = ['#', 'Submitted At', ...questions.map(q => q.label || q.id)];
+    const rows = responses.map((r, i) => {
+      let answers = {};
+      try { answers = JSON.parse(r.answers || '{}'); } catch(e){}
+      return [
+        i + 1,
+        new Date(r.submitted_at).toLocaleString(),
+        ...questions.map(q => {
+          const val = answers[q.id] || answers[q.label] || '';
+          if (Array.isArray(val)) return val.join(', ');
+          return String(val);
+        })
+      ];
+    });
+
+    // Generate XLSX using SheetJS if available, otherwise CSV
+    if (window.XLSX) {
+      const wsData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      // Column widths
+      ws['!cols'] = headers.map((h,i) => ({ wch: i===0?5:i===1?20:Math.max(h.length+4, 16) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Responses');
+      XLSX.writeFile(wb, (_fbEventTitle||'event').replace(/[^a-z0-9]/gi,'_') + '_responses.xlsx');
+    } else {
+      // Fallback to CSV
+      const escape = v => `"${String(v).replace(/"/g,'""')}"`;
+      const csv = [headers, ...rows].map(row => row.map(escape).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = (_fbEventTitle||'event').replace(/[^a-z0-9]/gi,'_') + '_responses.csv';
+      a.click(); URL.revokeObjectURL(url);
+    }
+  } catch(e) {
+    alert('Download failed: ' + e.message);
+  } finally {
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Responses`;
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REGISTRATION FORM (Public)
+// ════════════════════════════════════════════════════════════════════════════
+let _rfEventId = null;
+let _rfEventTitle = '';
+let _rfForm = null;
+let _rfImageFiles = {};
+
+async function openEventForm(eventId, eventTitle) {
+  _rfEventId = eventId;
+  _rfEventTitle = eventTitle;
+  _rfForm = null;
+  _rfImageFiles = {};
+
+  document.getElementById('rf-event-label').textContent = eventTitle;
+  document.getElementById('rf-title').textContent = 'Registration';
+  document.getElementById('rf-desc').textContent = '';
+  document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey);font-size:14px">Loading form…</div>';
+  document.getElementById('rf-submit-row').style.display = 'flex';
+  document.getElementById('reg-form-overlay').classList.add('open');
+
+  const res = await fetch('/api/events/' + eventId + '/form');
+  if (!res.ok) {
+    document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">No registration form available for this event.</div>';
+    document.getElementById('rf-submit-row').style.display = 'none';
+    return;
+  }
+  const form = await res.json();
+  if (!form.is_open) {
+    document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">Registrations are currently closed.</div>';
+    document.getElementById('rf-submit-row').style.display = 'none';
+    return;
+  }
+
+  _rfForm = form;
+  let questions = [];
+  try { questions = JSON.parse(form.questions || '[]'); } catch(e){}
+
+  document.getElementById('rf-title').textContent = form.title || eventTitle + ' Registration';
+  document.getElementById('rf-desc').textContent = form.description || '';
+
+  document.getElementById('rf-body').innerHTML = questions.map(q => buildRegField(q)).join('');
+}
+
+function buildRegField(q) {
+  const req = q.required ? `<span class="req-dot">*</span>` : '';
+  const label = `<div class="reg-field-label">${q.label || 'Question'}${req}</div>`;
+
+  if (q.type === 'text' || q.type === 'email' || q.type === 'phone') {
+    const t = q.type === 'email' ? 'email' : q.type === 'phone' ? 'tel' : 'text';
+    const ph = q.type === 'email' ? 'you@example.com' : q.type === 'phone' ? '+91 XXXXX XXXXX' : 'Your answer';
+    return `<div class="reg-field" data-qid="${q.id}">
+      ${label}
+      <input class="reg-input" type="${t}" placeholder="${ph}" data-qid="${q.id}" ${q.required?'required':''}>
+    </div>`;
+  }
+  if (q.type === 'textarea') {
+    return `<div class="reg-field" data-qid="${q.id}">
+      ${label}
+      <textarea class="reg-textarea" placeholder="Your answer…" data-qid="${q.id}" ${q.required?'required':''}></textarea>
+    </div>`;
+  }
+  if (q.type === 'radio') {
+    const opts = (q.options || []).map((opt, i) => `
+      <label class="reg-radio-item" onclick="selectRadioItem(this)">
+        <input type="radio" name="q_${q.id}" value="${(opt||'').replace(/"/g,'&quot;')}" data-qid="${q.id}">
+        ${opt}
+      </label>`).join('');
+    return `<div class="reg-field" data-qid="${q.id}">${label}<div class="reg-radio-group">${opts}</div></div>`;
+  }
+  if (q.type === 'checkbox') {
+    const opts = (q.options || []).map((opt, i) => `
+      <label class="reg-check-item" onclick="toggleCheckItem(this)">
+        <input type="checkbox" value="${(opt||'').replace(/"/g,'&quot;')}" data-qid="${q.id}">
+        ${opt}
+      </label>`).join('');
+    return `<div class="reg-field" data-qid="${q.id}">${label}<div class="reg-check-group">${opts}</div></div>`;
+  }
+  if (q.type === 'image') {
+    return `<div class="reg-field" data-qid="${q.id}">
+      ${label}
+      <div class="reg-image-upload" id="img-upload-${q.id}">
+        <input type="file" accept="image/*" data-qid="${q.id}" onchange="previewRegImage(this,'${q.id}')">
+        <div class="reg-image-upload-icon">🖼</div>
+        <div class="reg-image-upload-text">Click to upload image<br><span style="font-size:11px;opacity:.6">JPEG, PNG — max 10MB</span></div>
+        <img class="reg-image-preview" id="img-preview-${q.id}" src="" alt="">
+      </div>
+    </div>`;
+  }
+  return `<div class="reg-field" data-qid="${q.id}">${label}<input class="reg-input" type="text" placeholder="Your answer" data-qid="${q.id}"></div>`;
+}
+
+function selectRadioItem(label) {
+  const name = label.querySelector('input').name;
+  document.querySelectorAll(`input[name="${name}"]`).forEach(inp => {
+    inp.closest('.reg-radio-item').classList.remove('selected');
+  });
+  label.classList.add('selected');
+}
+
+function toggleCheckItem(label) {
+  const inp = label.querySelector('input[type=checkbox]');
+  // toggled after click, so check current state
+  setTimeout(() => label.classList.toggle('selected', inp.checked), 0);
+}
+
+function previewRegImage(input, qid) {
+  const file = input.files[0];
+  if (!file) return;
+  _rfImageFiles[qid] = file;
+  const prev = document.getElementById('img-preview-' + qid);
+  if (prev) {
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = 'block';
+  }
+  const hint = input.closest('.reg-image-upload').querySelector('.reg-image-upload-text');
+  if (hint) hint.textContent = file.name;
+}
+
+async function submitRegForm() {
+  if (!_rfForm || !_rfEventId) return;
+  let questions = [];
+  try { questions = JSON.parse(_rfForm.questions || '[]'); } catch(e){}
+
+  // Collect answers
+  const answers = {};
+  let valid = true;
+  for (const q of questions) {
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = document.querySelector(`[data-qid="${q.id}"]`);
+      const val = el ? el.value.trim() : '';
+      if (q.required && !val) { el && el.focus(); valid = false; break; }
+      answers[q.id] = val;
+    } else if (q.type === 'radio') {
+      const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+      if (q.required && !checked) { valid = false; break; }
+      answers[q.id] = checked ? checked.value : '';
+    } else if (q.type === 'checkbox') {
+      const checked = [...document.querySelectorAll(`input[data-qid="${q.id}"]:checked`)].map(i => i.value);
+      if (q.required && !checked.length) { valid = false; break; }
+      answers[q.id] = checked;
+    } else if (q.type === 'image') {
+      // Image uploaded separately, just mark presence
+      if (q.required && !_rfImageFiles[q.id]) { valid = false; break; }
+    }
+  }
+
+  if (!valid) {
+    const btn = document.getElementById('rf-submit-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = 'Please fill all required fields';
+    btn.style.background = '#ff453a';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
+    return;
+  }
+
+  const btn = document.getElementById('rf-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg> Submitting…';
+
+  const fd = new FormData();
+  fd.append('answers', JSON.stringify(answers));
+  // Append image files
+  for (const [qid, file] of Object.entries(_rfImageFiles)) {
+    fd.append(qid, file);
+  }
+
+  const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', body: fd });
+
+  if (res.ok) {
+    // Show success
+    document.querySelector('.reg-form-header').style.display = 'none';
+    document.getElementById('rf-submit-row').style.display = 'none';
+    document.getElementById('rf-body').innerHTML = `
+      <div class="reg-success">
+        <div class="reg-success-icon">🎬</div>
+        <div class="reg-success-title">You're registered!</div>
+        <div class="reg-success-sub">We'll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
+        <button onclick="closeRegForm()" style="margin-top:24px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+      </div>`;
+  } else {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Submission failed. Please try again.');
+    btn.disabled = false;
+    btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+}
+
+function closeRegForm() {
+  document.getElementById('reg-form-overlay').classList.remove('open');
+  // Reset header visibility for next open
+  const hdr = document.querySelector('.reg-form-header');
+  if (hdr) hdr.style.display = '';
+}
+
+// Load SheetJS for Excel export
+(function() {
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  document.head.appendChild(s);
+})();
 </script>
 </body>
 </html>

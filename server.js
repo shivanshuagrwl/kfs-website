@@ -813,6 +813,185 @@ app.post('/api/reviews', async (req, res) => {
   res.json(data);
 });
 
+// ── EVENT REGISTRATION FORMS ──────────────────────────────────────────────────
+
+// PUBLIC: Get the registration form for an event (schema only, no responses)
+app.get('/api/events/:id/form', async (req, res) => {
+  const { data, error } = await supabase
+    .from('event_forms')
+    .select('id,event_id,title,description,questions,is_open,created_at,updated_at')
+    .eq('event_id', req.params.id)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'No form found for this event' });
+  res.json(data);
+});
+
+// ADMIN: Create or update (upsert) the registration form for an event
+app.post('/api/admin/events/:id/form', requireSection('events'), async (req, res) => {
+  const { title, description, questions, is_open } = req.body;
+  if (!Array.isArray(questions)) return res.status(400).json({ error: 'questions must be an array' });
+
+  // Validate each question minimally
+  for (const q of questions) {
+    if (!q.id || !q.type) return res.status(400).json({ error: 'Each question must have id and type' });
+    if ((q.type === 'radio' || q.type === 'checkbox') && (!Array.isArray(q.options) || q.options.length < 1)) {
+      return res.status(400).json({ error: `Question "${q.label}" needs at least 1 option` });
+    }
+  }
+
+  // Check if form already exists for this event
+  const { data: existing } = await supabase
+    .from('event_forms')
+    .select('id')
+    .eq('event_id', req.params.id)
+    .maybeSingle();
+
+  let data, error;
+  const payload = {
+    event_id: req.params.id,
+    title: title || null,
+    description: description || null,
+    questions: JSON.stringify(questions),
+    is_open: is_open !== false && is_open !== 'false',
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    ({ data, error } = await supabase
+      .from('event_forms')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single());
+  } else {
+    ({ data, error } = await supabase
+      .from('event_forms')
+      .insert([{ ...payload, created_at: new Date().toISOString() }])
+      .select()
+      .single());
+  }
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const { data: ev } = await supabase.from('events').select('title').eq('id', req.params.id).maybeSingle();
+  await logActivity(req.admin.id, req.admin.name, existing ? 'update' : 'create', 'event_form', ev?.title || req.params.id);
+  res.json(data);
+});
+
+// ADMIN: Get all responses for an event form
+app.get('/api/admin/events/:id/form/responses', requireSection('events'), async (req, res) => {
+  const { data, error } = await supabase
+    .from('form_responses')
+    .select('*')
+    .eq('event_id', req.params.id)
+    .order('submitted_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+// ADMIN: Delete only the responses (keeps the form schema intact)
+app.delete('/api/admin/events/:id/form/responses', requireSection('events'), async (req, res) => {
+  const { error } = await supabase.from('form_responses').delete().eq('event_id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  const { data: ev } = await supabase.from('events').select('title').eq('id', req.params.id).maybeSingle();
+  await logActivity(req.admin.id, req.admin.name, 'delete', 'form_responses', `Responses for ${ev?.title || req.params.id}`);
+  res.json({ success: true });
+});
+
+// ADMIN: Delete the form for an event (and all its responses)
+app.delete('/api/admin/events/:id/form', requireSection('events'), async (req, res) => {
+  await supabase.from('form_responses').delete().eq('event_id', req.params.id);
+  await supabase.from('event_forms').delete().eq('event_id', req.params.id);
+  const { data: ev } = await supabase.from('events').select('title').eq('id', req.params.id).maybeSingle();
+  await logActivity(req.admin.id, req.admin.name, 'delete', 'event_form', ev?.title || req.params.id);
+  res.json({ success: true });
+});
+
+// PUBLIC: Submit a response to an event registration form
+// Handles multipart/form-data so image files can be uploaded per-question
+app.post('/api/events/:id/form/submit', upload.any(), async (req, res) => {
+  // 1. Verify the form exists and is open
+  const { data: form, error: formErr } = await supabase
+    .from('event_forms')
+    .select('id,is_open,questions')
+    .eq('event_id', req.params.id)
+    .maybeSingle();
+
+  if (formErr || !form) return res.status(404).json({ error: 'Form not found' });
+  if (!form.is_open) return res.status(403).json({ error: 'Registrations are currently closed' });
+
+  // 2. Parse submitted answers
+  let answers = {};
+  try { answers = JSON.parse(req.body.answers || '{}'); } catch(e) {
+    return res.status(400).json({ error: 'Invalid answers payload' });
+  }
+
+  // 3. Validate required fields against schema
+  let questions = [];
+  try { questions = JSON.parse(form.questions || '[]'); } catch(e) {}
+
+  for (const q of questions) {
+    if (!q.required) continue;
+    if (q.type === 'image') {
+      const hasFile = (req.files || []).some(f => f.fieldname === q.id);
+      if (!hasFile) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+    } else {
+      const val = answers[q.id];
+      const isEmpty = val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0);
+      if (isEmpty) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+    }
+  }
+
+  // 4. Upload any image files to Supabase Storage
+  const imageUrls = {};
+  for (const file of (req.files || [])) {
+    try {
+      const url = await uploadImage(file, `form-responses/${req.params.id}`);
+      imageUrls[file.fieldname] = url;
+    } catch(e) {
+      console.error('Image upload error for question', file.fieldname, e.message);
+      return res.status(500).json({ error: 'Image upload failed: ' + e.message });
+    }
+  }
+
+  // 5. Merge image URLs into answers
+  const finalAnswers = { ...answers, ...imageUrls };
+
+  // 6. Store response
+  const { data: response, error: insertErr } = await supabase
+    .from('form_responses')
+    .insert([{
+      event_id: req.params.id,
+      form_id: form.id,
+      answers: JSON.stringify(finalAnswers),
+      submitted_at: new Date().toISOString(),
+    }])
+    .select()
+    .single();
+
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+  res.json({ success: true, id: response.id });
+});
+
+// ADMIN: Download responses as server-side JSON (client does XLSX conversion)
+// This is an alias for the GET responses endpoint used by the download button
+app.get('/api/admin/events/:id/form/export', requireSection('events'), async (req, res) => {
+  const { data: form } = await supabase
+    .from('event_forms')
+    .select('title,questions')
+    .eq('event_id', req.params.id)
+    .maybeSingle();
+
+  const { data: responses } = await supabase
+    .from('form_responses')
+    .select('*')
+    .eq('event_id', req.params.id)
+    .order('submitted_at', { ascending: true });
+
+  res.json({ form: form || null, responses: responses || [] });
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
