@@ -271,9 +271,9 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── HERO ─────────────────────────────────────────────────────────────── */
-#hero-section{position:relative;height:calc(100vh - 72px);display:flex;align-items:center;
-  justify-content:center;flex-direction:column;overflow:hidden;text-align:center;
-  padding-bottom:90px;padding-left:20px;padding-right:20px}
+#hero-section{position:relative;min-height:calc(100vh - 72px);display:flex;align-items:center;
+  justify-content:center;flex-direction:column;overflow:visible;text-align:center;
+  padding:40px 20px 90px}
 .hero-grain{position:absolute;inset:0;opacity:.03;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-size:256px;pointer-events:none}
@@ -397,13 +397,13 @@ body.light-mode .bg-camera{opacity:.08;filter:invert(1)}
   89%  {transform:rotate(16deg)  translate( -4px, 18px) scale(1.01)}
   100%  {transform:rotate(15deg)  translate(0px,  0px)   scale(1)}
 }
-.hero-logo-wrap{margin-bottom:16px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards}
+.hero-logo-wrap{margin-bottom:16px;opacity:0;animation:logoReveal .8s .2s var(--ease) forwards;position:relative;z-index:1}
 .hero-logo{width:130px;height:130px;object-fit:contain;content:url('/images/KFS_LOGO_WHITE.png')}
 body.light-mode .hero-logo{content:url('/images/KFS_LOGO_DARK.png')}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .hero-tagline{font-size:clamp(3.2rem,8.5vw,7.8rem);font-weight:900;letter-spacing:-.05em;
   line-height:.92;opacity:0;animation:fadeUp .8s .4s var(--ease) forwards;
-  width:min(96vw,1400px);text-align:center}
+  width:min(96vw,1400px);text-align:center;position:relative;z-index:1}
 .hero-tagline em{font-style:normal;color:var(--grey)}
 .glow-word{display:inline;transition:text-shadow .7s ease,color .7s ease}
 .glow-word.lit{
@@ -412,8 +412,8 @@ body.light-mode .hero-logo{content:url('/images/KFS_LOGO_DARK.png')}
     0 0 80px rgba(255,255,255,.45),0 0 150px rgba(255,255,255,.2)
 }
 .hero-sub{margin-top:24px;font-size:14px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--grey);opacity:0;animation:fadeUp .8s .6s var(--ease) forwards}
-.hero-cta{margin-top:48px;display:flex;gap:16px;opacity:0;animation:fadeUp .8s .8s var(--ease) forwards}
+  color:var(--grey);opacity:0;animation:fadeUp .8s .6s var(--ease) forwards;position:relative;z-index:1}
+.hero-cta{margin-top:48px;display:flex;gap:16px;opacity:0;animation:fadeUp .8s .8s var(--ease) forwards;position:relative;z-index:1}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;
   font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
   text-decoration:none;border:1px solid var(--white);cursor:pointer;
@@ -587,6 +587,8 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 @media(max-width:768px){.blog-page-section{padding:24px 20px 20px}}
 /* Blog page top header matches section padding exactly */
 @media(max-width:768px){#page-blog > div:first-child{padding:40px 20px 0 !important}}
+@media(max-width:768px){#page-movies > div:first-child{padding:40px 20px 0 !important}
+  #page-movies > div:last-child{padding:24px 20px 40px !important}}
 .blog-page-section-header{margin-bottom:32px}
 .blog-page-section-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:var(--grey);margin-bottom:10px;font-weight:600}
@@ -1115,7 +1117,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   body{cursor:auto}
 
   /* hero */
-  #hero-section{height:100svh;padding:0 20px 80px;overflow:hidden}
+  #hero-section{min-height:100svh;padding:60px 20px 80px;overflow:visible}
   .hero-logo{width:90px;height:90px}
   .hero-logo-wrap{margin-bottom:8px}
   .hero-tagline{font-size:clamp(3rem,15vw,4.5rem);line-height:.92;text-align:center;width:100%}
@@ -1213,7 +1215,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
 @media(max-width:768px){.members-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* ── MOVIES ───────────────────────────────────────────────────────────── */
-.movies-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:transparent;margin-top:60px}
+.movies-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:transparent;margin-top:0}
 @media(max-width:1024px){.movies-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:600px){.movies-grid{grid-template-columns:repeat(2,1fr)}}
 .movie-card{background:var(--black);overflow:hidden;transition:background .3s var(--ease);border:1px solid var(--border);border-radius:12px}
@@ -1966,19 +1968,20 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- ── MOVIES PAGE ── -->
 <div class="page" id="page-movies">
-  <section class="section">
-    <div class="section-inner">
-      <p class="section-label">Our Work</p>
-      <h2 class="section-title">Films</h2>
-      <div id="movie-genre-filter-bar" class="genre-filter-bar" style="margin-top:32px;display:none">
+  <div style="padding:60px 80px 0">
+    <p class="blog-page-section-label">Our Work</p>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <h2 style="font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1">Films</h2>
+      <div id="movie-genre-filter-bar" class="genre-filter-bar" style="margin-bottom:4px;display:none">
         <span class="genre-filter-bar-label">Filter:</span>
-        <!-- genre filter chips injected by JS -->
-      </div>
-      <div class="movies-grid" id="movies-grid" style="margin-top:24px">
-        <div class="loading" style="grid-column:1/-1">Loading films...</div>
       </div>
     </div>
-  </section>
+  </div>
+  <div style="padding:40px 80px 60px">
+    <div class="movies-grid" id="movies-grid">
+      <div class="loading" style="grid-column:1/-1">Loading films...</div>
+    </div>
+  </div>
 </div>
 
 <!-- Movie Detail -->
