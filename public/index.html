@@ -3380,22 +3380,28 @@ async function openBlog(id) {
   let content = blog.content || '';
   // Convert h1-h6 → bold paragraph
   content = content.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '<p><strong>$1</strong></p>');
-  // Collapse <br> and <div> line breaks from contenteditable into spaces within a sentence,
-  // but treat double <br><br> or </div><div> as paragraph breaks
+  // Normalise div-based line breaks from contenteditable into paragraph markers
   content = content
-    .replace(/<div><br\s*\/?><\/div>/gi, '\n\n')          // empty div = paragraph break
-    .replace(/<\/div>\s*<div>/gi, '\n\n')                  // div-to-div = paragraph break
-    .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '\n\n')          // double br = paragraph break
-    .replace(/<br\s*\/?>/gi, ' ')                           // single br = space (not a new line)
-    .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n\n') // remaining divs
+    .replace(/<div><br\s*\/?><\/div>/gi, '\n\n')
+    .replace(/<\/div>\s*<div>/gi, '\n\n')
+    .replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n\n')
     .replace(/&nbsp;/gi, ' ');
-  // If no <p> tags yet, wrap paragraph blocks
-  if (content && !/<p[^>]*>/i.test(content)) {
+  // If already has <p> tags: strip ALL <br> inside them (editor inserts these for soft wraps)
+  if (/<p[^>]*>/i.test(content)) {
+    // Remove every <br> — they're visual line breaks from the editor, not real paragraph breaks
+    content = content.replace(/<br\s*\/?>/gi, ' ');
+    // Collapse multiple spaces
+    content = content.replace(/ {2,}/g, ' ');
+    // Remove empty <p> tags
+    content = content.replace(/<p[^>]*>\s*<\/p>/gi, '');
+  } else {
+    // Plain text — treat double-br or double-newline as paragraph break, single as space
     content = content
+      .replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '\n\n')
+      .replace(/<br\s*\/?>/gi, ' ')
       .split(/\n{2,}/)
-      .map(block => block.trim())
-      .filter(Boolean)
-      .map(block => '<p>' + block + '</p>')
+      .map(b => b.trim()).filter(Boolean)
+      .map(b => '<p>' + b + '</p>')
       .join('');
   }
   document.getElementById('blog-detail-body').innerHTML = content;
