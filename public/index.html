@@ -492,16 +492,16 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 /* ── HOME CAROUSEL SECTIONS ─────────────────────────────────────────── */
 .apple-section{width:100%;overflow:hidden;padding-left:0!important;padding-right:0!important}
 .apple-section .section-inner{max-width:none;padding:0}
-.apple-section .section-header{padding:52px 40px 20px}
-.apple-section .section-cta{padding:16px 40px 48px}
+.apple-section .section-header{padding:52px 0 20px}
+.apple-section .section-cta{padding:16px 0 48px}
 /* Carousel scroll track */
-.home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 40px 24px;
+.home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 0 24px;
   scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .home-carousel::-webkit-scrollbar{display:none}
 @media(max-width:768px){
-  .apple-section .section-header{padding:40px 20px 16px}
-  .apple-section .section-cta{padding:12px 20px 40px}
-  .home-carousel{padding:0 20px 20px}
+  .apple-section .section-header{padding:40px 0 16px}
+  .apple-section .section-cta{padding:12px 0 40px}
+  .home-carousel{padding:0 0 20px}
 }
 /* Blog carousel card */
 .hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
@@ -595,9 +595,9 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .blog-page-section-title{font-size:clamp(1.4rem,3vw,2rem);font-weight:700;letter-spacing:-.02em}
 .blog-page-divider{width:100%;height:1px;background:var(--border);margin:0}
 /* Scroll hint */
-.carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0 40px 0;
+.carousel-scroll-hint{display:flex;align-items:center;gap:6px;padding:0;
   margin-bottom:12px;color:var(--grey);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
-@media(max-width:768px){.carousel-scroll-hint{padding:0 20px 0}}.carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
+@media(max-width:768px){.carousel-scroll-hint{padding:0}}.carousel-scroll-hint svg{flex-shrink:0;animation:hint-slide 2s ease-in-out infinite}
 .events-tabs{display:flex;gap:0;margin-top:60px;border-bottom:1px solid var(--border)}
 .events-tab{padding:12px 24px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--grey);transition:color .2s;border-bottom:2px solid transparent;margin-bottom:-1px}
