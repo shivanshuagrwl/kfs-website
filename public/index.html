@@ -795,12 +795,12 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
 .apple-section .section-cta{padding:16px 40px 48px}
 /* Carousel scroll track */
 .home-carousel{display:flex;gap:12px;overflow-x:auto;padding:0 40px 24px;
-  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  scroll-snap-type:x mandatory;scroll-padding-left:40px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .home-carousel::-webkit-scrollbar{display:none}
 @media(max-width:768px){
   .apple-section .section-header{padding:40px 20px 16px}
   .apple-section .section-cta{padding:12px 20px 40px}
-  .home-carousel{padding:0 20px 20px}
+  .home-carousel{padding:0 20px 20px;scroll-padding-left:20px}
 }
 /* Blog carousel card */
 .hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
