@@ -712,6 +712,8 @@ body.light-mode .stat-num{
 body.light-mode .stat-label{
   background:linear-gradient(135deg,#333333 0%,#888888 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+body.light-mode .event-day{background:linear-gradient(160deg,#111111 0%,#555555 60%,#999999 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:none}
+body.light-mode .event-info h3{background:linear-gradient(160deg,#111111 0%,#555555 60%,#999999 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:none}
 
 /* ── ABOUT ────────────────────────────────────────────────────────────── */
 .about-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-top:48px}
@@ -853,9 +855,9 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .event-item:hover{padding-left:16px}
 @media(max-width:768px){.event-item{grid-template-columns:1fr;gap:12px}}
 .event-date-block{text-align:center;min-width:60px}
-.event-day{font-size:2rem;font-weight:700;letter-spacing:-.03em;display:block}
+.event-day{font-size:2rem;font-weight:900;letter-spacing:-.04em;display:block;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-month{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
-.event-info h3{font-size:18px;font-weight:600;margin-bottom:6px}
+.event-info h3{font-size:18px;font-weight:900;letter-spacing:-.02em;margin-bottom:6px;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-info p{font-size:13px;color:var(--grey)}
 .event-location{font-size:12px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase}
 .event-cover{width:100%;height:220px;object-fit:cover;margin-top:16px;filter:grayscale(100%)}
