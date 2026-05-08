@@ -304,15 +304,17 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 /* ── PUBLIC REGISTRATION FORM ─────────────────────────────────────────────── */
 .reg-form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2500;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(8px)}
 .reg-form-overlay.open{opacity:1;pointer-events:auto}
-.reg-form-panel{background:var(--black);border:1px solid var(--border);border-radius:22px;width:100%;max-width:600px;overflow:hidden;transform:translateY(24px);transition:transform .35s var(--ease);margin:auto}
+.reg-form-panel{background:var(--black);border:1px solid var(--border);border-radius:22px;width:100%;max-width:600px;overflow:hidden;transform:translateY(24px);transition:transform .35s var(--ease);margin:auto;display:flex;flex-direction:column;max-height:calc(100dvh - 48px)}
 .reg-form-overlay.open .reg-form-panel{transform:translateY(0)}
-.reg-form-header{padding:32px 32px 24px;border-bottom:1px solid var(--border);position:relative}
+.reg-form-header{padding:24px 24px 20px;border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
 .reg-form-event-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
-.reg-form-title{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.reg-form-title{font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.2;padding-right:36px}
 .reg-form-desc{font-size:14px;color:var(--grey);margin-top:8px;line-height:1.6}
-.reg-form-close{position:absolute;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.reg-form-close{position:absolute;top:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .reg-form-close:hover{color:var(--white);border-color:var(--grey)}
-.reg-form-body{padding:28px 32px}
+.reg-form-body{padding:24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+.reg-form-body::-webkit-scrollbar{width:4px}
+.reg-form-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
 .reg-field{margin-bottom:24px}
 .reg-field-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:.03em;margin-bottom:10px}
 .reg-field-label .req-dot{color:#ff453a;font-size:16px;line-height:1}
@@ -336,11 +338,12 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-image-upload-icon{font-size:28px;margin-bottom:8px;opacity:.5}
 .reg-image-upload-text{font-size:13px;color:var(--grey);line-height:1.5}
 .reg-image-preview{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:12px;display:none}
-.reg-submit-row{padding:0 32px 32px;display:flex;justify-content:flex-end}
-.reg-submit-btn{padding:14px 36px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
+.reg-submit-row{padding:0 24px 24px;display:flex;justify-content:flex-end;flex-shrink:0}
+.reg-submit-btn{padding:14px 36px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;width:100%}
+@media(min-width:480px){.reg-submit-btn{width:auto}}
 .reg-submit-btn:hover{opacity:.88;transform:scale(.98)}
 .reg-submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.reg-success{text-align:center;padding:60px 32px}
+.reg-success{text-align:center;padding:40px 24px}
 .reg-success-icon{display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--white)}
 .reg-success-title{font-size:20px;font-weight:700;margin-bottom:8px}
 .reg-success-sub{font-size:14px;color:var(--grey)}
@@ -3572,8 +3575,11 @@ function renderEventItem(e, full=false) {
       countdownHtml = `<div class="event-countdown"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${label}<\/div>`;
     }
   }
+  // Store event in registry so onclick handlers don't break on apostrophes/special chars
+  if (!window._eventRegistry) window._eventRegistry = {};
+  window._eventRegistry[e.id] = e;
   // Share
-  const shareHtml = `<button class="event-share-btn" onclick="event.stopPropagation();shareEvent('${e.id}','${e.title.replace(/'/g,"\\'")}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/><\/svg>Share<\/button>`;
+  const shareHtml = `<button class="event-share-btn" onclick="event.stopPropagation();shareEventById('${e.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/><\/svg>Share<\/button>`;
   // Image column — always show if cover_image exists
   const imgCol = e.cover_image
     ? `<div class="event-cover-col"><img src="${e.cover_image}" alt="${e.title}"><\/div>`
@@ -3589,7 +3595,7 @@ function renderEventItem(e, full=false) {
       <p>${e.description||''}<\/p>
       ${countdownHtml}
       <div class="event-action-row">
-        ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventForm('${e.id}','${e.title.replace(/'/g,"\\'")}','${e.event_date||''}','${e.event_time||''}','${(e.location||'').replace(/'/g,"\\'")}')">Register →<\/button>` : ''}
+        ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventFormById('${e.id}')">Register →<\/button>` : ''}
         ${shareHtml}
       <\/div>
     <\/div>
@@ -7506,6 +7512,18 @@ let _rfEventTime = '';
 let _rfEventLocation = '';
 let _rfForm = null;
 let _rfImageFiles = {};
+
+// Safe wrappers — look up event from registry to avoid apostrophe/quote issues in onclick
+function openEventFormById(eventId) {
+  const e = (window._eventRegistry || {})[eventId];
+  if (!e) return;
+  openEventForm(e.id, e.title, e.event_date || '', e.event_time || '', e.location || '');
+}
+function shareEventById(eventId) {
+  const e = (window._eventRegistry || {})[eventId];
+  if (!e) return;
+  shareEvent(e.id, e.title);
+}
 
 async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', eventLocation='') {
   _rfEventId = eventId;
