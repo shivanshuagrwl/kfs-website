@@ -6,7 +6,6 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,28 +34,19 @@ async function sbQuery(fn, retries = 3) {
   }
 }
 
-// ── Email helper ──────────────────────────────────────────────────────────────
-async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, eventVenue, customMessage }) {
-  // Load SMTP settings from DB at send-time so changes take effect without restart
+// ── Email helper (Brevo HTTP API — works on all hosts) ────────────────────────
+async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, eventVenue }) {
   const { data: rows } = await supabase.from('settings').select('key,value')
-    .in('key', ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from_name','email_confirmation_body']);
+    .in('key', ['brevo_api_key','smtp_from_name','email_confirmation_body']);
   const s = {};
   (rows || []).forEach(r => s[r.key] = r.value);
 
-  if (!s.smtp_host || !s.smtp_user || !s.smtp_pass) {
-    console.warn('[email] SMTP not configured — skipping confirmation email');
+  if (!s.brevo_api_key) {
+    console.warn('[email] Brevo API key not configured — skipping confirmation email');
     return;
   }
 
-  const transporter = nodemailer.createTransport({
-    host: s.smtp_host,
-    port: parseInt(s.smtp_port || '587'),
-    secure: parseInt(s.smtp_port || '587') === 465,
-    auth: { user: s.smtp_user, pass: s.smtp_pass },
-  });
-
-  // Build body — replace placeholders in custom template or use default
-  const defaultBody = `Hi {{name}},\n\nYou're confirmed for <strong>{{event}}</strong>!{{date_line}}{{venue_line}}\n\nSee you there!\n\nWarm regards,\nKFS — KIIT Film Society`;
+  const defaultBody = `Hi {{name}},\n\nYou're confirmed for {{event}}!{{date_line}}{{venue_line}}\n\nSee you there!\n\nWarm regards,\nKFS — KIIT Film Society`;
   let bodyTemplate = s.email_confirmation_body || defaultBody;
   const dateLine  = eventDate  ? `\n\nDate: ${new Date(eventDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}` : '';
   const venueLine = eventVenue ? `\nVenue: ${eventVenue}` : '';
@@ -67,7 +57,6 @@ async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, e
     .replace(/{{date_line}}/g,  dateLine)
     .replace(/{{venue_line}}/g, venueLine);
 
-  // Convert newlines + basic html for the HTML version
   const bodyHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
 <tr><td align="center">
@@ -92,15 +81,30 @@ async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, e
 </body></html>`;
 
   const fromName = s.smtp_from_name || 'KFS — KIIT Film Society';
-  await transporter.sendMail({
-    from: `"${fromName}" <noreply@kiitfilmsociety.in>`,
-    to: toEmail,
-    subject: `You're registered for ${eventTitle || 'the event'} — KFS`,
-    text: bodyText,
-    html: bodyHtml,
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': s.brevo_api_key,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: 'noreply@kiitfilmsociety.in' },
+      to: [{ email: toEmail, name: toName || toEmail }],
+      subject: `You're registered for ${eventTitle || 'the event'} — KFS`,
+      textContent: bodyText,
+      htmlContent: bodyHtml,
+    }),
   });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Brevo API error ${response.status}: ${err}`);
+  }
   console.log(`[email] Confirmation sent to ${toEmail} for event "${eventTitle}"`);
 }
+
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

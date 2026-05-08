@@ -2819,20 +2819,9 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
         <div class="settings-grid">
           <div class="form-group">
-            <label>SMTP Host</label>
-            <input type="text" id="set-smtp-host" placeholder="smtp.zoho.in" style="border-radius:10px">
-          </div>
-          <div class="form-group">
-            <label>SMTP Port</label>
-            <input type="number" id="set-smtp-port" placeholder="587" style="border-radius:10px">
-          </div>
-          <div class="form-group">
-            <label>SMTP Username (your email)</label>
-            <input type="text" id="set-smtp-user" placeholder="noreply@kiitfilmsociety.in" style="border-radius:10px">
-          </div>
-          <div class="form-group">
-            <label>SMTP Password / App Password</label>
-            <input type="password" id="set-smtp-pass" placeholder="••••••••••••" style="border-radius:10px" autocomplete="new-password">
+            <label>Brevo API Key</label>
+            <input type="password" id="set-brevo-api-key" placeholder="xkeysib-••••••••••••" style="border-radius:10px" autocomplete="new-password">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Get this from Brevo → Settings → SMTP & API → API Keys</p>
           </div>
           <div class="form-group">
             <label>Sender Display Name</label>
@@ -4835,10 +4824,7 @@ async function loadAdminData(name) {
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
       // Email confirmation
-      document.getElementById('set-smtp-host').value      = settings.smtp_host      || '';
-      document.getElementById('set-smtp-port').value      = settings.smtp_port      || '587';
-      document.getElementById('set-smtp-user').value      = settings.smtp_user      || '';
-      if (settings.smtp_pass) document.getElementById('set-smtp-pass').placeholder = '(saved — enter new to change)';
+      if (settings.brevo_api_key) document.getElementById('set-brevo-api-key').placeholder = '(saved — enter new to change)';
       document.getElementById('set-smtp-from-name').value = settings.smtp_from_name || '';
       document.getElementById('set-email-body').value     = settings.email_confirmation_body || '';
       // Easter egg image
@@ -5415,11 +5401,8 @@ async function saveEmailSettings() {
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   try {
     const fd = new FormData();
-    fd.append('smtp_host',      document.getElementById('set-smtp-host').value.trim());
-    fd.append('smtp_port',      document.getElementById('set-smtp-port').value.trim() || '587');
-    fd.append('smtp_user',      document.getElementById('set-smtp-user').value.trim());
-    const passVal = document.getElementById('set-smtp-pass').value;
-    if (passVal) fd.append('smtp_pass', passVal);
+    const apiKey = document.getElementById('set-brevo-api-key').value.trim();
+    if (apiKey) fd.append('brevo_api_key', apiKey);
     fd.append('smtp_from_name', document.getElementById('set-smtp-from-name').value.trim());
     fd.append('email_confirmation_body', document.getElementById('set-email-body').value);
     const res = await fetch('/api/admin/settings', {
@@ -5427,8 +5410,8 @@ async function saveEmailSettings() {
     });
     if (res.ok) {
       if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Email settings saved!'; setTimeout(()=>{ msg.textContent=''; }, 4000); }
-      document.getElementById('set-smtp-pass').value = '';
-      document.getElementById('set-smtp-pass').placeholder = '(saved — enter new to change)';
+      document.getElementById('set-brevo-api-key').value = '';
+      document.getElementById('set-brevo-api-key').placeholder = '(saved — enter new to change)';
     } else {
       const err = await res.json().catch(()=>({}));
       if (msg) { msg.style.color='#ff453a'; msg.textContent = 'Save failed: ' + (err.error || res.status); }
