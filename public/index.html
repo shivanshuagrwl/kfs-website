@@ -927,11 +927,27 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .event-item{display:grid;grid-template-columns:auto 1fr 4fr 140px;gap:16px;align-items:stretch;
   padding:28px 0;border-bottom:1px solid var(--border);transition:all .3s var(--ease)}
 .event-item:hover{padding-left:16px}
-@media(max-width:768px){.event-item{grid-template-columns:1fr;gap:12px}}
+@media(max-width:768px){
+  .event-item{
+    grid-template-columns:auto 1fr;
+    grid-template-rows:auto auto;
+    grid-template-areas:"img img" "date info";
+    gap:0;
+    padding:0 0 20px;
+    margin-bottom:4px;
+  }
+  .event-item:hover{padding-left:0}
+  .event-date-block{grid-area:date;padding:14px 12px 0 0;align-self:start}
+  .event-info{grid-area:info;padding:14px 0 0;align-self:start}
+  .event-cover-col{grid-area:img;width:100%;height:180px;max-height:180px;border-radius:10px;margin-bottom:0;align-self:auto;overflow:hidden}
+  .event-item-no-img{grid-template-areas:"date info";grid-template-rows:auto}
+  .event-item-no-img .event-date-block{padding-top:0}
+  .event-item-no-img .event-info{padding-top:0}
+}
 .event-date-block{text-align:center;min-width:80px;display:flex;flex-direction:column;justify-content:center;align-items:center}
 .event-day{font-size:3.5rem;font-weight:900;letter-spacing:-.04em;display:block;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-month{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
-.event-info h3{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:900;letter-spacing:-.03em;margin-bottom:6px;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
+.event-info h3{font-size:clamp(1.4rem,4vw,2.4rem);font-weight:900;letter-spacing:-.03em;margin-bottom:6px;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-info p{font-size:13px;color:var(--grey)}
 .event-location{font-size:16px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;word-break:break-word;white-space:normal;line-height:1.6;overflow-wrap:break-word}
 .event-time-display{font-size:22px;font-weight:700;letter-spacing:.04em;color:var(--white);text-transform:none}
@@ -940,7 +956,6 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
 .event-cover{width:100%;height:280px;object-fit:cover;margin-top:20px;border-radius:4px;filter:grayscale(0%)}
 .event-item-no-img{grid-template-columns:auto 1fr auto}
 @media(max-width:1024px){.event-cover-col{width:260px}}
-@media(max-width:768px){.event-cover-col{width:100%;height:200px;align-self:auto}}
 
 /* ── CHITRA VICHITRA SECTION ─────────────────────────────────────────── */
 .cv-section{margin-bottom:60px;padding-bottom:40px;border-bottom:1px solid var(--border)}
@@ -1487,7 +1502,6 @@ body.light-mode .member-film-poster-ph{background:#eee}
   /* events */
   .events-tabs{margin-top:28px}
   .events-tab{padding:10px 16px;font-size:12px}
-  .event-item{padding:20px 0;gap:16px;grid-template-columns:70px 1fr}
   .event-location{display:none}
   .event-cover{height:200px}
   .event-day{font-size:2.4rem}
