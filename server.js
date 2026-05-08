@@ -389,6 +389,18 @@ app.get('/api/settings/custom-eggs', async (req, res) => {
   try { res.json(JSON.parse(data?.value || '[]')); } catch { res.json([]); }
 });
 
+// ADMIN: Upload an image for a custom search easter egg (does NOT touch easter_egg_img setting)
+app.post('/api/admin/settings/custom-egg-upload', requireSection('settings'), upload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+  try {
+    const url = await uploadImage(req.file, 'general');
+    if (!url) return res.status(500).json({ error: 'Image upload to storage failed' });
+    res.json({ url });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Save all custom eggs (admin only)
 app.post('/api/admin/settings/custom-eggs', requireSection('settings'), async (req, res) => {
   const { eggs } = req.body;

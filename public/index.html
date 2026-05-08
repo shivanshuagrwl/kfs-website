@@ -5426,14 +5426,13 @@ async function addCustomEgg() {
   msg.textContent = 'Saving…';
   let image_url = null;
   if (imgFile) {
-    // Upload via the existing settings image upload route
+    // Upload via a dedicated endpoint that does NOT touch the No Shorts easter_egg_img setting
     const fd = new FormData();
-    fd.append('easter_egg_img', imgFile);
+    fd.append('image', imgFile);
     try {
-      const r = await apiFetch('/api/admin/settings', 'POST', fd);
-      // Get the uploaded URL from settings
-      const fresh = await apiFetch('/api/settings');
-      image_url = fresh.easter_egg_img || null;
+      const r = await apiFetch('/api/admin/settings/custom-egg-upload', 'POST', fd);
+      if (!r || !r.url) { msg.textContent = 'Image upload failed.'; return; }
+      image_url = r.url;
     } catch(e) { msg.textContent = 'Image upload failed: ' + e.message; return; }
   }
 
@@ -6348,7 +6347,7 @@ function doSearch(q) {
     const h = window._eggShortsHeading || 'No Shorts.';
     const s = window._eggShortsSub || 'we only make films that last';
     out.innerHTML = imgUrl
-      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div><div class="search-egg-noshorts"><strong>${h}</strong>${s}</div>`
+      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div>`
       : `<div class="search-egg-noshorts"><strong>${h}</strong>${fallback}</div>`;
     return;
   }
