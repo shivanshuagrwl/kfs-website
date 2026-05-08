@@ -12,17 +12,17 @@
 <meta name="theme-color" content="#000000">
 
 <!-- ── Canonical ────────────────────────────────────────────────────────── -->
-<link rel="canonical" href="https://kfsociety.in/">
+<link rel="canonical" href="https://kiitfilmsociety.in/">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KFS — KIIT Film Society">
 <meta property="og:title" content="KFS — KIIT Film Society">
 <meta property="og:description" content="Films. Stories. Creativity. The official home of KIIT Film Society.">
-<meta property="og:image" content="https://kfsociety.in/images/og-banner.png">
+<meta property="og:image" content="https://kiitfilmsociety.in/images/og-banner.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="https://kfsociety.in/">
+<meta property="og:url" content="https://kiitfilmsociety.in/">
 <meta property="og:locale" content="en_IN">
 
 <!-- ── Twitter / X Card ─────────────────────────────────────────────────── -->
@@ -30,7 +30,7 @@
 <meta name="twitter:site" content="@kfsociety">
 <meta name="twitter:title" content="KFS — KIIT Film Society">
 <meta name="twitter:description" content="Official KIIT Film Society — Films. Stories. Creativity.">
-<meta name="twitter:image" content="https://kfsociety.in/images/og-banner.png">
+<meta name="twitter:image" content="https://kiitfilmsociety.in/images/og-banner.png">
 
 <!-- ── Structured Data (JSON-LD) ────────────────────────────────────────── -->
 <script type="application/ld+json">
@@ -39,8 +39,8 @@
   "@type": "Organization",
   "name": "KFS — KIIT Film Society",
   "alternateName": "KFS",
-  "url": "https://kfsociety.in/",
-  "logo": "https://kfsociety.in/images/KFS_LOGO_WHITE.png",
+  "url": "https://kiitfilmsociety.in/",
+  "logo": "https://kiitfilmsociety.in/images/KFS_LOGO_WHITE.png",
   "description": "Official student-run film society of KIIT University, focused on cinema, filmmaking, storytelling, screenings, and creative collaboration.",
   "foundingLocation": {
     "@type": "Place",
@@ -3274,6 +3274,15 @@ function _doNavigate(page, pushState=true) {
   });
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
+  // Reset meta tags to site defaults on section navigation
+  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team') {
+    updateMetaTags({
+      title: 'KFS — KIIT Film Society',
+      description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
+      image: '/images/og-banner.png',
+      url: page === 'home' ? '/' : '/' + page,
+    });
+  }
   loadPageData(page);
 }
 
@@ -3911,6 +3920,14 @@ async function openBlog(id) {
   // Use slug URL — no UUID exposed
   const slug = blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
   history.pushState({page:'blog-detail', id}, '', '/blog/'+slug);
+  updateMetaTags({
+    title: blog.title,
+    description: blog.excerpt
+      ? blog.excerpt.slice(0, 155)
+      : (blog.content ? blog.content.replace(/<[^>]+>/g,'').slice(0,155) : `Read "${blog.title}" on KFS — KIIT Film Society.`),
+    image: blog.cover_image || null,
+    url: '/blog/' + slug,
+  });
   hideScrollProgress();
   setTimeout(updateScrollProgress, 100);
 }
@@ -4265,6 +4282,14 @@ async function openMovie(id) {
   window.scrollTo({top:0,behavior:'smooth'});
   const mslug = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
   history.pushState({page:'movie-detail', id}, '', '/films/'+mslug);
+  updateMetaTags({
+    title: m.title,
+    description: m.description
+      ? m.description.slice(0, 155)
+      : `Watch "${m.title}"${m.release_year ? ' ('+m.release_year+')' : ''} — a film by KIIT Film Society.`,
+    image: m.poster_image || null,
+    url: '/films/' + mslug,
+  });
   loadReviews(id);
   resetReviewForm();
 }
@@ -5759,6 +5784,43 @@ function hideScrollProgress() {
 window.addEventListener('scroll', updateScrollProgress, { passive: true });
 
 // ── SHARE BUTTON ─────────────────────────────────────────────────────
+// ── DYNAMIC META TAGS (SEO + share) ─────────────────────────────────────────
+// Call whenever the URL changes so og: / twitter: tags reflect the current page.
+function updateMetaTags({ title, description, image, url }) {
+  const BASE = 'https://kiitfilmsociety.in';
+  const fullUrl = url.startsWith('http') ? url : BASE + url;
+  const fullImg = image ? (image.startsWith('http') ? image : BASE + image) : BASE + '/images/og-banner.png';
+
+  // <title>
+  document.title = title + ' — KFS | KIIT Film Society';
+
+  // canonical
+  let canon = document.querySelector('link[rel="canonical"]');
+  if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
+  canon.href = fullUrl;
+
+  // og tags
+  const ogMeta = { 'og:title': title, 'og:description': description, 'og:image': fullImg, 'og:url': fullUrl };
+  for (const [prop, content] of Object.entries(ogMeta)) {
+    let el = document.querySelector(`meta[property="${prop}"]`);
+    if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+    el.setAttribute('content', content);
+  }
+
+  // twitter tags
+  const twMeta = { 'twitter:title': title, 'twitter:description': description, 'twitter:image': fullImg };
+  for (const [name, content] of Object.entries(twMeta)) {
+    let el = document.querySelector(`meta[name="${name}"]`);
+    if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+    el.setAttribute('content', content);
+  }
+
+  // description
+  let desc = document.querySelector('meta[name="description"]');
+  if (!desc) { desc = document.createElement('meta'); desc.setAttribute('name', 'description'); document.head.appendChild(desc); }
+  desc.setAttribute('content', description);
+}
+
 function shareContent(type) {
   let title, url, text;
   if (type === 'blog') {
@@ -7772,7 +7834,7 @@ async function submitRegForm() {
           <div class="reg-success-sub">We\'ll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
           <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
             ${_rfEventDate ? `<a href="${_gcUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(255,255,255,.1);color:var(--white);border:1px solid rgba(255,255,255,.2);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(255,255,255,.18)\'" onmouseout="this.style.background=\'rgba(255,255,255,.1)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Add to Google Calendar</a>` : ''}
-            <a href="https://wa.me/?text=${encodeURIComponent('I just registered for ' + _rfEventTitle + ' by KFS — KIIT Film Society! Join me: https://kfsociety.in/events')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(37,211,102,.2)\'" onmouseout="this.style.background=\'rgba(37,211,102,.12)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Share on WhatsApp</a>
+            <a href="https://wa.me/?text=${encodeURIComponent('I just registered for ' + _rfEventTitle + ' by KFS — KIIT Film Society! Join me: https://kiitfilmsociety.in/events')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(37,211,102,.2)\'" onmouseout="this.style.background=\'rgba(37,211,102,.12)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Share on WhatsApp</a>
             <button onclick="closeRegForm()" style="padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
           </div>
         </div>`;
@@ -7802,7 +7864,7 @@ async function submitRegForm() {
 
 // ── SHARE EVENT ──────────────────────────────────────────────────────────────
 function shareEvent(id, title) {
-  const url = 'https://kfsociety.in/events';
+  const url = 'https://kiitfilmsociety.in/events';
   const text = `Check out "${title}" by KFS — KIIT Film Society! Register here: ${url}`;
   if (navigator.share) {
     navigator.share({ title, text, url }).catch(()=>{});

@@ -159,62 +159,90 @@ app.get('/robots.txt', (req, res) => {
     'Allow: /\n' +
     'Disallow: /api/\n' +
     '\n' +
-    'Sitemap: https://kfsociety.in/sitemap.xml\n'
+    'Sitemap: https://kiitfilmsociety.in/sitemap.xml\n'
   );
 });
 
 // ── SITEMAP.XML ───────────────────────────────────────────────────────────────
+// Helper: turn a title into a URL slug (mirrors frontend slugify)
+function slugify(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 app.get('/sitemap.xml', async (req, res) => {
-  // Fetch published events from DB to include in sitemap
-  let eventUrls = '';
-  try {
-    const { data: events } = await supabase
-      .from('events')
-      .select('id, updated_at')
-      .eq('published', true)
-      .order('date', { ascending: false })
-      .limit(50);
-
-    if (events && events.length > 0) {
-      eventUrls = events.map(ev => {
-        const lastmod = ev.updated_at ? ev.updated_at.split('T')[0] : new Date().toISOString().split('T')[0];
-        return `  <url>\n    <loc>https://kfsociety.in/#events</loc>\n    <lastmod>${lastmod}</lastmod>\n    <priority>0.7</priority>\n  </url>`;
-      }).slice(0, 1).join('\n'); // one canonical events URL, dated to latest event
-    }
-  } catch (e) {
-    // Non-fatal — sitemap still works without events
-  }
-
   const today = new Date().toISOString().split('T')[0];
+
+  // ── Movies ────────────────────────────────────────────────────────────────
+  let movieUrls = '';
+  try {
+    const { data: movies } = await supabase
+      .from('movies')
+      .select('id, title, updated_at')
+      .order('release_year', { ascending: false })
+      .limit(200);
+    if (movies && movies.length > 0) {
+      movieUrls = movies.map(mv => {
+        const slug = slugify(mv.title) + '-' + mv.id;
+        const lastmod = mv.updated_at ? mv.updated_at.split('T')[0] : today;
+        return `  <url>\n    <loc>https://kiitfilmsociety.in/films/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`;
+      }).join('\n');
+    }
+  } catch (e) { /* non-fatal */ }
+
+  // ── Blogs ─────────────────────────────────────────────────────────────────
+  let blogUrls = '';
+  try {
+    const { data: blogs } = await supabase
+      .from('blogs')
+      .select('id, title, updated_at')
+      .eq('published', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (blogs && blogs.length > 0) {
+      blogUrls = blogs.map(b => {
+        const slug = slugify(b.title) + '-' + b.id;
+        const lastmod = b.updated_at ? b.updated_at.split('T')[0] : today;
+        return `  <url>\n    <loc>https://kiitfilmsociety.in/blog/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
+      }).join('\n');
+    }
+  } catch (e) { /* non-fatal */ }
+
   res.header('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://kfsociety.in/</loc>
+    <loc>https://kiitfilmsociety.in/</loc>
     <lastmod>${today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://kfsociety.in/#events</loc>
+    <loc>https://kiitfilmsociety.in/films</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://kiitfilmsociety.in/events</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://kfsociety.in/#films</loc>
-    <changefreq>monthly</changefreq>
+    <loc>https://kiitfilmsociety.in/blog</loc>
+    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://kfsociety.in/#about</loc>
+    <loc>https://kiitfilmsociety.in/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://kfsociety.in/#team</loc>
+    <loc>https://kiitfilmsociety.in/team</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
+${movieUrls}
+${blogUrls}
 </urlset>`);
 });
 
