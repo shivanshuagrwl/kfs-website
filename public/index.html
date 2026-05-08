@@ -924,38 +924,56 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
   color:var(--grey);transition:color .2s;border-bottom:2px solid transparent;margin-bottom:-1px}
 .events-tab.active{color:var(--white);border-bottom-color:var(--white)}
 .events-list{margin-top:0}
-.event-item{display:grid;grid-template-columns:auto 1fr 4fr 140px;gap:16px;align-items:stretch;
-  padding:28px 0;border-bottom:1px solid var(--border);transition:all .3s var(--ease)}
+/* ── EVENT ITEM LAYOUT ── */
+/* Desktop: date | info | cover | location */
+.event-item{
+  display:grid;
+  grid-template-columns:auto 1fr 4fr 140px;
+  grid-template-rows:auto auto;
+  grid-template-areas:"date info cover loc" "date btns cover loc";
+  gap:0 16px;
+  align-items:start;
+  padding:28px 0;
+  border-bottom:1px solid var(--border);
+  transition:all .3s var(--ease);
+}
 .event-item:hover{padding-left:16px}
+.event-date-block{grid-area:date;align-self:center}
+.event-info{grid-area:info}
+.event-cover-col{grid-area:cover;align-self:stretch;overflow:hidden;border-radius:6px;max-height:240px}
+.event-cover-col img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}
+.event-action-row{grid-area:btns;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.event-location{grid-area:loc;font-size:16px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;word-break:break-word;white-space:normal;line-height:1.6;overflow-wrap:break-word;align-self:center}
+.event-item-no-img{grid-template-columns:auto 1fr auto;grid-template-areas:"date info loc" "date btns loc"}
+@media(max-width:1024px){.event-cover-col{max-height:200px}}
+
+/* Mobile: date+info stacked, then image full-width, then buttons */
 @media(max-width:768px){
   .event-item{
     grid-template-columns:auto 1fr;
-    grid-template-rows:auto auto;
-    grid-template-areas:"img img" "date info";
+    grid-template-rows:auto auto auto;
+    grid-template-areas:"date info" "img img" "btns btns";
     gap:0;
-    padding:0 0 20px;
-    margin-bottom:4px;
+    padding:20px 0;
   }
   .event-item:hover{padding-left:0}
-  .event-date-block{grid-area:date;padding:14px 12px 0 0;align-self:start}
-  .event-info{grid-area:info;padding:14px 0 0;align-self:start}
-  .event-cover-col{grid-area:img;width:100%;height:180px;max-height:180px;border-radius:10px;margin-bottom:0;align-self:auto;overflow:hidden}
-  .event-item-no-img{grid-template-areas:"date info";grid-template-rows:auto}
-  .event-item-no-img .event-date-block{padding-top:0}
-  .event-item-no-img .event-info{padding-top:0}
+  .event-date-block{grid-area:date;align-self:start;padding-right:12px}
+  .event-info{grid-area:info;align-self:start}
+  .event-cover-col{grid-area:img;width:100%;height:190px;max-height:190px;border-radius:10px;margin:14px 0;align-self:auto}
+  .event-action-row{grid-area:btns;margin-top:0}
+  .event-location{display:none}
+  .event-item-no-img{grid-template-areas:"date info" "btns btns";grid-template-rows:auto auto}
+  .event-item-no-img .event-action-row{margin-top:12px}
 }
+
+/* ── EVENT ELEMENT STYLES ── */
 .event-date-block{text-align:center;min-width:80px;display:flex;flex-direction:column;justify-content:center;align-items:center}
 .event-day{font-size:3.5rem;font-weight:900;letter-spacing:-.04em;display:block;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-month{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
 .event-info h3{font-size:clamp(1.4rem,4vw,2.4rem);font-weight:900;letter-spacing:-.03em;margin-bottom:6px;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 12px rgba(255,255,255,.08))}
 .event-info p{font-size:13px;color:var(--grey)}
-.event-location{font-size:16px;letter-spacing:.08em;color:var(--grey);text-transform:uppercase;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;word-break:break-word;white-space:normal;line-height:1.6;overflow-wrap:break-word}
 .event-time-display{font-size:22px;font-weight:700;letter-spacing:.04em;color:var(--white);text-transform:none}
-.event-cover-col{align-self:stretch;overflow:hidden;border-radius:6px;max-height:240px}
-.event-cover-col img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}
 .event-cover{width:100%;height:280px;object-fit:cover;margin-top:20px;border-radius:4px;filter:grayscale(0%)}
-.event-item-no-img{grid-template-columns:auto 1fr auto}
-@media(max-width:1024px){.event-cover-col{width:260px}}
 
 /* ── CHITRA VICHITRA SECTION ─────────────────────────────────────────── */
 .cv-section{margin-bottom:60px;padding-bottom:40px;border-bottom:1px solid var(--border)}
@@ -3608,12 +3626,12 @@ function renderEventItem(e, full=false) {
       <h3>${e.title}<\/h3>
       <p>${e.description||''}<\/p>
       ${countdownHtml}
-      <div class="event-action-row">
-        ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventFormById('${e.id}')">Register →<\/button>` : ''}
-        ${shareHtml}
-      <\/div>
     <\/div>
     ${imgCol}
+    <div class="event-action-row">
+      ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventFormById('${e.id}')">Register →<\/button>` : ''}
+      ${shareHtml}
+    <\/div>
     <div class="event-location">${e.location||''}<br><span class="event-time-display">${fmtTime(e.event_time||'')}<\/span><\/div>
   <\/div>`;
 }
