@@ -78,8 +78,7 @@ async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, e
   <tr><td style="padding:32px 36px">
     <div style="background:#f5f5f5;color:#0a0a0a;display:inline-block;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:24px">✓ Registration Confirmed</div>
     <h2 style="font-size:22px;font-weight:700;color:#f5f5f5;margin:0 0 20px;letter-spacing:-.02em">${eventTitle || 'Event'}</h2>
-    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.replace(/
-/g,'<br>')}</div>
+    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.split('\n').join('<br>')}</div>
     ${dateLine || venueLine ? `<div style="margin:24px 0;padding:16px 20px;background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;font-size:13px;color:#888">
       ${eventDate ? `<div style="margin-bottom:6px">📅 <span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span></div>` : ''}
       ${eventVenue ? `<div>📍 <span style="color:#f5f5f5">${eventVenue}</span></div>` : ''}
