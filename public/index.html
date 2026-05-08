@@ -875,6 +875,19 @@ body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px
 @media(max-width:768px){.apple-achievement-grid{grid-template-columns:1fr;margin:0 20px}}
 
 /* ── BLOG FILTER FLOATING BUTTON ─────────────────────────────────────── */
+/* ── 404 PAGE ─────────────────────────────────────────────────────────────── */
+#page-404{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:60px 24px;position:relative;overflow:hidden}
+#page-404.active{display:flex}
+.not-found-reel{font-size:clamp(90px,20vw,180px);line-height:1;margin-bottom:8px;opacity:.08;font-weight:900;letter-spacing:-.05em;user-select:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);pointer-events:none}
+.not-found-icon{margin-bottom:32px;position:relative;z-index:1}
+.not-found-icon svg{opacity:.55}
+.not-found-eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--grey);margin-bottom:16px;font-weight:600;position:relative;z-index:1}
+.not-found-quote{font-size:clamp(1.15rem,3vw,1.7rem);font-weight:700;letter-spacing:-.03em;line-height:1.35;max-width:600px;margin-bottom:10px;position:relative;z-index:1}
+.not-found-quote-source{font-size:13px;color:var(--grey);margin-bottom:44px;font-style:italic;position:relative;z-index:1}
+.not-found-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 36px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;text-decoration:none;position:relative;z-index:1}
+.not-found-btn:hover{opacity:.85;transform:scale(.97)}
+body.light-mode .not-found-btn{background:#111;color:#fff}
+body.light-mode .not-found-reel{opacity:.05}
 .blog-filter-wrap{position:relative;display:inline-block}
 .blog-filter-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
@@ -2338,8 +2351,14 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <p class="blog-page-section-label">Our Work</p>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <h2 style="font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1">Films</h2>
-      <div id="movie-genre-filter-bar" class="genre-filter-bar" style="margin-bottom:4px;display:none">
-        <span class="genre-filter-bar-label">Filter:</span>
+      <div class="blog-filter-wrap" id="movie-genre-filter-bar" style="display:none;margin-bottom:4px">
+        <button class="blog-filter-btn" id="movie-filter-btn" onclick="toggleMovieGenreFilter(this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <span id="movie-filter-btn-label">Genre</span>
+          <span id="movie-filter-badge" style="display:none;background:var(--white);color:var(--black);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:2px"></span>
+          <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="blog-filter-dropdown" id="movie-genre-dropdown"></div>
       </div>
     </div>
   </div>
@@ -2348,6 +2367,25 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <div class="loading" style="grid-column:1/-1">Loading films...</div>
     </div>
   </div>
+</div>
+
+<!-- ── 404 PAGE ── -->
+<div class="page" id="page-404">
+  <div class="not-found-reel">404</div>
+  <div class="not-found-icon">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 8h20M2 8l2-4h16l2 4M2 8v10a2 2 0 002 2h16a2 2 0 002-2V8"/>
+      <circle cx="12" cy="13" r="2"/>
+      <path d="M12 11v-1M12 15v1M10.27 12l-.87-.5M13.73 14l.87.5M10.27 14l-.87.5M13.73 12l.87-.5"/>
+    </svg>
+  </div>
+  <p class="not-found-eyebrow">Error 404 — Scene Not Found</p>
+  <h1 class="not-found-quote">"Not all those who wander are lost — but this page definitely is."</h1>
+  <p class="not-found-quote-source">— Inspired by J.R.R. Tolkien &amp; a very confused browser</p>
+  <button class="not-found-btn" onclick="navigate('home')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to Home
+  </button>
 </div>
 
 <!-- Movie Detail -->
@@ -3269,6 +3307,13 @@ function _doNavigate(page, pushState=true) {
   }
   const pageEl = document.getElementById('page-'+page);
   if (pageEl) { pageEl.classList.add('active'); currentPage = page; }
+  else {
+    // Unknown route — show 404
+    const p404 = document.getElementById('page-404');
+    if (p404) { p404.classList.add('active'); currentPage = '404'; }
+    if (pushState) history.pushState({page:'404'}, '', window.location.pathname);
+    return;
+  }
   document.querySelectorAll('.nav-links a').forEach(a=>{
     a.classList.toggle('active', a.dataset.page === page);
   });
@@ -4106,28 +4151,54 @@ async function loadMovies() {
     });
   }
 
-  // Build genre filter bar
+  // Build genre filter dropdown (matching blog filter style)
   window._activeGenreFilter = null;
   const allGenres = [...new Set((movies||[]).flatMap(m => Array.isArray(m.genre) ? m.genre : []).filter(Boolean))].sort();
   const filterBar = document.getElementById('movie-genre-filter-bar');
-  if (allGenres.length > 1 && filterBar) {
-    filterBar.style.display = 'flex';
-    filterBar.innerHTML = '<span class="genre-filter-bar-label">Filter:</span>' +
-      '<div class="chips-row">' + allGenres.map(g => `<span class="genre-tag" data-genre="${g}" onclick="filterMoviesByGenre('${g}')">${g}</span>`).join('') + '</div>';
+  const dd = document.getElementById('movie-genre-dropdown');
+  if (allGenres.length > 1 && filterBar && dd) {
+    filterBar.style.display = 'inline-block';
+    const allItem = `<button class="blog-filter-item active" id="mgfi-all" onclick="applyMovieGenreFilter(null,this)"><span class="blog-filter-item-dot"></span>All Films</button>`;
+    const genreItems = allGenres.map(g => `<button class="blog-filter-item" id="mgfi-${g.replace(/\s+/g,'-')}" onclick="applyMovieGenreFilter('${g}',this)"><span class="blog-filter-item-dot"></span>${g}</button>`).join('');
+    dd.innerHTML = allItem + '<div class="blog-filter-divider-line"></div>' + genreItems;
   } else if (filterBar) { filterBar.style.display = 'none'; }
 
   renderMoviesGrid(movies || []);
 }
 
-function filterMoviesByGenre(genre) {
-  const active = window._activeGenreFilter === genre;
-  window._activeGenreFilter = active ? null : genre;
-  document.querySelectorAll('#movie-genre-filter-bar .genre-tag').forEach(el => {
-    el.classList.toggle('active-filter', el.dataset.genre === window._activeGenreFilter);
-  });
+function toggleMovieGenreFilter(btn) {
+  const dd = document.getElementById('movie-genre-dropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    setTimeout(() => {
+      document.addEventListener('click', function _close(e) {
+        if (!btn.closest('.blog-filter-wrap').contains(e.target)) {
+          dd.classList.remove('open');
+          btn.classList.remove('open');
+          document.removeEventListener('click', _close);
+        }
+      });
+    }, 0);
+  }
+}
+
+function applyMovieGenreFilter(genre, btn) {
+  document.querySelectorAll('#movie-genre-dropdown .blog-filter-item').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('movie-genre-dropdown').classList.remove('open');
+  document.getElementById('movie-filter-btn')?.classList.remove('open');
+  window._activeGenreFilter = genre;
+  const badge = document.getElementById('movie-filter-badge');
+  if (genre) {
+    if (badge) { badge.textContent = genre; badge.style.display = 'inline'; }
+  } else {
+    if (badge) badge.style.display = 'none';
+  }
   const movies = window._allMoviesCache || [];
-  const filtered = window._activeGenreFilter
-    ? movies.filter(m => (Array.isArray(m.genre) ? m.genre : []).map(g=>g.toLowerCase()).includes(window._activeGenreFilter.toLowerCase()))
+  const filtered = genre
+    ? movies.filter(m => (Array.isArray(m.genre) ? m.genre : []).map(g=>g.toLowerCase()).includes(genre.toLowerCase()))
     : movies;
   renderMoviesGrid(filtered);
 }
