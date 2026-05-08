@@ -2812,6 +2812,55 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         </div>
         <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
 
+        <!-- ── SECTION: Email Confirmation ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">✉️ Registration Confirmation Emails</p>
+        <p class="settings-section-desc">When someone registers for an event, send them an automatic confirmation email from <strong>noreply@kiitfilmsociety.in</strong>. Requires an SMTP relay that allows sending from your domain (e.g. Zoho Mail, Google Workspace, Brevo, Postmark).</p>
+
+        <div class="settings-grid">
+          <div class="form-group">
+            <label>SMTP Host</label>
+            <input type="text" id="set-smtp-host" placeholder="smtp.zoho.in" style="border-radius:10px">
+          </div>
+          <div class="form-group">
+            <label>SMTP Port</label>
+            <input type="number" id="set-smtp-port" placeholder="587" style="border-radius:10px">
+          </div>
+          <div class="form-group">
+            <label>SMTP Username (your email)</label>
+            <input type="text" id="set-smtp-user" placeholder="noreply@kiitfilmsociety.in" style="border-radius:10px">
+          </div>
+          <div class="form-group">
+            <label>SMTP Password / App Password</label>
+            <input type="password" id="set-smtp-pass" placeholder="••••••••••••" style="border-radius:10px" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label>Sender Display Name</label>
+            <input type="text" id="set-smtp-from-name" placeholder="KFS — KIIT Film Society" style="border-radius:10px">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:4px">
+          <label>Confirmation Email Body
+            <span style="font-weight:400;color:var(--grey);font-size:11px;margin-left:6px">Supports: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{name}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{event}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{date_line}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{venue_line}}</code></span>
+          </label>
+          <textarea id="set-email-body" style="min-height:130px;font-size:13px;font-family:monospace;border-radius:10px" placeholder="Hi {{name}},
+
+You're confirmed for {{event}}!{{date_line}}{{venue_line}}
+
+See you there!
+
+Warm regards,
+KFS — KIIT Film Society"></textarea>
+          <p style="font-size:11px;color:var(--grey);margin-top:6px">The email is sent only when the registration form has an <strong>Email</strong>-type question. Date &amp; venue lines are auto-populated from the event details.</p>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
+          <button class="btn btn-primary" style="border-radius:10px" onclick="saveEmailSettings()">Save Email Settings</button>
+          <button class="btn btn-secondary" style="border-radius:10px;font-size:12px" onclick="sendTestEmail()">Send Test Email</button>
+          <p id="email-settings-msg" style="font-size:12px;color:var(--grey);margin:0"></p>
+        </div>
+
         <!-- ── SAVE ALL SETTINGS ── -->
         <div class="settings-divider"></div>
         <div style="padding:8px 0 20px">
@@ -4785,6 +4834,13 @@ async function loadAdminData(name) {
       document.getElementById('set-instagram').value = settings.instagram||'';
       document.getElementById('set-youtube').value = settings.youtube||'';
       document.getElementById('set-email').value = settings.email||'';
+      // Email confirmation
+      document.getElementById('set-smtp-host').value      = settings.smtp_host      || '';
+      document.getElementById('set-smtp-port').value      = settings.smtp_port      || '587';
+      document.getElementById('set-smtp-user').value      = settings.smtp_user      || '';
+      if (settings.smtp_pass) document.getElementById('set-smtp-pass').placeholder = '(saved — enter new to change)';
+      document.getElementById('set-smtp-from-name').value = settings.smtp_from_name || '';
+      document.getElementById('set-email-body').value     = settings.email_confirmation_body || '';
       // Easter egg image
       if (settings.easter_egg_img) {
         document.getElementById('set-egg-img-url').value = settings.easter_egg_img;
@@ -5350,6 +5406,62 @@ async function saveSettings() {
     alert('Save failed: ' + e.message);
   } finally {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Settings'; }
+  }
+}
+
+async function saveEmailSettings() {
+  const btn = document.querySelector('[onclick="saveEmailSettings()"]');
+  const msg = document.getElementById('email-settings-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  try {
+    const fd = new FormData();
+    fd.append('smtp_host',      document.getElementById('set-smtp-host').value.trim());
+    fd.append('smtp_port',      document.getElementById('set-smtp-port').value.trim() || '587');
+    fd.append('smtp_user',      document.getElementById('set-smtp-user').value.trim());
+    const passVal = document.getElementById('set-smtp-pass').value;
+    if (passVal) fd.append('smtp_pass', passVal);
+    fd.append('smtp_from_name', document.getElementById('set-smtp-from-name').value.trim());
+    fd.append('email_confirmation_body', document.getElementById('set-email-body').value);
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken }, body: fd
+    });
+    if (res.ok) {
+      if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Email settings saved!'; setTimeout(()=>{ msg.textContent=''; }, 4000); }
+      document.getElementById('set-smtp-pass').value = '';
+      document.getElementById('set-smtp-pass').placeholder = '(saved — enter new to change)';
+    } else {
+      const err = await res.json().catch(()=>({}));
+      if (msg) { msg.style.color='#ff453a'; msg.textContent = 'Save failed: ' + (err.error || res.status); }
+    }
+  } catch(e) {
+    if (msg) { msg.style.color='#ff453a'; msg.textContent = 'Error: ' + e.message; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Email Settings'; }
+  }
+}
+
+async function sendTestEmail() {
+  const btn = document.querySelector('[onclick="sendTestEmail()"]');
+  const msg = document.getElementById('email-settings-msg');
+  const to = prompt('Send test confirmation email to which address?');
+  if (!to || !to.includes('@')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  try {
+    const res = await fetch('/api/admin/email/test', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (res.ok) {
+      if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Test email sent to ' + to; setTimeout(()=>{ msg.textContent=''; }, 6000); }
+    } else {
+      if (msg) { msg.style.color='#ff453a'; msg.textContent = 'Failed: ' + (d.error || res.status); }
+    }
+  } catch(e) {
+    if (msg) { msg.style.color='#ff453a'; msg.textContent = 'Error: ' + e.message; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Test Email'; }
   }
 }
 

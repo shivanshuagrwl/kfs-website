@@ -6,6 +6,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +33,74 @@ async function sbQuery(fn, retries = 3) {
       await new Promise(r => setTimeout(r, 300 * (i + 1)));
     }
   }
+}
+
+// ── Email helper ──────────────────────────────────────────────────────────────
+async function sendConfirmationEmail({ toEmail, toName, eventTitle, eventDate, eventVenue, customMessage }) {
+  // Load SMTP settings from DB at send-time so changes take effect without restart
+  const { data: rows } = await supabase.from('settings').select('key,value')
+    .in('key', ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from_name','email_confirmation_body']);
+  const s = {};
+  (rows || []).forEach(r => s[r.key] = r.value);
+
+  if (!s.smtp_host || !s.smtp_user || !s.smtp_pass) {
+    console.warn('[email] SMTP not configured — skipping confirmation email');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: s.smtp_host,
+    port: parseInt(s.smtp_port || '587'),
+    secure: parseInt(s.smtp_port || '587') === 465,
+    auth: { user: s.smtp_user, pass: s.smtp_pass },
+  });
+
+  // Build body — replace placeholders in custom template or use default
+  const defaultBody = `Hi {{name}},\n\nYou're confirmed for <strong>{{event}}</strong>!{{date_line}}{{venue_line}}\n\nSee you there!\n\nWarm regards,\nKFS — KIIT Film Society`;
+  let bodyTemplate = s.email_confirmation_body || defaultBody;
+  const dateLine  = eventDate  ? `\n\nDate: ${new Date(eventDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}` : '';
+  const venueLine = eventVenue ? `\nVenue: ${eventVenue}` : '';
+
+  const bodyText = bodyTemplate
+    .replace(/{{name}}/g,       toName || 'there')
+    .replace(/{{event}}/g,      eventTitle || '')
+    .replace(/{{date_line}}/g,  dateLine)
+    .replace(/{{venue_line}}/g, venueLine);
+
+  // Convert newlines + basic html for the HTML version
+  const bodyHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;max-width:560px">
+  <tr><td style="background:#0a0a0a;padding:28px 36px;border-bottom:1px solid #1e1e1e">
+    <span style="font-size:18px;font-weight:700;color:#f5f5f5;letter-spacing:-.02em">KFS — KIIT Film Society</span>
+  </td></tr>
+  <tr><td style="padding:32px 36px">
+    <div style="background:#f5f5f5;color:#0a0a0a;display:inline-block;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:24px">✓ Registration Confirmed</div>
+    <h2 style="font-size:22px;font-weight:700;color:#f5f5f5;margin:0 0 20px;letter-spacing:-.02em">${eventTitle || 'Event'}</h2>
+    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.replace(/
+/g,'<br>')}</div>
+    ${dateLine || venueLine ? `<div style="margin:24px 0;padding:16px 20px;background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;font-size:13px;color:#888">
+      ${eventDate ? `<div style="margin-bottom:6px">📅 <span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span></div>` : ''}
+      ${eventVenue ? `<div>📍 <span style="color:#f5f5f5">${eventVenue}</span></div>` : ''}
+    </div>` : ''}
+  </td></tr>
+  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    <p style="font-size:12px;color:#444;margin:0">This is an automated confirmation from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Please do not reply to this email.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  const fromName = s.smtp_from_name || 'KFS — KIIT Film Society';
+  await transporter.sendMail({
+    from: `"${fromName}" <noreply@kiitfilmsociety.in>`,
+    to: toEmail,
+    subject: `You're registered for ${eventTitle || 'the event'} — KFS`,
+    text: bodyText,
+    html: bodyHtml,
+  });
+  console.log(`[email] Confirmation sent to ${toEmail} for event "${eventTitle}"`);
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -1107,6 +1176,50 @@ app.post('/api/events/:id/form/submit', upload.any(), async (req, res) => {
     .single();
 
   if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  // 7. Send confirmation email (non-blocking — never fail the response)
+  try {
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Tier 1: question explicitly typed as 'email'
+    let emailQ = questions.find(q => q.type === 'email');
+
+    // Tier 2: any text/textarea question whose label mentions email
+    if (!emailQ)
+      emailQ = questions.find(q =>
+        ['text','textarea'].includes(q.type) && /e[\s-]?mail/i.test(q.label || '')
+      );
+
+    // Tier 3: scan every answer value for something that looks like an email
+    let toEmail = emailQ ? (finalAnswers[emailQ.id] || '').trim() : null;
+    if (!toEmail) {
+      for (const val of Object.values(finalAnswers)) {
+        if (typeof val === 'string' && EMAIL_RE.test(val.trim())) {
+          toEmail = val.trim();
+          break;
+        }
+      }
+    }
+
+    // Name: prefer a question labelled 'name', fall back to first short-text answer
+    const nameQ = questions.find(q =>
+      ['text','textarea'].includes(q.type) && /\bname\b/i.test(q.label || '')
+    );
+    const toName = nameQ ? (finalAnswers[nameQ.id] || '').trim() : null;
+
+    if (toEmail) {
+      // Fetch event details for the email
+      const { data: ev } = await supabase.from('events').select('title,event_date,venue').eq('id', req.params.id).maybeSingle();
+      sendConfirmationEmail({
+        toEmail,
+        toName,
+        eventTitle: ev?.title || '',
+        eventDate:  ev?.event_date || null,
+        eventVenue: ev?.venue || null,
+      }).catch(e => console.error('[email] send failed:', e.message));
+    }
+  } catch(e) { console.error('[email] pre-send error:', e.message); }
+
   res.json({ success: true, id: response.id });
 });
 
@@ -1126,6 +1239,25 @@ app.get('/api/admin/events/:id/form/export', requireSection('events'), async (re
     .order('submitted_at', { ascending: true });
 
   res.json({ form: form || null, responses: responses || [] });
+});
+
+// ── ADMIN: Send test confirmation email ───────────────────────────────────────
+app.post('/api/admin/email/test', authMiddleware, async (req, res) => {
+  const { to } = req.body;
+  if (!to || !to.includes('@')) return res.status(400).json({ error: 'Valid email required' });
+  try {
+    await sendConfirmationEmail({
+      toEmail: to,
+      toName: 'Test User',
+      eventTitle: 'Test Event — KFS',
+      eventDate: new Date().toISOString(),
+      eventVenue: 'KIIT University, Bhubaneswar',
+    });
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[email] test send failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
