@@ -1726,6 +1726,18 @@ app.post('/api/admin/wrapped/config', requireSection('wrapped'), async (req, res
   res.json({ success: true });
 });
 
+// Admin: upload an image for a Wrapped highlight card
+app.post('/api/admin/wrapped/upload-image', requireSection('wrapped'), upload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+  try {
+    const url = await uploadImage(req.file, 'wrapped');
+    if (!url) return res.status(500).json({ error: 'Image upload failed' });
+    res.json({ url });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Upload failed' });
+  }
+});
+
 // Public: aggregate stats for Wrapped (all-time + per-year totals)
 app.get('/api/wrapped/stats', async (req, res) => {
   try {
