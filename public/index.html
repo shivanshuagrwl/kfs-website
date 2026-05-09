@@ -4003,12 +4003,13 @@ async function openBlog(id) {
   // Use slug URL — no UUID exposed
   const slug = blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
   history.pushState({page:'blog-detail', id}, '', '/blog/'+slug);
+  window._currentBlogId = id;
   updateMetaTags({
     title: blog.title,
     description: blog.excerpt
       ? blog.excerpt.slice(0, 155)
       : (blog.content ? blog.content.replace(/<[^>]+>/g,'').slice(0,155) : `Read "${blog.title}" on KFS — KIIT Film Society.`),
-    image: blog.cover_image || null,
+    image: `/og/blog/${id}`,
     url: '/blog/' + slug,
   });
   hideScrollProgress();
@@ -4391,12 +4392,13 @@ async function openMovie(id) {
   window.scrollTo({top:0,behavior:'smooth'});
   const mslug = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
   history.pushState({page:'movie-detail', id}, '', '/films/'+mslug);
+  window._currentMovieId = id;
   updateMetaTags({
     title: m.title,
     description: m.description
       ? m.description.slice(0, 155)
       : `Watch "${m.title}"${m.release_year ? ' ('+m.release_year+')' : ''} — a film by KIIT Film Society.`,
-    image: m.poster_image || null,
+    image: `/og/film/${id}`,
     url: '/films/' + mslug,
   });
   loadReviews(id);
@@ -5988,26 +5990,20 @@ function updateMetaTags({ title, description, image, url }) {
 }
 
 function shareContent(type) {
-  let title, url, text;
   if (type === 'blog') {
-    title = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
-    url = window.location.href;
-    text = 'Check out this post from KFS — ' + title;
+    const id      = window._currentBlogId;
+    const title   = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
+    const excerpt = document.querySelector('#blog-detail-excerpt')?.textContent || '';
+    const cover   = document.querySelector('#blog-detail-cover')?.src || '';
+    if (id) { shareBlogCard(id, title, excerpt, cover); return; }
+    _copyShareFallback(window.location.href);
   } else {
-    title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
-    url = window.location.href;
-    text = 'Check out this film by KFS — ' + title;
-  }
-  if (navigator.share) {
-    navigator.share({ title, text, url }).catch(() => {});
-  } else {
-    // Fallback: copy to clipboard
-    navigator.clipboard?.writeText(url).then(() => {
-      const btn = document.querySelector('.share-btn');
-      if (btn) { const orig = btn.innerHTML; btn.innerHTML = '✓ Copied!'; setTimeout(() => btn.innerHTML = orig, 2000); }
-    }).catch(() => {
-      prompt('Copy this link:', url);
-    });
+    const id    = window._currentMovieId;
+    const title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
+    const desc  = document.querySelector('#movie-detail-description')?.textContent || '';
+    const poster= document.querySelector('#movie-detail-poster')?.src || '';
+    if (id) { shareFilmCard(id, title, desc, poster); return; }
+    _copyShareFallback(window.location.href);
   }
 }
 
@@ -7781,7 +7777,10 @@ function openEventFormById(eventId) {
 function shareEventById(eventId) {
   const e = (window._eventRegistry || {})[eventId];
   if (!e) return;
-  shareEvent(e.id, e.title);
+  const dateStr = e.event_date
+    ? new Date(e.event_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  shareEventCard(e.id, e.title, dateStr, e.venue || e.location || '');
 }
 
 async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', eventLocation='') {
@@ -8038,6 +8037,123 @@ function shareEvent(id, title) {
     const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
   }
+}
+
+// ── SHARE WITH DYNAMIC OG ─────────────────────────────────────────────────────
+// Updates OG/twitter meta tags to the dynamic image before sharing so that
+// WhatsApp / Telegram / iMessage previews show the right card.
+function _setOGImage(imageUrl, width=1200, height=630) {
+  const set = (attr, prop, val) => {
+    let el = document.querySelector(`meta[${attr}="${prop}"]`);
+    if (!el) { el = document.createElement('meta'); el.setAttribute(attr, prop); document.head.appendChild(el); }
+    el.setAttribute('content', val);
+  };
+  set('property', 'og:image',        imageUrl);
+  set('property', 'og:image:width',  String(width));
+  set('property', 'og:image:height', String(height));
+  set('name',     'twitter:image',   imageUrl);
+}
+
+function shareFilmCard(id, title, description, posterUrl) {
+  const slug = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const pageUrl  = `https://kiitfilmsociety.in/films/${slug}-${id}`;
+  const ogImgUrl = `https://kiitfilmsociety.in/og/film/${id}`;
+
+  // Update meta tags so crawlers / share sheets see the right image
+  _setOGImage(ogImgUrl);
+  let el = document.querySelector('meta[property="og:url"]');
+  if (el) el.setAttribute('content', pageUrl);
+  el = document.querySelector('meta[property="og:title"]');
+  if (el) el.setAttribute('content', title + ' — KFS');
+  el = document.querySelector('meta[property="og:description"]');
+  if (el) el.setAttribute('content', description || `Watch "${title}" — KFS | KIIT Film Society`);
+
+  const text = `"${title}" — a film by KFS | KIIT Film Society\n${pageUrl}`;
+  if (navigator.share) {
+    navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
+  } else {
+    _copyShareFallback(pageUrl);
+  }
+}
+
+function shareBlogCard(id, title, excerpt, coverUrl) {
+  const slug = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const pageUrl  = `https://kiitfilmsociety.in/blog/${slug}-${id}`;
+  const ogImgUrl = `https://kiitfilmsociety.in/og/blog/${id}`;
+
+  _setOGImage(ogImgUrl);
+  let el = document.querySelector('meta[property="og:url"]');
+  if (el) el.setAttribute('content', pageUrl);
+  el = document.querySelector('meta[property="og:title"]');
+  if (el) el.setAttribute('content', title + ' — KFS Blog');
+  el = document.querySelector('meta[property="og:description"]');
+  if (el) el.setAttribute('content', excerpt || `Read "${title}" on KFS — KIIT Film Society`);
+
+  const text = `"${title}" — KFS Blog\n${pageUrl}`;
+  if (navigator.share) {
+    navigator.share({ title: title + ' — KFS Blog', text, url: pageUrl }).catch(()=>{});
+  } else {
+    _copyShareFallback(pageUrl);
+  }
+}
+
+function shareEventCard(id, title, date, venue) {
+  const pageUrl  = `https://kiitfilmsociety.in/events`;
+  const ogImgUrl = `https://kiitfilmsociety.in/og/event/${id}`;
+
+  _setOGImage(ogImgUrl);
+  let el = document.querySelector('meta[property="og:url"]');
+  if (el) el.setAttribute('content', pageUrl);
+  el = document.querySelector('meta[property="og:title"]');
+  if (el) el.setAttribute('content', title + ' — KFS Event');
+  const desc = [date, venue].filter(Boolean).join(' · ');
+  el = document.querySelector('meta[property="og:description"]');
+  if (el) el.setAttribute('content', desc || `Join "${title}" — KFS | KIIT Film Society`);
+
+  const lines = [`"${title}" — KFS Event`];
+  if (date)  lines.push('📅 ' + date);
+  if (venue) lines.push('📍 ' + venue);
+  lines.push(pageUrl);
+  const text = lines.join('\n');
+
+  if (navigator.share) {
+    navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
+  } else {
+    _copyShareFallback(pageUrl);
+  }
+}
+
+function _copyShareFallback(url) {
+  // Show a brief "Copied!" toast instead of a WhatsApp fallback
+  navigator.clipboard?.writeText(url).then(() => {
+    _showShareToast('Link copied!');
+  }).catch(() => {
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(url)}`;
+    window.open(waUrl, '_blank');
+  });
+}
+
+function _showShareToast(msg) {
+  let t = document.getElementById('_share_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_share_toast';
+    t.style.cssText = [
+      'position:fixed','bottom:28px','left:50%','transform:translateX(-50%) translateY(20px)',
+      'background:#f5f5f5','color:#0a0a0a','font-size:13px','font-weight:600',
+      'padding:10px 22px','border-radius:999px','pointer-events:none',
+      'opacity:0','transition:opacity .2s,transform .2s','z-index:9999',
+    ].join(';');
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(20px)';
+  }, 2200);
 }
 
 // ── SORT HOME FILMS ───────────────────────────────────────────────────────────

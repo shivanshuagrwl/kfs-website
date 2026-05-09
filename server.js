@@ -1263,6 +1263,251 @@ app.post('/api/admin/email/test', authMiddleware, async (req, res) => {
   }
 });
 
+// ── DYNAMIC OG IMAGES ─────────────────────────────────────────────────────────
+// Generates a 1200×630 PNG preview card for WhatsApp / Twitter / LinkedIn shares.
+// Routes:
+//   /og/event/:id      — event card  (cover image + title + date + venue)
+//   /og/film/:id       — film card   (poster + title + director + genre)
+//   /og/blog/:id       — blog card   (cover + title + author + excerpt)
+//
+// Uses the `canvas` npm package for zero-dependency server-side 2D rendering.
+// Install once:  npm install canvas
+//
+// Cache header: 1 hour (images are mostly static; event cover can change).
+
+const { createCanvas, loadImage } = require('canvas');
+
+const OG_W = 1200;
+const OG_H = 630;
+const BASE_URL = 'https://kiitfilmsociety.in';
+
+// Shared helper — draw the dark KFS-branded card shell
+async function drawOGBase(ctx, coverUrl) {
+  // Background
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, OG_W, OG_H);
+
+  // Cover image (right half, darkened)
+  if (coverUrl) {
+    try {
+      const img = await loadImage(coverUrl);
+      const imgX = OG_W * 0.45;
+      const imgW = OG_W - imgX;
+      ctx.save();
+      ctx.drawImage(img, imgX, 0, imgW, OG_H);
+      // Dark gradient overlay over the image so text on left is readable
+      const grad = ctx.createLinearGradient(imgX, 0, OG_W, 0);
+      grad.addColorStop(0,   'rgba(10,10,10,1)');
+      grad.addColorStop(0.3, 'rgba(10,10,10,0.85)');
+      grad.addColorStop(1,   'rgba(10,10,10,0.25)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(imgX, 0, imgW, OG_H);
+      ctx.restore();
+    } catch { /* skip if image fails to load */ }
+  }
+
+  // Left edge accent bar
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(0, 0, 5, OG_H);
+
+  // KFS wordmark top-left
+  ctx.fillStyle = '#555555';
+  ctx.font = '500 18px sans-serif';
+  ctx.fillText('KFS — KIIT FILM SOCIETY', 56, 60);
+
+  // Bottom rule
+  ctx.fillStyle = '#1e1e1e';
+  ctx.fillRect(56, OG_H - 72, OG_W - 112, 1);
+
+  // Bottom URL
+  ctx.fillStyle = '#444444';
+  ctx.font = '400 16px sans-serif';
+  ctx.fillText('kiitfilmsociety.in', 56, OG_H - 40);
+}
+
+// Word-wrap helper — returns array of lines fitting maxWidth
+function wrapText(ctx, text, maxWidth) {
+  const words = (text || '').split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// Draw bold title with automatic wrapping + clamp to maxLines
+function drawTitle(ctx, text, x, y, maxWidth, fontSize, maxLines = 3) {
+  ctx.font = `700 ${fontSize}px sans-serif`;
+  ctx.fillStyle = '#f5f5f5';
+  const lines = wrapText(ctx, text, maxWidth).slice(0, maxLines);
+  const lineH = fontSize * 1.2;
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineH));
+  return y + lines.length * lineH;
+}
+
+// Draw a small pill badge
+function drawBadge(ctx, label, x, y) {
+  const pad = 16;
+  ctx.font = '600 13px sans-serif';
+  const w = ctx.measureText(label).width + pad * 2;
+  ctx.fillStyle = '#1e1e1e';
+  roundRect(ctx, x, y - 18, w, 28, 14);
+  ctx.fill();
+  ctx.fillStyle = '#888888';
+  ctx.fillText(label, x + pad, y + 2);
+  return x + w + 10;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── /og/event/:id ─────────────────────────────────────────────────────────────
+app.get('/og/event/:id', async (req, res) => {
+  try {
+    const { data: e } = await supabase.from('events').select('*').eq('id', req.params.id).maybeSingle();
+    if (!e) return res.status(404).send('Not found');
+
+    const canvas = createCanvas(OG_W, OG_H);
+    const ctx = canvas.getContext('2d');
+    await drawOGBase(ctx, e.cover_image);
+
+    // Type badge
+    drawBadge(ctx, e.is_upcoming ? 'UPCOMING EVENT' : 'EVENT', 56, 118);
+
+    // Title
+    let y = drawTitle(ctx, e.title || 'Event', 56, 150, 560, 52);
+
+    y += 28;
+    // Date
+    if (e.event_date) {
+      const d = new Date(e.event_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      ctx.fillStyle = '#aaaaaa';
+      ctx.font = '400 22px sans-serif';
+      ctx.fillText('📅  ' + d, 56, y);
+      y += 38;
+    }
+    // Time
+    if (e.event_time) {
+      ctx.fillStyle = '#aaaaaa';
+      ctx.font = '400 20px sans-serif';
+      ctx.fillText('🕐  ' + e.event_time, 56, y);
+      y += 36;
+    }
+    // Venue
+    const venue = e.venue || e.location;
+    if (venue) {
+      ctx.fillStyle = '#888888';
+      ctx.font = '400 18px sans-serif';
+      ctx.fillText('📍  ' + venue, 56, y);
+    }
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    canvas.createPNGStream().pipe(res);
+  } catch (err) {
+    console.error('[og/event]', err.message);
+    res.status(500).send('OG generation failed');
+  }
+});
+
+// ── /og/film/:id ──────────────────────────────────────────────────────────────
+app.get('/og/film/:id', async (req, res) => {
+  try {
+    const { data: m } = await supabase.from('movies').select('*').eq('id', req.params.id).maybeSingle();
+    if (!m) return res.status(404).send('Not found');
+
+    const canvas = createCanvas(OG_W, OG_H);
+    const ctx = canvas.getContext('2d');
+    await drawOGBase(ctx, m.poster_image);
+
+    // Genre badge(s)
+    const genres = (() => { try { const g = JSON.parse(m.genre || '[]'); return Array.isArray(g) ? g : [g]; } catch { return m.genre ? [m.genre] : []; }})();
+    let bx = 56;
+    genres.slice(0, 3).forEach(g => { bx = drawBadge(ctx, g.toUpperCase(), bx, 118); });
+
+    let y = drawTitle(ctx, m.title || 'Film', 56, 150, 560, 54);
+
+    y += 24;
+    if (m.director) {
+      ctx.fillStyle = '#888888';
+      ctx.font = '400 18px sans-serif';
+      ctx.fillText('Directed by', 56, y);
+      ctx.fillStyle = '#f5f5f5';
+      ctx.font = '600 22px sans-serif';
+      ctx.fillText(m.director, 56, y + 26);
+      y += 64;
+    }
+    if (m.release_year) {
+      ctx.fillStyle = '#555555';
+      ctx.font = '400 18px sans-serif';
+      ctx.fillText(String(m.release_year), 56, y);
+    }
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    canvas.createPNGStream().pipe(res);
+  } catch (err) {
+    console.error('[og/film]', err.message);
+    res.status(500).send('OG generation failed');
+  }
+});
+
+// ── /og/blog/:id ──────────────────────────────────────────────────────────────
+app.get('/og/blog/:id', async (req, res) => {
+  try {
+    const { data: b } = await supabase.from('blogs').select('*').eq('id', req.params.id).maybeSingle();
+    if (!b) return res.status(404).send('Not found');
+
+    const canvas = createCanvas(OG_W, OG_H);
+    const ctx = canvas.getContext('2d');
+    await drawOGBase(ctx, b.cover_image);
+
+    drawBadge(ctx, 'KFS BLOG', 56, 118);
+
+    let y = drawTitle(ctx, b.title || 'Blog', 56, 150, 560, 50);
+
+    y += 20;
+    if (b.excerpt) {
+      ctx.fillStyle = '#777777';
+      ctx.font = '400 20px sans-serif';
+      const lines = wrapText(ctx, b.excerpt, 540).slice(0, 2);
+      lines.forEach((l, i) => ctx.fillText(l, 56, y + i * 30));
+      y += lines.length * 30 + 20;
+    }
+    if (b.author) {
+      ctx.fillStyle = '#555555';
+      ctx.font = '500 17px sans-serif';
+      ctx.fillText('By ' + b.author, 56, y + 10);
+    }
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    canvas.createPNGStream().pipe(res);
+  } catch (err) {
+    console.error('[og/blog]', err.message);
+    res.status(500).send('OG generation failed');
+  }
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

@@ -3,7 +3,7 @@ services:
     name: kfs-website
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev && npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
