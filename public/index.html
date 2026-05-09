@@ -6260,6 +6260,19 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// Fetch wrapped config early so the nav link is hidden/shown on every page,
+// not just when the user visits the Wrapped section.
+(async function initWrappedNav() {
+  try {
+    const config = await apiFetch('/api/wrapped/config').catch(() => null);
+    if (config) _wrappedConfig = config;
+    const wrappedNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
+    if (wrappedNavLink) {
+      wrappedNavLink.style.display = (_wrappedConfig.enabled === false) ? 'none' : '';
+    }
+  } catch(e) { /* silently ignore — nav defaults to visible */ }
+})();
+
 checkRoute();
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
@@ -9634,6 +9647,9 @@ async function saveWrappedConfig() {
       throw new Error(err.error || 'Save failed (' + res.status + ')');
     }
     _wrappedConfig = config;
+    // Immediately reflect enabled/disabled in the public nav
+    const _wNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
+    if (_wNavLink) _wNavLink.style.display = (config.enabled === false) ? 'none' : '';
     _showShareToast('Wrapped config saved!');
   } catch(e) {
     showAdminError('Wrapped save failed: ' + e.message);
