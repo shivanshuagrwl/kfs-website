@@ -1783,6 +1783,12 @@ app.get('/api/wrapped/stats', async (req, res) => {
       yearMovies,
       topGenres,
       topRatedMovie: topRatedMovie ? { id: topRatedMovie.id, title: topRatedMovie.title, poster_image: topRatedMovie.poster_image, score: Math.round(bestScore*10)/10 } : null,
+      movieRatings: Object.fromEntries(
+        Object.entries(filmScores).map(([mid, scores]) => [
+          mid,
+          { avg: Math.round((scores.reduce((a,b)=>a+b,0)/scores.length)*10)/10, count: scores.length }
+        ])
+      ),
       allMovies: (movies || []).map(m => {
         let genres = [];
         try { genres = JSON.parse(m.genre || '[]'); } catch { genres = m.genre ? [m.genre] : []; }

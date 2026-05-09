@@ -1401,6 +1401,13 @@ body:has(#admin-panel.active) #main-nav{display:none}
 body.light-mode .search-egg-noshorts strong{color:#111}
 .search-hint{position:fixed;top:12vh;right:calc(50% - 320px);transform:translateY(-100%);font-size:11px;color:#444;padding-bottom:8px;letter-spacing:.05em}
 /* Custom eggs admin list */
+/* ── WRAPPED ADMIN TOGGLE ───────────────────────────────────────────────── */
+.wrapped-toggle-switch{position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0}
+.wrapped-toggle-switch input{opacity:0;width:0;height:0;position:absolute}
+.wrapped-toggle-track{position:relative;width:40px;height:22px;background:rgba(255,255,255,.12);border-radius:20px;transition:background .25s;border:1px solid rgba(255,255,255,.1)}
+.wrapped-toggle-switch input:checked~.wrapped-toggle-track{background:#34c759;border-color:#34c759}
+.wrapped-toggle-thumb{position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;left:2px;transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.wrapped-toggle-switch input:checked~.wrapped-toggle-track .wrapped-toggle-thumb{transform:translateX(18px)}
 .cegg-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
 .cegg-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
 .cegg-kw{font-weight:600;font-size:13px;min-width:90px;color:var(--white)}
@@ -3319,8 +3326,29 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-wrapped">
       <div class="admin-header">
         <div><h2>KFS Wrapped</h2><p>Customise the annual Wrapped experience for users</p></div>
-        <button class="btn btn-primary" onclick="saveWrappedConfig()">Save Config</button>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--card);border:1px solid var(--border);border-radius:20px">
+            <span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey)">Wrapped</span>
+            <label class="wrapped-toggle-switch" title="Show or hide the Wrapped page for all users">
+              <input type="checkbox" id="wrapped-enabled-toggle" onchange="updateWrappedToggleLabel(this)">
+              <span class="wrapped-toggle-track">
+                <span class="wrapped-toggle-thumb"></span>
+              </span>
+            </label>
+            <span id="wrapped-toggle-label" style="font-size:12px;font-weight:600;color:var(--grey);min-width:30px">Off</span>
+          </div>
+          <button class="btn btn-primary" onclick="saveWrappedConfig()">Save Config</button>
+        </div>
       </div>
+
+      <!-- Collapsed state when disabled -->
+      <div id="wrapped-disabled-notice" style="display:none;padding:32px;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:4px;margin-bottom:20px">
+        <div style="font-size:32px;margin-bottom:12px">🎬</div>
+        <div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px">Wrapped is currently hidden</div>
+        <div style="font-size:13px;color:var(--grey)">Toggle it On above to make the Wrapped page visible to users. You can still edit the config below.</div>
+      </div>
+
+      <div id="wrapped-config-body">
       <div class="admin-card" style="margin-bottom:20px">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--white)">Year &amp; Taglines</h3>
         <div class="form-group"><label>Year (shown on Wrapped page)</label><input type="text" id="wrapped-cfg-year" placeholder="e.g. 2025" style="max-width:160px"></div>
@@ -3360,10 +3388,10 @@ KFS — KIIT Film Society"></textarea>
         </div>
       </div>
       <div class="admin-card" style="margin-bottom:20px">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Blog Highlight Cards</h3>
-        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Showcase key blog moments — each card shows an image + headline (great for year-in-review storytelling)</p>
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Year Highlight Cards</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Showcase memorable moments of the year — each card shows an image + headline + description. Perfect for "what we did this year" storytelling. These appear after the stats cards.</p>
         <div id="wrapped-blog-highlights-list"></div>
-        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedBlogHighlight()">+ Add Blog Highlight</button>
+        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedBlogHighlight()">+ Add Highlight Card</button>
       </div>
       <div class="admin-card">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Fun Fact Cards</h3>
@@ -3371,6 +3399,7 @@ KFS — KIIT Film Society"></textarea>
         <div id="wrapped-fun-cards-list"></div>
         <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedFunCard()">+ Add Card</button>
       </div>
+      </div><!-- end wrapped-config-body -->
     </div>
 
   </div>
@@ -3711,6 +3740,10 @@ function _doNavigate(page, pushState=true) {
     document.getElementById('admin-login').classList.add('active');
     if (pushState) history.pushState({page}, '', '/admin');
     return;
+  }
+  if (page === 'wrapped' && _wrappedConfig && _wrappedConfig.enabled === false) {
+    // Wrapped is disabled — redirect to home
+    page = 'home';
   }
   const pageEl = document.getElementById('page-'+page);
   if (pageEl) { pageEl.classList.add('active'); currentPage = page; }
@@ -8742,8 +8775,28 @@ function buildWrappedCards(stats, config) {
   });
   const myTopGenres = Object.entries(myGenreCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([g])=>g);
 
-  // Most recently watched films (up to 3 for poster row)
-  const recentMovies = [...myMovies].sort((a,b)=>(watchedMovies[b.id]||0)-(watchedMovies[a.id]||0)).slice(0,3);
+  // ── Most-liked movie: highest community average rating among watched movies ──
+  // Falls back to most recently watched if no ratings
+  let myFavouriteMovie = null;
+  if (myMovies.length > 0) {
+    const allReviewStats = (stats && stats.movieRatings) || {}; // {id: {avg, count}}
+    // Find watched movie with highest community avg (min 1 review); fallback to most recent
+    let bestAvg = -1;
+    myMovies.forEach(m => {
+      const r = allReviewStats[String(m.id)];
+      if (r && r.avg > bestAvg) { bestAvg = r.avg; myFavouriteMovie = m; }
+    });
+    if (!myFavouriteMovie) {
+      // No rating data — pick most recently watched
+      myFavouriteMovie = [...myMovies].sort((a,b)=>(watchedMovies[b.id]||0)-(watchedMovies[a.id]||0))[0];
+    }
+  }
+
+  // Most recently watched films (up to 3 for poster row), excluding favourite
+  const recentMovies = [...myMovies]
+    .sort((a,b)=>(watchedMovies[b.id]||0)-(watchedMovies[a.id]||0))
+    .filter(m => !myFavouriteMovie || String(m.id) !== String(myFavouriteMovie.id))
+    .slice(0, 3);
 
   // Registered event titles
   const myEventTitles = eventIds.map(id => registeredEvents[id]?.title).filter(Boolean).slice(0,4);
@@ -8777,10 +8830,32 @@ function buildWrappedCards(stats, config) {
     `,
   });
 
-  // ── 2: Films watched ──────────────────────────────────────────────────────
+  // ── 2: Your Most-Liked Movie (auto: highest community rating among watched) ─
+  if (myFavouriteMovie) {
+    const fav = myFavouriteMovie;
+    const allReviewStats = (stats && stats.movieRatings) || {};
+    const favRating = allReviewStats[String(fav.id)];
+    cards.push({
+      id: 'my-fav-movie',
+      theme: _wrappedTheme(1),
+      render: () => `
+        ${W_ICONS.award}
+        <div class="wrapped-card-eyebrow">Your most-loved film</div>
+        ${fav.poster_image ? `<img class="wrapped-card-film-poster" src="${fav.poster_image}" alt="${fav.title}" loading="lazy" style="width:80px;height:120px;margin-bottom:10px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5)">` : ''}
+        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${fav.title}</div>
+        <div class="wrapped-card-sub">${[fav.release_year, fav.director ? fav.director.split(/[,|]+/)[0].trim() : null].filter(Boolean).join(' · ')}</div>
+        ${favRating ? `<div class="wrapped-card-stat" style="font-size:clamp(22px,5vw,36px);margin-top:8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:middle;margin-right:3px;margin-top:-3px;display:inline"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${favRating.avg.toFixed(1)}
+          <span class="wrapped-card-sub" style="font-size:13px;margin-left:4px;display:inline">/5 · ${favRating.count} ${favRating.count===1?'review':'reviews'}</span>
+        </div>` : `<div class="wrapped-card-sub" style="margin-top:6px;opacity:.6">The one that stayed with you.</div>`}
+      `,
+    });
+  }
+
+  // ── 3: Films watched count ─────────────────────────────────────────────────
   cards.push({
     id: 'films-watched',
-    theme: _wrappedTheme(1),
+    theme: _wrappedTheme(2),
     render: () => `
       ${W_ICONS.film}
       <div class="wrapped-card-eyebrow">Films on your list</div>
@@ -8805,13 +8880,13 @@ function buildWrappedCards(stats, config) {
     `,
   });
 
-  // ── 3: Most-watched films poster row (if user watched ≥ 1) ───────────────
+  // ── 4: Other films poster row (recently watched, excl. favourite) ──────────
   if (recentMovies.length > 0) {
     cards.push({
       id: 'my-films',
-      theme: _wrappedTheme(2),
+      theme: _wrappedTheme(3),
       render: () => `
-        <div class="wrapped-card-eyebrow">Films you watched</div>
+        <div class="wrapped-card-eyebrow">More from your watchlist</div>
         <div class="wrapped-card-film-row">
           ${recentMovies.map(m => m.poster_image
             ? `<img class="wrapped-card-film-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy">`
@@ -8824,11 +8899,11 @@ function buildWrappedCards(stats, config) {
     });
   }
 
-  // ── 4: Top genre ─────────────────────────────────────────────────────────
+  // ── 5: Top genre ─────────────────────────────────────────────────────────
   if (myTopGenres.length > 0) {
     cards.push({
       id: 'top-genre',
-      theme: _wrappedTheme(3),
+      theme: _wrappedTheme(4),
       render: () => `
         ${W_ICONS.chart}
         <div class="wrapped-card-eyebrow">Your top genre</div>
@@ -8842,7 +8917,7 @@ function buildWrappedCards(stats, config) {
   } else if (stats && stats.topGenres && stats.topGenres.length) {
     cards.push({
       id: 'top-genre-kfs',
-      theme: _wrappedTheme(3),
+      theme: _wrappedTheme(4),
       render: () => `
         ${W_ICONS.chart}
         <div class="wrapped-card-eyebrow">KFS's most made genre</div>
@@ -8853,10 +8928,10 @@ function buildWrappedCards(stats, config) {
     });
   }
 
-  // ── 5: Events attended ───────────────────────────────────────────────────
+  // ── 6: Events attended ───────────────────────────────────────────────────
   cards.push({
     id: 'events-attended',
-    theme: _wrappedTheme(4),
+    theme: _wrappedTheme(5),
     render: () => `
       ${W_ICONS.event}
       <div class="wrapped-card-eyebrow">Events attended</div>
@@ -8875,14 +8950,13 @@ function buildWrappedCards(stats, config) {
     `,
   });
 
-  // ── 6: Blogs read ─────────────────────────────────────────────────────────
-  // Fetch blog titles from stats if available
+  // ── 7: Blogs read ─────────────────────────────────────────────────────────
   const allBlogs = (stats && stats.allBlogs) || [];
   const myBlogs = readIds.map(id => allBlogs.find(b => String(b.id) === String(id))).filter(Boolean);
 
   cards.push({
     id: 'blogs-read',
-    theme: _wrappedTheme(5),
+    theme: _wrappedTheme(6),
     render: () => `
       ${W_ICONS.book}
       <div class="wrapped-card-eyebrow">Blog posts read</div>
@@ -8901,30 +8975,32 @@ function buildWrappedCards(stats, config) {
     `,
   });
 
-  // ── 6b: Admin blog highlight cards ───────────────────────────────────────
+  // ── 8: Year Highlight Cards (admin-curated: what KFS did this year) ────────
   if (config.blog_highlights && Array.isArray(config.blog_highlights)) {
     config.blog_highlights.forEach((bh, i) => {
       if (!bh.headline) return;
       cards.push({
-        id: 'blog-highlight-' + i,
-        theme: _wrappedTheme(i + 3),
+        id: 'year-highlight-' + i,
+        theme: _wrappedTheme(i + 2),
         render: () => `
           <div class="wrapped-card-blog-highlight">
-            ${bh.image_url ? `<img class="wrapped-card-blog-img" src="${bh.image_url}" alt="${bh.headline}" loading="lazy">` : W_ICONS.book}
+            ${bh.image_url
+              ? `<img class="wrapped-card-blog-img" src="${bh.image_url}" alt="${bh.headline}" loading="lazy" style="border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.4)">`
+              : `<div style="font-size:40px;margin-bottom:8px">🎬</div>`}
             <div class="wrapped-card-blog-title">${bh.headline}</div>
-            ${bh.sub ? `<div class="wrapped-card-blog-sub">${bh.sub}</div>` : ''}
+            ${bh.sub ? `<div class="wrapped-card-blog-sub" style="white-space:pre-line">${bh.sub}</div>` : ''}
           </div>
         `,
       });
     });
   }
 
-  // ── 7: KFS by the numbers ─────────────────────────────────────────────────
+  // ── 9: KFS by the numbers ─────────────────────────────────────────────────
   if (stats) {
     const listIconSvg = `<svg class="wrapped-card-list-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     cards.push({
       id: 'kfs-numbers',
-      theme: _wrappedTheme(6),
+      theme: _wrappedTheme(7),
       render: () => `
         ${W_ICONS.globe}
         <div class="wrapped-card-eyebrow">KFS · All Time</div>
@@ -8939,8 +9015,7 @@ function buildWrappedCards(stats, config) {
     });
   }
 
-  // ── 8: Community top-rated / admin-featured film ──────────────────────────
-  // Admin can override with a specific movie; falls back to auto top-rated
+  // ── 10: Community top-rated / admin-featured film ──────────────────────────
   let featuredMovie = null;
   if (config.featured_movie_id && allMovies.length) {
     featuredMovie = allMovies.find(m => String(m.id) === String(config.featured_movie_id));
@@ -8967,7 +9042,7 @@ function buildWrappedCards(stats, config) {
     });
   }
 
-  // ── 9: Genre personality ─────────────────────────────────────────────────
+  // ── 11: Genre personality ─────────────────────────────────────────────────
   const personalities = {
     'Drama':       { title: 'The Empath',       sub: 'You feel every scene.', icon: W_ICONS.heart },
     'Comedy':      { title: 'The Laughtrack',   sub: "Life's too short to be serious.", icon: W_ICONS.sun },
@@ -8993,7 +9068,7 @@ function buildWrappedCards(stats, config) {
     }
   }
 
-  // ── 10: Admin fun cards ──────────────────────────────────────────────────
+  // ── 12: Admin fun cards ──────────────────────────────────────────────────
   if (config.fun_cards && Array.isArray(config.fun_cards)) {
     config.fun_cards.forEach((fc, i) => {
       if (!fc.text) return;
@@ -9116,6 +9191,12 @@ async function loadWrapped() {
     ]);
     _wrappedStats  = stats  || {};
     _wrappedConfig = config || {};
+
+    // Show/hide wrapped nav link based on enabled flag (default true)
+    const wrappedNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
+    if (wrappedNavLink) {
+      wrappedNavLink.style.display = (_wrappedConfig.enabled === false) ? 'none' : '';
+    }
 
     const yearEl = document.getElementById('wrapped-year-label');
     const subEl  = document.getElementById('wrapped-hero-sub');
@@ -9347,6 +9428,13 @@ async function loadWrappedAdminSection() {
     if (bcEl)      bcEl.value      = config.broadcast || '';
     if (bcThemeEl) bcThemeEl.value = config.broadcast_theme || 'dark';
 
+    // Enabled toggle (default true if not set)
+    const toggleEl = document.getElementById('wrapped-enabled-toggle');
+    if (toggleEl) {
+      toggleEl.checked = config.enabled !== false;
+      updateWrappedToggleLabel(toggleEl);
+    }
+
     _wrappedAdminFunCards = Array.isArray(config.fun_cards) ? [...config.fun_cards] : [];
     _wrappedAdminBlogHighlights = Array.isArray(config.blog_highlights) ? [...config.blog_highlights] : [];
     renderWrappedFunCardsList();
@@ -9363,6 +9451,16 @@ async function loadWrappedAdminSection() {
       }
     }
   } catch(e) { console.error('[wrapped admin load]', e); }
+}
+
+function updateWrappedToggleLabel(el) {
+  const label = document.getElementById('wrapped-toggle-label');
+  const notice = document.getElementById('wrapped-disabled-notice');
+  if (label) {
+    label.textContent = el.checked ? 'On' : 'Off';
+    label.style.color = el.checked ? '#34c759' : 'var(--grey)';
+  }
+  if (notice) notice.style.display = el.checked ? 'none' : 'block';
 }
 
 function wrappedFeaturedMoviePreview() {
@@ -9395,21 +9493,35 @@ function renderWrappedBlogHighlightsList() {
   const list = document.getElementById('wrapped-blog-highlights-list');
   if (!list) return;
   if (!_wrappedAdminBlogHighlights.length) {
-    list.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No blog highlights yet. Add one below.</p>';
+    list.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No highlight cards yet. Add one below to showcase what KFS did this year.</p>';
     return;
   }
   list.innerHTML = _wrappedAdminBlogHighlights.map((bh, i) => `
-    <div class="wrapped-admin-highlight-row">
-      ${bh.image_url
-        ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url.replace(/"/g,'&quot;')}" alt="" onerror="this.style.display='none'">`
-        : `<div class="wrapped-admin-highlight-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:22px">🖼</div>`}
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" value="${(bh.headline||'').replace(/"/g,'&quot;')}" placeholder="Headline…" style="flex:1" oninput="wrappedBlogHighlightUpdate(${i},'headline',this.value)">
-          <button class="btn-sm danger" style="flex-shrink:0" onclick="wrappedBlogHighlightRemove(${i})">Remove</button>
+    <div class="wrapped-admin-highlight-row" style="flex-direction:column;align-items:stretch;gap:12px;padding:16px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.02);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px">
+        ${bh.image_url
+          ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url.replace(/"/g,'&quot;')}" alt="" onerror="this.style.display='none'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0">`
+          : `<div style="width:64px;height:64px;border-radius:8px;background:var(--card);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:20px;flex-shrink:0">📸</div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:4px">Card ${i+1}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${bh.headline || '(no headline yet)'}</div>
         </div>
-        <input type="text" value="${(bh.sub||'').replace(/"/g,'&quot;')}" placeholder="Subtext (optional)…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'sub',this.value)">
-        <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Image URL (paste Supabase/CDN link)…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value)">
+        <button class="btn-sm danger" style="flex-shrink:0" onclick="wrappedBlogHighlightRemove(${i})">Remove</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div>
+          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin-bottom:5px">Headline *</div>
+          <input type="text" value="${(bh.headline||'').replace(/"/g,'&quot;')}" placeholder="e.g. Chitra Vichitra 2025 was a hit!" style="width:100%;border-radius:8px" oninput="wrappedBlogHighlightUpdate(${i},'headline',this.value)">
+        </div>
+        <div>
+          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin-bottom:5px">Description (optional)</div>
+          <textarea placeholder="Add more context — what happened, why it was special…" style="width:100%;border-radius:8px;min-height:64px;resize:vertical;font-family:inherit;font-size:13px;padding:10px 12px;background:var(--black);border:1px solid var(--border);color:var(--white);outline:none" oninput="wrappedBlogHighlightUpdate(${i},'sub',this.value)">${(bh.sub||'').replace(/</g,'&lt;')}</textarea>
+        </div>
+        <div>
+          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin-bottom:5px">Image URL</div>
+          <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Paste Supabase / CDN image URL…" style="width:100%;border-radius:8px" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value)">
+          <div style="font-size:11px;color:var(--grey);margin-top:4px;opacity:.7">Upload to Supabase Storage first, then paste the public URL here</div>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -9417,7 +9529,7 @@ function renderWrappedBlogHighlightsList() {
 function wrappedBlogHighlightUpdate(i, key, val) {
   if (!_wrappedAdminBlogHighlights[i]) return;
   _wrappedAdminBlogHighlights[i][key] = val;
-  if (key === 'image_url') renderWrappedBlogHighlightsList();
+  if (key === 'image_url' || key === 'headline') renderWrappedBlogHighlightsList();
 }
 function wrappedBlogHighlightRemove(i) {
   _wrappedAdminBlogHighlights.splice(i, 1);
@@ -9476,6 +9588,7 @@ async function saveWrappedConfig() {
   if (saveBtn) { saveBtn.textContent = 'Saving…'; saveBtn.disabled = true; }
 
   const config = {
+    enabled:          document.getElementById('wrapped-enabled-toggle')?.checked !== false,
     year:             (document.getElementById('wrapped-cfg-year')?.value     || '').trim(),
     sub:              (document.getElementById('wrapped-cfg-sub')?.value      || '').trim(),
     outro:            (document.getElementById('wrapped-cfg-outro')?.value    || '').trim(),
