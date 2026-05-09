@@ -1630,7 +1630,7 @@ app.get('/api/wrapped/config', async (req, res) => {
 });
 
 // Admin: save wrapped config
-app.post('/api/admin/wrapped/config', requireSection('settings'), async (req, res) => {
+app.post('/api/admin/wrapped/config', requireSection('wrapped'), async (req, res) => {
   const config = req.body;
   if (typeof config !== 'object') return res.status(400).json({ error: 'Invalid config' });
   await supabase.from('settings').upsert({ key: 'wrapped_config', value: JSON.stringify(config) }, { onConflict: 'key' });

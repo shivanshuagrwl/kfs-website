@@ -1969,8 +1969,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="notifications" checked> Notifications</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="settings" checked> Settings</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
-        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
-        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
+        <label class="perm-check-item"></label>
       </div>
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
@@ -1995,8 +1997,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="notifications"> Notifications</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="settings"> Settings</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
-      <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
-      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
+      <label class="perm-check-item"></label>
     </div>
     <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
     <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
@@ -3459,7 +3463,7 @@ let adminToken = localStorage.getItem('kfs_token');
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','change-password'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access
@@ -5032,7 +5036,7 @@ async function loadAdminData(name) {
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
-    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics'};
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped'};
     // Store perms in a global map so onclick can look up safely (avoids JSON-in-attribute quoting bugs)
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
