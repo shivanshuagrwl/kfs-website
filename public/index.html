@@ -4374,6 +4374,8 @@ async function openBlog(id) {
   const slug = (blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
   history.pushState({page:'blog-detail', id}, '', '/blog/'+slug);
   window._currentBlogId = id;
+  window._currentBlogExcerpt = blog.excerpt || '';
+  window._currentBlogCover = blog.cover_image || '';
   updateMetaTags({
     title: blog.title,
     description: blog.excerpt
@@ -6387,15 +6389,15 @@ function shareContent(type) {
   if (type === 'blog') {
     const id      = window._currentBlogId;
     const title   = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
-    const excerpt = document.querySelector('#blog-detail-excerpt')?.textContent || '';
-    const cover   = document.querySelector('#blog-detail-cover')?.src || '';
+    const excerpt = window._currentBlogExcerpt || '';
+    const cover   = window._currentBlogCover || document.getElementById('blog-detail-img')?.src || '';
     if (id) { shareBlogCard(id, title, excerpt, cover); return; }
     _copyShareFallback(window.location.href);
   } else {
     const id    = window._currentMovieId;
     const title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
-    const desc  = document.querySelector('#movie-detail-description')?.textContent || '';
-    const poster= document.querySelector('#movie-detail-poster')?.src || '';
+    const desc  = document.getElementById('movie-detail-description')?.textContent || '';
+    const poster= document.getElementById('movie-detail-poster-img')?.src || '';
     if (id) { shareFilmCard(id, title, desc, poster); return; }
     _copyShareFallback(window.location.href);
   }
