@@ -1235,13 +1235,13 @@ app.post('/api/events/:id/form/submit', upload.any(), async (req, res) => {
 
     if (toEmail) {
       // Fetch event details for the email
-      const { data: ev } = await supabase.from('events').select('title,event_date,venue').eq('id', req.params.id).maybeSingle();
+      const { data: ev } = await supabase.from('events').select('title,event_date,location').eq('id', req.params.id).maybeSingle();
       sendConfirmationEmail({
         toEmail,
         toName,
         eventTitle: ev?.title || '',
         eventDate:  ev?.event_date || null,
-        eventVenue: ev?.venue || null,
+        eventVenue: ev?.location || null,
       }).catch(e => console.error('[email] send failed:', e.message));
     }
   } catch(e) { console.error('[email] pre-send error:', e.message); }
