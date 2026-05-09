@@ -4004,7 +4004,7 @@ async function openBlog(id) {
   renderRecentlyViewed(id);
   window.scrollTo({top:0,behavior:'instant'});
   // Use slug URL — no UUID exposed
-  const slug = blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
+  const slug = (blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
   history.pushState({page:'blog-detail', id}, '', '/blog/'+slug);
   window._currentBlogId = id;
   updateMetaTags({
@@ -4393,7 +4393,7 @@ async function openMovie(id) {
     spotifyEmbed.innerHTML = '';
   }
   window.scrollTo({top:0,behavior:'smooth'});
-  const mslug = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : id;
+  const mslug = (m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
   history.pushState({page:'movie-detail', id}, '', '/films/'+mslug);
   window._currentMovieId = id;
   updateMetaTags({
@@ -8056,11 +8056,11 @@ async function submitRegForm() {
 // ── SHARE EVENT ──────────────────────────────────────────────────────────────
 function shareEvent(id, title) {
   const url = 'https://kiitfilmsociety.in/events';
-  const text = `Check out "${title}" by KFS — KIIT Film Society! Register here: ${url}`;
+  const text = `Check out "${title}" by KFS — KIIT Film Society!`;
   if (navigator.share) {
     navigator.share({ title, text, url }).catch(()=>{});
   } else {
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`;
     window.open(waUrl, '_blank');
   }
 }
@@ -8084,7 +8084,8 @@ function shareFilmCard(id, title, description, posterUrl) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/films/${slug}-${id}`;
   // Server injects real OG tags at /films/:slug for crawlers — no JS meta mutation needed.
-  const text = `"${title}" — a film by KFS | KIIT Film Society\n${pageUrl}`;
+  // NOTE: do NOT include pageUrl in `text` — navigator.share appends `url` automatically.
+  const text = description ? `"${title}" — a film by KFS | KIIT Film Society\n${description}` : `"${title}" — a film by KFS | KIIT Film Society`;
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
   } else {
@@ -8096,7 +8097,9 @@ function shareBlogCard(id, title, excerpt, coverUrl) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/blog/${slug}-${id}`;
   // Server injects real OG tags at /blog/:slug for crawlers — no JS meta mutation needed.
-  const text = `"${title}" — KFS Blog\n${pageUrl}`;
+  // NOTE: do NOT include pageUrl in `text` — navigator.share appends `url` automatically,
+  // which would cause the link to appear twice in the share sheet.
+  const text = excerpt ? `"${title}" — KFS Blog\n${excerpt}` : `"${title}" — KFS Blog`;
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS Blog', text, url: pageUrl }).catch(()=>{});
   } else {
@@ -8108,10 +8111,10 @@ function shareEventCard(id, title, date, venue) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/events/${slug}-${id}`;
   // Server injects real OG tags at /events/:slug for crawlers — no JS meta mutation needed.
+  // NOTE: do NOT include pageUrl in `text` — navigator.share appends `url` automatically.
   const lines = [`"${title}" — KFS Event`];
   if (date)  lines.push('\u{1F4C5} ' + date);
   if (venue) lines.push('\u{1F4CD} ' + venue);
-  lines.push(pageUrl);
   const text = lines.join('\n');
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
