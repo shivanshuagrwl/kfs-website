@@ -951,6 +951,9 @@ body.light-mode .blog-filter-item.active .blog-filter-item-dot{background:#111}
   transition:all .3s var(--ease);
 }
 .event-item:hover{padding-left:16px}
+/* Highlight pulse when deep-linking to a specific event */
+@keyframes eventHighlight{0%,100%{box-shadow:0 0 0 0 transparent}30%{box-shadow:0 0 0 3px rgba(245,245,245,.35)}70%{box-shadow:0 0 0 3px rgba(245,245,245,.15)}}
+.event-highlight{animation:eventHighlight 2s ease}
 .event-date-block{grid-area:date;align-self:center}
 .event-info{grid-area:info}
 .event-cover-col{grid-area:cover;align-self:stretch;overflow:hidden;border-radius:6px;max-height:240px}
@@ -3708,7 +3711,7 @@ function renderEventItem(e, full=false) {
   const imgCol = e.cover_image
     ? `<div class="event-cover-col"><img src="${e.cover_image}" alt="${e.title}"><\/div>`
     : `<div class="event-cover-col" style="display:none"><\/div>`;
-  return `<div class="event-item${e.cover_image ? '' : ' event-item-no-img'}">
+  return `<div class="event-item${e.cover_image ? '' : ' event-item-no-img'}" data-event-id="${e.id}">
     <div class="event-date-block">
       <span class="event-day">${day}<\/span>
       <span class="event-month">${month}<\/span>
@@ -5724,42 +5727,65 @@ async function checkRoute() {
   if (!path || path === 'home') { navigate('home', false); return; }
   if (path === 'admin') { navigate('admin', false); return; }
 
-  const blogMatch = path.match(/^blog\/(.+)/);
-  const filmMatch = path.match(/^films\/(.+)/);
+  const blogMatch  = path.match(/^blog\/(.+)/);
+  const filmMatch  = path.match(/^films\/(.+)/);
+  const eventMatch = path.match(/^events\/(.+)/);
   // legacy /movies/ URLs redirect to films
   const movieLegacy = path.match(/^movies\/(.+)/);
 
+  // Extract ID from the tail of a slug: "my-post-title-42" → "42"
+  // Works for both numeric IDs and UUIDs.
+  function idFromSlug(slug) {
+    if (!slug) return null;
+    const uuidM = slug.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+    if (uuidM) return uuidM[1];
+    const numM = slug.match(/-([^-]+)$/);
+    if (numM) return numM[1];
+    return slug;
+  }
+
   if (filmMatch || movieLegacy) {
     const slug = (filmMatch || movieLegacy)[1];
-    // Try to resolve slug → movie ID
-    try {
-      const movies = await apiFetch('/api/movies');
-      if (movies && movies.length) {
-        const match = movies.find(m => {
-          const s = m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '';
-          return s === slug;
-        });
-        if (match) { openMovie(match.id); return; }
-      }
-    } catch(e) {}
-    // Fallback: go to films listing
+    const id   = idFromSlug(slug);
+    if (id) {
+      try {
+        const movie = await apiFetch('/api/movies/' + id);
+        if (movie && movie.id) { openMovie(movie.id); return; }
+      } catch(e) {}
+    }
     navigate('movies', false);
     return;
   }
 
   if (blogMatch) {
     const slug = blogMatch[1];
-    try {
-      const blogs = await apiFetch('/api/blogs');
-      if (blogs && blogs.length) {
-        const match = blogs.find(b => {
-          const s = b.title ? b.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '';
-          return s === slug;
-        });
-        if (match) { openBlog(match.id); return; }
-      }
-    } catch(e) {}
+    const id   = idFromSlug(slug);
+    if (id) {
+      try {
+        const blog = await apiFetch('/api/blogs/' + id);
+        if (blog && blog.id) { openBlog(blog.id); return; }
+      } catch(e) {}
+    }
     navigate('blog', false);
+    return;
+  }
+
+  if (eventMatch) {
+    // Events have no dedicated detail page — navigate to the events list.
+    // Then scroll to & highlight the matching event card.
+    const slug = eventMatch[1];
+    const id   = idFromSlug(slug);
+    navigate('events', false);
+    if (id) {
+      setTimeout(() => {
+        const card = document.querySelector(`[data-event-id="${id}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('event-highlight');
+          setTimeout(() => card.classList.remove('event-highlight'), 2000);
+        }
+      }, 800);
+    }
     return;
   }
 
@@ -8057,8 +8083,7 @@ function _setOGImage(imageUrl, width=1200, height=630) {
 function shareFilmCard(id, title, description, posterUrl) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/films/${slug}-${id}`;
-  // The server at /films/:slug injects real OG tags for crawlers.
-  // Client-side meta mutation is intentionally omitted — crawlers don't execute JS.
+  // Server injects real OG tags at /films/:slug for crawlers — no JS meta mutation needed.
   const text = `"${title}" — a film by KFS | KIIT Film Society\n${pageUrl}`;
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
@@ -8070,7 +8095,7 @@ function shareFilmCard(id, title, description, posterUrl) {
 function shareBlogCard(id, title, excerpt, coverUrl) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/blog/${slug}-${id}`;
-  // The server at /blog/:slug injects real OG tags for crawlers.
+  // Server injects real OG tags at /blog/:slug for crawlers — no JS meta mutation needed.
   const text = `"${title}" — KFS Blog\n${pageUrl}`;
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS Blog', text, url: pageUrl }).catch(()=>{});
@@ -8082,17 +8107,12 @@ function shareBlogCard(id, title, excerpt, coverUrl) {
 function shareEventCard(id, title, date, venue) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const pageUrl = `https://kiitfilmsociety.in/events/${slug}-${id}`;
-
-  // The server at /events/:slug injects real OG tags for crawlers.
-  let el = document.querySelector('meta[property="og:url"]');
-  if (el) el.setAttribute('content', pageUrl);
-
+  // Server injects real OG tags at /events/:slug for crawlers — no JS meta mutation needed.
   const lines = [`"${title}" — KFS Event`];
-  if (date)  lines.push('📅 ' + date);
-  if (venue) lines.push('📍 ' + venue);
+  if (date)  lines.push('\u{1F4C5} ' + date);
+  if (venue) lines.push('\u{1F4CD} ' + venue);
   lines.push(pageUrl);
   const text = lines.join('\n');
-
   if (navigator.share) {
     navigator.share({ title: title + ' — KFS', text, url: pageUrl }).catch(()=>{});
   } else {
