@@ -1859,6 +1859,65 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .movie-rating-badge .rb-count{font-size:9px;font-weight:400;color:rgba(255,255,255,.5);letter-spacing:.02em}
 .movie-card:hover .movie-rating-badge{opacity:.85}
 
+/* ── KFS WRAPPED ─────────────────────────────────────────────── */
+#page-wrapped{padding:80px 0 60px;background:var(--black)}
+.wrapped-hero{text-align:center;padding:60px 24px 40px;background:radial-gradient(ellipse at 50% 0%,rgba(245,245,245,.06) 0%,transparent 70%)}
+.wrapped-hero-year{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:16px}
+.wrapped-hero-title{font-size:clamp(36px,7vw,72px);font-weight:800;letter-spacing:-.04em;line-height:1;margin-bottom:12px;color:var(--white)}
+.wrapped-hero-sub{font-size:16px;color:var(--grey);max-width:480px;margin:0 auto 32px}
+.wrapped-start-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--white);color:var(--black);border:none;border-radius:40px;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:transform .2s,opacity .2s}
+.wrapped-start-btn:hover{transform:scale(1.04);opacity:.9}
+.wrapped-deck-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 0 40px}
+.wrapped-deck{position:relative;width:min(360px,90vw);height:500px;margin:0 auto}
+.wrapped-card{position:absolute;inset:0;border-radius:28px;overflow:hidden;cursor:pointer;user-select:none;transition:transform .5s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,box-shadow .4s ease}
+.wrapped-card.is-active{transform:none;opacity:1;z-index:10;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.wrapped-card.is-behind{transform:scale(.93) translateY(24px);opacity:.5;z-index:2;pointer-events:none}
+.wrapped-card.is-behind-2{transform:scale(.86) translateY(48px);opacity:.25;z-index:1;pointer-events:none}
+.wrapped-card.is-exit{transform:translateX(130%) rotate(16deg)!important;opacity:0!important;pointer-events:none;transition:transform .4s cubic-bezier(.55,0,1,.45),opacity .3s ease!important}
+.wrapped-card-inner{padding:32px 28px 36px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden}
+.wrapped-card-bg{position:absolute;inset:0;z-index:0}
+.wrapped-card-content{position:relative;z-index:2;color:#fff}
+.wrapped-card-eyebrow{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px;opacity:.65}
+.wrapped-card-headline{font-size:clamp(26px,6vw,40px);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-bottom:8px}
+.wrapped-card-sub{font-size:13px;opacity:.65;line-height:1.5;margin-top:6px}
+.wrapped-card-emoji{font-size:56px;margin-bottom:14px;display:block}
+.wrapped-card-stat{font-size:clamp(54px,12vw,88px);font-weight:900;letter-spacing:-.05em;line-height:1}
+.wrapped-card-stat-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;margin-top:4px}
+.wrapped-card-genres{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.wrapped-card-genre-pill{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;background:rgba(255,255,255,.18);backdrop-filter:blur(4px)}
+.wrapped-card-film-poster{width:120px;height:180px;object-fit:cover;border-radius:12px;margin-bottom:14px;display:block;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.wrapped-progress{display:flex;gap:4px;margin-bottom:24px;position:relative;z-index:2}
+.wrapped-progress-bar{height:3px;flex:1;border-radius:2px;background:rgba(255,255,255,.18);transition:background .3s}
+.wrapped-progress-bar.done{background:rgba(255,255,255,.85)}
+.wrapped-progress-bar.active{background:rgba(255,255,255,.55)}
+.wrapped-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 0 0;width:min(360px,90vw)}
+.wrapped-nav-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:8px 18px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;transition:all .2s}
+.wrapped-nav-btn:hover{border-color:var(--white);color:var(--white)}
+.wrapped-share-btn{background:var(--white);color:var(--black);border:none;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:transform .2s}
+.wrapped-share-btn:hover{transform:scale(1.05)}
+.wrapped-card-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.wrapped-card-list li{font-size:13px;display:flex;align-items:center;gap:8px;opacity:.85}
+.wrapped-card-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.6;flex-shrink:0}
+.wrapped-restart-row{text-align:center;padding:12px 0}
+/* admin wrapped */
+.wrapped-admin-card-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.wrapped-admin-card-thumb{width:110px;padding:12px 10px;background:#1a1a1a;border-radius:12px;border:1px solid var(--border);font-size:11px;color:var(--grey);text-align:center;cursor:pointer;transition:border-color .2s}
+.wrapped-admin-card-thumb:hover,.wrapped-admin-card-thumb.selected{border-color:var(--white);color:var(--white)}
+.wrapped-admin-card-thumb .thumb-icon{font-size:26px;margin-bottom:5px}
+
+/* ── SMART RECOMMENDATIONS ───────────────────────────────────── */
+.film-recs-section{margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+.film-recs-label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:18px}
+.film-recs-label em{color:var(--white);font-style:italic;font-weight:700}
+.film-recs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px}
+.film-rec-card{cursor:pointer;transition:transform .2s,opacity .2s}
+.film-rec-card:hover{transform:translateY(-4px);opacity:.85}
+.film-rec-poster{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:10px;display:block;background:var(--mid)}
+.film-rec-poster-ph{width:100%;aspect-ratio:2/3;border-radius:10px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;color:var(--border)}
+.film-rec-title{font-size:12px;font-weight:600;margin-top:7px;line-height:1.3;color:var(--white)}
+.film-rec-meta{font-size:11px;color:var(--grey);margin-top:2px}
+.film-rec-match{font-size:10px;color:#555;margin-top:2px;font-style:italic}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1943,6 +2002,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <li><a onclick="navigate('blog');closeMenu()" data-page="blog">Blog</a></li>
     <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
     <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
+    <li><a onclick="navigate('wrapped');closeMenu()" data-page="wrapped">Wrapped</a></li>
   </ul>
   <div class="nav-right">
     <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -2391,6 +2451,32 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
   </button>
 </div>
 
+<!-- KFS WRAPPED PAGE -->
+<div id="page-wrapped" class="page">
+  <div class="wrapped-hero">
+    <div class="wrapped-hero-year" id="wrapped-year-label">KFS · 2025</div>
+    <h1 class="wrapped-hero-title">Your Year<br>at <span>KFS</span></h1>
+    <p class="wrapped-hero-sub" id="wrapped-hero-sub">Films watched. Events attended. Stories read. Your KFS year, in cards.</p>
+    <button class="wrapped-start-btn" onclick="startWrapped()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      See Your Wrapped
+    </button>
+  </div>
+
+  <!-- Card Deck (shown after start) -->
+  <div class="wrapped-deck-wrap" id="wrapped-deck-wrap" style="display:none">
+    <div class="wrapped-deck" id="wrapped-deck"></div>
+    <div class="wrapped-nav">
+      <button class="wrapped-nav-btn" onclick="wrappedPrev()">← Back</button>
+      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share Card ↗</button>
+      <button class="wrapped-nav-btn" onclick="wrappedNext()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Canvas for share image generation (hidden) -->
+  <canvas id="wrapped-share-canvas" style="display:none"></canvas>
+</div>
+
 <!-- Movie Detail -->
 <div id="movie-detail">
   <div class="movie-detail-layout">
@@ -2485,6 +2571,12 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
         <div class="reviews-list" id="reviews-list"></div>
       </div>
 
+      <!-- Smart Recommendations -->
+      <div class="film-recs-section" id="film-recs-section" style="display:none">
+        <div class="film-recs-label" id="film-recs-label">Because you watched <em id="film-recs-title-ref">…</em></div>
+        <div class="film-recs-grid" id="film-recs-grid"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -2543,6 +2635,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div class="admin-sidebar-group">Extras</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('wrapped')" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
     <div class="admin-sidebar-group">Analytics</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
@@ -3007,6 +3100,32 @@ KFS — KIIT Film Society"></textarea>
       </div>
     </div>
 
+    <!-- WRAPPED ADMIN -->
+    <div class="admin-section" id="section-wrapped">
+      <div class="admin-header">
+        <div><h2>KFS Wrapped</h2><p>Customise the annual Wrapped experience for users</p></div>
+        <button class="btn btn-primary" onclick="saveWrappedConfig()">Save Config</button>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--white)">Wrapped Year &amp; Taglines</h3>
+        <div class="form-group"><label>Year (shown on Wrapped page)</label><input type="text" id="wrapped-cfg-year" placeholder="e.g. 2025" style="max-width:160px"></div>
+        <div class="form-group"><label>Hero subtitle</label><input type="text" id="wrapped-cfg-sub" placeholder="e.g. Films watched. Events attended. Stories read."></div>
+        <div class="form-group"><label>Closing message (last card)</label><textarea id="wrapped-cfg-outro" rows="3" placeholder="e.g. Thanks for being part of KFS this year. See you at the next screening."></textarea></div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Fun Fact Cards</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">These appear as extra "fun" slides between stats cards</p>
+        <div id="wrapped-fun-cards-list"></div>
+        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedFunCard()">+ Add Fun Card</button>
+      </div>
+      <div class="admin-card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Broadcast Message</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Show a special message card at the start of everyone's Wrapped</p>
+        <div class="form-group"><label>Message (leave blank to disable)</label><textarea id="wrapped-cfg-broadcast" rows="3" placeholder="e.g. 🎬 KFS turns 5 this year! Thanks for the ride."></textarea></div>
+        <div class="form-group"><label>Broadcast card accent colour (hex)</label><input type="text" id="wrapped-cfg-broadcast-color" placeholder="#c0392b" style="max-width:160px"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 <div class="modal-overlay" id="blog-modal">
@@ -3405,6 +3524,7 @@ function loadPageData(page) {
   else if (page==='blog') loadBlog();
   else if (page==='members') loadMembers();
   else if (page==='movies') loadMovies();
+  else if (page==='wrapped') loadWrapped();
 }
 
 function toggleMenu() {
@@ -8212,6 +8332,571 @@ function closeRegForm() {
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   document.head.appendChild(s);
 })();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SMART RECOMMENDATIONS — tag/genre/director-based engine
+// Injected into movie-detail after reviews load.
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function loadFilmRecommendations(movieId, movieTitle) {
+  const sec = document.getElementById('film-recs-section');
+  const grid = document.getElementById('film-recs-grid');
+  const titleRef = document.getElementById('film-recs-title-ref');
+  if (!sec || !grid) return;
+  sec.style.display = 'none';
+  grid.innerHTML = '';
+  try {
+    const recs = await apiFetch('/api/recommendations/' + movieId);
+    if (!recs || !recs.length) return;
+    if (titleRef) titleRef.textContent = movieTitle || 'this film';
+    grid.innerHTML = recs.map(m => {
+      const genres = Array.isArray(m.genre) ? m.genre : [];
+      return `<div class="film-rec-card" onclick="openMovie('${m.id}')">
+        ${m.poster_image
+          ? `<img class="film-rec-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy">`
+          : `<div class="film-rec-poster-ph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>`}
+        <div class="film-rec-title">${m.title}</div>
+        <div class="film-rec-meta">${m.release_year || ''}</div>
+        ${genres.length ? `<div class="film-rec-match">${genres.slice(0,2).join(' · ')}</div>` : ''}
+      </div>`;
+    }).join('');
+    sec.style.display = 'block';
+  } catch(e) { /* silent */ }
+}
+
+// After page is loaded, wrap openMovie to inject recommendations.
+// Using a flag-based approach to avoid re-entrant infinite loops.
+let _recsPatchApplied = false;
+function _ensureRecsPatch() {
+  if (_recsPatchApplied) return;
+  _recsPatchApplied = true;
+  const _orig = openMovie;
+  openMovie = async function(id) {
+    await _orig(id);
+    const m = window._allMoviesCache ? window._allMoviesCache.find(x => String(x.id) === String(id)) : null;
+    setTimeout(() => loadFilmRecommendations(id, m ? m.title : ''), 80);
+  };
+}
+window.addEventListener('load', _ensureRecsPatch);
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// KFS WRAPPED — Spotify-style annual recap
+// Data sources: localStorage (watched films, read blogs) + /api/wrapped/stats
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _wrappedCards = [];
+let _wrappedIndex = 0;
+let _wrappedStats = null;
+let _wrappedConfig = {};
+
+// Card colour themes
+const WRAPPED_THEMES = [
+  { bg: 'linear-gradient(145deg,#0a0a0a 0%,#1a1a2e 100%)', fg: '#f5f5f5', accent: '#7c83fd' },
+  { bg: 'linear-gradient(145deg,#0d1b0d 0%,#0a2a0a 100%)', fg: '#e8f5e9', accent: '#4caf50' },
+  { bg: 'linear-gradient(145deg,#1a0a0a 0%,#2d0a0a 100%)', fg: '#fff5f5', accent: '#ef5350' },
+  { bg: 'linear-gradient(145deg,#0a0d1a 0%,#0a1428 100%)', fg: '#e8f0ff', accent: '#42a5f5' },
+  { bg: 'linear-gradient(145deg,#1a1200 0%,#2a1e00 100%)', fg: '#fff9e6', accent: '#ffd54f' },
+  { bg: 'linear-gradient(145deg,#1a001a 0%,#2a002a 100%)', fg: '#fce4ec', accent: '#ec407a' },
+  { bg: 'linear-gradient(145deg,#001a1a 0%,#00292a 100%)', fg: '#e0f7fa', accent: '#26c6da' },
+];
+
+function _wrappedTheme(i) { return WRAPPED_THEMES[i % WRAPPED_THEMES.length]; }
+
+// Build the set of cards based on user data + server stats
+function buildWrappedCards(stats, config) {
+  const cards = [];
+  const watchedMovies = getWatchedMovies(); // {id: timestamp}
+  const readBlogs     = getBlogReadState(); // {id: timestamp}
+
+  const watchedIds  = Object.keys(watchedMovies);
+  const readIds     = Object.keys(readBlogs);
+  const watchedCount = watchedIds.length;
+  const readCount    = readIds.length;
+
+  // Find watched movies details
+  const allMovies = (stats && stats.allMovies) || [];
+  const myMovies  = watchedIds.map(id => allMovies.find(m => String(m.id) === String(id))).filter(Boolean);
+
+  // My genre breakdown
+  const myGenreCount = {};
+  myMovies.forEach(m => {
+    const genres = Array.isArray(m.genre) ? m.genre : [];
+    genres.forEach(g => { if (g) myGenreCount[g] = (myGenreCount[g] || 0) + 1; });
+  });
+  const myTopGenres = Object.entries(myGenreCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([g])=>g);
+
+  const year = (config.year || new Date().getFullYear()).toString();
+
+  // 0 — Broadcast message (if set by admin)
+  if (config.broadcast && config.broadcast.trim()) {
+    const color = config.broadcast_color || '#c0392b';
+    cards.push({
+      id: 'broadcast',
+      theme: { bg: `linear-gradient(145deg,${color}22 0%,${color}44 100%)`, fg: '#fff', accent: color },
+      render: () => `
+        <span class="wrapped-card-emoji">📢</span>
+        <div class="wrapped-card-eyebrow">From KFS</div>
+        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${config.broadcast}</div>
+      `,
+    });
+  }
+
+  // 1 — Intro card
+  cards.push({
+    id: 'intro',
+    theme: _wrappedTheme(0),
+    render: () => `
+      <span class="wrapped-card-emoji">🎬</span>
+      <div class="wrapped-card-eyebrow">KFS · ${year}</div>
+      <div class="wrapped-card-headline">Your Year<br>in Cinema</div>
+      <div class="wrapped-card-sub">Tap → to see how your KFS year unfolded.</div>
+    `,
+  });
+
+  // 2 — Films watched count
+  cards.push({
+    id: 'films-watched',
+    theme: _wrappedTheme(1),
+    render: () => `
+      <div class="wrapped-card-eyebrow">Films watched</div>
+      <div class="wrapped-card-stat">${watchedCount}</div>
+      <div class="wrapped-card-stat-label">KFS ${watchedCount === 1 ? 'film' : 'films'} on your list</div>
+      ${watchedCount === 0
+        ? `<div class="wrapped-card-sub" style="margin-top:16px">Start exploring the KFS film library! Hit "+ Watchlist" on any film.</div>`
+        : watchedCount >= 5
+          ? `<div class="wrapped-card-sub" style="margin-top:16px">That's ${watchedCount >= 10 ? 'incredible' : 'impressive'} dedication. 🎥</div>`
+          : `<div class="wrapped-card-sub" style="margin-top:16px">Every film is a new perspective.</div>`}
+    `,
+  });
+
+  // 3 — Top genre (personal or global)
+  if (myTopGenres.length > 0) {
+    cards.push({
+      id: 'top-genre',
+      theme: _wrappedTheme(2),
+      render: () => `
+        <div class="wrapped-card-eyebrow">Your top genre</div>
+        <div class="wrapped-card-headline">${myTopGenres[0]}</div>
+        <div class="wrapped-card-sub">You gravitate towards ${myTopGenres[0].toLowerCase()} films.</div>
+        ${myTopGenres.length > 1 ? `<div class="wrapped-card-genres">${myTopGenres.map(g=>`<span class="wrapped-card-genre-pill">${g}</span>`).join('')}</div>` : ''}
+      `,
+    });
+  } else if (stats && stats.topGenres && stats.topGenres.length) {
+    cards.push({
+      id: 'top-genre-kfs',
+      theme: _wrappedTheme(2),
+      render: () => `
+        <div class="wrapped-card-eyebrow">KFS's most made genre</div>
+        <div class="wrapped-card-headline">${stats.topGenres[0].genre}</div>
+        <div class="wrapped-card-sub">KFS has made <strong>${stats.topGenres[0].count}</strong> ${stats.topGenres[0].genre.toLowerCase()} films.</div>
+        <div class="wrapped-card-genres">${stats.topGenres.slice(0,4).map(g=>`<span class="wrapped-card-genre-pill">${g.genre}</span>`).join('')}</div>
+      `,
+    });
+  }
+
+  // 4 — Most-watched film poster (if user watched ≥1)
+  if (myMovies.length > 0) {
+    // Most recently watched
+    const recent = [...myMovies].sort((a,b) => {
+      return (watchedMovies[b.id] || 0) - (watchedMovies[a.id] || 0);
+    })[0];
+    cards.push({
+      id: 'fav-film',
+      theme: _wrappedTheme(3),
+      render: () => `
+        <div class="wrapped-card-eyebrow">Last film you marked</div>
+        ${recent.poster_image ? `<img class="wrapped-card-film-poster" src="${recent.poster_image}" alt="${recent.title}">` : ''}
+        <div class="wrapped-card-headline" style="font-size:clamp(20px,4vw,30px)">${recent.title}</div>
+        <div class="wrapped-card-sub">${recent.release_year || ''}${recent.director ? ` · Dir. ${recent.director.split(/[,|]+/)[0].trim()}` : ''}</div>
+      `,
+    });
+  }
+
+  // 5 — Blogs read
+  cards.push({
+    id: 'blogs-read',
+    theme: _wrappedTheme(4),
+    render: () => `
+      <div class="wrapped-card-eyebrow">Blog posts read</div>
+      <div class="wrapped-card-stat">${readCount}</div>
+      <div class="wrapped-card-stat-label">${readCount === 1 ? 'article' : 'articles'} explored</div>
+      ${readCount === 0
+        ? `<div class="wrapped-card-sub" style="margin-top:16px">The KFS blog is full of film essays and behind-the-scenes stories.</div>`
+        : `<div class="wrapped-card-sub" style="margin-top:16px">Curiosity looks good on you. 📖</div>`}
+    `,
+  });
+
+  // 6 — KFS by the numbers (global stats)
+  if (stats) {
+    cards.push({
+      id: 'kfs-numbers',
+      theme: _wrappedTheme(5),
+      render: () => `
+        <div class="wrapped-card-eyebrow">KFS this year</div>
+        <div class="wrapped-card-headline">By the<br>Numbers</div>
+        <ul class="wrapped-card-list" style="margin-top:16px">
+          <li>${stats.totalMovies} films in the library</li>
+          <li>${stats.totalEvents} events hosted</li>
+          <li>${stats.totalBlogs} blog posts published</li>
+          <li>${stats.totalReviews} community reviews</li>
+        </ul>
+      `,
+    });
+  }
+
+  // 7 — Top rated film (community)
+  if (stats && stats.topRatedMovie) {
+    const t = stats.topRatedMovie;
+    cards.push({
+      id: 'top-rated',
+      theme: _wrappedTheme(6),
+      render: () => `
+        <div class="wrapped-card-eyebrow">Community's top-rated film</div>
+        ${t.poster_image ? `<img class="wrapped-card-film-poster" src="${t.poster_image}" alt="${t.title}">` : ''}
+        <div class="wrapped-card-headline" style="font-size:clamp(20px,4vw,28px)">${t.title}</div>
+        <div class="wrapped-card-stat" style="font-size:clamp(32px,7vw,52px)">★ ${t.score}</div>
+      `,
+    });
+  }
+
+  // 8 — Fun cards from admin config
+  if (config.fun_cards && Array.isArray(config.fun_cards)) {
+    config.fun_cards.forEach((fc, i) => {
+      if (!fc.text) return;
+      cards.push({
+        id: 'fun-' + i,
+        theme: _wrappedTheme(i + 2),
+        render: () => `
+          ${fc.emoji ? `<span class="wrapped-card-emoji">${fc.emoji}</span>` : ''}
+          <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${fc.text}</div>
+          ${fc.sub ? `<div class="wrapped-card-sub">${fc.sub}</div>` : ''}
+        `,
+      });
+    });
+  }
+
+  // 9 — Genre personality card (fun, if genres watched)
+  if (myTopGenres.length > 0) {
+    const personalities = {
+      'Drama':       { title: 'The Empath',       sub: 'You feel every scene.', emoji: '😢' },
+      'Comedy':      { title: 'The Laughtrack',   sub: 'Life\'s too short to be serious.', emoji: '😂' },
+      'Horror':      { title: 'The Brave Soul',   sub: 'You watch what others fear.', emoji: '👻' },
+      'Thriller':    { title: 'The Edge-Sitter',  sub: 'You never blink.', emoji: '😬' },
+      'Documentary': { title: 'The Truth-Seeker', sub: 'Facts hit harder than fiction.', emoji: '🔍' },
+      'Romance':     { title: 'The Hopeful',      sub: 'You believe in the happy ending.', emoji: '💘' },
+      'Action':      { title: 'The Adrenaline',   sub: 'Still counting the explosions.', emoji: '💥' },
+    };
+    const p = personalities[myTopGenres[0]];
+    if (p) {
+      cards.push({
+        id: 'personality',
+        theme: _wrappedTheme(1),
+        render: () => `
+          <span class="wrapped-card-emoji">${p.emoji}</span>
+          <div class="wrapped-card-eyebrow">Your film personality</div>
+          <div class="wrapped-card-headline">${p.title}</div>
+          <div class="wrapped-card-sub">${p.sub}</div>
+        `,
+      });
+    }
+  }
+
+  // 10 — Outro / thank you
+  const outroText = config.outro || `Thanks for being part of KFS ${year}.\nSee you at the next screening. 🎞`;
+  cards.push({
+    id: 'outro',
+    theme: _wrappedTheme(0),
+    render: () => `
+      <span class="wrapped-card-emoji">🎞</span>
+      <div class="wrapped-card-eyebrow">KFS · ${year}</div>
+      <div class="wrapped-card-headline">That's a<br>Wrap!</div>
+      <div class="wrapped-card-sub" style="white-space:pre-line">${outroText}</div>
+    `,
+  });
+
+  return cards;
+}
+
+function renderWrappedDeck() {
+  const deck = document.getElementById('wrapped-deck');
+  if (!deck) return;
+  deck.innerHTML = '';
+
+  _wrappedCards.forEach((card, i) => {
+    const t = card.theme;
+    const div = document.createElement('div');
+    div.className = 'wrapped-card';
+    if      (i === _wrappedIndex)     div.classList.add('is-active');
+    else if (i === _wrappedIndex + 1) div.classList.add('is-behind');
+    else if (i === _wrappedIndex + 2) div.classList.add('is-behind-2');
+    else div.style.opacity = '0';
+    div.innerHTML = `
+      <div class="wrapped-card-inner">
+        <div class="wrapped-card-bg" style="background:${t.bg}"></div>
+        <div class="wrapped-card-content" style="color:${t.fg}">
+          <div class="wrapped-progress">
+            ${_wrappedCards.map((_,j) => `<div class="wrapped-progress-bar ${j<i?'done':j===i?'active':''}"></div>`).join('')}
+          </div>
+          ${card.render()}
+        </div>
+      </div>`;
+    div.addEventListener('click', () => wrappedNext());
+    deck.appendChild(div);
+  });
+}
+
+async function loadWrapped() {
+  try {
+    const [stats, config] = await Promise.all([
+      apiFetch('/api/wrapped/stats'),
+      apiFetch('/api/wrapped/config'),
+    ]);
+    _wrappedStats  = stats  || {};
+    _wrappedConfig = config || {};
+
+    // Update hero text from config
+    const yearEl = document.getElementById('wrapped-year-label');
+    const subEl  = document.getElementById('wrapped-hero-sub');
+    if (yearEl && _wrappedConfig.year) yearEl.textContent = `KFS · ${_wrappedConfig.year}`;
+    if (subEl  && _wrappedConfig.sub)  subEl.textContent  = _wrappedConfig.sub;
+  } catch(e) {
+    _wrappedStats = {}; _wrappedConfig = {};
+  }
+}
+
+async function startWrapped() {
+  if (!_wrappedStats) await loadWrapped();
+  _wrappedCards = buildWrappedCards(_wrappedStats, _wrappedConfig);
+  _wrappedIndex = 0;
+  document.getElementById('wrapped-deck-wrap').style.display = 'flex';
+  renderWrappedDeck();
+}
+
+function wrappedNext() {
+  if (!_wrappedCards.length) return;
+  if (_wrappedIndex >= _wrappedCards.length - 1) {
+    // Show restart row on last card
+    const restartRow = document.getElementById('wrapped-restart-row');
+    if (!restartRow) {
+      const row = document.createElement('div');
+      row.id = 'wrapped-restart-row';
+      row.className = 'wrapped-restart-row';
+      row.innerHTML = `<button class="wrapped-start-btn" style="margin-top:16px" onclick="restartWrapped()">↺ Replay</button>`;
+      document.getElementById('wrapped-deck-wrap').appendChild(row);
+    }
+    return;
+  }
+  // Animate current card out
+  const cards = document.querySelectorAll('.wrapped-card');
+  if (cards[_wrappedIndex]) {
+    cards[_wrappedIndex].classList.remove('is-active');
+    cards[_wrappedIndex].classList.add('is-exit');
+  }
+  _wrappedIndex++;
+  // Re-render to update classes/progress
+  renderWrappedDeck();
+}
+
+function wrappedPrev() {
+  if (_wrappedIndex <= 0) return;
+  _wrappedIndex--;
+  renderWrappedDeck();
+}
+
+function restartWrapped() {
+  _wrappedIndex = 0;
+  const restartRow = document.getElementById('wrapped-restart-row');
+  if (restartRow) restartRow.remove();
+  renderWrappedDeck();
+}
+
+// Share current wrapped card as image using Canvas
+async function shareWrappedCard() {
+  if (!_wrappedCards.length) return;
+  const card = _wrappedCards[_wrappedIndex];
+  if (!card) return;
+  const t = card.theme;
+  const canvas = document.getElementById('wrapped-share-canvas');
+  if (!canvas) { _copyShareFallback('https://kiitfilmsociety.in/wrapped'); return; }
+
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Background gradient
+  const grd = ctx.createLinearGradient(0, 0, W, H);
+  // Parse simple hex or use fallback
+  const bg1 = t.bg.includes('#') ? t.bg.match(/#[0-9a-f]{3,8}/gi)?.[0] || '#0a0a0a' : '#0a0a0a';
+  const bg2 = t.bg.includes('#') ? t.bg.match(/#[0-9a-f]{3,8}/gi)?.[1] || '#1a1a1a' : '#1a1a1a';
+  grd.addColorStop(0, bg1);
+  grd.addColorStop(1, bg2);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+
+  // KFS wordmark
+  ctx.fillStyle = t.fg;
+  ctx.globalAlpha = 0.4;
+  ctx.font = '700 28px system-ui,sans-serif';
+  ctx.fillText('KFS — KIIT FILM SOCIETY', 72, 80);
+  ctx.globalAlpha = 1;
+
+  // Progress dots
+  const dotW = (W - 144) / _wrappedCards.length - 4;
+  _wrappedCards.forEach((_, i) => {
+    ctx.fillStyle = i < _wrappedIndex ? t.fg : i === _wrappedIndex ? t.accent : (t.fg + '33');
+    ctx.globalAlpha = i < _wrappedIndex ? 0.8 : i === _wrappedIndex ? 1 : 0.2;
+    ctx.beginPath();
+    ctx.roundRect(72 + i * (dotW + 4), 108, dotW, 6, 3);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Card content (text-only version of the card)
+  ctx.fillStyle = t.fg;
+  ctx.font = '800 96px system-ui,sans-serif';
+  const headline = _wrappedCards[_wrappedIndex].id;
+  // Render a simplified text version based on card id
+  const year = (_wrappedConfig.year || new Date().getFullYear()).toString();
+  const lines = [];
+  const watched = Object.keys(getWatchedMovies()).length;
+  const read = Object.keys(getBlogReadState()).length;
+  if      (card.id === 'films-watched') { lines.push([String(watched), 96, 800]); lines.push(['films on your list', 28, 400]); }
+  else if (card.id === 'blogs-read')    { lines.push([String(read), 96, 800]); lines.push(['blog posts read', 28, 400]); }
+  else if (card.id === 'outro')         { lines.push(['That\'s a', 64, 800]); lines.push(['Wrap!', 96, 900]); }
+  else if (card.id === 'intro')         { lines.push(['Your Year', 64, 800]); lines.push(['in Cinema', 64, 400]); }
+  else { lines.push(['KFS', 96, 900]); lines.push([year, 48, 400]); }
+
+  let y = H / 2 - 60;
+  lines.forEach(([text, size, weight]) => {
+    ctx.font = `${weight} ${size}px system-ui,sans-serif`;
+    ctx.fillStyle = t.fg;
+    ctx.fillText(text, 72, y);
+    y += size + 16;
+  });
+
+  // Bottom URL
+  ctx.fillStyle = t.fg;
+  ctx.globalAlpha = 0.35;
+  ctx.font = '400 24px system-ui,sans-serif';
+  ctx.fillText('kiitfilmsociety.in/wrapped', 72, H - 56);
+  ctx.globalAlpha = 1;
+
+  // Share
+  canvas.toBlob(async blob => {
+    const url = 'https://kiitfilmsociety.in/wrapped';
+    if (navigator.share && blob) {
+      try {
+        await navigator.share({
+          title: `My KFS Wrapped ${year}`,
+          text: `My KFS Wrapped ${year} — see yours at kiitfilmsociety.in/wrapped`,
+          url,
+          files: [new File([blob], `kfs-wrapped-${year}.png`, { type: 'image/png' })],
+        });
+        return;
+      } catch(e) { /* fall through */ }
+    }
+    // Fallback: download the image
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `kfs-wrapped-${year}.png`;
+    a.click();
+    _showShareToast('Card downloaded!');
+  }, 'image/png');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN — Wrapped Config Editor
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _wrappedAdminFunCards = [];
+
+async function loadWrappedAdminSection() {
+  try {
+    const config = await apiFetch('/api/wrapped/config');
+    if (!config) return;
+    _wrappedConfig = config;
+    const yearEl = document.getElementById('wrapped-cfg-year');
+    const subEl  = document.getElementById('wrapped-cfg-sub');
+    const outroEl = document.getElementById('wrapped-cfg-outro');
+    const bcEl   = document.getElementById('wrapped-cfg-broadcast');
+    const bcColEl= document.getElementById('wrapped-cfg-broadcast-color');
+    if (yearEl) yearEl.value = config.year || '';
+    if (subEl)  subEl.value  = config.sub  || '';
+    if (outroEl) outroEl.value = config.outro || '';
+    if (bcEl)   bcEl.value   = config.broadcast || '';
+    if (bcColEl) bcColEl.value = config.broadcast_color || '';
+    _wrappedAdminFunCards = Array.isArray(config.fun_cards) ? [...config.fun_cards] : [];
+    renderWrappedFunCardsList();
+  } catch(e) { console.error('[wrapped admin load]', e); }
+}
+
+function renderWrappedFunCardsList() {
+  const list = document.getElementById('wrapped-fun-cards-list');
+  if (!list) return;
+  if (!_wrappedAdminFunCards.length) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No fun cards yet.</p>';
+    return;
+  }
+  list.innerHTML = _wrappedAdminFunCards.map((fc, i) => `
+    <div style="display:flex;gap:8px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="text" value="${(fc.emoji||'').replace(/"/g,'&quot;')}" placeholder="🎬" style="width:54px;text-align:center;font-size:20px" oninput="wrappedFunCardUpdate(${i},'emoji',this.value)">
+      <input type="text" value="${(fc.text||'').replace(/"/g,'&quot;')}" placeholder="Fun fact headline…" style="flex:1" oninput="wrappedFunCardUpdate(${i},'text',this.value)">
+      <input type="text" value="${(fc.sub||'').replace(/"/g,'&quot;')}" placeholder="Subtext…" style="flex:1" oninput="wrappedFunCardUpdate(${i},'sub',this.value)">
+      <button class="btn-sm danger" style="flex-shrink:0" onclick="wrappedFunCardRemove(${i})">✕</button>
+    </div>`).join('');
+}
+
+function wrappedFunCardUpdate(i, key, val) {
+  if (!_wrappedAdminFunCards[i]) return;
+  _wrappedAdminFunCards[i][key] = val;
+}
+function wrappedFunCardRemove(i) {
+  _wrappedAdminFunCards.splice(i, 1);
+  renderWrappedFunCardsList();
+}
+function addWrappedFunCard() {
+  _wrappedAdminFunCards.push({ emoji: '', text: '', sub: '' });
+  renderWrappedFunCardsList();
+}
+
+async function saveWrappedConfig() {
+  const config = {
+    year:              (document.getElementById('wrapped-cfg-year')?.value || '').trim(),
+    sub:               (document.getElementById('wrapped-cfg-sub')?.value  || '').trim(),
+    outro:             (document.getElementById('wrapped-cfg-outro')?.value || '').trim(),
+    broadcast:         (document.getElementById('wrapped-cfg-broadcast')?.value || '').trim(),
+    broadcast_color:   (document.getElementById('wrapped-cfg-broadcast-color')?.value || '').trim(),
+    fun_cards:         _wrappedAdminFunCards.filter(fc => fc.text),
+  };
+  const token = localStorage.getItem('kfs_admin_token');
+  try {
+    const res = await fetch('/api/admin/wrapped/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error('Save failed');
+    _showShareToast('Wrapped config saved!');
+    _wrappedConfig = config;
+  } catch(e) {
+    alert('Error saving: ' + e.message);
+  }
+}
+
+// Hook into showAdminSection to load wrapped config
+// (called via the existing showAdminSection at the top of this file)
+document.addEventListener('DOMContentLoaded', () => {
+  // Patch wrapped into admin section loader
+  const origShowAdmin = window.showAdminSection;
+  if (origShowAdmin) {
+    window.showAdminSection = function(name) {
+      origShowAdmin(name);
+      if (name === 'wrapped') loadWrappedAdminSection();
+    };
+  }
+});
+
 </script>
 </body>
 </html>

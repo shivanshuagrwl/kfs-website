@@ -1620,6 +1620,125 @@ app.get('/events/:slug', async (req, res) => {
   }
 });
 
+// ── KFS WRAPPED ───────────────────────────────────────────────────────────────
+// Public: get the wrapped config (year, taglines, fun cards) set by admin
+app.get('/api/wrapped/config', async (req, res) => {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'wrapped_config').maybeSingle();
+  try {
+    res.json(data ? JSON.parse(data.value) : {});
+  } catch { res.json({}); }
+});
+
+// Admin: save wrapped config
+app.post('/api/admin/wrapped/config', requireSection('settings'), async (req, res) => {
+  const config = req.body;
+  if (typeof config !== 'object') return res.status(400).json({ error: 'Invalid config' });
+  await supabase.from('settings').upsert({ key: 'wrapped_config', value: JSON.stringify(config) }, { onConflict: 'key' });
+  await logActivity(req.admin.id, req.admin.name, 'update', 'settings', 'KFS Wrapped Config');
+  res.json({ success: true });
+});
+
+// Public: aggregate stats for Wrapped (all-time + per-year totals)
+app.get('/api/wrapped/stats', async (req, res) => {
+  try {
+    const year = req.query.year ? parseInt(req.query.year) : null;
+
+    // All movies
+    const { data: movies } = await supabase.from('movies').select('id,title,genre,release_year,director,poster_image');
+
+    // Genre frequency map across all KFS films
+    const genreCount = {};
+    (movies || []).forEach(m => {
+      let genres = [];
+      try { genres = JSON.parse(m.genre || '[]'); } catch { genres = m.genre ? [m.genre] : []; }
+      if (!Array.isArray(genres)) genres = [genres];
+      genres.forEach(g => { if (g) genreCount[g] = (genreCount[g] || 0) + 1; });
+    });
+    const topGenres = Object.entries(genreCount).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([g,c])=>({genre:g,count:c}));
+
+    // Total counts
+    const { count: totalMovies } = await supabase.from('movies').select('id', { count: 'exact', head: true });
+    const { count: totalBlogs  } = await supabase.from('blogs').select('id', { count: 'exact', head: true }).eq('published', true);
+    const { count: totalEvents } = await supabase.from('events').select('id', { count: 'exact', head: true });
+    const { count: totalReviews} = await supabase.from('reviews').select('id', { count: 'exact', head: true });
+
+    // Year-specific counts (films released that year)
+    let yearMovies = null;
+    if (year) {
+      const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('release_year', year);
+      yearMovies = count;
+    }
+
+    // Top reviewed film
+    const { data: reviews } = await supabase.from('reviews').select('movie_id,overall');
+    const filmScores = {};
+    (reviews || []).forEach(r => {
+      if (!filmScores[r.movie_id]) filmScores[r.movie_id] = [];
+      filmScores[r.movie_id].push(r.overall);
+    });
+    let topRated = null;
+    let bestScore = 0;
+    Object.entries(filmScores).forEach(([mid, scores]) => {
+      const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
+      if (avg > bestScore && scores.length >= 2) { bestScore = avg; topRated = mid; }
+    });
+    const topRatedMovie = topRated ? (movies||[]).find(m=>String(m.id)===String(topRated)) : null;
+
+    res.json({
+      totalMovies: totalMovies || 0,
+      totalBlogs: totalBlogs || 0,
+      totalEvents: totalEvents || 0,
+      totalReviews: totalReviews || 0,
+      yearMovies,
+      topGenres,
+      topRatedMovie: topRatedMovie ? { id: topRatedMovie.id, title: topRatedMovie.title, poster_image: topRatedMovie.poster_image, score: Math.round(bestScore*10)/10 } : null,
+      allMovies: (movies || []).map(m => {
+        let genres = [];
+        try { genres = JSON.parse(m.genre || '[]'); } catch { genres = m.genre ? [m.genre] : []; }
+        return { id: m.id, title: m.title, genre: Array.isArray(genres) ? genres : [genres], release_year: m.release_year, director: m.director, poster_image: m.poster_image };
+      }),
+    });
+  } catch(e) {
+    console.error('[wrapped/stats]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── RECOMMENDATIONS ────────────────────────────────────────────────────────────
+// Returns films similar to a given film by tag/genre overlap
+app.get('/api/recommendations/:movieId', async (req, res) => {
+  try {
+    const { data: source } = await supabase.from('movies').select('id,genre,director').eq('id', req.params.movieId).maybeSingle();
+    if (!source) return res.json([]);
+
+    let srcGenres = [];
+    try { srcGenres = JSON.parse(source.genre || '[]'); } catch { srcGenres = source.genre ? [source.genre] : []; }
+    if (!Array.isArray(srcGenres)) srcGenres = [srcGenres];
+    srcGenres = srcGenres.map(g => g.toLowerCase().trim());
+
+    const { data: all } = await supabase.from('movies').select('id,title,genre,director,poster_image,release_year').neq('id', req.params.movieId);
+
+    const scored = (all || []).map(m => {
+      let mGenres = [];
+      try { mGenres = JSON.parse(m.genre || '[]'); } catch { mGenres = m.genre ? [m.genre] : []; }
+      if (!Array.isArray(mGenres)) mGenres = [mGenres];
+      mGenres = mGenres.map(g => g.toLowerCase().trim());
+
+      let score = 0;
+      // Genre overlap (2 pts per match)
+      srcGenres.forEach(g => { if (mGenres.includes(g)) score += 2; });
+      // Same director (3 pts)
+      if (source.director && m.director && source.director.split(/[,|]+/)[0].trim().toLowerCase() === m.director.split(/[,|]+/)[0].trim().toLowerCase()) score += 3;
+
+      return { ...m, genre: mGenres, _score: score };
+    }).filter(m => m._score > 0).sort((a,b) => b._score - a._score).slice(0, 6);
+
+    res.json(scored.map(({ _score, ...m }) => m));
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
