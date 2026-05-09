@@ -235,12 +235,13 @@ app.get('/robots.txt', (req, res) => {
   );
 });
 
-// ── SITEMAP.XML ───────────────────────────────────────────────────────────────
-// Helper: turn a title into a URL slug (mirrors frontend slugify)
+// ── SHARED UTILITIES ──────────────────────────────────────────────────────────
+// Turn a title into a URL slug — mirrors the frontend slugify helper
 function slugify(str) {
   return (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// ── SITEMAP.XML ───────────────────────────────────────────────────────────────
 app.get('/sitemap.xml', async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
 
@@ -1458,6 +1459,164 @@ app.get('/og/blog/:id', async (req, res) => {
   } catch (err) {
     console.error('[og/blog]', err.message);
     res.status(500).send('OG generation failed');
+  }
+});
+
+// ── SHARE-LINK HTML WITH DYNAMIC OG TAGS ─────────────────────────────────────
+// Injects og:title / og:description / og:image into the SPA shell so
+// social crawlers (WhatsApp, Twitter, Telegram…) get real previews AND
+// real users land on the correct deep-linked page.
+
+const fs = require('fs');
+
+// Read the base HTML once (cached).  We'll inject <meta> tags into <head>.
+function injectOgTags(html, { title, description, imageUrl, url }) {
+  const siteName = 'KFS — KIIT Film Society';
+  const safeTitle = (title || siteName).replace(/"/g, '&quot;');
+  const safeDesc  = (description || 'KIIT Film Society — student-run cinema collective.').slice(0, 200).replace(/"/g, '&quot;');
+  const safeImg   = imageUrl || '';
+  const safeUrl   = url || 'https://kiitfilmsociety.in';
+
+  const tags = `
+  <!-- Dynamic OG tags injected by server -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="${siteName}" />
+  <meta property="og:title"       content="${safeTitle}" />
+  <meta property="og:description" content="${safeDesc}" />
+  <meta property="og:url"         content="${safeUrl}" />
+  ${safeImg ? `<meta property="og:image"       content="${safeImg}" />
+  <meta property="og:image:width"  content="1200" />
+  <meta property="og:image:height" content="630" />` : ''}
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:title"       content="${safeTitle}" />
+  <meta name="twitter:description" content="${safeDesc}" />
+  ${safeImg ? `<meta name="twitter:image"       content="${safeImg}" />` : ''}
+  <link rel="canonical"            href="${safeUrl}" />`;
+
+  // Insert just before </head>; fallback: prepend to <body>
+  if (html.includes('</head>')) {
+    return html.replace('</head>', tags + '\n</head>');
+  }
+  return html.replace('<body', tags + '\n<body');
+}
+
+// Extract numeric/UUID id from end of a slug like "my-post-title-42"
+function idFromSlug(slug) {
+  if (!slug) return null;
+  // UUID pattern
+  const uuidMatch = slug.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+  if (uuidMatch) return uuidMatch[1];
+  // Numeric id at end
+  const numMatch = slug.match(/-(\d+)$/);
+  if (numMatch) return numMatch[1];
+  // Fallback: the whole slug might just be an id
+  return slug;
+}
+
+// Serve the SPA index.html with injected OG tags
+async function serveWithOg(res, ogData) {
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  try {
+    let html = fs.readFileSync(indexPath, 'utf8');
+    html = injectOgTags(html, ogData);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Don't cache share pages — OG data can change
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(html);
+  } catch (e) {
+    // If index.html can't be read, fall through
+    res.sendFile(indexPath);
+  }
+}
+
+// ── /blog/:slug  (e.g. /blog/my-post-title-42) ───────────────────────────────
+app.get('/blog/:slug', async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    const { data: b } = id
+      ? await supabase.from('blogs').select('id,title,excerpt,cover_image,author').eq('id', id).maybeSingle()
+      : null;
+
+    if (!b) {
+      // Unknown blog — serve SPA without special OG so the app can show its own 404
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+
+    const canonicalSlug = slugify(b.title) + '-' + b.id;
+    const pageUrl = `https://kiitfilmsociety.in/blog/${canonicalSlug}`;
+
+    return serveWithOg(res, {
+      title:       b.title ? `${b.title} — KFS Blog` : 'KFS Blog',
+      description: b.excerpt || `Read "${b.title}" on the KIIT Film Society blog.`,
+      imageUrl:    b.cover_image ? `https://kiitfilmsociety.in/og/blog/${b.id}` : null,
+      url:         pageUrl,
+    });
+  } catch (err) {
+    console.error('[share/blog]', err.message);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+});
+
+// ── /films/:slug  (e.g. /films/do-paise-ki-dhoop-7) ─────────────────────────
+app.get('/films/:slug', async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    const { data: m } = id
+      ? await supabase.from('movies').select('id,title,description,poster_image,director,release_year').eq('id', id).maybeSingle()
+      : null;
+
+    if (!m) {
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+
+    const canonicalSlug = slugify(m.title) + '-' + m.id;
+    const pageUrl = `https://kiitfilmsociety.in/films/${canonicalSlug}`;
+    const desc = m.description
+      ? m.description.slice(0, 160)
+      : (m.director ? `Directed by ${m.director}${m.release_year ? ` · ${m.release_year}` : ''}` : 'A film by KIIT Film Society.');
+
+    return serveWithOg(res, {
+      title:       m.title ? `${m.title} — KFS Films` : 'KFS Films',
+      description: desc,
+      imageUrl:    m.poster_image ? `https://kiitfilmsociety.in/og/film/${m.id}` : null,
+      url:         pageUrl,
+    });
+  } catch (err) {
+    console.error('[share/film]', err.message);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+});
+
+// ── /events/:slug ─────────────────────────────────────────────────────────────
+app.get('/events/:slug', async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    const { data: e } = id
+      ? await supabase.from('events').select('id,title,description,cover_image,event_date,location').eq('id', id).maybeSingle()
+      : null;
+
+    if (!e) {
+      return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+
+    const canonicalSlug = slugify(e.title) + '-' + e.id;
+    const pageUrl = `https://kiitfilmsociety.in/events/${canonicalSlug}`;
+    const dateStr = e.event_date
+      ? new Date(e.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null;
+    const desc = e.description
+      ? e.description.slice(0, 160)
+      : `KFS Event${dateStr ? ' on ' + dateStr : ''}${e.location ? ' at ' + e.location : ''}.`;
+
+    return serveWithOg(res, {
+      title:       e.title ? `${e.title} — KFS Events` : 'KFS Events',
+      description: desc,
+      imageUrl:    e.cover_image ? `https://kiitfilmsociety.in/og/event/${e.id}` : null,
+      url:         pageUrl,
+    });
+  } catch (err) {
+    console.error('[share/event]', err.message);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
   }
 });
 
