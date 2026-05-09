@@ -1921,52 +1921,159 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .movie-card:hover .movie-rating-badge{opacity:.85}
 
 /* ── KFS WRAPPED ─────────────────────────────────────────────── */
-/* ── KFS WRAPPED ─────────────────────────────────────────────── */
-#page-wrapped{padding:80px 0 60px;background:var(--black)}
-.wrapped-hero{text-align:center;padding:60px 24px 40px;background:radial-gradient(ellipse at 50% 0%,rgba(245,245,245,.06) 0%,transparent 70%)}
-.wrapped-hero-year{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:16px}
-.wrapped-hero-title{font-size:clamp(36px,7vw,72px);font-weight:800;letter-spacing:-.04em;line-height:1;margin-bottom:12px;color:var(--white)}
-.wrapped-hero-sub{font-size:16px;color:var(--grey);max-width:480px;margin:0 auto 32px}
-.wrapped-start-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--white);color:var(--black);border:none;border-radius:40px;font-size:14px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:transform .2s,opacity .2s}
-.wrapped-start-btn:hover{transform:scale(1.04);opacity:.9}
-.wrapped-deck-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 0 40px}
-.wrapped-deck{position:relative;width:min(360px,90vw);height:520px;margin:0 auto}
-.wrapped-card{position:absolute;inset:0;border-radius:28px;overflow:hidden;cursor:pointer;user-select:none;transition:transform .5s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,box-shadow .4s ease}
-.wrapped-card.is-active{transform:none;opacity:1;z-index:10;box-shadow:0 24px 64px rgba(0,0,0,.6)}
-.wrapped-card.is-behind{transform:scale(.93) translateY(24px);opacity:.5;z-index:2;pointer-events:none}
-.wrapped-card.is-behind-2{transform:scale(.86) translateY(48px);opacity:.25;z-index:1;pointer-events:none}
-.wrapped-card.is-exit{transform:translateX(130%) rotate(16deg)!important;opacity:0!important;pointer-events:none;transition:transform .4s cubic-bezier(.55,0,1,.45),opacity .3s ease!important}
-.wrapped-card-inner{padding:32px 28px 36px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden}
+#page-wrapped{padding:80px 0 60px;background:var(--black);min-height:100vh}
+
+/* Hero */
+.wrapped-hero{
+  text-align:center;padding:80px 24px 52px;position:relative;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%,rgba(245,245,245,.07) 0%,transparent 65%);
+}
+.wrapped-hero::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 2px,rgba(255,255,255,.012) 2px,rgba(255,255,255,.012) 4px
+  );pointer-events:none;z-index:0;
+}
+.wrapped-hero-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 14px;border-radius:20px;
+  border:1px solid rgba(245,245,245,.12);
+  background:rgba(245,245,245,.05);
+  font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  color:rgba(245,245,245,.55);margin-bottom:24px;position:relative;z-index:1;
+}
+.wrapped-hero-badge-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(245,245,245,.5);
+  box-shadow:0 0 6px rgba(245,245,245,.5);
+  animation:wrapBadgePulse 2s ease-in-out infinite;
+}
+@keyframes wrapBadgePulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+.wrapped-hero-year{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:16px;position:relative;z-index:1}
+.wrapped-hero-title{
+  font-size:clamp(42px,9vw,88px);font-weight:900;letter-spacing:-.05em;line-height:.95;
+  margin-bottom:20px;color:var(--white);position:relative;z-index:1;
+}
+.wrapped-hero-title em{font-style:normal;
+  background:linear-gradient(135deg,#fff 0%,rgba(245,245,245,.7) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.wrapped-hero-sub{font-size:15px;color:rgba(245,245,245,.5);max-width:400px;margin:0 auto 36px;line-height:1.6;position:relative;z-index:1}
+.wrapped-hero-stats{
+  display:flex;justify-content:center;gap:28px;margin-bottom:36px;position:relative;z-index:1;
+}
+.wrapped-hero-stat{display:flex;flex-direction:column;gap:3px;align-items:center}
+.wrapped-hero-stat-num{font-size:22px;font-weight:800;letter-spacing:-.03em;color:var(--white)}
+.wrapped-hero-stat-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(245,245,245,.35)}
+.wrapped-hero-divider{width:1px;background:rgba(245,245,245,.1);align-self:stretch;margin:4px 0}
+.wrapped-start-btn{
+  display:inline-flex;align-items:center;gap:9px;padding:16px 36px;
+  background:var(--white);color:var(--black);border:none;border-radius:40px;
+  font-size:14px;font-weight:800;letter-spacing:.03em;cursor:pointer;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;
+  box-shadow:0 0 0 0 rgba(245,245,245,.2);position:relative;z-index:1;
+}
+.wrapped-start-btn:hover{transform:scale(1.06);box-shadow:0 0 40px rgba(245,245,245,.15)}
+.wrapped-start-btn:active{transform:scale(.97)}
+.wrapped-hint{font-size:11px;color:rgba(245,245,245,.25);margin-top:14px;position:relative;z-index:1;letter-spacing:.04em}
+
+/* Deck */
+.wrapped-deck-wrap{display:flex;flex-direction:column;align-items:center;padding:24px 0 48px;opacity:0;transition:opacity .4s ease}
+.wrapped-deck-wrap.visible{opacity:1}
+.wrapped-deck{position:relative;width:min(360px,90vw);height:560px;margin:0 auto}
+.wrapped-card{
+  position:absolute;inset:0;border-radius:32px;overflow:hidden;cursor:pointer;
+  user-select:none;
+  transition:transform .55s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,box-shadow .4s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.wrapped-card.is-active{
+  transform:none;opacity:1;z-index:10;
+  box-shadow:0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);
+}
+.wrapped-card.is-behind{transform:scale(.93) translateY(28px);opacity:.55;z-index:2;pointer-events:none}
+.wrapped-card.is-behind-2{transform:scale(.86) translateY(54px);opacity:.2;z-index:1;pointer-events:none}
+.wrapped-card.is-exit-left{
+  transform:translateX(-130%) rotate(-14deg)!important;
+  opacity:0!important;pointer-events:none;
+  transition:transform .38s cubic-bezier(.55,0,1,.45),opacity .28s ease!important;
+}
+.wrapped-card.is-exit-right{
+  transform:translateX(130%) rotate(14deg)!important;
+  opacity:0!important;pointer-events:none;
+  transition:transform .38s cubic-bezier(.55,0,1,.45),opacity .28s ease!important;
+}
+.wrapped-card-inner{
+  padding:36px 30px 40px;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;position:relative;overflow:hidden;
+}
 .wrapped-card-bg{position:absolute;inset:0;z-index:0}
+.wrapped-card-grain{
+  position:absolute;inset:0;z-index:1;opacity:.06;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:128px;
+}
+.wrapped-card-glow{
+  position:absolute;bottom:-40%;left:50%;transform:translateX(-50%);
+  width:80%;height:70%;border-radius:50%;z-index:1;pointer-events:none;
+  filter:blur(48px);opacity:.25;
+}
 .wrapped-card-content{position:relative;z-index:2;color:#fff}
-.wrapped-card-eyebrow{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px;opacity:.65}
-.wrapped-card-headline{font-size:clamp(26px,6vw,40px);font-weight:800;letter-spacing:-.03em;line-height:1.1;margin-bottom:8px}
-.wrapped-card-sub{font-size:13px;opacity:.65;line-height:1.5;margin-top:6px}
+.wrapped-card-eyebrow{
+  font-size:9px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;
+  margin-bottom:14px;opacity:.5;
+}
+.wrapped-card-headline{
+  font-size:clamp(28px,7vw,44px);font-weight:900;letter-spacing:-.04em;
+  line-height:1.05;margin-bottom:8px;
+}
+.wrapped-card-sub{font-size:13px;opacity:.6;line-height:1.55;margin-top:8px}
 /* SVG icon block on cards — replaces emoji */
-.wrapped-card-icon{width:52px;height:52px;margin-bottom:16px;display:block;opacity:.9}
-.wrapped-card-stat{font-size:clamp(54px,12vw,88px);font-weight:900;letter-spacing:-.05em;line-height:1}
-.wrapped-card-stat-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;margin-top:4px}
-.wrapped-card-genres{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
-.wrapped-card-genre-pill{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;background:rgba(255,255,255,.18);backdrop-filter:blur(4px)}
-.wrapped-card-film-poster{width:100px;height:150px;object-fit:cover;border-radius:10px;margin-bottom:12px;display:block;box-shadow:0 8px 24px rgba(0,0,0,.5)}
-.wrapped-card-film-row{display:flex;gap:10px;margin-top:10px;overflow:hidden}
-.wrapped-card-film-row .wrapped-card-film-poster{width:74px;height:110px}
-.wrapped-progress{display:flex;gap:4px;margin-bottom:24px;position:relative;z-index:2}
-.wrapped-progress-bar{height:3px;flex:1;border-radius:2px;background:rgba(255,255,255,.18);transition:background .3s}
-.wrapped-progress-bar.done{background:rgba(255,255,255,.85)}
-.wrapped-progress-bar.active{background:rgba(255,255,255,.55)}
-.wrapped-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 0 0;width:min(360px,90vw)}
-.wrapped-nav-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:8px 18px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;transition:all .2s}
-.wrapped-nav-btn:hover{border-color:var(--white);color:var(--white)}
-.wrapped-share-btn{background:var(--white);color:var(--black);border:none;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:transform .2s}
-.wrapped-share-btn:hover{transform:scale(1.05)}
-.wrapped-card-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
-.wrapped-card-list li{font-size:13px;display:flex;align-items:center;gap:10px;opacity:.85}
-.wrapped-card-list-icon{width:16px;height:16px;flex-shrink:0;opacity:.55}
-.wrapped-restart-row{text-align:center;padding:12px 0}
-.wrapped-card-events-row{display:flex;flex-direction:column;gap:7px;margin-top:12px}
-.wrapped-card-event-item{font-size:12px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;line-height:1.3}
-.wrapped-card-event-item svg{flex-shrink:0;opacity:.6}
+.wrapped-card-icon{width:56px;height:56px;margin-bottom:18px;display:block;opacity:.85}
+.wrapped-card-stat{font-size:clamp(60px,13vw,96px);font-weight:900;letter-spacing:-.06em;line-height:1}
+.wrapped-card-stat-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.45;margin-top:6px;font-weight:700}
+.wrapped-card-genres{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.wrapped-card-genre-pill{
+  padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;
+  background:rgba(255,255,255,.15);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12);
+}
+.wrapped-card-film-poster{width:100px;height:150px;object-fit:cover;border-radius:12px;margin-bottom:14px;display:block;box-shadow:0 12px 32px rgba(0,0,0,.6)}
+.wrapped-card-film-row{display:flex;gap:10px;margin-top:12px;overflow:hidden}
+.wrapped-card-film-row .wrapped-card-film-poster{width:76px;height:114px;border-radius:10px}
+.wrapped-progress{display:flex;gap:5px;margin-bottom:28px;position:relative;z-index:2}
+.wrapped-progress-bar{height:3px;flex:1;border-radius:3px;background:rgba(255,255,255,.15);transition:background .4s ease}
+.wrapped-progress-bar.done{background:rgba(255,255,255,.9)}
+.wrapped-progress-bar.active{background:rgba(255,255,255,.6)}
+.wrapped-nav{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:18px 0 0;width:min(360px,90vw);gap:10px;
+}
+.wrapped-nav-btn{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  color:rgba(245,245,245,.6);padding:10px 22px;border-radius:24px;
+  font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:all .2s;
+}
+.wrapped-nav-btn:hover{border-color:rgba(255,255,255,.3);color:var(--white);background:rgba(255,255,255,.1)}
+.wrapped-share-btn{
+  background:var(--white);color:var(--black);border:none;
+  padding:10px 22px;border-radius:24px;font-size:12px;font-weight:800;
+  letter-spacing:.04em;cursor:pointer;transition:transform .2s,box-shadow .2s;
+  flex:1;max-width:140px;text-align:center;
+  box-shadow:0 4px 20px rgba(245,245,245,.12);
+}
+.wrapped-share-btn:hover{transform:scale(1.05);box-shadow:0 6px 28px rgba(245,245,245,.2)}
+.wrapped-card-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.wrapped-card-list li{font-size:13px;display:flex;align-items:center;gap:10px;opacity:.8;line-height:1.4}
+.wrapped-card-list-icon{width:16px;height:16px;flex-shrink:0;opacity:.5}
+.wrapped-restart-row{text-align:center;padding:16px 0}
+.wrapped-card-events-row{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.wrapped-card-event-item{
+  font-size:12px;display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;padding:8px 12px;line-height:1.35;
+}
+.wrapped-card-event-item svg{flex-shrink:0;opacity:.5}
 /* admin wrapped */
 .wrapped-admin-card-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
 .wrapped-admin-fun-row{display:flex;gap:8px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
@@ -2538,25 +2645,43 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- KFS WRAPPED PAGE -->
 <div id="page-wrapped" class="page">
-  <div class="wrapped-hero">
-    <div class="wrapped-hero-year" id="wrapped-year-label">KFS · 2025</div>
-    <h1 class="wrapped-hero-title">Your Year<br>at <span>KFS</span></h1>
+  <div class="wrapped-hero" id="wrapped-hero">
+    <div class="wrapped-hero-badge">
+      <span class="wrapped-hero-badge-dot"></span>
+      <span id="wrapped-year-label">KFS · 2025</span>
+    </div>
+    <h1 class="wrapped-hero-title">Your Year<br><em>at KFS</em></h1>
     <p class="wrapped-hero-sub" id="wrapped-hero-sub">Films watched. Events attended. Stories read. Your KFS year, in cards.</p>
-    <button class="wrapped-start-btn" onclick="startWrapped()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/></svg>
-      See Your Wrapped
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+    <div class="wrapped-hero-stats" id="wrapped-hero-stats" style="display:none">
+      <div class="wrapped-hero-stat">
+        <div class="wrapped-hero-stat-num" id="whero-films">—</div>
+        <div class="wrapped-hero-stat-label">Films</div>
+      </div>
+      <div class="wrapped-hero-divider"></div>
+      <div class="wrapped-hero-stat">
+        <div class="wrapped-hero-stat-num" id="whero-events">—</div>
+        <div class="wrapped-hero-stat-label">Events</div>
+      </div>
+      <div class="wrapped-hero-divider"></div>
+      <div class="wrapped-hero-stat">
+        <div class="wrapped-hero-stat-num" id="whero-blogs">—</div>
+        <div class="wrapped-hero-stat-label">Reads</div>
+      </div>
+    </div>
+    <button class="wrapped-start-btn" id="wrapped-start-btn" onclick="startWrapped()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
       See Your Wrapped
     </button>
+    <p class="wrapped-hint">tap cards to advance · swipe to navigate</p>
   </div>
 
   <!-- Card Deck (shown after start) -->
   <div class="wrapped-deck-wrap" id="wrapped-deck-wrap" style="display:none">
     <div class="wrapped-deck" id="wrapped-deck"></div>
     <div class="wrapped-nav">
-      <button class="wrapped-nav-btn" onclick="wrappedPrev()">Back</button>
-      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share Card</button>
-      <button class="wrapped-nav-btn" onclick="wrappedNext()">Next</button>
+      <button class="wrapped-nav-btn" onclick="wrappedPrev()">← Back</button>
+      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share</button>
+      <button class="wrapped-nav-btn" onclick="wrappedNext()">Next →</button>
     </div>
   </div>
 
@@ -8558,23 +8683,24 @@ const W_ICONS = {
 // Fun-card icon options for admin picker
 const W_FUN_ICONS = ['film','play','star','book','event','chart','globe','heart','lens','sun','tape','award'];
 
-// Card colour themes — dark, site-native palettes only (no external hex)
+// Card colour themes — cinematic palettes with accent glow colours
 const WRAPPED_THEMES = [
-  { bg: 'linear-gradient(145deg,#0a0a0a 0%,#111 100%)',         fg: '#f5f5f5', noise: .04 },
-  { bg: 'linear-gradient(145deg,#0a0a12 0%,#0d0d20 100%)',      fg: '#e8e8ff', noise: .04 },
-  { bg: 'linear-gradient(145deg,#0a0f0a 0%,#0d1a0d 100%)',      fg: '#e8f0e8', noise: .04 },
-  { bg: 'linear-gradient(145deg,#120a0a 0%,#1e0d0d 100%)',      fg: '#ffe8e8', noise: .04 },
-  { bg: 'linear-gradient(145deg,#0f0d08 0%,#1e1a08 100%)',      fg: '#f5f0e0', noise: .04 },
-  { bg: 'linear-gradient(145deg,#0a0a14 0%,#10102a 100%)',      fg: '#dde8ff', noise: .04 },
-  { bg: 'linear-gradient(145deg,#0a0a0a 0%,#181818 100%)',      fg: '#d4d4d4', noise: .04 },
+  { bg: 'linear-gradient(150deg,#0a0a0a 0%,#141414 100%)', fg: '#f5f5f5', glow: 'rgba(245,245,245,.12)' },
+  { bg: 'linear-gradient(150deg,#08080f 0%,#0e0e22 100%)', fg: '#c8c8ff', glow: 'rgba(120,120,255,.25)' },
+  { bg: 'linear-gradient(150deg,#070f07 0%,#0b1c0b 100%)', fg: '#b8f0b8', glow: 'rgba(80,200,80,.22)' },
+  { bg: 'linear-gradient(150deg,#120606 0%,#200b0b 100%)', fg: '#ffb8b8', glow: 'rgba(255,80,80,.22)' },
+  { bg: 'linear-gradient(150deg,#0f0c05 0%,#1c1605 100%)', fg: '#f5e8b0', glow: 'rgba(240,200,60,.22)' },
+  { bg: 'linear-gradient(150deg,#06060f 0%,#0c0c28 100%)', fg: '#b0c8ff', glow: 'rgba(80,120,255,.25)' },
+  { bg: 'linear-gradient(150deg,#0a0808 0%,#1a1010 100%)', fg: '#f0c8a0', glow: 'rgba(220,140,60,.22)' },
+  { bg: 'linear-gradient(150deg,#080a0f 0%,#0e1420 100%)', fg: '#a0e0ff', glow: 'rgba(60,180,255,.22)' },
 ];
 
 const BROADCAST_THEMES = {
-  dark:    'linear-gradient(145deg,#0a0a0a 0%,#1a1a1a 100%)',
-  slate:   'linear-gradient(145deg,#0a0d14 0%,#0d1424 100%)',
-  forest:  'linear-gradient(145deg,#080f08 0%,#0d1a0d 100%)',
-  crimson: 'linear-gradient(145deg,#140808 0%,#220d0d 100%)',
-  gold:    'linear-gradient(145deg,#130f04 0%,#1e1804 100%)',
+  dark:    'linear-gradient(150deg,#0a0a0a 0%,#1a1a1a 100%)',
+  slate:   'linear-gradient(150deg,#08090f 0%,#0c1020 100%)',
+  forest:  'linear-gradient(150deg,#060f06 0%,#0b1a0b 100%)',
+  crimson: 'linear-gradient(150deg,#120606 0%,#200b0b 100%)',
+  gold:    'linear-gradient(150deg,#100c03 0%,#1c1603 100%)',
 };
 
 function _wrappedTheme(i) { return WRAPPED_THEMES[i % WRAPPED_THEMES.length]; }
@@ -8628,11 +8754,11 @@ function buildWrappedCards(stats, config) {
     const bg = BROADCAST_THEMES[themeName] || BROADCAST_THEMES.dark;
     cards.push({
       id: 'broadcast',
-      theme: { bg, fg: '#f5f5f5' },
+      theme: { bg, fg: '#f5f5f5', glow: 'rgba(245,245,245,.15)' },
       render: () => `
         ${W_ICONS.broadcast}
         <div class="wrapped-card-eyebrow">From KFS</div>
-        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${config.broadcast}</div>
+        <div class="wrapped-card-headline" style="font-size:clamp(20px,4.5vw,30px);line-height:1.15">${config.broadcast}</div>
       `,
     });
   }
@@ -8645,7 +8771,7 @@ function buildWrappedCards(stats, config) {
       ${W_ICONS.tape}
       <div class="wrapped-card-eyebrow">KFS · ${year}</div>
       <div class="wrapped-card-headline">Your Year<br>in Cinema</div>
-      <div class="wrapped-card-sub">Tap to see how your KFS year unfolded.</div>
+      <div class="wrapped-card-sub">Tap or swipe to reveal how your KFS year unfolded — one card at a time.</div>
     `,
   });
 
@@ -8659,12 +8785,14 @@ function buildWrappedCards(stats, config) {
       <div class="wrapped-card-stat">${watchedCount}</div>
       <div class="wrapped-card-stat-label">${watchedCount === 1 ? 'film' : 'films'} watched</div>
       ${watchedCount === 0
-        ? `<div class="wrapped-card-sub" style="margin-top:14px">Start exploring the KFS library — hit the watchlist badge on any film.</div>`
-        : watchedCount >= 10
-          ? `<div class="wrapped-card-sub" style="margin-top:14px">Incredible dedication to the screen.</div>`
-          : watchedCount >= 5
-            ? `<div class="wrapped-card-sub" style="margin-top:14px">Impressive — you're building a real filmography.</div>`
-            : `<div class="wrapped-card-sub" style="margin-top:14px">Every film is a new perspective.</div>`}
+        ? `<div class="wrapped-card-sub" style="margin-top:14px">Start exploring the KFS library — mark films as watched to track your journey.</div>`
+        : watchedCount >= 20
+          ? `<div class="wrapped-card-sub" style="margin-top:14px">Seriously cinematic. You live here.</div>`
+          : watchedCount >= 10
+            ? `<div class="wrapped-card-sub" style="margin-top:14px">Incredible dedication to the craft.</div>`
+            : watchedCount >= 5
+              ? `<div class="wrapped-card-sub" style="margin-top:14px">You're building a real filmography.</div>`
+              : `<div class="wrapped-card-sub" style="margin-top:14px">Every film is a new perspective.</div>`}
       ${myMovies.length > 0 ? `<div class="wrapped-card-events-row" style="margin-top:10px">
         ${myMovies.slice(0,4).map(m=>`<div class="wrapped-card-event-item">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -8797,13 +8925,13 @@ function buildWrappedCards(stats, config) {
       theme: _wrappedTheme(6),
       render: () => `
         ${W_ICONS.globe}
-        <div class="wrapped-card-eyebrow">KFS in ${year}</div>
+        <div class="wrapped-card-eyebrow">KFS · All Time</div>
         <div class="wrapped-card-headline">By the<br>Numbers</div>
         <ul class="wrapped-card-list">
-          <li>${listIconSvg}${stats.totalMovies} films in the library</li>
-          <li>${listIconSvg}${stats.totalEvents} events hosted</li>
-          <li>${listIconSvg}${stats.totalBlogs} blog posts published</li>
-          <li>${listIconSvg}${stats.totalReviews} community reviews</li>
+          <li>${listIconSvg}<strong>${stats.totalMovies}</strong>&nbsp;films in the library</li>
+          <li>${listIconSvg}<strong>${stats.totalEvents}</strong>&nbsp;events hosted</li>
+          <li>${listIconSvg}<strong>${stats.totalBlogs}</strong>&nbsp;blog posts published</li>
+          <li>${listIconSvg}<strong>${stats.totalReviews}</strong>&nbsp;community reviews</li>
         </ul>
       `,
     });
@@ -8886,10 +9014,16 @@ function buildWrappedCards(stats, config) {
     id: 'outro',
     theme: _wrappedTheme(0),
     render: () => `
-      ${W_ICONS.tape}
+      ${W_ICONS.award}
       <div class="wrapped-card-eyebrow">KFS · ${year}</div>
-      <div class="wrapped-card-headline">That's a<br>Wrap.</div>
-      <div class="wrapped-card-sub" style="white-space:pre-line">${outroText}</div>
+      <div class="wrapped-card-headline" style="font-size:clamp(40px,9vw,64px)">That's a<br>Wrap.</div>
+      <div class="wrapped-card-sub" style="white-space:pre-line;margin-top:14px;font-size:14px;opacity:.7">${outroText}</div>
+      <div style="margin-top:20px">
+        <button class="wrapped-start-btn" style="font-size:12px;padding:12px 24px" onclick="event.stopPropagation();shareWrappedCard()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share your Wrapped
+        </button>
+      </div>
     `,
   });
 
@@ -8909,44 +9043,115 @@ function renderWrappedDeck() {
     else if (i === _wrappedIndex + 1) div.classList.add('is-behind');
     else if (i === _wrappedIndex + 2) div.classList.add('is-behind-2');
     else div.style.opacity = '0';
+
+    // Progress bars keyed to _wrappedIndex (not i)
+    const progressHtml = _wrappedCards.map((_,j) =>
+      `<div class="wrapped-progress-bar ${j < _wrappedIndex ? 'done' : j === _wrappedIndex ? 'active' : ''}"></div>`
+    ).join('');
+
     div.innerHTML = `
       <div class="wrapped-card-inner">
         <div class="wrapped-card-bg" style="background:${t.bg};"></div>
+        <div class="wrapped-card-grain"></div>
+        ${t.glow ? `<div class="wrapped-card-glow" style="background:${t.glow}"></div>` : ''}
         <div class="wrapped-card-content" style="color:${t.fg}">
-          <div class="wrapped-progress">
-            ${_wrappedCards.map((_,j) => `<div class="wrapped-progress-bar ${j<i?'done':j===i?'active':''}"></div>`).join('')}
-          </div>
+          <div class="wrapped-progress">${progressHtml}</div>
           ${card.render()}
         </div>
       </div>`;
-    div.addEventListener('click', () => wrappedNext());
+
+    // Click: right half → next, left half → prev (intuitive story UX)
+    div.addEventListener('click', e => {
+      if (!div.classList.contains('is-active')) return;
+      const rect = div.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < rect.width * 0.25) wrappedPrev();
+      else wrappedNext();
+    });
+
     deck.appendChild(div);
   });
+
+  // Swipe support
+  _attachWrappedSwipe(deck);
+}
+
+let _wSwipeStartX = 0, _wSwipeStartY = 0, _wSwiping = false;
+function _attachWrappedSwipe(deck) {
+  deck.addEventListener('touchstart', e => {
+    _wSwipeStartX = e.touches[0].clientX;
+    _wSwipeStartY = e.touches[0].clientY;
+    _wSwiping = true;
+  }, { passive: true });
+  deck.addEventListener('touchend', e => {
+    if (!_wSwiping) return;
+    _wSwiping = false;
+    const dx = e.changedTouches[0].clientX - _wSwipeStartX;
+    const dy = e.changedTouches[0].clientY - _wSwipeStartY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx < 0) wrappedNext(); else wrappedPrev();
+    }
+  }, { passive: true });
+  // Keyboard
+  if (!deck._keyHandlerAttached) {
+    deck._keyHandlerAttached = true;
+    document.addEventListener('keydown', e => {
+      if (document.getElementById('page-wrapped')?.classList.contains('active')) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); wrappedNext(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); wrappedPrev(); }
+      }
+    });
+  }
 }
 
 async function loadWrapped() {
+  // Avoid double-loading
+  if (_wrappedStats !== null) return;
   try {
     const [stats, config] = await Promise.all([
-      apiFetch('/api/wrapped/stats'),
-      apiFetch('/api/wrapped/config'),
+      apiFetch('/api/wrapped/stats').catch(() => null),
+      apiFetch('/api/wrapped/config').catch(() => null),
     ]);
     _wrappedStats  = stats  || {};
     _wrappedConfig = config || {};
 
     const yearEl = document.getElementById('wrapped-year-label');
     const subEl  = document.getElementById('wrapped-hero-sub');
+    const statsEl = document.getElementById('wrapped-hero-stats');
     if (yearEl && _wrappedConfig.year) yearEl.textContent = `KFS · ${_wrappedConfig.year}`;
     if (subEl  && _wrappedConfig.sub)  subEl.textContent  = _wrappedConfig.sub;
+
+    // Populate hero stats from localStorage counts
+    const watchedCount = Object.keys(getWatchedMovies()).length;
+    const readCount    = Object.keys(getBlogReadState()).length;
+    const eventCount   = Object.keys(getRegisteredEvents()).length;
+    if (statsEl && (watchedCount + readCount + eventCount) > 0) {
+      document.getElementById('whero-films').textContent  = watchedCount;
+      document.getElementById('whero-events').textContent = eventCount;
+      document.getElementById('whero-blogs').textContent  = readCount;
+      statsEl.style.display = 'flex';
+    }
   } catch(e) {
     _wrappedStats = {}; _wrappedConfig = {};
   }
 }
 
 async function startWrapped() {
-  if (!_wrappedStats) await loadWrapped();
+  // Ensure data loaded (loadWrapped guards against double-loading)
+  _wrappedStats = null; // force fresh load each time Start is clicked
+  await loadWrapped();
   _wrappedCards = buildWrappedCards(_wrappedStats, _wrappedConfig);
   _wrappedIndex = 0;
-  document.getElementById('wrapped-deck-wrap').style.display = 'flex';
+
+  // Hide hero, reveal deck with animation
+  const hero = document.getElementById('wrapped-hero');
+  const deck = document.getElementById('wrapped-deck-wrap');
+  const restartRow = document.getElementById('wrapped-restart-row');
+  if (restartRow) restartRow.remove();
+  if (hero) { hero.style.transition = 'opacity .35s ease, transform .35s ease'; hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)'; setTimeout(() => { hero.style.display = 'none'; }, 360); }
+  deck.style.display = 'flex';
+  deck.style.opacity = '0';
+  setTimeout(() => { deck.classList.add('visible'); }, 20);
   renderWrappedDeck();
 }
 
@@ -8958,24 +9163,33 @@ function wrappedNext() {
       restartRow = document.createElement('div');
       restartRow.id = 'wrapped-restart-row';
       restartRow.className = 'wrapped-restart-row';
-      restartRow.innerHTML = `<button class="wrapped-start-btn" style="margin-top:16px" onclick="restartWrapped()">Replay</button>`;
+      restartRow.innerHTML = `<button class="wrapped-start-btn" style="margin-top:16px" onclick="restartWrapped()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        Replay
+      </button>`;
       document.getElementById('wrapped-deck-wrap').appendChild(restartRow);
     }
     return;
   }
-  const cards = document.querySelectorAll('.wrapped-card');
-  if (cards[_wrappedIndex]) {
-    cards[_wrappedIndex].classList.remove('is-active');
-    cards[_wrappedIndex].classList.add('is-exit');
+  // Animate exit-left before advancing
+  const activeCard = document.querySelector('.wrapped-card.is-active');
+  if (activeCard) {
+    activeCard.classList.remove('is-active');
+    activeCard.classList.add('is-exit-left');
   }
   _wrappedIndex++;
-  renderWrappedDeck();
+  setTimeout(() => renderWrappedDeck(), 40);
 }
 
 function wrappedPrev() {
   if (_wrappedIndex <= 0) return;
+  const activeCard = document.querySelector('.wrapped-card.is-active');
+  if (activeCard) {
+    activeCard.classList.remove('is-active');
+    activeCard.classList.add('is-exit-right');
+  }
   _wrappedIndex--;
-  renderWrappedDeck();
+  setTimeout(() => renderWrappedDeck(), 40);
 }
 
 function restartWrapped() {
@@ -8983,6 +9197,19 @@ function restartWrapped() {
   const restartRow = document.getElementById('wrapped-restart-row');
   if (restartRow) restartRow.remove();
   renderWrappedDeck();
+}
+
+function showWrappedHero() {
+  const hero = document.getElementById('wrapped-hero');
+  const deck = document.getElementById('wrapped-deck-wrap');
+  deck.classList.remove('visible');
+  setTimeout(() => { deck.style.display = 'none'; }, 400);
+  if (hero) {
+    hero.style.display = '';
+    hero.style.opacity = '0';
+    hero.style.transform = 'translateY(-16px)';
+    setTimeout(() => { hero.style.opacity = '1'; hero.style.transform = 'translateY(0)'; }, 20);
+  }
 }
 
 // Share current wrapped card as image using Canvas
