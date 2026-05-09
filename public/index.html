@@ -9417,6 +9417,7 @@ function wrappedBlogHighlightUpdate(i, key, val) {
   _wrappedAdminBlogHighlights[i][key] = val;
   if (key === 'image_url') renderWrappedBlogHighlightsList();
 }
+function wrappedBlogHighlightRemove(i) {
   _wrappedAdminBlogHighlights.splice(i, 1);
   renderWrappedBlogHighlightsList();
 }
@@ -9425,7 +9426,7 @@ function addWrappedBlogHighlight() {
   renderWrappedBlogHighlightsList();
 }
 
-
+function renderWrappedFunCardsList() {
   const list = document.getElementById('wrapped-fun-cards-list');
   if (!list) return;
   if (!_wrappedAdminFunCards.length) {
