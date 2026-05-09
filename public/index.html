@@ -608,6 +608,7 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
   .nav-links.open li:nth-child(3){opacity:1;transform:none;transition-delay:.16s}
   .nav-links.open li:nth-child(4){opacity:1;transform:none;transition-delay:.21s}
   .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
+  .nav-links.open li:nth-child(6){opacity:1;transform:none;transition-delay:.31s}
 
   .nav-links a{
     display:flex;align-items:center;padding:18px 28px;
@@ -1988,35 +1989,33 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .wrapped-deck-wrap{display:flex;flex-direction:column;align-items:center;padding:24px 0 48px;opacity:0;transition:opacity .4s ease}
 .wrapped-deck-wrap.visible{opacity:1}
 
-/* Stage: card + flanking arrows */
+/* Stage: card flanked by arrows */
 .wrapped-stage{
   display:flex;align-items:center;justify-content:center;
-  gap:clamp(16px,3vw,48px);
+  gap:clamp(12px,3vw,52px);
   width:100%;padding:0 16px;
 }
 
-/* Card deck — fixed phone-sized card on all screens */
+/* Card — phone-sized on all screens, taller on desktop */
 .wrapped-deck{
   position:relative;
   width:min(360px,88vw);
-  height:clamp(520px,72vh,620px);
+  height:clamp(500px,70vh,620px);
   flex-shrink:0;
 }
 
-/* Arrow buttons — sit on either side of the card */
+/* Side arrow buttons */
 .wrapped-arrow-btn{
   flex-shrink:0;
-  width:44px;height:44px;
-  border-radius:50%;
+  width:48px;height:48px;border-radius:50%;
   background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.12);
-  color:rgba(245,245,245,.55);
-  font-size:28px;line-height:1;
+  color:rgba(245,245,245,.5);
+  font-size:32px;line-height:1;
   cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   transition:background .2s,border-color .2s,color .2s,transform .15s;
-  /* keep arrows vertically centred with the card */
-  align-self:center;
+  user-select:none;-webkit-tap-highlight-color:transparent;
 }
 .wrapped-arrow-btn:hover{
   background:rgba(255,255,255,.13);
@@ -2024,18 +2023,18 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
   color:var(--white);
   transform:scale(1.1);
 }
-.wrapped-arrow-btn:active{transform:scale(.93)}
+.wrapped-arrow-btn:active{transform:scale(.9)}
 
-/* On truly narrow screens, shrink arrows so they don't crowd the card */
-@media(max-width:480px){
-  .wrapped-stage{gap:10px;padding:0 8px}
-  .wrapped-arrow-btn{width:36px;height:36px;font-size:22px}
+/* On narrow phones shrink arrows so card stays wide */
+@media(max-width:420px){
+  .wrapped-stage{gap:8px;padding:0 6px}
+  .wrapped-arrow-btn{width:36px;height:36px;font-size:24px}
 }
 
-/* Share button row below the stage */
+/* Share row */
 .wrapped-nav{
   display:flex;justify-content:center;align-items:center;
-  padding:18px 0 0;width:min(360px,90vw);
+  padding:20px 0 0;
 }
 .wrapped-card{
   position:absolute;inset:0;border-radius:32px;overflow:hidden;cursor:pointer;
@@ -2729,7 +2728,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <button class="wrapped-arrow-btn wrapped-arrow-next" onclick="wrappedNext()" aria-label="Next card">&#8250;</button>
     </div>
     <div class="wrapped-nav">
-      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share this card</button>
+      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share this card
+      </button>
     </div>
   </div>
 
@@ -3788,6 +3790,15 @@ function _doNavigate(page, pushState=true) {
   }
   const pageEl = document.getElementById('page-'+page);
   if (pageEl) { pageEl.classList.add('active'); currentPage = page; }
+  // When landing on wrapped (nav click, back button, or refresh) always show the hero cleanly
+  if (page === 'wrapped') {
+    const hero = document.getElementById('wrapped-hero');
+    const deck = document.getElementById('wrapped-deck-wrap');
+    const restartRow = document.getElementById('wrapped-restart-row');
+    if (restartRow) restartRow.remove();
+    if (hero) { hero.style.opacity = '1'; hero.style.transform = ''; hero.style.display = ''; hero.style.transition = ''; }
+    if (deck)  { deck.classList.remove('visible'); deck.style.display = 'none'; }
+  }
   else {
     // Unknown route — show 404
     const p404 = document.getElementById('page-404');
@@ -9274,9 +9285,9 @@ async function startWrapped() {
   if (restartRow) restartRow.remove();
   if (hero) { hero.style.transition = 'opacity .35s ease, transform .35s ease'; hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)'; setTimeout(() => { hero.style.display = 'none'; }, 360); }
   deck.style.display = 'flex';
-  deck.style.opacity = '0';
-  setTimeout(() => { deck.classList.add('visible'); }, 20);
+  deck.classList.remove('visible');
   renderWrappedDeck();
+  requestAnimationFrame(() => requestAnimationFrame(() => { deck.classList.add('visible'); }));
 }
 
 function wrappedNext() {
