@@ -5071,6 +5071,7 @@ async function loadAdminData(name) {
       <td style="color:var(--grey);font-size:12px">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}<\/td>
     <\/tr>`).join('');
   }
+  else if (name==='wrapped') { loadWrappedAdminSection(); }
 }
 
 function openBlogModal(blog=null) {
@@ -9105,14 +9106,16 @@ function renderWrappedBlogHighlightsList() {
   }
   list.innerHTML = _wrappedAdminBlogHighlights.map((bh, i) => `
     <div class="wrapped-admin-highlight-row">
-      ${bh.image_url ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url}" alt="">` : `<div class="wrapped-admin-highlight-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:18px">🖼</div>`}
+      ${bh.image_url
+        ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url.replace(/"/g,'&quot;')}" alt="" onerror="this.style.display='none'">`
+        : `<div class="wrapped-admin-highlight-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:22px">🖼</div>`}
       <div style="flex:1;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;gap:8px;align-items:center">
           <input type="text" value="${(bh.headline||'').replace(/"/g,'&quot;')}" placeholder="Headline…" style="flex:1" oninput="wrappedBlogHighlightUpdate(${i},'headline',this.value)">
           <button class="btn-sm danger" style="flex-shrink:0" onclick="wrappedBlogHighlightRemove(${i})">Remove</button>
         </div>
         <input type="text" value="${(bh.sub||'').replace(/"/g,'&quot;')}" placeholder="Subtext (optional)…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'sub',this.value)">
-        <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Image URL…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value);this.closest('.wrapped-admin-highlight-row').querySelector('img,div.wrapped-admin-highlight-thumb').src=this.value">
+        <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Image URL (paste Supabase/CDN link)…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value)">
       </div>
     </div>`).join('');
 }
@@ -9122,7 +9125,6 @@ function wrappedBlogHighlightUpdate(i, key, val) {
   _wrappedAdminBlogHighlights[i][key] = val;
   if (key === 'image_url') renderWrappedBlogHighlightsList();
 }
-function wrappedBlogHighlightRemove(i) {
   _wrappedAdminBlogHighlights.splice(i, 1);
   renderWrappedBlogHighlightsList();
 }
@@ -9174,6 +9176,10 @@ function addWrappedFunCard() {
 }
 
 async function saveWrappedConfig() {
+  const saveBtn = document.querySelector('#section-wrapped .btn-primary');
+  const origText = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) { saveBtn.textContent = 'Saving…'; saveBtn.disabled = true; }
+
   const config = {
     year:             (document.getElementById('wrapped-cfg-year')?.value     || '').trim(),
     sub:              (document.getElementById('wrapped-cfg-sub')?.value      || '').trim(),
@@ -9191,24 +9197,19 @@ async function saveWrappedConfig() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(config),
     });
-    if (!res.ok) throw new Error('Save failed');
-    _showShareToast('Wrapped config saved!');
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.error || 'Save failed (' + res.status + ')');
+    }
     _wrappedConfig = config;
+    _showShareToast('Wrapped config saved!');
   } catch(e) {
-    alert('Error saving: ' + e.message);
+    showAdminError('Wrapped save failed: ' + e.message);
+  } finally {
+    if (saveBtn) { saveBtn.textContent = origText; saveBtn.disabled = false; }
   }
 }
 
-// Hook into showAdminSection to load wrapped config
-document.addEventListener('DOMContentLoaded', () => {
-  const origShowAdmin = window.showAdminSection;
-  if (origShowAdmin) {
-    window.showAdminSection = function(name) {
-      origShowAdmin(name);
-      if (name === 'wrapped') loadWrappedAdminSection();
-    };
-  }
-});
 
 </script>
 </body>
