@@ -1725,12 +1725,15 @@ app.get('/api/recommendations/:movieId', async (req, res) => {
       mGenres = mGenres.map(g => g.toLowerCase().trim());
 
       let score = 0;
+      let reason = 'genre';
       // Genre overlap (2 pts per match)
       srcGenres.forEach(g => { if (mGenres.includes(g)) score += 2; });
       // Same director (3 pts)
-      if (source.director && m.director && source.director.split(/[,|]+/)[0].trim().toLowerCase() === m.director.split(/[,|]+/)[0].trim().toLowerCase()) score += 3;
+      if (source.director && m.director && source.director.split(/[,|]+/)[0].trim().toLowerCase() === m.director.split(/[,|]+/)[0].trim().toLowerCase()) {
+        score += 3; reason = 'director';
+      }
 
-      return { ...m, genre: mGenres, _score: score };
+      return { ...m, genre: mGenres, _score: score, _reason: reason };
     }).filter(m => m._score > 0).sort((a,b) => b._score - a._score).slice(0, 6);
 
     res.json(scored.map(({ _score, ...m }) => m));
