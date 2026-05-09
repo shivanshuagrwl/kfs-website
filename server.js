@@ -230,6 +230,8 @@ app.get('/robots.txt', (req, res) => {
     'User-agent: *\n' +
     'Allow: /\n' +
     'Disallow: /api/\n' +
+    'Disallow: /admin\n' +
+    'Disallow: /admin/\n' +
     '\n' +
     'Sitemap: https://kiitfilmsociety.in/sitemap.xml\n'
   );
@@ -267,20 +269,39 @@ app.get('/sitemap.xml', async (req, res) => {
   try {
     const { data: blogs } = await supabase
       .from('blogs')
-      .select('id, title, updated_at')
+      .select('id, title, updated_at, created_at')
       .eq('published', true)
       .order('created_at', { ascending: false })
       .limit(200);
     if (blogs && blogs.length > 0) {
       blogUrls = blogs.map(b => {
         const slug = slugify(b.title) + '-' + b.id;
-        const lastmod = b.updated_at ? b.updated_at.split('T')[0] : today;
-        return `  <url>\n    <loc>https://kiitfilmsociety.in/blog/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
+        const lastmod = b.updated_at ? b.updated_at.split('T')[0] : (b.created_at ? b.created_at.split('T')[0] : today);
+        return `  <url>\n    <loc>https://kiitfilmsociety.in/blog/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.75</priority>\n  </url>`;
+      }).join('\n');
+    }
+  } catch (e) { /* non-fatal */ }
+
+  // ── Events ────────────────────────────────────────────────────────────────
+  let eventUrls = '';
+  try {
+    const { data: evs } = await supabase
+      .from('events')
+      .select('id, title, updated_at, event_date')
+      .order('event_date', { ascending: false })
+      .limit(200);
+    if (evs && evs.length > 0) {
+      eventUrls = evs.map(ev => {
+        const slug = slugify(ev.title) + '-' + ev.id;
+        const lastmod = ev.updated_at ? ev.updated_at.split('T')[0] : today;
+        const isPast = ev.event_date && new Date(ev.event_date) < new Date();
+        return `  <url>\n    <loc>https://kiitfilmsociety.in/events/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${isPast ? 'monthly' : 'weekly'}</changefreq>\n    <priority>${isPast ? '0.6' : '0.85'}</priority>\n  </url>`;
       }).join('\n');
     }
   } catch (e) { /* non-fatal */ }
 
   res.header('Content-Type', 'application/xml');
+  res.header('Cache-Control', 'public, max-age=3600');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -316,6 +337,7 @@ app.get('/sitemap.xml', async (req, res) => {
   </url>
 ${movieUrls}
 ${blogUrls}
+${eventUrls}
 </urlset>`);
 });
 
@@ -1470,28 +1492,42 @@ app.get('/og/blog/:id', async (req, res) => {
 const fs = require('fs');
 
 // Read the base HTML once (cached).  We'll inject <meta> tags into <head>.
-function injectOgTags(html, { title, description, imageUrl, url }) {
+function injectOgTags(html, { title, description, imageUrl, url, type, author, publishedTime, jsonLd }) {
   const siteName = 'KFS — KIIT Film Society';
+  const ogType   = type || 'website';
   const safeTitle = (title || siteName).replace(/"/g, '&quot;');
   const safeDesc  = (description || 'KIIT Film Society — student-run cinema collective.').slice(0, 200).replace(/"/g, '&quot;');
   const safeImg   = imageUrl || '';
   const safeUrl   = url || 'https://kiitfilmsociety.in';
 
+  const articleMeta = ogType === 'article' ? `
+  ${publishedTime ? `<meta property="article:published_time" content="${publishedTime}" />` : ''}
+  ${author        ? `<meta property="article:author"         content="${author.replace(/"/g,'&quot;')}" />` : ''}
+  <meta property="article:section" content="Cinema" />` : '';
+
+  const jsonLdTag = jsonLd
+    ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}<\/script>`
+    : '';
+
   const tags = `
   <!-- Dynamic OG tags injected by server -->
-  <meta property="og:type"        content="website" />
+  <meta property="og:type"        content="${ogType}" />
   <meta property="og:site_name"   content="${siteName}" />
   <meta property="og:title"       content="${safeTitle}" />
   <meta property="og:description" content="${safeDesc}" />
   <meta property="og:url"         content="${safeUrl}" />
   ${safeImg ? `<meta property="og:image"       content="${safeImg}" />
   <meta property="og:image:width"  content="1200" />
-  <meta property="og:image:height" content="630" />` : ''}
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt"    content="${safeTitle}" />` : ''}
+  ${articleMeta}
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="${safeTitle}" />
   <meta name="twitter:description" content="${safeDesc}" />
-  ${safeImg ? `<meta name="twitter:image"       content="${safeImg}" />` : ''}
-  <link rel="canonical"            href="${safeUrl}" />`;
+  ${safeImg ? `<meta name="twitter:image"       content="${safeImg}" />
+  <meta name="twitter:image:alt"   content="${safeTitle}" />` : ''}
+  <link rel="canonical"            href="${safeUrl}" />
+  ${jsonLdTag}`;
 
   // Insert just before </head>; fallback: prepend to <body>
   if (html.includes('</head>')) {
@@ -1534,7 +1570,7 @@ app.get('/blog/:slug', async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
     const { data: b } = id
-      ? await supabase.from('blogs').select('id,title,excerpt,cover_image,author').eq('id', id).maybeSingle()
+      ? await supabase.from('blogs').select('id,title,excerpt,cover_image,author,created_at').eq('id', id).maybeSingle()
       : null;
 
     if (!b) {
@@ -1544,12 +1580,32 @@ app.get('/blog/:slug', async (req, res) => {
 
     const canonicalSlug = slugify(b.title) + '-' + b.id;
     const pageUrl = `https://kiitfilmsociety.in/blog/${canonicalSlug}`;
+    const imageUrl = b.cover_image ? `https://kiitfilmsociety.in/og/blog/${b.id}` : null;
 
     return serveWithOg(res, {
-      title:       b.title ? `${b.title} — KFS Blog` : 'KFS Blog',
-      description: b.excerpt || `Read "${b.title}" on the KIIT Film Society blog.`,
-      imageUrl:    b.cover_image ? `https://kiitfilmsociety.in/og/blog/${b.id}` : null,
-      url:         pageUrl,
+      title:         b.title ? `${b.title} — KFS Blog` : 'KFS Blog',
+      description:   b.excerpt || `Read "${b.title}" on the KIIT Film Society blog.`,
+      imageUrl,
+      url:           pageUrl,
+      type:          'article',
+      author:        b.author || 'KFS — KIIT Film Society',
+      publishedTime: b.created_at || null,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type':    'Article',
+        'headline': b.title,
+        'description': b.excerpt || '',
+        'url':      pageUrl,
+        'image':    imageUrl || 'https://kiitfilmsociety.in/images/og-banner.png',
+        'author':   { '@type': 'Person', 'name': b.author || 'KFS' },
+        'publisher': {
+          '@type': 'Organization',
+          'name':  'KFS — KIIT Film Society',
+          'logo':  { '@type': 'ImageObject', 'url': 'https://kiitfilmsociety.in/images/KFS_LOGO_WHITE.png' }
+        },
+        'datePublished': b.created_at || null,
+        'mainEntityOfPage': pageUrl,
+      },
     });
   } catch (err) {
     console.error('[share/blog]', err.message);
@@ -1574,12 +1630,29 @@ app.get('/films/:slug', async (req, res) => {
     const desc = m.description
       ? m.description.slice(0, 160)
       : (m.director ? `Directed by ${m.director}${m.release_year ? ` · ${m.release_year}` : ''}` : 'A film by KIIT Film Society.');
+    const imageUrl = m.poster_image ? `https://kiitfilmsociety.in/og/film/${m.id}` : null;
 
     return serveWithOg(res, {
       title:       m.title ? `${m.title} — KFS Films` : 'KFS Films',
       description: desc,
-      imageUrl:    m.poster_image ? `https://kiitfilmsociety.in/og/film/${m.id}` : null,
+      imageUrl,
       url:         pageUrl,
+      type:        'video.movie',
+      jsonLd: {
+        '@context':    'https://schema.org',
+        '@type':       'Movie',
+        'name':        m.title,
+        'description': desc,
+        'url':         pageUrl,
+        'image':       imageUrl || 'https://kiitfilmsociety.in/images/og-banner.png',
+        'director':    m.director ? { '@type': 'Person', 'name': m.director } : undefined,
+        'dateCreated': m.release_year ? String(m.release_year) : undefined,
+        'productionCompany': {
+          '@type': 'Organization',
+          'name':  'KFS — KIIT Film Society',
+          'url':   'https://kiitfilmsociety.in'
+        },
+      },
     });
   } catch (err) {
     console.error('[share/film]', err.message);
@@ -1608,11 +1681,26 @@ app.get('/events/:slug', async (req, res) => {
       ? e.description.slice(0, 160)
       : `KFS Event${dateStr ? ' on ' + dateStr : ''}${e.location ? ' at ' + e.location : ''}.`;
 
+    const imageUrl = e.cover_image ? `https://kiitfilmsociety.in/og/event/${e.id}` : null;
+
     return serveWithOg(res, {
       title:       e.title ? `${e.title} — KFS Events` : 'KFS Events',
       description: desc,
-      imageUrl:    e.cover_image ? `https://kiitfilmsociety.in/og/event/${e.id}` : null,
+      imageUrl,
       url:         pageUrl,
+      type:        'article',
+      publishedTime: e.event_date || null,
+      jsonLd: {
+        '@context':   'https://schema.org',
+        '@type':      'Event',
+        'name':       e.title,
+        'description': desc,
+        'url':        pageUrl,
+        'image':      imageUrl || 'https://kiitfilmsociety.in/images/og-banner.png',
+        'startDate':  e.event_date || undefined,
+        'location':   e.location ? { '@type': 'Place', 'name': e.location } : { '@type': 'Place', 'name': 'KIIT University, Bhubaneswar' },
+        'organizer':  { '@type': 'Organization', 'name': 'KFS — KIIT Film Society', 'url': 'https://kiitfilmsociety.in' },
+      },
     });
   } catch (err) {
     console.error('[share/event]', err.message);
