@@ -1987,7 +1987,56 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 /* Deck */
 .wrapped-deck-wrap{display:flex;flex-direction:column;align-items:center;padding:24px 0 48px;opacity:0;transition:opacity .4s ease}
 .wrapped-deck-wrap.visible{opacity:1}
-.wrapped-deck{position:relative;width:min(360px,90vw);height:560px;margin:0 auto}
+
+/* Stage: card + flanking arrows */
+.wrapped-stage{
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(16px,3vw,48px);
+  width:100%;padding:0 16px;
+}
+
+/* Card deck — fixed phone-sized card on all screens */
+.wrapped-deck{
+  position:relative;
+  width:min(360px,88vw);
+  height:clamp(520px,72vh,620px);
+  flex-shrink:0;
+}
+
+/* Arrow buttons — sit on either side of the card */
+.wrapped-arrow-btn{
+  flex-shrink:0;
+  width:44px;height:44px;
+  border-radius:50%;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  color:rgba(245,245,245,.55);
+  font-size:28px;line-height:1;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .2s,border-color .2s,color .2s,transform .15s;
+  /* keep arrows vertically centred with the card */
+  align-self:center;
+}
+.wrapped-arrow-btn:hover{
+  background:rgba(255,255,255,.13);
+  border-color:rgba(255,255,255,.3);
+  color:var(--white);
+  transform:scale(1.1);
+}
+.wrapped-arrow-btn:active{transform:scale(.93)}
+
+/* On truly narrow screens, shrink arrows so they don't crowd the card */
+@media(max-width:480px){
+  .wrapped-stage{gap:10px;padding:0 8px}
+  .wrapped-arrow-btn{width:36px;height:36px;font-size:22px}
+}
+
+/* Share button row below the stage */
+.wrapped-nav{
+  display:flex;justify-content:center;align-items:center;
+  padding:18px 0 0;width:min(360px,90vw);
+}
 .wrapped-card{
   position:absolute;inset:0;border-radius:32px;overflow:hidden;cursor:pointer;
   user-select:none;
@@ -2052,21 +2101,11 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .wrapped-progress-bar{height:3px;flex:1;border-radius:3px;background:rgba(255,255,255,.15);transition:background .4s ease}
 .wrapped-progress-bar.done{background:rgba(255,255,255,.9)}
 .wrapped-progress-bar.active{background:rgba(255,255,255,.6)}
-.wrapped-nav{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:18px 0 0;width:min(360px,90vw);gap:10px;
-}
-.wrapped-nav-btn{
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
-  color:rgba(245,245,245,.6);padding:10px 22px;border-radius:24px;
-  font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:all .2s;
-}
-.wrapped-nav-btn:hover{border-color:rgba(255,255,255,.3);color:var(--white);background:rgba(255,255,255,.1)}
 .wrapped-share-btn{
   background:var(--white);color:var(--black);border:none;
-  padding:10px 22px;border-radius:24px;font-size:12px;font-weight:800;
+  padding:11px 28px;border-radius:24px;font-size:12px;font-weight:800;
   letter-spacing:.04em;cursor:pointer;transition:transform .2s,box-shadow .2s;
-  flex:1;max-width:140px;text-align:center;
+  display:inline-flex;align-items:center;gap:7px;
   box-shadow:0 4px 20px rgba(245,245,245,.12);
 }
 .wrapped-share-btn:hover{transform:scale(1.05);box-shadow:0 6px 28px rgba(245,245,245,.2)}
@@ -2679,16 +2718,18 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
       See Your Wrapped
     </button>
-    <p class="wrapped-hint">tap cards to advance · swipe to navigate</p>
+    <p class="wrapped-hint">use arrows or tap cards · swipe on mobile</p>
   </div>
 
   <!-- Card Deck (shown after start) -->
   <div class="wrapped-deck-wrap" id="wrapped-deck-wrap" style="display:none">
-    <div class="wrapped-deck" id="wrapped-deck"></div>
+    <div class="wrapped-stage">
+      <button class="wrapped-arrow-btn wrapped-arrow-prev" onclick="wrappedPrev()" aria-label="Previous card">&#8249;</button>
+      <div class="wrapped-deck" id="wrapped-deck"></div>
+      <button class="wrapped-arrow-btn wrapped-arrow-next" onclick="wrappedNext()" aria-label="Next card">&#8250;</button>
+    </div>
     <div class="wrapped-nav">
-      <button class="wrapped-nav-btn" onclick="wrappedPrev()">← Back</button>
-      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share</button>
-      <button class="wrapped-nav-btn" onclick="wrappedNext()">Next →</button>
+      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">Share this card</button>
     </div>
   </div>
 
@@ -3747,15 +3788,6 @@ function _doNavigate(page, pushState=true) {
   }
   const pageEl = document.getElementById('page-'+page);
   if (pageEl) { pageEl.classList.add('active'); currentPage = page; }
-  // When showing wrapped page, always restore the hero (user lands on hero, not mid-deck)
-  if (page === 'wrapped') {
-    const hero = document.getElementById('wrapped-hero');
-    const deck = document.getElementById('wrapped-deck-wrap');
-    if (hero) { hero.style.opacity = '1'; hero.style.transform = ''; hero.style.display = ''; }
-    if (deck) { deck.classList.remove('visible'); deck.style.display = 'none'; }
-    const restartRow = document.getElementById('wrapped-restart-row');
-    if (restartRow) restartRow.remove();
-  }
   else {
     // Unknown route — show 404
     const p404 = document.getElementById('page-404');
@@ -9242,9 +9274,9 @@ async function startWrapped() {
   if (restartRow) restartRow.remove();
   if (hero) { hero.style.transition = 'opacity .35s ease, transform .35s ease'; hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)'; setTimeout(() => { hero.style.display = 'none'; }, 360); }
   deck.style.display = 'flex';
-  deck.classList.remove('visible');
+  deck.style.opacity = '0';
+  setTimeout(() => { deck.classList.add('visible'); }, 20);
   renderWrappedDeck();
-  requestAnimationFrame(() => requestAnimationFrame(() => { deck.classList.add('visible'); }));
 }
 
 function wrappedNext() {
@@ -9527,48 +9559,12 @@ function renderWrappedBlogHighlightsList() {
           <textarea placeholder="Add more context — what happened, why it was special…" style="width:100%;border-radius:8px;min-height:64px;resize:vertical;font-family:inherit;font-size:13px;padding:10px 12px;background:var(--black);border:1px solid var(--border);color:var(--white);outline:none" oninput="wrappedBlogHighlightUpdate(${i},'sub',this.value)">${(bh.sub||'').replace(/</g,'&lt;')}</textarea>
         </div>
         <div>
-          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin-bottom:5px">Image</div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <label style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:12px;font-weight:600;color:var(--white);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.13)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Upload Image
-              <input type="file" accept="image/*" style="display:none" onchange="wrappedBlogHighlightUpload(${i},this)">
-            </label>
-            <span id="wrapped-hl-upload-status-${i}" style="font-size:11px;color:var(--grey)">${bh.image_url ? '✓ Image set' : 'No image yet'}</span>
-          </div>
-          ${bh.image_url ? `<div style="font-size:11px;color:var(--grey);margin-top:6px;opacity:.6;word-break:break-all">${bh.image_url.replace(/^https?:\/\/[^/]+\//, '…/')}</div>` : ''}
+          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin-bottom:5px">Image URL</div>
+          <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Paste Supabase / CDN image URL…" style="width:100%;border-radius:8px" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value)">
+          <div style="font-size:11px;color:var(--grey);margin-top:4px;opacity:.7">Upload to Supabase Storage first, then paste the public URL here</div>
         </div>
       </div>
     </div>`).join('');
-}
-
-async function wrappedBlogHighlightUpload(i, input) {
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
-  const statusEl = document.getElementById('wrapped-hl-upload-status-' + i);
-  if (statusEl) { statusEl.textContent = 'Uploading…'; statusEl.style.color = 'var(--grey)'; }
-
-  const fd = new FormData();
-  fd.append('image', file);
-  const token = adminToken || localStorage.getItem('kfs_token');
-  try {
-    const res = await fetch('/api/admin/wrapped/upload-image', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token },
-      body: fd,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Upload failed (' + res.status + ')');
-    }
-    const { url } = await res.json();
-    _wrappedAdminBlogHighlights[i].image_url = url;
-    if (statusEl) { statusEl.textContent = '✓ Uploaded!'; statusEl.style.color = '#34c759'; }
-    // Re-render to show thumb + truncated URL
-    setTimeout(() => renderWrappedBlogHighlightsList(), 800);
-  } catch(e) {
-    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#ff453a'; }
-  }
 }
 
 function wrappedBlogHighlightUpdate(i, key, val) {
