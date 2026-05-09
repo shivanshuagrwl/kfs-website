@@ -6,8 +6,6 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-function wrappedBlogHighlightRemove(i) { ... }
-function renderWrappedFunCardsList() { ... }
 
 const app = express();
 const PORT = process.env.PORT || 3000;
