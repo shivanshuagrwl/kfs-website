@@ -1912,6 +1912,12 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .wrapped-admin-fun-icon-picker{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .wrapped-admin-fun-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s;color:var(--grey)}
 .wrapped-admin-fun-icon-opt:hover,.wrapped-admin-fun-icon-opt.sel{border-color:var(--white);color:var(--white)}
+.wrapped-admin-highlight-row{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)}
+.wrapped-admin-highlight-thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border);background:var(--card)}
+.wrapped-card-blog-highlight{display:flex;flex-direction:column;gap:0;margin-top:8px}
+.wrapped-card-blog-img{width:100%;height:140px;object-fit:cover;border-radius:12px;margin-bottom:10px;display:block}
+.wrapped-card-blog-title{font-size:clamp(16px,3.5vw,22px);font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.wrapped-card-blog-sub{font-size:12px;opacity:.6;margin-top:5px;line-height:1.4}
 
 /* ── SMART RECOMMENDATIONS ───────────────────────────────────── */
 .film-recs-section{margin-top:48px;padding-top:36px;border-top:1px solid var(--border)}
@@ -3132,6 +3138,23 @@ KFS — KIIT Film Society"></textarea>
         <div class="form-group"><label>Closing message (last card)</label><textarea id="wrapped-cfg-outro" rows="3" placeholder="e.g. Thanks for being part of KFS this year. See you at the next screening."></textarea></div>
       </div>
       <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Featured Movie of the Year</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Override the auto-computed top-rated film — shown on a special card with poster art</p>
+        <div class="form-group">
+          <label>Select Movie</label>
+          <select id="wrapped-cfg-featured-movie" style="max-width:360px" onchange="wrappedFeaturedMoviePreview()">
+            <option value="">— Auto (highest-rated by community) —</option>
+          </select>
+        </div>
+        <div id="wrapped-featured-movie-preview" style="display:none;margin-top:12px;display:flex;align-items:center;gap:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px">
+          <img id="wrapped-featured-movie-thumb" style="width:48px;height:72px;object-fit:cover;border-radius:6px" src="" alt="">
+          <div>
+            <div id="wrapped-featured-movie-title" style="font-weight:600;font-size:14px"></div>
+            <div id="wrapped-featured-movie-meta" style="font-size:12px;color:var(--grey);margin-top:2px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Broadcast Message</h3>
         <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Show a special message card at the very start of everyone's Wrapped — leave blank to disable</p>
         <div class="form-group"><label>Message</label><textarea id="wrapped-cfg-broadcast" rows="3" placeholder="e.g. KFS turns 5 this year! Thanks for being part of the journey."></textarea></div>
@@ -3145,6 +3168,12 @@ KFS — KIIT Film Society"></textarea>
             <option value="gold">Gold — warm amber</option>
           </select>
         </div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Blog Highlight Cards</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Showcase key blog moments — each card shows an image + headline (great for year-in-review storytelling)</p>
+        <div id="wrapped-blog-highlights-list"></div>
+        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedBlogHighlight()">+ Add Blog Highlight</button>
       </div>
       <div class="admin-card">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Fun Fact Cards</h3>
@@ -8570,6 +8599,13 @@ function buildWrappedCards(stats, config) {
           : watchedCount >= 5
             ? `<div class="wrapped-card-sub" style="margin-top:14px">Impressive — you're building a real filmography.</div>`
             : `<div class="wrapped-card-sub" style="margin-top:14px">Every film is a new perspective.</div>`}
+      ${myMovies.length > 0 ? `<div class="wrapped-card-events-row" style="margin-top:10px">
+        ${myMovies.slice(0,4).map(m=>`<div class="wrapped-card-event-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ${m.title}${m.release_year?' · '+m.release_year:''}
+        </div>`).join('')}
+        ${myMovies.length > 4 ? `<div class="wrapped-card-sub" style="margin-top:4px">+${myMovies.length-4} more</div>` : ''}
+      </div>` : ''}
     `,
   });
 
@@ -8644,6 +8680,10 @@ function buildWrappedCards(stats, config) {
   });
 
   // ── 6: Blogs read ─────────────────────────────────────────────────────────
+  // Fetch blog titles from stats if available
+  const allBlogs = (stats && stats.allBlogs) || [];
+  const myBlogs = readIds.map(id => allBlogs.find(b => String(b.id) === String(id))).filter(Boolean);
+
   cards.push({
     id: 'blogs-read',
     theme: _wrappedTheme(5),
@@ -8655,8 +8695,33 @@ function buildWrappedCards(stats, config) {
       ${readCount === 0
         ? `<div class="wrapped-card-sub" style="margin-top:14px">The KFS blog is full of film essays and behind-the-scenes stories.</div>`
         : `<div class="wrapped-card-sub" style="margin-top:14px">Curiosity looks good on you.</div>`}
+      ${myBlogs.length > 0 ? `<div class="wrapped-card-events-row" style="margin-top:10px">
+        ${myBlogs.slice(0,4).map(b=>`<div class="wrapped-card-event-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ${b.title}
+        </div>`).join('')}
+        ${myBlogs.length > 4 ? `<div class="wrapped-card-sub" style="margin-top:4px">+${myBlogs.length-4} more</div>` : ''}
+      </div>` : ''}
     `,
   });
+
+  // ── 6b: Admin blog highlight cards ───────────────────────────────────────
+  if (config.blog_highlights && Array.isArray(config.blog_highlights)) {
+    config.blog_highlights.forEach((bh, i) => {
+      if (!bh.headline) return;
+      cards.push({
+        id: 'blog-highlight-' + i,
+        theme: _wrappedTheme(i + 3),
+        render: () => `
+          <div class="wrapped-card-blog-highlight">
+            ${bh.image_url ? `<img class="wrapped-card-blog-img" src="${bh.image_url}" alt="${bh.headline}" loading="lazy">` : W_ICONS.book}
+            <div class="wrapped-card-blog-title">${bh.headline}</div>
+            ${bh.sub ? `<div class="wrapped-card-blog-sub">${bh.sub}</div>` : ''}
+          </div>
+        `,
+      });
+    });
+  }
 
   // ── 7: KFS by the numbers ─────────────────────────────────────────────────
   if (stats) {
@@ -8678,20 +8743,30 @@ function buildWrappedCards(stats, config) {
     });
   }
 
-  // ── 8: Community top-rated film ──────────────────────────────────────────
-  if (stats && stats.topRatedMovie) {
-    const t = stats.topRatedMovie;
+  // ── 8: Community top-rated / admin-featured film ──────────────────────────
+  // Admin can override with a specific movie; falls back to auto top-rated
+  let featuredMovie = null;
+  if (config.featured_movie_id && allMovies.length) {
+    featuredMovie = allMovies.find(m => String(m.id) === String(config.featured_movie_id));
+  }
+  if (!featuredMovie && stats && stats.topRatedMovie) {
+    featuredMovie = stats.topRatedMovie;
+  }
+  if (featuredMovie) {
+    const t = featuredMovie;
+    const isAdminPicked = !!config.featured_movie_id;
     cards.push({
       id: 'top-rated',
       theme: _wrappedTheme(1),
       render: () => `
         ${W_ICONS.award}
-        <div class="wrapped-card-eyebrow">Community's top-rated film</div>
-        ${t.poster_image ? `<img class="wrapped-card-film-poster" src="${t.poster_image}" alt="${t.title}" loading="lazy">` : ''}
+        <div class="wrapped-card-eyebrow">${isAdminPicked ? "KFS Film of the Year" : "Community's top-rated film"}</div>
+        ${t.poster_image ? `<img class="wrapped-card-film-poster" src="${t.poster_image}" alt="${t.title}" loading="lazy" style="width:80px;height:120px;margin-bottom:8px">` : ''}
         <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${t.title}</div>
-        <div class="wrapped-card-stat" style="font-size:clamp(28px,6vw,44px)">
+        ${t.score ? `<div class="wrapped-card-stat" style="font-size:clamp(28px,6vw,44px)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:middle;margin-right:4px;margin-top:-3px;display:inline"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${t.score}
-        </div>
+        </div>` : ''}
+        ${t.release_year || t.director ? `<div class="wrapped-card-sub">${[t.release_year, t.director ? t.director.split(/[,|]+/)[0].trim() : null].filter(Boolean).join(' · ')}</div>` : ''}
       `,
     });
   }
@@ -8953,12 +9028,19 @@ function eventIds_share()   { return Object.keys(getRegisteredEvents()).length; 
 // ══════════════════════════════════════════════════════════════════════════════
 
 let _wrappedAdminFunCards = [];
+let _wrappedAdminBlogHighlights = [];
+let _wrappedAdminAllMovies = [];
 
 async function loadWrappedAdminSection() {
   try {
-    const config = await apiFetch('/api/wrapped/config');
+    const [config, movies] = await Promise.all([
+      apiFetch('/api/wrapped/config'),
+      apiFetch('/api/movies'),
+    ]);
     if (!config) return;
     _wrappedConfig = config;
+    _wrappedAdminAllMovies = movies || [];
+
     const yearEl    = document.getElementById('wrapped-cfg-year');
     const subEl     = document.getElementById('wrapped-cfg-sub');
     const outroEl   = document.getElementById('wrapped-cfg-outro');
@@ -8969,9 +9051,42 @@ async function loadWrappedAdminSection() {
     if (outroEl)   outroEl.value   = config.outro || '';
     if (bcEl)      bcEl.value      = config.broadcast || '';
     if (bcThemeEl) bcThemeEl.value = config.broadcast_theme || 'dark';
+
     _wrappedAdminFunCards = Array.isArray(config.fun_cards) ? [...config.fun_cards] : [];
+    _wrappedAdminBlogHighlights = Array.isArray(config.blog_highlights) ? [...config.blog_highlights] : [];
     renderWrappedFunCardsList();
+    renderWrappedBlogHighlightsList();
+
+    // Populate movie dropdown
+    const sel = document.getElementById('wrapped-cfg-featured-movie');
+    if (sel && _wrappedAdminAllMovies.length) {
+      sel.innerHTML = '<option value="">— Auto (highest-rated by community) —</option>'
+        + _wrappedAdminAllMovies.map(m => `<option value="${m.id}" data-poster="${m.poster_image||''}" data-year="${m.release_year||''}" data-dir="${(m.director||'').split(/[,|]+/)[0].trim()}">${m.title}${m.release_year?' ('+m.release_year+')':''}</option>`).join('');
+      if (config.featured_movie_id) {
+        sel.value = config.featured_movie_id;
+        wrappedFeaturedMoviePreview();
+      }
+    }
   } catch(e) { console.error('[wrapped admin load]', e); }
+}
+
+function wrappedFeaturedMoviePreview() {
+  const sel = document.getElementById('wrapped-cfg-featured-movie');
+  const preview = document.getElementById('wrapped-featured-movie-preview');
+  const thumb = document.getElementById('wrapped-featured-movie-thumb');
+  const titleEl = document.getElementById('wrapped-featured-movie-title');
+  const metaEl = document.getElementById('wrapped-featured-movie-meta');
+  if (!sel || !preview) return;
+  const opt = sel.options[sel.selectedIndex];
+  if (!sel.value || !opt) { preview.style.display = 'none'; return; }
+  const poster = opt.dataset.poster;
+  const year = opt.dataset.year;
+  const dir = opt.dataset.dir;
+  thumb.src = poster || '';
+  thumb.style.display = poster ? 'block' : 'none';
+  titleEl.textContent = opt.text.replace(/ \(\d{4}\)$/, '');
+  metaEl.textContent = [year, dir].filter(Boolean).join(' · ');
+  preview.style.display = 'flex';
 }
 
 function _iconPickerHtml(selectedIcon, rowIndex) {
@@ -8981,7 +9096,42 @@ function _iconPickerHtml(selectedIcon, rowIndex) {
   }).join('');
 }
 
-function renderWrappedFunCardsList() {
+function renderWrappedBlogHighlightsList() {
+  const list = document.getElementById('wrapped-blog-highlights-list');
+  if (!list) return;
+  if (!_wrappedAdminBlogHighlights.length) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--grey);margin:0">No blog highlights yet. Add one below.</p>';
+    return;
+  }
+  list.innerHTML = _wrappedAdminBlogHighlights.map((bh, i) => `
+    <div class="wrapped-admin-highlight-row">
+      ${bh.image_url ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url}" alt="">` : `<div class="wrapped-admin-highlight-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:18px">🖼</div>`}
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" value="${(bh.headline||'').replace(/"/g,'&quot;')}" placeholder="Headline…" style="flex:1" oninput="wrappedBlogHighlightUpdate(${i},'headline',this.value)">
+          <button class="btn-sm danger" style="flex-shrink:0" onclick="wrappedBlogHighlightRemove(${i})">Remove</button>
+        </div>
+        <input type="text" value="${(bh.sub||'').replace(/"/g,'&quot;')}" placeholder="Subtext (optional)…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'sub',this.value)">
+        <input type="text" value="${(bh.image_url||'').replace(/"/g,'&quot;')}" placeholder="Image URL…" style="width:100%" oninput="wrappedBlogHighlightUpdate(${i},'image_url',this.value);this.closest('.wrapped-admin-highlight-row').querySelector('img,div.wrapped-admin-highlight-thumb').src=this.value">
+      </div>
+    </div>`).join('');
+}
+
+function wrappedBlogHighlightUpdate(i, key, val) {
+  if (!_wrappedAdminBlogHighlights[i]) return;
+  _wrappedAdminBlogHighlights[i][key] = val;
+  if (key === 'image_url') renderWrappedBlogHighlightsList();
+}
+function wrappedBlogHighlightRemove(i) {
+  _wrappedAdminBlogHighlights.splice(i, 1);
+  renderWrappedBlogHighlightsList();
+}
+function addWrappedBlogHighlight() {
+  _wrappedAdminBlogHighlights.push({ headline: '', sub: '', image_url: '' });
+  renderWrappedBlogHighlightsList();
+}
+
+
   const list = document.getElementById('wrapped-fun-cards-list');
   if (!list) return;
   if (!_wrappedAdminFunCards.length) {
@@ -9030,9 +9180,11 @@ async function saveWrappedConfig() {
     outro:            (document.getElementById('wrapped-cfg-outro')?.value    || '').trim(),
     broadcast:        (document.getElementById('wrapped-cfg-broadcast')?.value || '').trim(),
     broadcast_theme:  (document.getElementById('wrapped-cfg-broadcast-theme')?.value || 'dark').trim(),
+    featured_movie_id: (document.getElementById('wrapped-cfg-featured-movie')?.value || '').trim() || null,
     fun_cards:        _wrappedAdminFunCards.filter(fc => fc.text),
+    blog_highlights:  _wrappedAdminBlogHighlights.filter(bh => bh.headline),
   };
-  const token = localStorage.getItem('kfs_admin_token');
+  const token = adminToken || localStorage.getItem('kfs_token');
   try {
     const res = await fetch('/api/admin/wrapped/config', {
       method: 'POST',

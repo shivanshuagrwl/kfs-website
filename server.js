@@ -1646,6 +1646,9 @@ app.get('/api/wrapped/stats', async (req, res) => {
     // All movies
     const { data: movies } = await supabase.from('movies').select('id,title,genre,release_year,director,poster_image');
 
+    // All published blogs (for personalized blog-read cards)
+    const { data: blogs } = await supabase.from('blogs').select('id,title,cover_image').eq('published', true);
+
     // Genre frequency map across all KFS films
     const genreCount = {};
     (movies || []).forEach(m => {
@@ -1697,6 +1700,7 @@ app.get('/api/wrapped/stats', async (req, res) => {
         try { genres = JSON.parse(m.genre || '[]'); } catch { genres = m.genre ? [m.genre] : []; }
         return { id: m.id, title: m.title, genre: Array.isArray(genres) ? genres : [genres], release_year: m.release_year, director: m.director, poster_image: m.poster_image };
       }),
+      allBlogs: (blogs || []).map(b => ({ id: b.id, title: b.title, cover_image: b.cover_image })),
     });
   } catch(e) {
     console.error('[wrapped/stats]', e.message);
