@@ -6,6 +6,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,13 +112,60 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ── File uploads ──────────────────────────────────────────────────────────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
+// ── Image compression config ──────────────────────────────────────────────────
+// Max dimension for any uploaded image. Larger images are scaled down while
+// preserving aspect ratio. Posters/covers rarely need to be bigger than this.
+const IMAGE_MAX_PX   = 1800;  // longest edge in pixels
+const IMAGE_QUALITY  = 82;    // WebP quality (0-100). 82 is visually lossless for photos.
+
+async function compressImage(file) {
+  if (!file) return null;
+
+  // Skip SVG / GIF — sharp can't meaningfully compress them
+  const mime = file.mimetype || '';
+  if (mime === 'image/svg+xml' || mime === 'image/gif') return file;
+
+  try {
+    const before = file.buffer.length;
+
+    const compressed = await sharp(file.buffer)
+      .rotate()                           // auto-rotate from EXIF orientation
+      .resize(IMAGE_MAX_PX, IMAGE_MAX_PX, {
+        fit: 'inside',                    // never upscale, just shrink if needed
+        withoutEnlargement: true,
+      })
+      .webp({ quality: IMAGE_QUALITY })   // always convert to WebP for best size
+      .toBuffer();
+
+    const after = compressed.length;
+    const saving = Math.round((1 - after / before) * 100);
+    console.log(`[img] ${file.originalname}: ${(before/1024).toFixed(0)}KB → ${(after/1024).toFixed(0)}KB (${saving}% smaller)`);
+
+    // Return a modified file-like object with the compressed buffer
+    return {
+      ...file,
+      buffer: compressed,
+      mimetype: 'image/webp',
+      originalname: file.originalname.replace(/\.[^.]+$/, '') + '.webp',
+    };
+  } catch (e) {
+    // If compression fails for any reason, fall back to original
+    console.warn(`[img] compression failed for ${file.originalname}:`, e.message, '— using original');
+    return file;
+  }
+}
+
 async function uploadImage(file, folder = 'general') {
   if (!file) return null;
-  const ext = path.extname(file.originalname) || '.jpg';
+
+  // Compress before upload
+  const processed = await compressImage(file);
+
+  const ext = path.extname(processed.originalname) || '.webp';
   const filename = `${folder}/${Date.now()}${ext}`;
   const { data, error } = await supabase.storage
     .from('kfs-media')
-    .upload(filename, file.buffer, { contentType: file.mimetype, upsert: true });
+    .upload(filename, processed.buffer, { contentType: processed.mimetype, upsert: true });
   if (error) {
     const msg = error.message || JSON.stringify(error);
     console.error('Storage error:', msg);
@@ -1397,18 +1445,29 @@ function svgToPng(svgStr) {
 }
 
 // ── /og/event/:id ─────────────────────────────────────────────────────────────
+// ── /og/event/:id ─────────────────────────────────────────────────────────────
+// For social crawlers: redirect to the actual cover image stored in Supabase.
+// Falls back to the generated SVG card when no cover image exists.
 app.get('/og/event/:id', async (req, res) => {
   try {
     const { data: e } = await supabase.from('events').select('*').eq('id', req.params.id).maybeSingle();
     if (!e) return res.status(404).send('Not found');
 
-    const coverDataUri = await toDataUri(e.cover_image);
+    // If we have a real cover image, redirect social crawlers straight to it.
+    // 1200×630 is already set in the og:image:width/height meta tags so platforms
+    // will size the preview correctly without fetching dimensions separately.
+    if (e.cover_image) {
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // 24h — image rarely changes
+      return res.redirect(302, e.cover_image);
+    }
+
+    // No cover — fall back to the generated SVG card
     const dateStr = e.event_date
       ? new Date(e.event_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : null;
 
     const svg = buildOGSvg({
-      coverDataUri,
+      coverDataUri: null,
       badge: e.is_upcoming ? 'UPCOMING EVENT' : 'EVENT',
       title: e.title || 'Event',
       lines: [
@@ -1433,12 +1492,18 @@ app.get('/og/film/:id', async (req, res) => {
     const { data: m } = await supabase.from('movies').select('*').eq('id', req.params.id).maybeSingle();
     if (!m) return res.status(404).send('Not found');
 
-    const coverDataUri = await toDataUri(m.poster_image);
+    // Redirect to the actual poster — fast, zero CPU, beautiful preview
+    if (m.poster_image) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.redirect(302, m.poster_image);
+    }
+
+    // No poster — generate SVG card fallback
     const genres = (() => { try { const g = JSON.parse(m.genre || '[]'); return Array.isArray(g) ? g : [g]; } catch { return m.genre ? [m.genre] : []; }})();
     const badge = genres.slice(0, 2).join(' · ').toUpperCase() || 'FILM';
 
     const svg = buildOGSvg({
-      coverDataUri,
+      coverDataUri: null,
       badge,
       title: m.title || 'Film',
       lines: [
@@ -1462,11 +1527,17 @@ app.get('/og/blog/:id', async (req, res) => {
     const { data: b } = await supabase.from('blogs').select('*').eq('id', req.params.id).maybeSingle();
     if (!b) return res.status(404).send('Not found');
 
-    const coverDataUri = await toDataUri(b.cover_image);
+    // Redirect to the actual cover image — no processing needed
+    if (b.cover_image) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.redirect(302, b.cover_image);
+    }
+
+    // No cover — generate SVG card fallback
     const excerpt = b.excerpt ? b.excerpt.slice(0, 90) + (b.excerpt.length > 90 ? '…' : '') : null;
 
     const svg = buildOGSvg({
-      coverDataUri,
+      coverDataUri: null,
       badge: 'KFS BLOG',
       title: b.title || 'Blog',
       lines: [
