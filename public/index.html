@@ -1547,6 +1547,14 @@ body.light-mode .member-profile-section-title{border-color:#eee;color:#aaa}
 body.light-mode .member-film-card{background:#f5f5f5;border-color:#e0e0e0}
 body.light-mode .member-film-card:hover{border-color:#aaa}
 body.light-mode .member-film-poster-ph{background:#eee}
+.mprofile-blog-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e1e1e;cursor:pointer;transition:opacity .15s}
+.mprofile-blog-item:last-child{border-bottom:none}
+.mprofile-blog-item:hover{opacity:.75}
+.mprofile-blog-thumb{width:52px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#222}
+.mprofile-blog-thumb-ph{width:52px;height:36px;border-radius:6px;flex-shrink:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center}
+.mprofile-blog-title{font-size:13px;font-weight:500;color:var(--white);line-height:1.35;flex:1}
+body.light-mode .mprofile-blog-item{border-bottom-color:#eee}
+body.light-mode .mprofile-blog-thumb-ph{background:#f0f0f0}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:28px;
   padding-top:20px;border-top:1px solid var(--border)}
 
@@ -3441,7 +3449,11 @@ KFS — KIIT Film Society"></textarea>
     <h3 id="blog-modal-title">New Blog Post</h3>
     <input type="hidden" id="blog-edit-id">
     <div class="form-group"><label>Title</label><input type="text" id="blog-title"></div>
-    <div class="form-group"><label>Author</label><input type="text" id="blog-author" placeholder="e.g. Shivanshu Agarwal"></div>
+    <div class="form-group">
+      <label>Author</label>
+      <div id="blog-author-picker" style="position:relative"></div>
+      <p style="font-size:11px;color:var(--grey);margin-top:6px">Search KFS members, or type any name and press Enter for a free-text author.</p>
+    </div>
     <div class="form-group"><label>Excerpt (short summary)</label><input type="text" id="blog-excerpt"></div>
     <div class="form-group"><label>Cover Image</label><input type="file" id="blog-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
@@ -3630,6 +3642,10 @@ KFS — KIIT Film Society"></textarea>
       <div id="mprofile-films-wrap" style="display:none">
         <div class="member-profile-section-title">Films</div>
         <div class="member-films-grid" id="mprofile-films-grid"></div>
+      </div>
+      <div id="mprofile-blogs-wrap" style="display:none">
+        <div class="member-profile-section-title">Blog Posts</div>
+        <div id="mprofile-blogs-list"></div>
       </div>
     </div>
   </div>
@@ -4383,15 +4399,27 @@ async function openBlog(id) {
   // Author
   const authorEl = document.getElementById('blog-detail-author');
   if (blog.author) {
-    // Try to match author name against members (case-insensitive)
-    const matchedMember = allMembers && allMembers.find(
-      m => m.name && m.name.trim().toLowerCase() === blog.author.trim().toLowerCase()
-    );
-    if (matchedMember) {
-      authorEl.innerHTML = `By <span class="blog-author-link" style="cursor:pointer;border-bottom:1px solid rgba(245,245,245,.3);padding-bottom:1px" onclick="openMemberProfile(window._blogAuthorMember)">${blog.author}</span>`;
-      window._blogAuthorMember = matchedMember;
+    // Author may be stored as "Name||memberId" (linked) or plain name (free-text)
+    const authorRaw = blog.author.trim();
+    const pipeIdx = authorRaw.indexOf('||');
+    let displayName = authorRaw;
+    let linkedMember = null;
+    if (pipeIdx !== -1) {
+      displayName = authorRaw.slice(0, pipeIdx).trim();
+      const memberId = authorRaw.slice(pipeIdx + 2).trim();
+      linkedMember = allMembers && allMembers.find(m => String(m.id) === memberId);
+    }
+    // Fallback: try name-match if no id link found
+    if (!linkedMember) {
+      linkedMember = allMembers && allMembers.find(
+        m => m.name && m.name.trim().toLowerCase() === displayName.toLowerCase()
+      );
+    }
+    if (linkedMember) {
+      window._blogAuthorMember = linkedMember;
+      authorEl.innerHTML = `By <span class="blog-author-link" style="cursor:pointer;border-bottom:1px solid rgba(245,245,245,.3);padding-bottom:1px" onclick="openMemberProfile(window._blogAuthorMember)">${displayName}</span>`;
     } else {
-      authorEl.innerHTML = `By <span>${blog.author}</span>`;
+      authorEl.innerHTML = `By <span>${displayName}</span>`;
     }
     authorEl.style.display = 'block';
   } else {
@@ -5351,11 +5379,18 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-modal-title').textContent = blog ? 'Edit Post' : 'New Blog Post';
   document.getElementById('blog-edit-id').value = blog?.id||'';
   document.getElementById('blog-title').value = blog?.title||'';
-  document.getElementById('blog-author').value = blog?.author||'';
   document.getElementById('blog-excerpt').value = blog?.excerpt||'';
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
   document.getElementById('blog-cover').value='';
+  // Init author picker (single-select member picker)
+  if (!window._blogAuthorPicker) {
+    window._blogAuthorPicker = new MemberPicker('blog-author-picker', false);
+  } else {
+    window._blogAuthorPicker.selected = [];
+    window._blogAuthorPicker._renderTags();
+  }
+  if (blog?.author) window._blogAuthorPicker.setValue(blog.author);
   // Clear inline new-tag field
   const inlineEl = document.getElementById('blog-new-tag-inline');
   if (inlineEl) inlineEl.value = '';
@@ -5520,7 +5555,9 @@ async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
   const fd = new FormData();
   fd.append('title', document.getElementById('blog-title').value);
-  fd.append('author', document.getElementById('blog-author').value);
+  // Author from MemberPicker (Name||memberId for linked, plain name for free-text)
+  const authorVal = window._blogAuthorPicker ? window._blogAuthorPicker.getValue() : '';
+  fd.append('author', authorVal);
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
   fd.append('content', document.getElementById('blog-editor-content').innerHTML);
   fd.append('published', document.getElementById('blog-published').value);
@@ -5529,13 +5566,14 @@ async function saveBlog() {
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeBlogModal(); loadAdminData('blogs'); }
+  if (res.ok) { window._allBlogsCache = null; closeBlogModal(); loadAdminData('blogs'); }
   else alert('Error saving post');
 }
 
 async function deleteBlog(id) {
   if (!confirm('Delete this post?')) return;
   await apiFetch('/api/admin/blogs/'+id,'DELETE');
+  window._allBlogsCache = null;
   loadAdminData('blogs');
 }
 
@@ -7053,6 +7091,45 @@ async function openMemberProfile(member) {
   } else {
     filmsWrap.style.display='none';
   }
+
+  // ── Blogs authored by this member ──────────────────────────────────────────
+  const blogsWrap = document.getElementById('mprofile-blogs-wrap');
+  const blogsList = document.getElementById('mprofile-blogs-list');
+  // Use cached blogs if available; fetch otherwise
+  const getBlogs = async () => {
+    if (window._allBlogsCache) return window._allBlogsCache;
+    const data = await apiFetch('/api/blogs').catch(()=>[]);
+    window._allBlogsCache = data || [];
+    return window._allBlogsCache;
+  };
+  getBlogs().then(allBlogs => {
+    const memberId = String(member.id);
+    const memberName = member.name.trim().toLowerCase();
+    const authored = allBlogs.filter(b => {
+      if (!b.author) return false;
+      const raw = b.author.trim();
+      const pipeIdx = raw.indexOf('||');
+      if (pipeIdx !== -1) {
+        const id = raw.slice(pipeIdx + 2).trim();
+        const name = raw.slice(0, pipeIdx).trim().toLowerCase();
+        return id === memberId || name === memberName;
+      }
+      return raw.toLowerCase() === memberName;
+    });
+    if (authored.length) {
+      blogsWrap.style.display = 'block';
+      blogsList.innerHTML = authored.map(b => `
+        <div class="mprofile-blog-item" onclick="closeMemberProfile();openBlog(${b.id})">
+          ${b.cover_image
+            ? `<img class="mprofile-blog-thumb" src="${b.cover_image}" alt="">`
+            : `<div class="mprofile-blog-thumb-ph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg><\/div>`}
+          <span class="mprofile-blog-title">${b.title}<\/span>
+        <\/div>`).join('');
+    } else {
+      blogsWrap.style.display = 'none';
+    }
+  });
+
   modal.classList.add('open');
 }
 function closeMemberProfile() {
