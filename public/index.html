@@ -916,10 +916,10 @@ body.light-mode .hc-blog-card.hc-viewed .hc-read-badge{background:rgba(150,150,1
 .hc-blog-excerpt{font-size:13px;color:var(--grey);line-height:1.6;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* Film carousel card */
-.hc-film-card{flex:0 0 42vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
+.hc-film-card{flex:0 0 48vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
-@media(min-width:600px){.hc-film-card{flex:0 0 220px}}
-@media(min-width:900px){.hc-film-card{flex:0 0 260px}}
+@media(min-width:600px){.hc-film-card{flex:0 0 260px}}
+@media(min-width:900px){.hc-film-card{flex:0 0 310px}}
 .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(255,255,255,.08),0 0 0 1px rgba(255,255,255,.07)}
 body.light-mode .hc-film-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.18)}
 .hc-film-card:active{transform:scale(.98)}
@@ -1193,13 +1193,12 @@ body.light-mode .member-card:hover{box-shadow:0 8px 28px rgba(0,0,0,.12),0 0 0 1
 /* ── MEMBERS PHOTO CARDS ─────────────────────────────────────────────── */
 .members-grid-photo{
   display:grid;
-  grid-template-columns:repeat(5,1fr);
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
   gap:20px;
   margin-top:24px;
 }
-@media(max-width:1100px){.members-grid-photo{grid-template-columns:repeat(4,1fr)}}
-@media(max-width:768px){.members-grid-photo{grid-template-columns:repeat(3,1fr);gap:14px}}
-@media(max-width:480px){.members-grid-photo{grid-template-columns:repeat(2,1fr);gap:10px}}
+@media(max-width:768px){.members-grid-photo{gap:14px}}
+@media(max-width:480px){.members-grid-photo{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}}
 
 .member-card-photo{
   display:flex;flex-direction:column;
@@ -2666,7 +2665,7 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 </div>
 
 <!-- KFS WRAPPED PAGE -->
-<div id="page-wrapped" class="page">
+<div id="page-wrapped" class="page" style="display:none">
   <div class="wrapped-hero" id="wrapped-hero">
     <div class="wrapped-hero-badge">
       <span class="wrapped-hero-badge-dot"></span>
@@ -4725,7 +4724,8 @@ function renderMovieCard(m, clickable=false) {
     <\/div>
     <div class="movie-info">
       <div class="movie-title">${m.title}<\/div>
-      <div class="movie-year">${m.release_year||''}${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? ` · <span style="color:#666;font-size:10px;letter-spacing:.06em;text-transform:uppercase">${(Array.isArray(m.genre)?m.genre:[m.genre]).join(', ')}<\/span>` : ''}<\/div>
+      <div class="movie-year">${m.release_year||''}<\/div>
+      ${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${(Array.isArray(m.genre)?m.genre:[m.genre]).map(g=>`<span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${g}<\/span>`).join('')}<\/div>` : ''}
       <div class="movie-director">${m.director ? 'Dir. '+splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : ''}<\/div>
       ${m.description ? `<div class="movie-desc-snip">${m.description}<\/div>` : ''}
     <\/div>
@@ -6180,9 +6180,9 @@ async function checkRoute() {
   // Wait for wrapped config to resolve before routing, so we never
   // briefly flash the wrapped page if it is disabled.
   await _wrappedNavReady;
-  // Now safe to restore visibility on the wrapped page element
+  // Now safe to restore the wrapped page element (clear the inline display:none set in HTML)
   const wp = document.getElementById('page-wrapped');
-  if (wp) wp.style.visibility = '';
+  if (wp) wp.style.display = '';
 
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
@@ -6308,12 +6308,7 @@ const _wrappedNavReady = (async function initWrappedNav() {
   } catch(e) { /* silently ignore — nav defaults to visible */ }
 })();
 
-// Hide the wrapped page element immediately so it never flashes on refresh
-// before we know whether it is enabled. _doNavigate will un-hide it if needed.
-(function() {
-  const wp = document.getElementById('page-wrapped');
-  if (wp) wp.style.visibility = 'hidden';
-})();
+// The wrapped page is hidden via display:none in HTML and revealed by checkRoute after config loads.
 
 checkRoute();
 setTimeout(() => document.body.classList.add('loaded'), 600);
