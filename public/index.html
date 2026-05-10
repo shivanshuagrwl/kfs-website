@@ -6497,7 +6497,7 @@ function updateMetaTags({ title, description, image, url }) {
   desc.setAttribute('content', description);
 }
 
-function shareContent(type) {
+async function shareContent(type) {
   if (type === 'blog') {
     const id      = window._currentBlogId;
     const title   = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
@@ -6509,9 +6509,32 @@ function shareContent(type) {
     const id    = window._currentMovieId;
     const title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
     const desc  = document.getElementById('movie-detail-description')?.textContent || '';
-    const poster= document.getElementById('movie-detail-poster-img')?.src || '';
-    if (id) { shareFilmCard(id, title, desc, poster); return; }
-    _copyShareFallback(window.location.href);
+    if (!id) { _copyShareFallback(window.location.href); return; }
+
+    const movieData = _gatherCurrentMovieData();
+    const pageUrl   = movieData.pageUrl;
+    const shareText = desc
+      ? `"${title}" — a film by KFS | KIIT Film Society\n${desc.slice(0,120)}${desc.length>120?'…':''}`
+      : `"${title}" — a film by KFS | KIIT Film Society`;
+
+    // Try to share with the story card image (so the recipient sees a rich preview)
+    if (navigator.share && navigator.canShare) {
+      try {
+        const blob = await _renderStoryCardBlob(movieData);
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+        const file = new File([blob], `kfs-${slug}.png`, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: title + ' — KFS', text: shareText, url: pageUrl, files: [file] });
+          return;
+        }
+      } catch(e) { /* fall through to text-only share */ }
+    }
+    // Text-only share (desktop or unsupported)
+    if (navigator.share) {
+      navigator.share({ title: title + ' — KFS', text: shareText, url: pageUrl }).catch(()=>{});
+    } else {
+      _copyShareFallback(pageUrl);
+    }
   }
 }
 
@@ -10014,59 +10037,198 @@ function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
   ctx.fillText(line, x, y);
 }
 
-function downloadStoryCard(data) {
-  // data = { type, title, sub, quote } — all optional
-  data = data || {};
-  var type  = (data.type  || 'FILM').toUpperCase();
-  var title = data.title || 'Title';
-  var sub   = (data.sub   || '').toUpperCase();
-  var quote = data.quote  || '';
-
-  var cv = document.createElement('canvas');
-  cv.width = 1080; cv.height = 1920;
-  var ctx = cv.getContext('2d');
-  ctx.fillStyle = '#0c0c0c'; ctx.fillRect(0,0,1080,1920);
-  ctx.fillStyle = '#141414'; ctx.fillRect(0,0,1080,880);
-  // Play button
-  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(540,440,76,0,Math.PI*2); ctx.stroke();
-  ctx.fillStyle = '#555';
-  ctx.beginPath(); ctx.moveTo(510,404); ctx.lineTo(578,440); ctx.lineTo(510,476); ctx.closePath(); ctx.fill();
-  // KFS
-  ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
-  ctx.fillText('K F S', 56, 958);
-  // Type badge
-  ctx.font = '24px monospace'; ctx.fillStyle = '#444'; ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1.5;
-  var tw = ctx.measureText(type).width + 38;
-  _kfsRoundRect(ctx, 1080-56-tw, 930, tw, 46, 4); ctx.stroke();
-  ctx.fillText(type, 1080-56-tw+19, 961);
-  // Title
-  ctx.font = 'bold 82px serif'; ctx.fillStyle = '#e8e8e2';
-  ctx.fillText(title, 56, 1098);
-  // Subtitle
-  ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
-  ctx.fillText(sub, 56, 1155);
-  // Quote bar
-  ctx.fillStyle = '#2a2a2a'; ctx.fillRect(56,1185,4,96);
-  ctx.font = 'italic 400 36px serif'; ctx.fillStyle = '#888';
-  _kfsWrapText(ctx, quote, 76, 1222, 880, 52);
-  // Footer
-  ctx.font = '22px monospace'; ctx.fillStyle = '#333';
-  ctx.fillText('kiitfilmsociety.in', 56, 1824);
+// ── STORY CARD ─────────────────────────────────────────────────────────────────
+// data = { type, title, year, description, genres[], crew[], posterUrl, pageUrl }
+async function downloadStoryCard(data) {
+  var blob = await _renderStoryCardBlob(data);
+  if (!blob) return;
+  var url = URL.createObjectURL(blob);
   var lnk = document.createElement('a');
-  lnk.download = 'kfs-story-' + title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '.png';
-  lnk.href = cv.toDataURL('image/png');
+  var slug = (data.title||'film').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  lnk.download = 'kfs-story-' + slug + '.png';
+  lnk.href = url;
   lnk.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
 }
 
-// Download story card pre-filled from the currently open movie detail
-function downloadMovieStoryCard() {
-  var title = document.getElementById('movie-detail-title')?.textContent || '';
-  var desc  = document.getElementById('movie-detail-description')?.textContent || '';
-  var year  = document.getElementById('movie-detail-year')?.textContent || '';
-  // truncate quote to a reasonable length
-  var quote = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
-  downloadStoryCard({ type: 'FILM', title: title, sub: year, quote: quote });
+// Download story card for the currently open movie
+async function downloadMovieStoryCard() {
+  var data = _gatherCurrentMovieData();
+  await downloadStoryCard(data);
+}
+
+// Gather all current movie data from the DOM + window state
+function _gatherCurrentMovieData() {
+  var title   = document.getElementById('movie-detail-title')?.textContent?.trim() || '';
+  var year    = document.getElementById('movie-detail-year')?.textContent?.trim()  || '';
+  var desc    = document.getElementById('movie-detail-description')?.textContent?.trim() || '';
+  var posterEl= document.getElementById('movie-detail-poster-img');
+  var posterUrl = (posterEl && posterEl.style.display !== 'none') ? posterEl.src : '';
+  var id      = window._currentMovieId || '';
+  var slug    = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  var pageUrl = id ? ('https://kiitfilmsociety.in/films/' + slug + '-' + id) : 'https://kiitfilmsociety.in';
+
+  // Genre tags
+  var genreTags = [];
+  document.querySelectorAll('#movie-detail-genre-wrap .genre-tag').forEach(function(el){
+    genreTags.push(el.textContent.trim());
+  });
+
+  // Crew — read from the rendered crew items
+  var crew = [];
+  document.querySelectorAll('#movie-detail-crew .movie-crew-item').forEach(function(item){
+    var label = item.querySelector('.movie-crew-label')?.textContent?.trim() || '';
+    var value = item.querySelector('.movie-crew-value')?.textContent?.replace(/\s+/g,' ')?.trim() || '';
+    if (label && value) crew.push({ label: label, value: value });
+  });
+
+  return { type: 'FILM', title: title, year: year, description: desc,
+           genres: genreTags, crew: crew, posterUrl: posterUrl, pageUrl: pageUrl };
+}
+
+// Render story card to a Blob (PNG). Returns null on failure.
+async function _renderStoryCardBlob(data) {
+  data = data || {};
+  var W = 1080, H = 1920, PAD = 64;
+  var type   = (data.type  || 'FILM').toUpperCase();
+  var title  = data.title  || 'Untitled';
+  var year   = data.year   || '';
+  var desc   = data.description || '';
+  var genres = data.genres || [];
+  var crew   = (data.crew  || []).slice(0, 4); // max 4 crew rows
+  var poster = data.posterUrl || '';
+  var pageUrl= data.pageUrl || 'kiitfilmsociety.in';
+  var displayUrl = pageUrl.replace(/^https?:\/\//,'');
+
+  var cv  = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var ctx = cv.getContext('2d');
+
+  // ── Background ──────────────────────────────────────────────
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Poster image (top ~55% of card) ─────────────────────────
+  var imgZoneH = 1060;
+  if (poster) {
+    try {
+      var pImg = await _kfsLoadImage(poster);
+      // Cover-fill the image zone
+      var sc = Math.max(W / pImg.naturalWidth, imgZoneH / pImg.naturalHeight);
+      var dw = pImg.naturalWidth * sc, dh = pImg.naturalHeight * sc;
+      ctx.drawImage(pImg, (W - dw) / 2, (imgZoneH - dh) / 2, dw, dh);
+    } catch(e) { /* no poster — leave dark bg */ }
+  }
+
+  // Gradient overlay on poster — dark vignette bottom
+  var grad = ctx.createLinearGradient(0, imgZoneH * 0.3, 0, imgZoneH);
+  grad.addColorStop(0, 'rgba(10,10,10,0)');
+  grad.addColorStop(0.6, 'rgba(10,10,10,0.55)');
+  grad.addColorStop(1,   'rgba(10,10,10,0.95)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, imgZoneH);
+
+  // Top gradient (for KFS label legibility)
+  var topGrad = ctx.createLinearGradient(0, 0, 0, 180);
+  topGrad.addColorStop(0, 'rgba(10,10,10,0.7)');
+  topGrad.addColorStop(1, 'rgba(10,10,10,0)');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, W, 180);
+
+  // ── KFS wordmark top-left ────────────────────────────────────
+  ctx.font = '600 28px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('K F S', PAD, 80);
+
+  // ── Type badge top-right ─────────────────────────────────────
+  ctx.font = '600 22px monospace';
+  var bw = ctx.measureText(type).width + 44;
+  _kfsRoundRect(ctx, W - PAD - bw, 48, bw, 42, 6);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(type, W - PAD - bw + 22, 76);
+
+  // ── Content panel (bottom of card) ──────────────────────────
+  var panelY = imgZoneH;  // where text panel starts
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, panelY, W, H - panelY);
+
+  var cy = panelY + 64;
+
+  // Year + genres row
+  var metaParts = [];
+  if (year) metaParts.push(year);
+  genres.slice(0, 3).forEach(function(g){ metaParts.push(g); });
+  if (metaParts.length) {
+    ctx.font = '500 26px monospace';
+    ctx.fillStyle = '#505050';
+    ctx.fillText(metaParts.join('  ·  '), PAD, cy);
+    cy += 52;
+  }
+
+  // Title — large, auto-wraps at 2 lines max
+  var titleFontSize = 96;
+  ctx.font = 'bold ' + titleFontSize + 'px serif';
+  while (ctx.measureText(title).width > W - PAD*2 - 20 && titleFontSize > 52) {
+    titleFontSize -= 4;
+    ctx.font = 'bold ' + titleFontSize + 'px serif';
+  }
+  // Wrap to 2 lines if still needed
+  var titleLines = _kfsWrapTextLines(ctx, title, W - PAD*2, 2);
+  ctx.fillStyle = '#ebebE5';
+  titleLines.forEach(function(line, i){ ctx.fillText(line, PAD, cy + i * (titleFontSize + 12)); });
+  cy += titleLines.length * (titleFontSize + 12) + 32;
+
+  // Thin divider
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, cy); ctx.lineTo(W - PAD, cy); ctx.stroke();
+  cy += 36;
+
+  // Crew rows
+  if (crew.length) {
+    crew.forEach(function(c) {
+      ctx.font = '600 22px monospace'; ctx.fillStyle = '#383838';
+      ctx.fillText(c.label.toUpperCase(), PAD, cy);
+      ctx.font = '400 28px sans-serif'; ctx.fillStyle = '#787870';
+      // truncate long crew strings
+      var crewVal = c.value;
+      ctx.font = '400 28px sans-serif';
+      while (ctx.measureText(crewVal).width > W - PAD*2 - 10 && crewVal.length > 4) {
+        crewVal = crewVal.slice(0, -4) + '…';
+      }
+      ctx.fillText(crewVal, PAD, cy + 36);
+      cy += 84;
+    });
+    cy += 8;
+  }
+
+  // Description (italic, capped to 3 lines)
+  if (desc) {
+    ctx.font = 'italic 400 32px serif'; ctx.fillStyle = '#3e3e3a';
+    // quote bar
+    ctx.fillStyle = '#222'; ctx.fillRect(PAD, cy, 3, 100);
+    ctx.font = 'italic 400 32px serif'; ctx.fillStyle = '#484844';
+    var descLines = _kfsWrapTextLines(ctx, desc, W - PAD*2 - 20, 3);
+    descLines.forEach(function(line, i){ ctx.fillText(line, PAD + 20, cy + 36 + i * 46); });
+    cy += 100 + descLines.length * 4;
+  }
+
+  // ── Footer ───────────────────────────────────────────────────
+  var footerY = H - 80;
+  ctx.fillStyle = '#141414';
+  ctx.fillRect(0, footerY - 1, W, H - footerY + 1);
+
+  // URL with subtle arrow — acts as the deep link hint
+  ctx.font = '500 24px monospace'; ctx.fillStyle = '#303030';
+  ctx.fillText(displayUrl, PAD, H - 32);
+
+  // Small arrow indicator
+  ctx.font = '500 24px monospace'; ctx.fillStyle = '#282828';
+  ctx.fillText('↗', W - PAD - ctx.measureText('↗').width, H - 32);
+
+  return new Promise(function(resolve) {
+    cv.toBlob(function(blob){ resolve(blob); }, 'image/png');
+  });
 }
 
 // ── SCREENSAVER ────────────────────────────────────────────────────────────
