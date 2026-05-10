@@ -1527,6 +1527,10 @@ body.light-mode .mpicker-tag{background:#f0f0f0;border-color:#ddd;color:#111}
 .member-profile-batch{font-size:11px;color:#555;margin-top:2px}
 .member-profile-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1;z-index:1}
 .member-profile-close:hover{color:#fff}
+.member-passport-dl-btn{position:absolute;top:16px;right:52px;background:none;border:none;color:#555;cursor:pointer;line-height:1;z-index:1;padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .15s,background .15s}
+.member-passport-dl-btn:hover{color:#f5f5f5;background:rgba(255,255,255,.08)}
+body.light-mode .member-passport-dl-btn{color:#aaa}
+body.light-mode .member-passport-dl-btn:hover{color:#111;background:rgba(0,0,0,.06)}
 .member-profile-body{padding:0 32px 32px}
 .member-profile-bio{font-size:14px;color:#bbb;line-height:1.7;margin-bottom:28px}
 .member-profile-section-title{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#666;margin-bottom:14px;padding-top:20px;border-top:1px solid #222}
@@ -1812,6 +1816,9 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
   margin-top:16px}
 .share-btn:hover{border-color:var(--white);color:var(--white)}
 .share-btn svg{flex-shrink:0}
+.movie-story-dl-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:transparent;border:1px solid var(--border);border-radius:50%;color:var(--grey);cursor:pointer;transition:all .2s;flex-shrink:0;margin-top:16px}
+.movie-story-dl-btn:hover{border-color:var(--white);color:var(--white);background:rgba(245,245,245,.06)}
+body.light-mode .movie-story-dl-btn:hover{border-color:#111;color:#111;background:rgba(0,0,0,.04)}
 
 /* ── MEMBER SPOTLIGHT ──────────────────────────────────────────────── */
 .spotlight-wrap{margin-top:80px;display:grid;grid-template-columns:200px 1fr;
@@ -2737,10 +2744,15 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:32px">
         <a class="movie-detail-back" onclick="navigate('movies')" style="margin-bottom:0">← Back to Films</a>
-        <button class="share-btn" onclick="shareContent('movie')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          Share
-        </button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="share-btn" onclick="shareContent('movie')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share
+          </button>
+          <button class="movie-story-dl-btn" onclick="downloadMovieStoryCard()" title="Download Story Card">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+        </div>
       </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
@@ -3609,6 +3621,9 @@ KFS — KIIT Film Society"></textarea>
 <div id="member-profile-modal">
   <div class="member-profile-box">
     <button class="member-profile-close" onclick="closeMemberProfile()">×</button>
+    <button class="member-passport-dl-btn" onclick="downloadPassportFromProfile()" title="Download Passport Card">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
     <div class="member-profile-header">
       <div id="mprofile-photo-wrap"></div>
       <div>
@@ -9679,7 +9694,15 @@ function _kfsRoundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
 }
 
-function downloadPassportCard() {
+function downloadPassportCard(data) {
+  // data = { name, role, batch, genre, films } — optional, falls back to defaults
+  data = data || {};
+  var name  = data.name  || 'Your Name';
+  var role  = data.role  || '';
+  var batch = data.batch || '';
+  var genre = data.genre || '';
+  var films = data.films || '';
+
   var cv = document.createElement('canvas');
   cv.width = 1080; cv.height = 1620;
   var ctx = cv.getContext('2d');
@@ -9695,18 +9718,18 @@ function downloadPassportCard() {
   ctx.fillText('MEMBER', 1080-56-bw+22, 97);
   // Name
   ctx.font = 'bold 88px serif'; ctx.fillStyle = '#e8e8e2';
-  ctx.fillText(document.getElementById('pp-name').value || 'Your Name', 56, 560);
+  ctx.fillText(name, 56, 560);
   // Role
   ctx.font = '500 30px monospace'; ctx.fillStyle = '#666';
-  ctx.fillText((document.getElementById('pp-role').value || '').toUpperCase(), 56, 618);
+  ctx.fillText(role.toUpperCase(), 56, 618);
   // Stripe
   ctx.fillStyle = '#2a2a2a';
   for(var x=56;x<1024;x+=20){ctx.fillRect(x,658,12,5);}
   // Fields
   var fields = [
-    ['BATCH', document.getElementById('pp-batch').value],
-    ['GENRE', document.getElementById('pp-genre').value],
-    ['FILMS', document.getElementById('pp-films').value],
+    ['BATCH', batch],
+    ['GENRE', genre],
+    ['FILMS', films],
   ];
   var fy = 760;
   fields.forEach(function(pair) {
@@ -9716,8 +9739,9 @@ function downloadPassportCard() {
     ctx.fillText(pair[1], 56, fy+42); fy += 112;
   });
   // Serial
+  var yr = new Date().getFullYear();
   ctx.font = '500 24px monospace'; ctx.fillStyle = '#333';
-  ctx.fillText('KFS · 2024 · 00042', 56, 1068);
+  ctx.fillText('KFS · ' + yr, 56, 1068);
   // Footer band
   ctx.fillStyle = '#181818'; ctx.fillRect(0,1100,1080,520);
   ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
@@ -9725,9 +9749,26 @@ function downloadPassportCard() {
   ctx.font = '22px monospace'; ctx.fillStyle = '#333';
   ctx.fillText('kiitfilmsociety.in', 56, 1558);
   var lnk = document.createElement('a');
-  lnk.download = 'kfs-passport.png';
+  lnk.download = 'kfs-passport-' + name.toLowerCase().replace(/\s+/g,'-') + '.png';
   lnk.href = cv.toDataURL('image/png');
   lnk.click();
+}
+
+// Download passport pre-filled from the currently open member profile
+function downloadPassportFromProfile() {
+  var name  = document.getElementById('mprofile-name')?.textContent || '';
+  var roleEl = document.getElementById('mprofile-role')?.textContent || '';
+  // role text is "Role · Domain" — take first part
+  var role  = roleEl.split('·')[0].trim();
+  var batchEl = document.getElementById('mprofile-batch')?.textContent || '';
+  // batch text is "Batch of YYYY"
+  var batch = batchEl.replace(/^Batch of\s*/i,'').trim();
+
+  // Count films from the visible films grid
+  var filmCards = document.querySelectorAll('#mprofile-films-grid .member-film-card');
+  var filmCount = filmCards.length ? String(filmCards.length) + ' film' + (filmCards.length !== 1 ? 's' : '') : '';
+
+  downloadPassportCard({ name: name, role: role, batch: batch, genre: '', films: filmCount });
 }
 
 function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
@@ -9740,7 +9781,14 @@ function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
   ctx.fillText(line, x, y);
 }
 
-function downloadStoryCard() {
+function downloadStoryCard(data) {
+  // data = { type, title, sub, quote } — all optional
+  data = data || {};
+  var type  = (data.type  || 'FILM').toUpperCase();
+  var title = data.title || 'Title';
+  var sub   = (data.sub   || '').toUpperCase();
+  var quote = data.quote  || '';
+
   var cv = document.createElement('canvas');
   cv.width = 1080; cv.height = 1920;
   var ctx = cv.getContext('2d');
@@ -9755,28 +9803,37 @@ function downloadStoryCard() {
   ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
   ctx.fillText('K F S', 56, 958);
   // Type badge
-  var type = (document.getElementById('sc-type').value || 'FILM').toUpperCase();
   ctx.font = '24px monospace'; ctx.fillStyle = '#444'; ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1.5;
   var tw = ctx.measureText(type).width + 38;
   _kfsRoundRect(ctx, 1080-56-tw, 930, tw, 46, 4); ctx.stroke();
   ctx.fillText(type, 1080-56-tw+19, 961);
   // Title
   ctx.font = 'bold 82px serif'; ctx.fillStyle = '#e8e8e2';
-  ctx.fillText(document.getElementById('sc-title').value || 'Title', 56, 1098);
+  ctx.fillText(title, 56, 1098);
   // Subtitle
   ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
-  ctx.fillText((document.getElementById('sc-sub').value || '').toUpperCase(), 56, 1155);
+  ctx.fillText(sub, 56, 1155);
   // Quote bar
   ctx.fillStyle = '#2a2a2a'; ctx.fillRect(56,1185,4,96);
   ctx.font = 'italic 400 36px serif'; ctx.fillStyle = '#888';
-  _kfsWrapText(ctx, document.getElementById('sc-quote').value || '', 76, 1222, 880, 52);
+  _kfsWrapText(ctx, quote, 76, 1222, 880, 52);
   // Footer
   ctx.font = '22px monospace'; ctx.fillStyle = '#333';
   ctx.fillText('kiitfilmsociety.in', 56, 1824);
   var lnk = document.createElement('a');
-  lnk.download = 'kfs-story-card.png';
+  lnk.download = 'kfs-story-' + title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '.png';
   lnk.href = cv.toDataURL('image/png');
   lnk.click();
+}
+
+// Download story card pre-filled from the currently open movie detail
+function downloadMovieStoryCard() {
+  var title = document.getElementById('movie-detail-title')?.textContent || '';
+  var desc  = document.getElementById('movie-detail-description')?.textContent || '';
+  var year  = document.getElementById('movie-detail-year')?.textContent || '';
+  // truncate quote to a reasonable length
+  var quote = desc.length > 160 ? desc.slice(0, 157) + '…' : desc;
+  downloadStoryCard({ type: 'FILM', title: title, sub: year, quote: quote });
 }
 
 // ── SCREENSAVER ────────────────────────────────────────────────────────────
