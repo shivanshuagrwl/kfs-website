@@ -1304,50 +1304,16 @@ body.light-mode .member-special-tag.tag-developer{
 .testimonial-role{font-size:11px;color:var(--grey);letter-spacing:.06em}
 
 /* ── FOOTER ──────────────────────────────────────────────────────────── */
-footer{
-  position:relative;
-  padding:0;
-  margin-top:80px;
-  overflow:hidden;
-}
-.footer-silhouette{
-  display:block;
-  width:100%;
-  line-height:0;
-  position:relative;
-}
-.footer-silhouette svg{
-  display:block;
-  width:100%;
-  height:auto;
-}
-.footer-inner{
-  background:var(--black);
-  border-top:1px solid var(--border);
-  padding:48px 40px 40px;
-  display:grid;
-  grid-template-columns:1fr auto;
-  align-items:end;
-  gap:40px;
-  position:relative;
-}
-@media(max-width:768px){
-  .footer-inner{padding:36px 24px 32px;grid-template-columns:1fr;gap:24px}
-}
-.footer-logo{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+footer{border-top:1px solid var(--border);padding:60px 40px;
+  display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px}
+@media(max-width:768px){footer{padding:40px 24px;grid-template-columns:1fr}}
+.footer-logo{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .footer-logo span{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
-.footer-tagline{
-  font-size:11px;color:var(--grey);letter-spacing:.06em;text-transform:uppercase;
-  margin-bottom:10px;opacity:.6;
-}
 .footer-copy{font-size:12px;color:var(--grey)}
-.footer-links{display:flex;gap:24px;align-items:center}
+.footer-links{display:flex;gap:24px}
 .footer-links a{font-size:12px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--grey);text-decoration:none;transition:color .2s}
 .footer-links a:hover{color:var(--white)}
-/* light mode */
-body.light-mode .footer-silhouette .sil-fill{fill:#f0f0f0}
-body.light-mode .footer-silhouette .sil-sky{stop-color:#f0f0f0}
 
 /* ── ADMIN LOGIN ────────────────────────────────────────────────────────── */
 #admin-login{display:none;min-height:100vh;align-items:center;justify-content:center}
@@ -1662,7 +1628,7 @@ body.light-mode .member-film-poster-ph{background:#eee}
   .testimonial-quote{font-size:13px}
 
   /* footer */
-  .footer-inner{padding:32px 20px 28px;gap:20px;grid-template-columns:1fr}
+  footer{padding:36px 20px;gap:20px;grid-template-columns:1fr}
   .footer-links{flex-wrap:wrap;gap:16px;margin-top:12px}
 
   /* login */
@@ -2534,157 +2500,16 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
   </section>
 
   <footer>
-    <!-- Silhouette cityscape / film-set horizon -->
-    <div class="footer-silhouette" aria-hidden="true">
-      <svg viewBox="0 0 1440 180" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="sil-fade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--black)" stop-opacity="0" class="sil-sky"/>
-            <stop offset="100%" stop-color="var(--black)" stop-opacity="1"/>
-          </linearGradient>
-        </defs>
-
-        <!-- Silhouette shapes — film city skyline with camera towers, reels, and buildings -->
-        <g class="sil-fill" fill="#0a0a0a">
-
-          <!-- Far-left low buildings -->
-          <rect x="0"   y="148" width="28"  height="32"/>
-          <rect x="30"  y="138" width="18"  height="42"/>
-          <rect x="50"  y="145" width="22"  height="35"/>
-
-          <!-- Camera on tripod — left -->
-          <polygon points="80,110 94,110 94,148 86,148 86,130 80,130"/>
-          <polygon points="72,104 102,104 98,112 76,112"/>
-          <rect x="84" y="148" width="4" height="8"/>
-          <polygon points="82,156 74,170 96,170 88,156"/>
-
-          <!-- Mid-left buildings — varied heights -->
-          <rect x="110" y="128" width="30" height="52"/>
-          <rect x="142" y="120" width="20" height="60"/>
-          <!-- antenna on building -->
-          <rect x="149" y="112" width="2"  height="10"/>
-          <rect x="162" y="135" width="35" height="45"/>
-          <rect x="199" y="125" width="24" height="55"/>
-
-          <!-- Film reel silhouette — centre-left -->
-          <circle cx="248" cy="134" r="24" fill="#0a0a0a"/>
-          <circle cx="248" cy="134" r="14" fill="var(--black)"/>
-          <!-- reel spokes -->
-          <rect x="246" y="112" width="4"  height="22" rx="2" fill="#0a0a0a"/>
-          <rect x="246" y="136" width="4"  height="22" rx="2" fill="#0a0a0a"/>
-          <rect x="226" y="132" width="22" height="4"  rx="2" fill="#0a0a0a"/>
-          <rect x="248" y="132" width="22" height="4"  rx="2" fill="#0a0a0a"/>
-          <circle cx="248" cy="134" r="5"  fill="#0a0a0a"/>
-          <!-- reel base -->
-          <rect x="240" y="158" width="16" height="22"/>
-
-          <!-- Centre buildings — tallest cluster -->
-          <rect x="280" y="80"  width="38" height="100"/>
-          <!-- windows hint -->
-          <rect x="284" y="86"  width="6"  height="6"  fill="var(--black)"/>
-          <rect x="294" y="86"  width="6"  height="6"  fill="var(--black)"/>
-          <rect x="304" y="86"  width="6"  height="6"  fill="var(--black)"/>
-          <rect x="284" y="96"  width="6"  height="6"  fill="var(--black)"/>
-          <rect x="304" y="96"  width="6"  height="6"  fill="var(--black)"/>
-          <!-- rooftop spike -->
-          <polygon points="295,68 299,80 291,80"/>
-
-          <rect x="320" y="100" width="30" height="80"/>
-          <rect x="352" y="90"  width="44" height="90"/>
-          <!-- tall tower -->
-          <polygon points="374,72 378,90 370,90"/>
-          <rect x="398" y="108" width="26" height="72"/>
-
-          <!-- Camera on tripod — centre -->
-          <polygon points="435,88 453,88 453,130 444,130 444,108 435,108"/>
-          <polygon points="426,82 462,82 458,90 430,90"/>
-          <rect x="442" y="130" width="4" height="10"/>
-          <polygon points="440,140 430,160 456,160 446,140"/>
-
-          <!-- Right-centre buildings -->
-          <rect x="470" y="115" width="32" height="65"/>
-          <rect x="504" y="125" width="22" height="55"/>
-          <rect x="528" y="105" width="40" height="75"/>
-          <!-- dome on building -->
-          <ellipse cx="548" cy="104" rx="18" ry="10"/>
-
-          <!-- Film strip fence — right centre -->
-          <rect x="578" y="148" width="80" height="32"/>
-          <!-- sprocket holes punched out (lighter) -->
-          <rect x="584" y="153" width="10" height="8" fill="var(--black)"/>
-          <rect x="600" y="153" width="10" height="8" fill="var(--black)"/>
-          <rect x="616" y="153" width="10" height="8" fill="var(--black)"/>
-          <rect x="632" y="153" width="10" height="8" fill="var(--black)"/>
-          <rect x="648" y="153" width="10" height="8" fill="var(--black)"/>
-
-          <!-- Far right buildings -->
-          <rect x="666" y="130" width="28" height="50"/>
-          <rect x="696" y="118" width="36" height="62"/>
-          <!-- antenna -->
-          <rect x="712" y="108" width="2"  height="12"/>
-          <rect x="736" y="128" width="30" height="52"/>
-          <rect x="768" y="112" width="42" height="68"/>
-
-          <!-- Camera on tripod — right -->
-          <polygon points="822,96 838,96 838,135 830,135 830,115 822,115"/>
-          <polygon points="814,90 846,90 842,98 818,98"/>
-          <rect x="828" y="135" width="4" height="8"/>
-          <polygon points="826,143 818,160 838,160 830,143"/>
-
-          <!-- More right buildings -->
-          <rect x="854" y="124" width="26" height="56"/>
-          <rect x="882" y="132" width="20" height="48"/>
-          <rect x="904" y="115" width="34" height="65"/>
-
-          <!-- Second film reel — far right -->
-          <circle cx="958" cy="136" r="22" fill="#0a0a0a"/>
-          <circle cx="958" cy="136" r="12" fill="var(--black)"/>
-          <rect x="956" y="116" width="4" height="20" rx="2" fill="#0a0a0a"/>
-          <rect x="956" y="136" width="4" height="20" rx="2" fill="#0a0a0a"/>
-          <rect x="938" y="134" width="20" height="4" rx="2" fill="#0a0a0a"/>
-          <rect x="958" y="134" width="20" height="4" rx="2" fill="#0a0a0a"/>
-          <circle cx="958" cy="136" r="5" fill="#0a0a0a"/>
-          <rect x="950" y="158" width="16" height="22"/>
-
-          <!-- Far-right low edge -->
-          <rect x="988"  y="140" width="24" height="40"/>
-          <rect x="1014" y="130" width="30" height="50"/>
-          <rect x="1046" y="138" width="20" height="42"/>
-          <rect x="1068" y="125" width="36" height="55"/>
-          <rect x="1106" y="140" width="26" height="40"/>
-          <rect x="1134" y="148" width="20" height="32"/>
-          <rect x="1156" y="135" width="32" height="45"/>
-          <rect x="1190" y="128" width="28" height="52"/>
-          <rect x="1220" y="142" width="22" height="38"/>
-          <rect x="1244" y="133" width="30" height="47"/>
-          <rect x="1276" y="148" width="24" height="32"/>
-          <rect x="1302" y="138" width="36" height="42"/>
-          <rect x="1340" y="145" width="22" height="35"/>
-          <rect x="1364" y="130" width="30" height="50"/>
-          <rect x="1396" y="148" width="44" height="32"/>
-
-          <!-- Ground fill all the way across -->
-          <rect x="0" y="168" width="1440" height="12"/>
-        </g>
-
-        <!-- Fade overlay so silhouette blends into footer bg -->
-        <rect x="0" y="0" width="1440" height="180" fill="url(#sil-fade)"/>
-      </svg>
+    <div>
+      <div class="footer-logo">
+        <span>KIIT Film Society</span>
+      </div>
+      <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span></p>
     </div>
-
-    <div class="footer-inner">
-      <div>
-        <div class="footer-logo">
-          <span>KIIT Film Society</span>
-        </div>
-        <p class="footer-tagline">Cinema · Filmmaking · Bhubaneswar</p>
-        <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span></p>
-      </div>
-      <div class="footer-links">
-        <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
-        <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
-        <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
-      </div>
+    <div class="footer-links">
+      <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
+      <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
     </div>
   </footer>
 </div>
