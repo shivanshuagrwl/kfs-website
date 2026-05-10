@@ -6177,6 +6177,13 @@ function showAdminError(msg) {
 }
 
 async function checkRoute() {
+  // Wait for wrapped config to resolve before routing, so we never
+  // briefly flash the wrapped page if it is disabled.
+  await _wrappedNavReady;
+  // Now safe to restore visibility on the wrapped page element
+  const wp = document.getElementById('page-wrapped');
+  if (wp) wp.style.visibility = '';
+
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
   if (path === 'admin') { navigate('admin', false); return; }
@@ -6289,7 +6296,8 @@ document.addEventListener('click', function(e) {
 
 // Fetch wrapped config early so the nav link is hidden/shown on every page,
 // not just when the user visits the Wrapped section.
-(async function initWrappedNav() {
+// Store the promise so checkRoute can await it before deciding whether to show wrapped.
+const _wrappedNavReady = (async function initWrappedNav() {
   try {
     const config = await apiFetch('/api/wrapped/config').catch(() => null);
     if (config) _wrappedConfig = config;
@@ -6298,6 +6306,13 @@ document.addEventListener('click', function(e) {
       wrappedNavLink.style.display = (_wrappedConfig.enabled === false) ? 'none' : '';
     }
   } catch(e) { /* silently ignore — nav defaults to visible */ }
+})();
+
+// Hide the wrapped page element immediately so it never flashes on refresh
+// before we know whether it is enabled. _doNavigate will un-hide it if needed.
+(function() {
+  const wp = document.getElementById('page-wrapped');
+  if (wp) wp.style.visibility = 'hidden';
 })();
 
 checkRoute();
@@ -6970,6 +6985,7 @@ function initMoviePickers() {
 // MEMBER PROFILE MODAL
 // ══════════════════════════════════════════════════════════
 async function openMemberProfile(member) {
+  window._currentProfileMember = member;  // store for passport download
   const modal = document.getElementById('member-profile-modal');
   document.getElementById('mprofile-name').textContent = member.name;
   document.getElementById('mprofile-role').textContent = [member.role, member.domain].filter(Boolean).join(' · ');
@@ -9694,81 +9710,298 @@ function _kfsRoundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
 }
 
-function downloadPassportCard(data) {
-  // data = { name, role, batch, genre, films } — optional, falls back to defaults
+// ── PASSPORT CARD ─────────────────────────────────────────────────────────────
+// data = { name, role, domain, batch, bio, photo, special_tag, filmPosters[] }
+async function downloadPassportCard(data) {
   data = data || {};
-  var name  = data.name  || 'Your Name';
-  var role  = data.role  || '';
-  var batch = data.batch || '';
-  var genre = data.genre || '';
-  var films = data.films || '';
+  var W = 1080, H = 1620;
+  var PAD = 64;
+  var name       = data.name       || 'Your Name';
+  var role       = data.role       || '';
+  var domain     = data.domain     || '';
+  var batch      = data.batch      || '';
+  var bio        = data.bio        || '';
+  var specialTag = data.special_tag|| '';   // 'admin-developer' | 'developer' | ''
+  var filmPosters= data.filmPosters|| [];    // array of poster URLs (up to 3)
+  var photoUrl   = data.photo      || '';
+  var yr         = new Date().getFullYear();
 
   var cv = document.createElement('canvas');
-  cv.width = 1080; cv.height = 1620;
+  cv.width = W; cv.height = H;
   var ctx = cv.getContext('2d');
-  ctx.fillStyle = '#141414'; ctx.fillRect(0,0,1080,1620);
-  ctx.fillStyle = '#111'; ctx.fillRect(0,0,1080,1100);
-  // KFS label
-  ctx.font = '500 26px monospace'; ctx.fillStyle = '#555';
-  ctx.fillText('K F S', 56, 96);
-  // Member badge outline
-  ctx.font = '22px monospace'; ctx.fillStyle = '#444'; ctx.strokeStyle = '#2e2e2e'; ctx.lineWidth = 1.5;
-  var bw = ctx.measureText('MEMBER').width + 44;
-  _kfsRoundRect(ctx, 1080-56-bw, 68, bw, 44, 5); ctx.stroke();
-  ctx.fillText('MEMBER', 1080-56-bw+22, 97);
-  // Name
-  ctx.font = 'bold 88px serif'; ctx.fillStyle = '#e8e8e2';
-  ctx.fillText(name, 56, 560);
+
+  // ── Background ──────────────────────────────────────────────
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle top gradient wash
+  var topGrad = ctx.createLinearGradient(0, 0, 0, 500);
+  topGrad.addColorStop(0, 'rgba(255,255,255,0.04)');
+  topGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, W, 500);
+
+  // ── Header row: KFS left, badge right ──────────────────────
+  ctx.font = '600 28px monospace';
+  ctx.fillStyle = '#4a4a4a';
+  ctx.fillText('K F S', PAD, 88);
+
+  // MEMBER badge
+  var badgeLabel = 'MEMBER';
+  ctx.font = '600 20px monospace';
+  var bw = ctx.measureText(badgeLabel).width + 48;
+  var bh = 40, bx = W - PAD - bw, by = 62;
+  ctx.strokeStyle = '#2e2e2e'; ctx.lineWidth = 1.5;
+  _kfsRoundRect(ctx, bx, by, bw, bh, 6); ctx.stroke();
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillText(badgeLabel, bx + 24, by + 26);
+
+  // Special tag (if any) — right of header, below badge
+  if (specialTag) {
+    var tagLabel = specialTag === 'admin-developer' ? '</> ADMIN-DEV' : '</> DEV';
+    ctx.font = '600 18px monospace';
+    var tw2 = ctx.measureText(tagLabel).width + 40;
+    var ty2 = by + bh + 10;
+    if (specialTag === 'admin-developer') {
+      ctx.strokeStyle = '#8b5cf640'; ctx.fillStyle = '#8b5cf6';
+    } else {
+      ctx.strokeStyle = '#3b82f640'; ctx.fillStyle = '#60a5fa';
+    }
+    _kfsRoundRect(ctx, W - PAD - tw2, ty2, tw2, 36, 6);
+    ctx.globalAlpha = 0.18; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = specialTag === 'admin-developer' ? '#c4b5fd' : '#93c5fd';
+    ctx.fillText(tagLabel, W - PAD - tw2 + 20, ty2 + 24);
+  }
+
+  // ── Photo circle ────────────────────────────────────────────
+  var photoSize = 200, photoX = PAD, photoY = 136;
+  // Draw placeholder circle first
+  ctx.save();
+  ctx.beginPath(); ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 0, Math.PI*2);
+  ctx.fillStyle = '#1e1e1e'; ctx.fill();
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+
+  // Load and clip photo if available
+  var photoLoaded = false;
+  if (photoUrl) {
+    try {
+      var photoImg = await _kfsLoadImage(photoUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2 - 2, 0, Math.PI*2);
+      ctx.clip();
+      // cover-fit: draw centered square crop
+      var ps = photoSize - 4;
+      var iw = photoImg.naturalWidth, ih = photoImg.naturalHeight;
+      var scale = Math.max(ps/iw, ps/ih);
+      var dw = iw*scale, dh = ih*scale;
+      ctx.drawImage(photoImg, photoX+2 + (ps-dw)/2, photoY+2 + (ps-dh)/2, dw, dh);
+      ctx.restore();
+      photoLoaded = true;
+    } catch(e) { /* keep placeholder */ }
+  }
+  if (!photoLoaded) {
+    // Silhouette icon
+    ctx.save();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(photoX+photoSize/2, photoY+68, 36, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(photoX+photoSize/2, photoY+photoSize/2+30, 56, 44, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Name block ──────────────────────────────────────────────
+  var nameX = photoX + photoSize + 40;
+  var nameMaxW = W - nameX - PAD;
+
+  // Name — auto-shrink font to fit
+  var nameFontSize = 72;
+  ctx.font = `bold ${nameFontSize}px serif`;
+  while (ctx.measureText(name).width > nameMaxW && nameFontSize > 36) {
+    nameFontSize -= 4;
+    ctx.font = `bold ${nameFontSize}px serif`;
+  }
+  ctx.fillStyle = '#e8e8e2';
+  ctx.fillText(name, nameX, photoY + 74);
+
   // Role
-  ctx.font = '500 30px monospace'; ctx.fillStyle = '#666';
-  ctx.fillText(role.toUpperCase(), 56, 618);
-  // Stripe
-  ctx.fillStyle = '#2a2a2a';
-  for(var x=56;x<1024;x+=20){ctx.fillRect(x,658,12,5);}
-  // Fields
-  var fields = [
-    ['BATCH', batch],
-    ['GENRE', genre],
-    ['FILMS', films],
-  ];
-  var fy = 760;
-  fields.forEach(function(pair) {
-    ctx.font = '22px monospace'; ctx.fillStyle = '#444';
-    ctx.fillText(pair[0], 56, fy);
-    ctx.font = '400 32px sans-serif'; ctx.fillStyle = '#b0b0a8';
-    ctx.fillText(pair[1], 56, fy+42); fy += 112;
+  ctx.font = '600 26px monospace';
+  ctx.fillStyle = '#606060';
+  ctx.fillText(role.toUpperCase(), nameX, photoY + 74 + 46);
+
+  // Domain (if different from role)
+  if (domain && domain.toLowerCase() !== role.toLowerCase()) {
+    ctx.font = '500 22px monospace';
+    ctx.fillStyle = '#424242';
+    ctx.fillText(domain.toUpperCase(), nameX, photoY + 74 + 46 + 34);
+  }
+
+  // Batch pill
+  if (batch) {
+    ctx.font = '500 20px monospace';
+    ctx.fillStyle = '#3a3a3a';
+    var batchText = 'BATCH ' + batch;
+    var bpw = ctx.measureText(batchText).width + 32;
+    var bpy = photoY + photoSize - 38;
+    _kfsRoundRect(ctx, nameX, bpy, bpw, 32, 16);
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#505050';
+    ctx.fillText(batchText, nameX + 16, bpy + 21);
+  }
+
+  // ── Divider line ────────────────────────────────────────────
+  var divY = photoY + photoSize + 48;
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, divY); ctx.lineTo(W-PAD, divY); ctx.stroke();
+
+  // ── Bio ─────────────────────────────────────────────────────
+  var bioY = divY + 48;
+  if (bio) {
+    ctx.font = 'italic 400 30px serif';
+    ctx.fillStyle = '#4a4a4a';
+    // wrap bio
+    var bioMaxW = W - PAD*2;
+    var bioLines = _kfsWrapTextLines(ctx, bio, bioMaxW, 3); // max 3 lines
+    bioLines.forEach(function(line, i) {
+      ctx.fillText(line, PAD, bioY + i * 44);
+    });
+    bioY += bioLines.length * 44 + 32;
+  }
+
+  // ── Data fields ─────────────────────────────────────────────
+  var numFilms = filmPosters.length || data.filmCount || 0;
+  var fieldRows = [];
+  if (numFilms) fieldRows.push(['FILMS',   String(numFilms) + (numFilms === 1 ? ' film' : ' films')]);
+  if (batch)    fieldRows.push(['BATCH',   batch]);
+  if (domain)   fieldRows.push(['DOMAIN',  domain]);
+
+  var fy = bioY;
+  fieldRows.forEach(function(pair) {
+    ctx.font = '600 20px monospace'; ctx.fillStyle = '#383838';
+    ctx.fillText(pair[0], PAD, fy);
+    ctx.font = '400 28px sans-serif'; ctx.fillStyle = '#888880';
+    ctx.fillText(pair[1], PAD, fy + 38);
+    fy += 96;
   });
-  // Serial
-  var yr = new Date().getFullYear();
-  ctx.font = '500 24px monospace'; ctx.fillStyle = '#333';
-  ctx.fillText('KFS · ' + yr, 56, 1068);
-  // Footer band
-  ctx.fillStyle = '#181818'; ctx.fillRect(0,1100,1080,520);
-  ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0,1100); ctx.lineTo(1080,1100); ctx.stroke();
-  ctx.font = '22px monospace'; ctx.fillStyle = '#333';
-  ctx.fillText('kiitfilmsociety.in', 56, 1558);
+
+  // ── Film posters strip ──────────────────────────────────────
+  var postersY = Math.max(fy + 16, H - 380);
+  if (filmPosters.length) {
+    // Section label
+    ctx.font = '600 20px monospace'; ctx.fillStyle = '#2e2e2e';
+    ctx.fillText('FILMS', PAD, postersY);
+    postersY += 28;
+
+    var maxPosters = Math.min(filmPosters.length, 4);
+    var posterH = 200, posterW = Math.round(posterH * 2/3); // 2:3 ratio
+    var posterGap = 20;
+    var totalW = maxPosters * posterW + (maxPosters-1) * posterGap;
+    var startX = PAD;
+
+    for (var pi = 0; pi < maxPosters; pi++) {
+      var px = startX + pi * (posterW + posterGap);
+      var py = postersY;
+      // Placeholder
+      ctx.fillStyle = '#191919';
+      _kfsRoundRect(ctx, px, py, posterW, posterH, 8);
+      ctx.fill();
+      try {
+        var pImg = await _kfsLoadImage(filmPosters[pi]);
+        ctx.save();
+        _kfsRoundRect(ctx, px, py, posterW, posterH, 8);
+        ctx.clip();
+        var sc = Math.max(posterW/pImg.naturalWidth, posterH/pImg.naturalHeight);
+        var dw2 = pImg.naturalWidth*sc, dh2 = pImg.naturalHeight*sc;
+        ctx.drawImage(pImg, px+(posterW-dw2)/2, py+(posterH-dh2)/2, dw2, dh2);
+        ctx.restore();
+      } catch(e) {
+        // film icon fallback
+        ctx.fillStyle = '#2a2a2a';
+        ctx.font = '32px monospace';
+        ctx.fillText('▶', px + posterW/2 - 12, py + posterH/2 + 10);
+      }
+    }
+  }
+
+  // ── Footer band ─────────────────────────────────────────────
+  ctx.fillStyle = '#090909';
+  ctx.fillRect(0, H-100, W, 100);
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H-100); ctx.lineTo(W, H-100); ctx.stroke();
+
+  ctx.font = '500 22px monospace'; ctx.fillStyle = '#2e2e2e';
+  ctx.fillText('kiitfilmsociety.in', PAD, H-38);
+  ctx.fillText('KFS · ' + yr, W-PAD - ctx.measureText('KFS · '+yr).width, H-38);
+
+  // ── Download ─────────────────────────────────────────────────
   var lnk = document.createElement('a');
   lnk.download = 'kfs-passport-' + name.toLowerCase().replace(/\s+/g,'-') + '.png';
   lnk.href = cv.toDataURL('image/png');
   lnk.click();
 }
 
+// Load an image cross-origin, returning a promise<HTMLImageElement>
+function _kfsLoadImage(url) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = function() { resolve(img); };
+    img.onerror = function() { reject(new Error('img load failed: ' + url)); };
+    img.src = url;
+  });
+}
+
+// Wrap text and return array of line strings (max maxLines)
+function _kfsWrapTextLines(ctx, text, maxW, maxLines) {
+  var words = text.split(' '), lines = [], line = '';
+  for (var n = 0; n < words.length; n++) {
+    var test = line + (line ? ' ' : '') + words[n];
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line);
+      if (lines.length >= maxLines) {
+        // Truncate last line with ellipsis
+        var last = lines[lines.length-1];
+        while (ctx.measureText(last + '…').width > maxW && last.length > 0) last = last.slice(0,-1);
+        lines[lines.length-1] = last + '…';
+        return lines;
+      }
+      line = words[n];
+    } else { line = test; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 // Download passport pre-filled from the currently open member profile
-function downloadPassportFromProfile() {
-  var name  = document.getElementById('mprofile-name')?.textContent || '';
-  var roleEl = document.getElementById('mprofile-role')?.textContent || '';
-  // role text is "Role · Domain" — take first part
-  var role  = roleEl.split('·')[0].trim();
-  var batchEl = document.getElementById('mprofile-batch')?.textContent || '';
-  // batch text is "Batch of YYYY"
-  var batch = batchEl.replace(/^Batch of\s*/i,'').trim();
+async function downloadPassportFromProfile() {
+  var name     = document.getElementById('mprofile-name')?.textContent?.trim() || '';
+  var roleEl   = document.getElementById('mprofile-role')?.textContent || '';
+  // role text is "Role · Domain"
+  var parts    = roleEl.split('·');
+  var role     = parts[0]?.trim() || '';
+  var domain   = parts[1]?.trim() || '';
+  var batchEl  = document.getElementById('mprofile-batch')?.textContent || '';
+  var batch    = batchEl.replace(/^Batch of\s*/i,'').trim();
+  var bio      = document.getElementById('mprofile-bio')?.textContent?.trim() || '';
 
-  // Count films from the visible films grid
-  var filmCards = document.querySelectorAll('#mprofile-films-grid .member-film-card');
-  var filmCount = filmCards.length ? String(filmCards.length) + ' film' + (filmCards.length !== 1 ? 's' : '') : '';
+  // Photo from the img tag inside mprofile-photo-wrap
+  var photoImg = document.querySelector('#mprofile-photo-wrap img');
+  var photo    = photoImg ? photoImg.src : '';
 
-  downloadPassportCard({ name: name, role: role, batch: batch, genre: '', films: filmCount });
+  // Special tag — read from window._currentProfileMember set by openMemberProfile
+  var special_tag = window._currentProfileMember?.special_tag || '';
+
+  // Film posters from the films grid
+  var filmPosters = [];
+  document.querySelectorAll('#mprofile-films-grid .member-film-card').forEach(function(card) {
+    var img = card.querySelector('img.member-film-poster');
+    if (img && img.src) filmPosters.push(img.src);
+  });
+
+  await downloadPassportCard({ name, role, domain, batch, bio, photo, special_tag, filmPosters });
 }
 
 function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
