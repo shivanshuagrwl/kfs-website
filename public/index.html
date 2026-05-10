@@ -24,6 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="dns-prefetch" href="https://supabase.co">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
@@ -2706,6 +2707,17 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
   <!-- Canvas for share image generation (hidden) -->
   <canvas id="wrapped-share-canvas" style="display:none"></canvas>
+</div>
+
+<!-- ── GLOBAL SCREENSAVER OVERLAY ── -->
+<div id="kfs-screensaver" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity 1.2s ease" onclick="exitKFSScreensaver()" aria-hidden="true">
+  <div style="position:absolute;inset:0;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%22.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22200%22 height=%22200%22 filter=%22url(%23n)%22 opacity=%22.05%22/%3E%3C/svg%3E');opacity:.35;pointer-events:none"></div>
+  <div style="position:relative;z-index:2;text-align:center;padding:0 48px;max-width:800px">
+    <div id="kfs-ss-title" style="font-family:'DM Serif Display',Georgia,serif;font-size:clamp(48px,8vw,96px);color:#e8e8e2;line-height:1.05;transition:opacity 1s ease">Last Frame</div>
+    <div id="kfs-ss-year" style="font-family:'DM Mono',monospace;font-size:13px;letter-spacing:.18em;color:#555;margin-top:10px;transition:opacity 1s ease">2023</div>
+  </div>
+  <div style="position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#333">Kiit Film Society</div>
+  <div style="position:absolute;top:20px;right:24px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#333">Click anywhere to exit</div>
 </div>
 
 <!-- Movie Detail -->
@@ -9658,6 +9670,180 @@ async function saveWrappedConfig() {
   }
 }
 
+function _kfsRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+function downloadPassportCard() {
+  var cv = document.createElement('canvas');
+  cv.width = 1080; cv.height = 1620;
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#141414'; ctx.fillRect(0,0,1080,1620);
+  ctx.fillStyle = '#111'; ctx.fillRect(0,0,1080,1100);
+  // KFS label
+  ctx.font = '500 26px monospace'; ctx.fillStyle = '#555';
+  ctx.fillText('K F S', 56, 96);
+  // Member badge outline
+  ctx.font = '22px monospace'; ctx.fillStyle = '#444'; ctx.strokeStyle = '#2e2e2e'; ctx.lineWidth = 1.5;
+  var bw = ctx.measureText('MEMBER').width + 44;
+  _kfsRoundRect(ctx, 1080-56-bw, 68, bw, 44, 5); ctx.stroke();
+  ctx.fillText('MEMBER', 1080-56-bw+22, 97);
+  // Name
+  ctx.font = 'bold 88px serif'; ctx.fillStyle = '#e8e8e2';
+  ctx.fillText(document.getElementById('pp-name').value || 'Your Name', 56, 560);
+  // Role
+  ctx.font = '500 30px monospace'; ctx.fillStyle = '#666';
+  ctx.fillText((document.getElementById('pp-role').value || '').toUpperCase(), 56, 618);
+  // Stripe
+  ctx.fillStyle = '#2a2a2a';
+  for(var x=56;x<1024;x+=20){ctx.fillRect(x,658,12,5);}
+  // Fields
+  var fields = [
+    ['BATCH', document.getElementById('pp-batch').value],
+    ['GENRE', document.getElementById('pp-genre').value],
+    ['FILMS', document.getElementById('pp-films').value],
+  ];
+  var fy = 760;
+  fields.forEach(function(pair) {
+    ctx.font = '22px monospace'; ctx.fillStyle = '#444';
+    ctx.fillText(pair[0], 56, fy);
+    ctx.font = '400 32px sans-serif'; ctx.fillStyle = '#b0b0a8';
+    ctx.fillText(pair[1], 56, fy+42); fy += 112;
+  });
+  // Serial
+  ctx.font = '500 24px monospace'; ctx.fillStyle = '#333';
+  ctx.fillText('KFS · 2024 · 00042', 56, 1068);
+  // Footer band
+  ctx.fillStyle = '#181818'; ctx.fillRect(0,1100,1080,520);
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,1100); ctx.lineTo(1080,1100); ctx.stroke();
+  ctx.font = '22px monospace'; ctx.fillStyle = '#333';
+  ctx.fillText('kiitfilmsociety.in', 56, 1558);
+  var lnk = document.createElement('a');
+  lnk.download = 'kfs-passport.png';
+  lnk.href = cv.toDataURL('image/png');
+  lnk.click();
+}
+
+function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
+  var words = text.split(' '), line = '';
+  for(var n=0;n<words.length;n++){
+    var tl = line + words[n] + ' ';
+    if(ctx.measureText(tl).width > maxW && n > 0){ ctx.fillText(line, x, y); line = words[n] + ' '; y += lineH; }
+    else { line = tl; }
+  }
+  ctx.fillText(line, x, y);
+}
+
+function downloadStoryCard() {
+  var cv = document.createElement('canvas');
+  cv.width = 1080; cv.height = 1920;
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0c0c0c'; ctx.fillRect(0,0,1080,1920);
+  ctx.fillStyle = '#141414'; ctx.fillRect(0,0,1080,880);
+  // Play button
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(540,440,76,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle = '#555';
+  ctx.beginPath(); ctx.moveTo(510,404); ctx.lineTo(578,440); ctx.lineTo(510,476); ctx.closePath(); ctx.fill();
+  // KFS
+  ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
+  ctx.fillText('K F S', 56, 958);
+  // Type badge
+  var type = (document.getElementById('sc-type').value || 'FILM').toUpperCase();
+  ctx.font = '24px monospace'; ctx.fillStyle = '#444'; ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1.5;
+  var tw = ctx.measureText(type).width + 38;
+  _kfsRoundRect(ctx, 1080-56-tw, 930, tw, 46, 4); ctx.stroke();
+  ctx.fillText(type, 1080-56-tw+19, 961);
+  // Title
+  ctx.font = 'bold 82px serif'; ctx.fillStyle = '#e8e8e2';
+  ctx.fillText(document.getElementById('sc-title').value || 'Title', 56, 1098);
+  // Subtitle
+  ctx.font = '500 28px monospace'; ctx.fillStyle = '#555';
+  ctx.fillText((document.getElementById('sc-sub').value || '').toUpperCase(), 56, 1155);
+  // Quote bar
+  ctx.fillStyle = '#2a2a2a'; ctx.fillRect(56,1185,4,96);
+  ctx.font = 'italic 400 36px serif'; ctx.fillStyle = '#888';
+  _kfsWrapText(ctx, document.getElementById('sc-quote').value || '', 76, 1222, 880, 52);
+  // Footer
+  ctx.font = '22px monospace'; ctx.fillStyle = '#333';
+  ctx.fillText('kiitfilmsociety.in', 56, 1824);
+  var lnk = document.createElement('a');
+  lnk.download = 'kfs-story-card.png';
+  lnk.href = cv.toDataURL('image/png');
+  lnk.click();
+}
+
+// ── SCREENSAVER ────────────────────────────────────────────────────────────
+var _ssFilms = [
+  {title:'Last Frame', year:'2023'},
+  {title:'Eclipse', year:'2024'},
+  {title:'Drift', year:'2022'},
+  {title:'Still Water', year:'2024'},
+  {title:'Overture', year:'2021'},
+];
+var _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null;
+var _SS_IDLE_MS = 3 * 60 * 1000; // 3 minutes
+
+function _resetIdleTimer() {
+  clearTimeout(_ssIdleTimer);
+  if (_ssActive) return;
+  _ssIdleTimer = setTimeout(function() {
+    // Don't trigger on admin panel or admin login
+    var ap = document.getElementById('admin-panel');
+    var al = document.getElementById('admin-login');
+    if ((ap && ap.classList.contains('active')) || (al && al.classList.contains('active'))) return;
+    launchKFSScreensaver();
+  }, _SS_IDLE_MS);
+}
+
+(function initIdleWatcher() {
+  ['mousemove','keydown','scroll','click','touchstart'].forEach(function(ev) {
+    document.addEventListener(ev, _resetIdleTimer, { passive: true });
+  });
+  _resetIdleTimer();
+})();
+
+function launchKFSScreensaver() {
+  var el = document.getElementById('kfs-screensaver');
+  if (!el || _ssActive) return;
+  _ssActive = true;
+  el.style.display = 'flex';
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.style.opacity = '1'; }); });
+  _ssCycleFilm();
+  _ssTimer = setInterval(_ssCycleFilm, 3200);
+  document.addEventListener('keydown', exitKFSScreensaver, { once: true });
+}
+
+function _ssCycleFilm() {
+  var f = _ssFilms[_ssIdx % _ssFilms.length];
+  var titleEl = document.getElementById('kfs-ss-title');
+  var yearEl = document.getElementById('kfs-ss-year');
+  if (!titleEl || !yearEl) return;
+  titleEl.style.opacity = '0'; yearEl.style.opacity = '0';
+  setTimeout(function() {
+    titleEl.textContent = f.title; yearEl.textContent = f.year;
+    titleEl.style.opacity = '1'; yearEl.style.opacity = '1';
+  }, 500);
+  _ssIdx++;
+}
+
+function exitKFSScreensaver() {
+  var el = document.getElementById('kfs-screensaver');
+  if (!el) return;
+  _ssActive = false;
+  el.style.opacity = '0';
+  clearInterval(_ssTimer);
+  setTimeout(function(){ el.style.display = 'none'; }, 1200);
+  _resetIdleTimer();
+}
+// Allow clicking inside screensaver to not double-fire via bubbled events
+document.getElementById('kfs-screensaver') && document.getElementById('kfs-screensaver').addEventListener('click', function(e){ e.stopPropagation(); exitKFSScreensaver(); });
 
 </script>
 </body>
