@@ -1574,7 +1574,7 @@ function injectOgTags(html, { title, description, imageUrl, url, type, author, p
     return true;
   }).join('\n');
 
-  const KFS_LOGO = 'https://kiitfilmsociety.in/images/KFS_LOGO_WHITE.png';
+  const KFS_LOGO = 'https://kiitfilmsociety.in/images/kfs-logo.png';
   const siteName = 'KFS — KIIT Film Society';
   const ogType   = type || 'website';
   const safeTitle = (title || siteName).replace(/"/g, '&quot;');
@@ -1686,7 +1686,7 @@ app.get('/blog/:slug', async (req, res) => {
         'publisher': {
           '@type': 'Organization',
           'name':  'KFS — KIIT Film Society',
-          'logo':  { '@type': 'ImageObject', 'url': 'https://kiitfilmsociety.in/images/KFS_LOGO_WHITE.png' }
+          'logo':  { '@type': 'ImageObject', 'url': 'https://kiitfilmsociety.in/images/kfs-logo.png' }
         },
         'datePublished': b.created_at || null,
         'mainEntityOfPage': pageUrl,
