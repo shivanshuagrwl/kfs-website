@@ -1566,9 +1566,13 @@ const fs = require('fs');
 function injectOgTags(html, { title, description, imageUrl, url, type, author, publishedTime, jsonLd }) {
   // Strip ALL existing og:* and twitter:* meta tags from index.html so the
   // hardcoded og-banner.png doesn't override our dynamic image.
-  html = html
-    .replace(/<meta\s+property="og:[^"]*"[^>]*\/?>/gi, '')
-    .replace(/<meta\s+name="twitter:[^"]*"[^>]*\/?>/gi, '');
+  html = html.split('\n').filter(line => {
+    const t = line.trim();
+    if (!t.startsWith('<meta')) return true;
+    if (/property\s*=\s*["']og:/i.test(t)) return false;
+    if (/name\s*=\s*["']twitter:/i.test(t)) return false;
+    return true;
+  }).join('\n');
 
   const siteName = 'KFS — KIIT Film Society';
   const ogType   = type || 'website';
