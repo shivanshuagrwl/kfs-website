@@ -1568,8 +1568,17 @@ function injectOgTags(html, { title, description, imageUrl, url, type, author, p
   const ogType   = type || 'website';
   const safeTitle = (title || siteName).replace(/"/g, '&quot;');
   const safeDesc  = (description || 'KIIT Film Society — student-run cinema collective.').slice(0, 200).replace(/"/g, '&quot;');
-  const safeImg   = imageUrl || '';
   const safeUrl   = url || 'https://kiitfilmsociety.in';
+
+  // If no movie poster / blog cover exists, fall back to the KFS logo (square)
+  // instead of the generic og-banner — cleaner & more recognisable in previews.
+  const KFS_LOGO_URL = 'https://kiitfilmsociety.in/images/KFS_LOGO_WHITE.png';
+  const hasCoverImage = !!imageUrl;
+  const safeImg = imageUrl || KFS_LOGO_URL;
+
+  // Use summary (square) card when showing the logo; summary_large_image when a
+  // real wide cover / poster is present.
+  const twitterCard = hasCoverImage ? 'summary_large_image' : 'summary';
 
   const articleMeta = ogType === 'article' ? `
   ${publishedTime ? `<meta property="article:published_time" content="${publishedTime}" />` : ''}
@@ -1587,16 +1596,17 @@ function injectOgTags(html, { title, description, imageUrl, url, type, author, p
   <meta property="og:title"       content="${safeTitle}" />
   <meta property="og:description" content="${safeDesc}" />
   <meta property="og:url"         content="${safeUrl}" />
-  ${safeImg ? `<meta property="og:image"       content="${safeImg}" />
-  <meta property="og:image:width"  content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt"    content="${safeTitle}" />` : ''}
+  <meta property="og:image"       content="${safeImg}" />
+  ${hasCoverImage ? `<meta property="og:image:width"  content="1200" />
+  <meta property="og:image:height" content="630" />` : `<meta property="og:image:width"  content="400" />
+  <meta property="og:image:height" content="400" />`}
+  <meta property="og:image:alt"    content="${safeTitle}" />
   ${articleMeta}
-  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:card"        content="${twitterCard}" />
   <meta name="twitter:title"       content="${safeTitle}" />
   <meta name="twitter:description" content="${safeDesc}" />
-  ${safeImg ? `<meta name="twitter:image"       content="${safeImg}" />
-  <meta name="twitter:image:alt"   content="${safeTitle}" />` : ''}
+  <meta name="twitter:image"       content="${safeImg}" />
+  <meta name="twitter:image:alt"   content="${safeTitle}" />
   <link rel="canonical"            href="${safeUrl}" />
   ${jsonLdTag}`;
 
