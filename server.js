@@ -778,24 +778,81 @@ app.get('/api/yt-duration', async (req, res) => {
   if (!videoId) return res.status(400).json({ error: 'Missing video ID' });
   try {
     const https = require('https');
-    const url = 'https://www.youtube.com/watch?v=' + videoId;
-    const html = await new Promise((resolve, reject) => {
-      https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; KFSBot/1.0)' } }, r => {
-        let body = '';
-        r.on('data', chunk => { body += chunk; if (body.length > 200000) r.destroy(); });
-        r.on('end', () => resolve(body));
-        r.on('error', reject);
-      }).on('error', reject);
-    });
-    // Try to extract lengthSeconds from ytInitialData or player config
-    let seconds = null;
-    const m1 = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
-    if (m1) seconds = parseInt(m1[1], 10);
-    if (!seconds) {
-      const m2 = html.match(/"approxDurationMs"\s*:\s*"(\d+)"/);
-      if (m2) seconds = Math.round(parseInt(m2[1], 10) / 1000);
+
+    // Helper: fetch URL with timeout and follow redirects
+    function httpsGet(url, hdrs) {
+      return new Promise((resolve, reject) => {
+        const opts = new URL(url);
+        const req = https.get({ hostname: opts.hostname, path: opts.pathname + opts.search, headers: hdrs || {} }, r => {
+          // follow one redirect
+          if ((r.statusCode === 301 || r.statusCode === 302) && r.headers.location) {
+            return httpsGet(r.headers.location, hdrs).then(resolve).catch(reject);
+          }
+          let body = '';
+          r.on('data', chunk => { body += chunk; if (body.length > 300000) r.destroy(); });
+          r.on('end', () => resolve({ status: r.statusCode, body }));
+          r.on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+      });
     }
-    if (seconds) {
+
+    let seconds = null;
+
+    // Strategy 1: YouTube noembed (returns duration in seconds via oembed-style endpoint)
+    try {
+      const ne = await httpsGet(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+      if (ne.status === 200) {
+        // noembed doesn't return duration — skip to next strategy
+      }
+    } catch (_) {}
+
+    // Strategy 2: Scrape YouTube watch page — try multiple patterns
+    if (!seconds) {
+      try {
+        const yt = await httpsGet(
+          `https://www.youtube.com/watch?v=${videoId}`,
+          {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          }
+        );
+        if (yt.status === 200) {
+          const html = yt.body;
+          const m1 = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
+          if (m1) seconds = parseInt(m1[1], 10);
+          if (!seconds) {
+            const m2 = html.match(/"approxDurationMs"\s*:\s*"(\d+)"/);
+            if (m2) seconds = Math.round(parseInt(m2[1], 10) / 1000);
+          }
+          if (!seconds) {
+            // Try ISO 8601 duration in structured data: "duration":"PT4M13S"
+            const m3 = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
+            if (m3) {
+              seconds = (parseInt(m3[1] || 0) * 3600) + (parseInt(m3[2] || 0) * 60) + parseInt(m3[3] || 0);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Strategy 3: YouTube shorts / embed page (lighter, may reveal duration)
+    if (!seconds) {
+      try {
+        const embed = await httpsGet(
+          `https://www.youtube.com/embed/${videoId}`,
+          { 'User-Agent': 'Mozilla/5.0 (compatible; KFSBot/1.0)' }
+        );
+        if (embed.status === 200) {
+          const m = embed.body.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
+          if (m) seconds = parseInt(m[1], 10);
+        }
+      } catch (_) {}
+    }
+
+    if (seconds && seconds > 0) {
       return res.json({ seconds, minutes: Math.round(seconds / 60) });
     }
     return res.json({ error: 'Duration not found' });

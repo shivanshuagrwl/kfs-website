@@ -536,7 +536,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   border-bottom:1px solid rgba(255,255,255,.04);transition:background .3s var(--ease),border-color .3s var(--ease)}
 .nav-logo{display:flex;align-items:center;text-decoration:none;justify-self:start}
 .nav-logo-text{font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--white)}
-.nav-logo-img{width:48px;height:48px;object-fit:contain;transition:opacity .2s;content:url('/images/kfs-logo.png')}
+.nav-logo-img{width:32px;height:32px;object-fit:contain;transition:opacity .2s;content:url('/images/kfs-logo.png')}
 .nav-logo-img:hover{opacity:.75}
 body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 .nav-links{display:flex;gap:32px;list-style:none;justify-self:center}
@@ -2214,8 +2214,9 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 <!-- NAV -->
 <nav id="main-nav">
-  <a class="nav-logo" onclick="navigate('home')">
+  <a class="nav-logo" onclick="navigate('home')" style="gap:10px">
     <img class="nav-logo-img" src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
+    <span class="nav-logo-text">KFS</span>
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a onclick="navigate('home');closeMenu()" class="active" data-page="home">Home</a></li>
@@ -2760,9 +2761,9 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
-      <div id="movie-detail-meta-row" style="display:none;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)">
-        <span id="movie-detail-runtime" style="display:none"></span>
-        <span id="movie-detail-language" style="display:none"></span>
+      <div id="movie-detail-meta-row" style="display:none;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span id="movie-detail-runtime" style="display:none;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:rgba(245,245,245,.07);border:1px solid rgba(245,245,245,.12);font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:var(--grey)"></span>
+        <span id="movie-detail-language" style="display:none;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;background:rgba(245,245,245,.07);border:1px solid rgba(245,245,245,.12);font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:var(--grey)"></span>
       </div>
       <div id="movie-detail-genre-wrap" style="display:none;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:6px">
         <!-- genre tags injected by JS -->
@@ -4791,12 +4792,13 @@ async function openMovie(id) {
   const metaRowEl = document.getElementById('movie-detail-meta-row');
   if (m.runtime) {
     const mins = parseInt(m.runtime, 10);
-    runtimeEl.textContent = '⏱ ' + (mins >= 60 ? Math.floor(mins/60)+'h '+(mins%60)+'m' : mins+'m');
-    runtimeEl.style.display = 'inline';
+    const dur = mins >= 60 ? Math.floor(mins/60)+'h '+(mins%60)+'m' : mins+'m';
+    runtimeEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' + dur;
+    runtimeEl.style.display = 'inline-flex';
   } else { runtimeEl.style.display = 'none'; }
   if (m.language) {
-    languageEl.textContent = '🌐 ' + m.language;
-    languageEl.style.display = 'inline';
+    languageEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' + m.language;
+    languageEl.style.display = 'inline-flex';
   } else { languageEl.style.display = 'none'; }
   metaRowEl.style.display = (m.runtime || m.language) ? 'flex' : 'none';
 
