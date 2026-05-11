@@ -1564,6 +1564,12 @@ const fs = require('fs');
 
 // Read the base HTML once (cached).  We'll inject <meta> tags into <head>.
 function injectOgTags(html, { title, description, imageUrl, url, type, author, publishedTime, jsonLd }) {
+  // Strip ALL existing og:* and twitter:* meta tags from index.html so the
+  // hardcoded og-banner.png doesn't override our dynamic image.
+  html = html
+    .replace(/<meta\s+property="og:[^"]*"[^>]*\/?>/gi, '')
+    .replace(/<meta\s+name="twitter:[^"]*"[^>]*\/?>/gi, '');
+
   const siteName = 'KFS — KIIT Film Society';
   const ogType   = type || 'website';
   const safeTitle = (title || siteName).replace(/"/g, '&quot;');
