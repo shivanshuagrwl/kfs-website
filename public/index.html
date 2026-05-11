@@ -3624,7 +3624,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-actors"></div></div>
     <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
     <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
-    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." oninput="tryAutoFetchYTRuntime(this.value)"></div>
+    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><div style="display:flex;gap:8px;align-items:center"><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." oninput="tryAutoFetchYTRuntime(this.value)" style="flex:1"><button type="button" id="yt-fetch-btn" style="display:none;padding:6px 12px;font-size:12px;border-radius:6px;border:1px solid var(--border,#333);background:var(--surface2,#1a1a1a);color:var(--text,#f5f5f5);cursor:pointer;white-space:nowrap">&#x21BA; Fetch</button></div></div>
     <div class="form-group"><label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-spotify" placeholder="https://open.spotify.com/..."></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
@@ -5761,26 +5761,38 @@ function closeMovieModal() { document.getElementById('movie-modal').classList.re
 
 // Auto-fetch YouTube video duration when Watch URL is pasted
 var _ytRuntimeFetchTimer = null;
+async function fetchYTRuntime(videoId, force) {
+  const runtimeEl = document.getElementById('movie-runtime');
+  const btn = document.getElementById('yt-fetch-btn');
+  if (!runtimeEl) return;
+  if (runtimeEl.value && !force) return; // don't overwrite unless forced
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const r = await fetch('/api/yt-duration?v=' + videoId);
+    if (!r.ok) { if (btn) { btn.textContent = '✗'; btn.disabled = false; } return; }
+    const d = await r.json();
+    if (d.minutes) {
+      runtimeEl.value = d.minutes;
+      runtimeEl.style.outline = '2px solid rgba(52,199,89,.6)';
+      setTimeout(() => { runtimeEl.style.outline = ''; }, 2000);
+      if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '↺ Fetch'; btn.disabled = false; }, 1500); }
+    } else {
+      if (btn) { btn.textContent = '✗ Not found'; setTimeout(() => { btn.textContent = '↺ Fetch'; btn.disabled = false; }, 2000); }
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = '✗ Error'; setTimeout(() => { btn.textContent = '↺ Fetch'; btn.disabled = false; }, 2000); }
+  }
+}
+
 function tryAutoFetchYTRuntime(url) {
   clearTimeout(_ytRuntimeFetchTimer);
-  if (!url) return;
+  const btn = document.getElementById('yt-fetch-btn');
+  if (!url) { if (btn) btn.style.display = 'none'; return; }
   const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  if (!match) return;
+  if (!match) { if (btn) btn.style.display = 'none'; return; }
   const videoId = match[1];
-  const runtimeEl = document.getElementById('movie-runtime');
-  if (runtimeEl && runtimeEl.value) return; // don't overwrite if already manually set
-  _ytRuntimeFetchTimer = setTimeout(async function() {
-    try {
-      const r = await fetch('/api/yt-duration?v='+videoId);
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d.minutes && runtimeEl && !runtimeEl.value) {
-        runtimeEl.value = d.minutes;
-        runtimeEl.style.outline = '2px solid rgba(52,199,89,.6)';
-        setTimeout(()=>{ runtimeEl.style.outline=''; }, 2000);
-      }
-    } catch(e) {}
-  }, 700);
+  if (btn) { btn.style.display = 'inline-flex'; btn.onclick = () => fetchYTRuntime(videoId, true); }
+  _ytRuntimeFetchTimer = setTimeout(() => fetchYTRuntime(videoId, false), 700);
 }
 
 async function saveMovie() {
@@ -5810,7 +5822,7 @@ async function saveMovie() {
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
   const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
   if (res.ok) { closeMovieModal(); loadAdminData('movies'); }
-  else alert('Error saving film');
+  else { let msg='Error saving film'; try { const e=await res.json(); msg=(e.error||msg); } catch(x){} alert(msg); }
 }
 
 async function deleteMovie(id) {
