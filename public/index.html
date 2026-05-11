@@ -2760,6 +2760,10 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
       </div>
       <h1 class="movie-detail-title" id="movie-detail-title"></h1>
       <p class="movie-detail-year" id="movie-detail-year"></p>
+      <div id="movie-detail-meta-row" style="display:none;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)">
+        <span id="movie-detail-runtime" style="display:none"></span>
+        <span id="movie-detail-language" style="display:none"></span>
+      </div>
       <div id="movie-detail-genre-wrap" style="display:none;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:6px">
         <!-- genre tags injected by JS -->
       </div>
@@ -3598,6 +3602,10 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Movie Poster</label><input type="file" id="movie-poster" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group"><label>Title</label><input type="text" id="movie-title"></div>
     <div class="form-group"><label>Release Year</label><input type="text" id="movie-year" placeholder="2024"></div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>Runtime <span style="font-weight:400;color:var(--grey)">(minutes)</span></label><input type="number" id="movie-runtime" placeholder="e.g. 18" min="1"></div>
+      <div class="form-group" style="flex:1"><label>Language</label><input type="text" id="movie-language" placeholder="e.g. Hindi, English"></div>
+    </div>
     <div class="form-group"><label>Genre Tags <span style="font-weight:400;color:var(--grey)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
       <div class="tag-input-wrap" id="movie-genre-wrap" onclick="document.getElementById('movie-genre-input').focus()">
         <input type="hidden" id="movie-genre">
@@ -3616,7 +3624,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-actors"></div></div>
     <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
     <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
-    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link)</span></label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..."></div>
+    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." oninput="tryAutoFetchYTRuntime(this.value)"></div>
     <div class="form-group"><label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-spotify" placeholder="https://open.spotify.com/..."></div>
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
@@ -4777,6 +4785,21 @@ async function openMovie(id) {
   document.getElementById('movie-detail-title').textContent = m.title;
   document.getElementById('movie-detail-year').textContent = m.release_year||'';
 
+  // Runtime & Language
+  const runtimeEl = document.getElementById('movie-detail-runtime');
+  const languageEl = document.getElementById('movie-detail-language');
+  const metaRowEl = document.getElementById('movie-detail-meta-row');
+  if (m.runtime) {
+    const mins = parseInt(m.runtime, 10);
+    runtimeEl.textContent = '⏱ ' + (mins >= 60 ? Math.floor(mins/60)+'h '+(mins%60)+'m' : mins+'m');
+    runtimeEl.style.display = 'inline';
+  } else { runtimeEl.style.display = 'none'; }
+  if (m.language) {
+    languageEl.textContent = '🌐 ' + m.language;
+    languageEl.style.display = 'inline';
+  } else { languageEl.style.display = 'none'; }
+  metaRowEl.style.display = (m.runtime || m.language) ? 'flex' : 'none';
+
   // Genre
   const genreWrap = document.getElementById('movie-detail-genre-wrap');
   const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
@@ -5708,6 +5731,8 @@ function openMovieModal(m=null) {
   document.getElementById('movie-edit-id').value = m?.id||'';
   document.getElementById('movie-title').value = m?.title||'';
   document.getElementById('movie-year').value = m?.release_year||'';
+  document.getElementById('movie-runtime').value = m?.runtime||'';
+  document.getElementById('movie-language').value = m?.language||'';
   // Init genre tag-pill input
   const existingGenres = Array.isArray(m?.genre) ? m.genre : (m?.genre ? [m.genre] : []);
   initGenreTagInput(existingGenres);
@@ -5734,11 +5759,37 @@ function openMovieModal(m=null) {
 function editMovie(m) { openMovieModal(m); }
 function closeMovieModal() { document.getElementById('movie-modal').classList.remove('open'); }
 
+// Auto-fetch YouTube video duration when Watch URL is pasted
+var _ytRuntimeFetchTimer = null;
+function tryAutoFetchYTRuntime(url) {
+  clearTimeout(_ytRuntimeFetchTimer);
+  if (!url) return;
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (!match) return;
+  const videoId = match[1];
+  const runtimeEl = document.getElementById('movie-runtime');
+  if (runtimeEl && runtimeEl.value) return; // don't overwrite if already manually set
+  _ytRuntimeFetchTimer = setTimeout(async function() {
+    try {
+      const r = await fetch('/api/yt-duration?v='+videoId);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.minutes && runtimeEl && !runtimeEl.value) {
+        runtimeEl.value = d.minutes;
+        runtimeEl.style.outline = '2px solid rgba(52,199,89,.6)';
+        setTimeout(()=>{ runtimeEl.style.outline=''; }, 2000);
+      }
+    } catch(e) {}
+  }, 700);
+}
+
 async function saveMovie() {
   const id = document.getElementById('movie-edit-id').value;
   const fd = new FormData();
   fd.append('title', document.getElementById('movie-title').value);
   fd.append('release_year', document.getElementById('movie-year').value);
+  fd.append('runtime', document.getElementById('movie-runtime').value.trim());
+  fd.append('language', document.getElementById('movie-language').value.trim());
   fd.append('genre', document.getElementById('movie-genre').value); // set by tag input as JSON array string
   fd.append('description', document.getElementById('movie-description').value);
   fd.append('director', _moviePickers['director'].getValue());
@@ -7075,6 +7126,12 @@ async function openMemberProfile(member) {
     });
     if (roleLabel) memberFilms.push({movie:m, role:roleLabel});
   });
+  // Sort by release year (newest first); films with no year go to the end
+  memberFilms.sort((a,b) => {
+    const ya = parseInt(a.movie.release_year)||0;
+    const yb = parseInt(b.movie.release_year)||0;
+    return yb - ya;
+  });
 
   const filmsWrap = document.getElementById('mprofile-films-wrap');
   const filmsGrid = document.getElementById('mprofile-films-grid');
@@ -7085,7 +7142,7 @@ async function openMemberProfile(member) {
         ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
         <div class="member-film-info">
           <div class="member-film-title">${mv.title}<\/div>
-          <div class="member-film-role-label">${role}<\/div>
+          <div class="member-film-role-label">${role}${mv.release_year ? ' · '+mv.release_year : ''}<\/div>
         <\/div>
       <\/div>`).join('');
   } else {

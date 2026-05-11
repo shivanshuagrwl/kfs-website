@@ -772,6 +772,38 @@ function parseGenre(raw) {
   try { const p = JSON.parse(raw); return Array.isArray(p) ? p : [p]; } catch { return [raw]; }
 }
 
+// YouTube duration auto-fetch (scrapes public YT page — no API key needed)
+app.get('/api/yt-duration', async (req, res) => {
+  const videoId = (req.query.v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 11);
+  if (!videoId) return res.status(400).json({ error: 'Missing video ID' });
+  try {
+    const https = require('https');
+    const url = 'https://www.youtube.com/watch?v=' + videoId;
+    const html = await new Promise((resolve, reject) => {
+      https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; KFSBot/1.0)' } }, r => {
+        let body = '';
+        r.on('data', chunk => { body += chunk; if (body.length > 200000) r.destroy(); });
+        r.on('end', () => resolve(body));
+        r.on('error', reject);
+      }).on('error', reject);
+    });
+    // Try to extract lengthSeconds from ytInitialData or player config
+    let seconds = null;
+    const m1 = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
+    if (m1) seconds = parseInt(m1[1], 10);
+    if (!seconds) {
+      const m2 = html.match(/"approxDurationMs"\s*:\s*"(\d+)"/);
+      if (m2) seconds = Math.round(parseInt(m2[1], 10) / 1000);
+    }
+    if (seconds) {
+      return res.json({ seconds, minutes: Math.round(seconds / 60) });
+    }
+    return res.json({ error: 'Duration not found' });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/movies', async (req, res) => {
   let query = supabase.from('movies').select('*').order('release_year', { ascending: false });
   const { data } = await query;
@@ -793,7 +825,7 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, runtime, language } = req.body;
   // genre arrives as JSON string array from frontend
   let genreVal = null;
   if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
@@ -802,6 +834,7 @@ app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'),
     title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
     poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
+    runtime: runtime ? parseInt(runtime, 10) : null, language: language || null,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
   await logActivity(req.admin.id, req.admin.name, 'create', 'movie', title);
@@ -809,12 +842,13 @@ app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'),
 });
 
 app.put('/api/admin/movies/:id', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, runtime, language } = req.body;
   let genreVal = null;
   if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
   const updates = { title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
-    trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null };
+    trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
+    runtime: runtime ? parseInt(runtime, 10) : null, language: language || null };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
