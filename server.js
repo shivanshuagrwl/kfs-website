@@ -1084,28 +1084,10 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   else fromDate = new Date('2020-01-01');
   const from = fromDate.toISOString().slice(0,10);
   const today = new Date().toISOString().slice(0,10);
-
-  // Use count queries for totals — avoids Supabase's silent 1000-row cap
-  const { count: total } = await supabase
-    .from('page_views').select('*', { count: 'exact', head: true }).gte('date', from);
-  const { count: todayViews } = await supabase
-    .from('page_views').select('*', { count: 'exact', head: true }).eq('date', today);
-
-  // Fetch rows only for chart data — paginate in chunks to bypass 1000-row cap
-  let rows = [];
-  let offset = 0;
-  const CHUNK = 1000;
-  while (true) {
-    const { data: chunk } = await supabase
-      .from('page_views').select('page, date, hour')
-      .gte('date', from)
-      .range(offset, offset + CHUNK - 1);
-    if (!chunk || chunk.length === 0) break;
-    rows = rows.concat(chunk);
-    if (chunk.length < CHUNK) break;
-    offset += CHUNK;
-  }
-
+  const { data: rows } = await supabase.from('page_views').select('*').gte('date', from);
+  if (!rows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  const total = rows.length;
+  const todayViews = rows.filter(r=>r.date===today).length;
   const dateMap = {};
   rows.forEach(r => { dateMap[r.date] = (dateMap[r.date]||0)+1; });
   const by_date = Object.entries(dateMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,views])=>({date,views}));
@@ -1115,7 +1097,7 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   const by_page = Object.entries(pageMap).sort((a,b)=>b[1]-a[1]).map(([page,views])=>({page,views}));
   const by_hour = Array(24).fill(0);
   rows.filter(r=>r.date===today).forEach(r => { by_hour[r.hour] = (by_hour[r.hour]||0)+1; });
-  res.json({ total: total||0, today: todayViews||0, peak_day: peak.date, by_page, by_date, by_hour });
+  res.json({ total, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
 });
 
 // ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────

@@ -1944,6 +1944,19 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .movie-card:hover .movie-rating-badge{opacity:.85}
 
 /* ── KFS WRAPPED ─────────────────────────────────────────────── */
+/*
+  WRAPPED KILL-SWITCH — hides page + nav link instantly at CSS parse time,
+  before any JS runs. Eliminates the refresh flash when feature is off.
+
+  TO ENABLE:        delete the two selectors below (keep comment if handy).
+  AFTER THE EVENT:  delete this entire comment block and both rules.
+*/
+#page-wrapped,
+li:has(a[data-page="wrapped"]) {
+  display: none !important;
+}
+/* end wrapped kill-switch */
+
 #page-wrapped{padding:80px 0 60px;background:var(--black);min-height:100vh}
 
 /* Hero */
@@ -6278,9 +6291,10 @@ async function checkRoute() {
   // Wait for wrapped config to resolve before routing, so we never
   // briefly flash the wrapped page if it is disabled.
   await _wrappedNavReady;
-  // Now safe to restore the wrapped page element (clear the inline display:none set in HTML)
+  // Now safe to restore the wrapped page element — only if config says it is enabled.
+  // Guarding here (in addition to the CSS rule below) prevents any JS-timing flash.
   const wp = document.getElementById('page-wrapped');
-  if (wp) wp.style.display = '';
+  if (wp && _wrappedConfig?.enabled !== false) wp.style.display = '';
 
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
