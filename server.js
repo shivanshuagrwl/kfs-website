@@ -1084,25 +1084,8 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   else fromDate = new Date('2020-01-01');
   const from = fromDate.toISOString().slice(0,10);
   const today = new Date().toISOString().slice(0,10);
-
-  // Fetch ALL rows by paginating in 1000-row chunks — bypasses Supabase's default 1k cap
-  let rows = [];
-  let offset = 0;
-  const CHUNK = 1000;
-  while (true) {
-    const { data: chunk, error } = await supabase
-      .from('page_views')
-      .select('page,date,hour')
-      .gte('date', from)
-      .range(offset, offset + CHUNK - 1);
-    if (error || !chunk || chunk.length === 0) break;
-    rows = rows.concat(chunk);
-    if (chunk.length < CHUNK) break; // last page
-    offset += CHUNK;
-  }
-
-  if (!rows.length) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
-
+  const { data: rows } = await supabase.from('page_views').select('*').gte('date', from);
+  if (!rows) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
   const total = rows.length;
   const todayViews = rows.filter(r=>r.date===today).length;
   const dateMap = {};
