@@ -2677,7 +2677,7 @@ li:has(a[data-page="wrapped"]) {
       <div class="section-header">
         <p class="section-label">Open Calls</p>
         <h2 class="section-title">Collaborate</h2>
-        <p class="section-sub" style="margin-top:12px">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+        <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
       </div>
 
       <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:28px;border-radius:10px">+ Post an Open Call</button>
@@ -3592,7 +3592,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Skills Needed</label><input id="collab-skills" placeholder="Sync sound, Foley, acting, colour grading…"></div>
     <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
     <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
-    <div class="form-group"><label>Your Name</label><input id="collab-contact-name" placeholder="Your name (optional)"></div>
+    <div class="form-group"><label>Your Name</label><div class="mpicker-wrap" id="mpick-collab-name"></div></div>
     <div class="form-group">
       <label>Are you a KFS member?</label>
       <select id="collab-kfs-member">
@@ -10603,18 +10603,26 @@ async function loadCollaborate() {
       <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
         <strong style="color:var(--white)">Contact:</strong>
         ${(() => {
-          const namePart = p.contact_name ? (() => {
-            const match = window._memberRegistry && window._memberRegistry.find(m =>
-              m.name && m.name.trim().toLowerCase() === p.contact_name.trim().toLowerCase()
-            );
-            if (match) {
-              const idx = window._memberRegistry.indexOf(match);
-              return `<span style="color:var(--white);cursor:pointer;border-bottom:1px solid rgba(245,245,245,.35);padding-bottom:1px" onclick="openMemberProfile(window._memberRegistry[${idx}])">${escapeHtml(p.contact_name)}</span>`;
+          const parts = [];
+          if (p.contact_name) {
+            const [rawName, memberId] = p.contact_name.split('||');
+            const name = rawName.trim();
+            const member = memberId && allMembers ? allMembers.find(m => String(m.id) === memberId.trim()) : null;
+            if (member) {
+              const idx = window._memberRegistry ? window._memberRegistry.indexOf(member) : -1;
+              const finalIdx = idx >= 0 ? idx : (() => {
+                if (!window._memberRegistry) window._memberRegistry = [];
+                window._memberRegistry.push(member);
+                return window._memberRegistry.length - 1;
+              })();
+              parts.push(`<span style="color:var(--white);cursor:pointer;border-bottom:1px solid rgba(245,245,245,.35);padding-bottom:1px" onclick="openMemberProfile(window._memberRegistry[${finalIdx}])">${escapeHtml(name)}</span>`);
+            } else {
+              parts.push(escapeHtml(name));
             }
-            return escapeHtml(p.contact_name);
-          })() : '';
-          const rest = [p.contact_email, p.contact_phone].filter(Boolean).map(escapeHtml);
-          return [namePart, ...rest].filter(Boolean).join(' · ');
+          }
+          if (p.contact_email) parts.push(escapeHtml(p.contact_email));
+          if (p.contact_phone) parts.push(escapeHtml(p.contact_phone));
+          return parts.join(' · ');
         })()}
       </p>
     </div>
@@ -10630,7 +10638,18 @@ function openCollabForm(post) {
   document.getElementById('collab-skills').value = post?.skills || '';
   document.getElementById('collab-timeline').value = post?.timeline || '';
   document.getElementById('collab-description').value = post?.description || '';
-  document.getElementById('collab-contact-name').value = post?.contact_name || '';
+
+  // Init member picker for contact name (single-select, free-text allowed)
+  if (!window._collabNamePicker) {
+    window._collabNamePicker = new MemberPicker('mpick-collab-name', false);
+    window._collabNamePicker.input.placeholder = 'Your name (optional)';
+  } else {
+    window._collabNamePicker.selected = [];
+    window._collabNamePicker._renderTags();
+    window._collabNamePicker.input.value = '';
+  }
+  if (post?.contact_name) window._collabNamePicker.setValue(post.contact_name);
+
   document.getElementById('collab-kfs-member').value = String(post?.is_kfs_member ?? true);
   document.getElementById('collab-email').value = post?.contact_email || '';
   document.getElementById('collab-phone').value = post?.contact_phone || '';
@@ -10650,7 +10669,7 @@ function collabPayload() {
     skills:         document.getElementById('collab-skills').value,
     timeline:       document.getElementById('collab-timeline').value,
     description:    document.getElementById('collab-description').value,
-    contact_name:   document.getElementById('collab-contact-name').value,
+    contact_name:   window._collabNamePicker ? window._collabNamePicker.getValue() : '',
     is_kfs_member:  document.getElementById('collab-kfs-member').value === 'true',
     contact_email:  document.getElementById('collab-email').value,
     contact_phone:  document.getElementById('collab-phone').value,
