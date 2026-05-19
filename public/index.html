@@ -612,6 +612,7 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
   .nav-links.open li:nth-child(4){opacity:1;transform:none;transition-delay:.21s}
   .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
   .nav-links.open li:nth-child(6){opacity:1;transform:none;transition-delay:.31s}
+  .nav-links.open li:nth-child(7){opacity:1;transform:none;transition-delay:.36s}
 
   .nav-links a{
     display:flex;align-items:center;padding:18px 28px;
@@ -2679,7 +2680,7 @@ li:has(a[data-page="wrapped"]) {
         <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
       </div>
 
-      <button class="btn btn-primary" onclick="openCollabForm()">+ Post an Open Call</button>
+      <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:28px;border-radius:10px">+ Post an Open Call</button>
 
       <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
         <p style="color:var(--white);font-weight:600;margin-bottom:8px">Your listing is live.</p>
@@ -3488,9 +3489,6 @@ KFS — KIIT Film Society"></textarea>
       </div><!-- end wrapped-config-body -->
     </div>
 
-  </div>
-</div>
-
     <div class="admin-section" id="section-collaborate">
       <div class="admin-header">
         <div><h2>Collaboration Board</h2><p>Delete inappropriate or expired open calls</p></div>
@@ -3502,6 +3500,9 @@ KFS — KIIT Film Society"></textarea>
         </table>
       </div>
     </div>
+
+  </div>
+</div>
 
 <div class="modal-overlay" id="blog-modal">
   <div class="modal">
