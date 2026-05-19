@@ -2184,7 +2184,7 @@ li:has(a[data-page="wrapped"]) {
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
-        <label class="perm-check-item"></label>
+        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="collaborate" checked> Collaborate</label>
       </div>
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
@@ -2212,7 +2212,7 @@ li:has(a[data-page="wrapped"]) {
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
-      <label class="perm-check-item"></label>
+      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="collaborate"> Collaborate</label>
     </div>
     <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
     <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
@@ -2239,6 +2239,7 @@ li:has(a[data-page="wrapped"]) {
     <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
     <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
     <li><a onclick="navigate('wrapped');closeMenu()" data-page="wrapped">Wrapped</a></li>
+    <li><a onclick="navigate('collaborate');closeMenu()" data-page="collaborate">Collaborate</a></li>
   </ul>
   <div class="nav-right">
     <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -2668,6 +2669,31 @@ li:has(a[data-page="wrapped"]) {
   </div>
 </div>
 
+<!-- ── COLLABORATE PAGE ── -->
+<div class="page" id="page-collaborate">
+  <section class="section">
+    <div class="section-inner">
+      <div class="section-header">
+        <p class="section-label">Open Calls</p>
+        <h2 class="section-title">Collaborate</h2>
+        <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+      </div>
+
+      <button class="btn btn-primary" onclick="openCollabForm()">+ Post an Open Call</button>
+
+      <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
+        <p style="color:var(--white);font-weight:600;margin-bottom:8px">Your listing is live.</p>
+        <p style="color:var(--grey);font-size:13px;margin-bottom:12px">Save this private edit link. Anyone with it can edit or delete your listing.</p>
+        <input id="collab-edit-link" readonly style="width:100%;padding:12px;background:var(--black);border:1px solid var(--border);color:var(--white);border-radius:8px;font-size:13px">
+      </div>
+
+      <div id="collab-list" style="margin-top:36px">
+        <div class="loading">Loading open calls...</div>
+      </div>
+    </div>
+  </section>
+</div>
+
 <!-- ── 404 PAGE ── -->
 <div class="page" id="page-404">
   <div class="not-found-reel">404</div>
@@ -2917,6 +2943,7 @@ li:has(a[data-page="wrapped"]) {
     <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('wrapped')" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('collaborate')" data-section="collaborate"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collaborate</div>
     <div class="admin-sidebar-group">Analytics</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
@@ -3463,6 +3490,19 @@ KFS — KIIT Film Society"></textarea>
 
   </div>
 </div>
+
+    <div class="admin-section" id="section-collaborate">
+      <div class="admin-header">
+        <div><h2>Collaboration Board</h2><p>Delete inappropriate or expired open calls</p></div>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Title</th><th>Role</th><th>KFS Member</th><th>Until</th><th>Contact</th><th>Actions</th></tr></thead>
+          <tbody id="admin-collab-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
 <div class="modal-overlay" id="blog-modal">
   <div class="modal">
     <h3 id="blog-modal-title">New Blog Post</h3>
@@ -3537,7 +3577,39 @@ KFS — KIIT Film Society"></textarea>
   </div>
 </div>
 
-<div class="modal-overlay" id="member-modal">
+<div class="modal-overlay" id="collab-modal">
+  <div class="modal-box" style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 id="collab-modal-title" style="font-size:18px;font-weight:700;color:var(--white);margin:0">Post Open Call</h3>
+      <button class="modal-close" onclick="closeCollabForm()" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px">×</button>
+    </div>
+
+    <input type="hidden" id="collab-token">
+
+    <div class="form-group"><label>Title *</label><input id="collab-title" placeholder="Looking for a sound designer for our 10-minute short"></div>
+    <div class="form-group"><label>Role Needed *</label><input id="collab-role" placeholder="Sound designer, actor, editor…"></div>
+    <div class="form-group"><label>Skills Needed</label><input id="collab-skills" placeholder="Sync sound, Foley, acting, colour grading…"></div>
+    <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
+    <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
+    <div class="form-group"><label>Your Name</label><input id="collab-contact-name" placeholder="Your name (optional)"></div>
+    <div class="form-group">
+      <label>Are you a KFS member?</label>
+      <select id="collab-kfs-member">
+        <option value="true">Yes — I'm a KFS member</option>
+        <option value="false">No — I'm not a KFS member</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Email (required if no phone)</label><input id="collab-email" type="email" placeholder="your@email.com"></div>
+    <div class="form-group"><label>Phone (required if no email)</label><input id="collab-phone" placeholder="+91 XXXXX XXXXX"></div>
+    <div class="form-group"><label>Listing Expiry Date *</label><input id="collab-date" type="date"><p style="font-size:12px;color:var(--grey);margin-top:6px">Your listing will be automatically removed after this date.</p></div>
+
+    <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveCollabPost()">Save Listing</button>
+      <button class="btn btn-secondary" id="collab-delete-own" onclick="deleteOwnCollabPost()" style="display:none">Delete Listing</button>
+    </div>
+  </div>
+</div>
   <div class="modal">
     <h3 id="member-modal-title">Add Member</h3>
     <input type="hidden" id="member-edit-id">
@@ -3890,6 +3962,7 @@ function loadPageData(page) {
   else if (page==='members') loadMembers();
   else if (page==='movies') loadMovies();
   else if (page==='wrapped') loadWrapped();
+  else if (page==='collaborate') loadCollaborate();
 }
 
 function toggleMenu() {
@@ -5371,7 +5444,7 @@ async function loadAdminData(name) {
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
-    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped'};
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate'};
     // Store perms in a global map so onclick can look up safely (avoids JSON-in-attribute quoting bugs)
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
@@ -5411,6 +5484,7 @@ async function loadAdminData(name) {
     <\/tr>`).join('');
   }
   else if (name==='wrapped') { loadWrappedAdminSection(); }
+  else if (name==='collaborate') { loadAdminCollaborate(); }
 }
 
 function openBlogModal(blog=null) {
@@ -6307,6 +6381,12 @@ async function checkRoute() {
   const eventMatch = path.match(/^events\/(.+)/);
   // legacy /movies/ URLs redirect to films
   const movieLegacy = path.match(/^movies\/(.+)/);
+  // collaborate edit link
+  const collabEditMatch = path.match(/^collaborate\/edit\/(.+)/);
+  if (collabEditMatch) {
+    loadCollabEditToken(collabEditMatch[1]);
+    return;
+  }
 
   // Extract ID from the tail of a slug: "my-post-title-42" → "42"
   // Works for both numeric IDs and UUIDs.
@@ -10475,6 +10555,192 @@ function exitKFSScreensaver() {
 }
 // Allow clicking inside screensaver to not double-fire via bubbled events
 document.getElementById('kfs-screensaver') && document.getElementById('kfs-screensaver').addEventListener('click', function(e){ e.stopPropagation(); exitKFSScreensaver(); });
+
+// ── COLLABORATE ────────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+async function loadCollaborate() {
+  const list = document.getElementById('collab-list');
+  if (!list) return;
+  list.innerHTML = '<div class="loading">Loading open calls…</div>';
+
+  let posts;
+  try {
+    const res = await fetch('/api/collaborate');
+    posts = await res.json();
+  } catch(e) {
+    list.innerHTML = '<div class="admin-empty"><p>Could not load listings.</p></div>';
+    return;
+  }
+
+  if (!posts || !posts.length) {
+    list.innerHTML = '<div class="admin-empty" style="text-align:center;padding:48px 24px"><p style="color:var(--grey);font-size:15px">No open calls right now. Be the first to post one!</p></div>';
+    return;
+  }
+
+  list.innerHTML = posts.map(p => `
+    <div class="admin-card" style="padding:24px;margin-bottom:14px;border-radius:12px">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <h3 style="font-size:20px;margin-bottom:6px;color:var(--white)">${escapeHtml(p.title)}</h3>
+          <p style="color:var(--grey);font-size:13px;margin:0">
+            ${escapeHtml(p.role)}
+            <span style="margin:0 6px;opacity:.4">·</span>
+            <span style="color:${p.is_kfs_member ? 'var(--accent)' : 'var(--grey)'}">${p.is_kfs_member ? '✓ KFS Member' : 'Not a KFS member'}</span>
+          </p>
+        </div>
+        <span class="tag upcoming" style="flex-shrink:0">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+      </div>
+      <p style="color:var(--white);line-height:1.65;margin-bottom:14px;font-size:15px">${escapeHtml(p.description)}</p>
+      ${p.skills ? `<p style="color:var(--grey);font-size:13px;margin-bottom:6px"><strong style="color:var(--white)">Skills needed:</strong> ${escapeHtml(p.skills)}</p>` : ''}
+      ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:6px"><strong style="color:var(--white)">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
+      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <strong style="color:var(--white)">Contact:</strong>
+        ${escapeHtml([p.contact_name, p.contact_email, p.contact_phone].filter(Boolean).join(' · '))}
+      </p>
+    </div>
+  `).join('');
+}
+
+function openCollabForm(post) {
+  document.getElementById('collab-modal').classList.add('open');
+  document.getElementById('collab-modal-title').textContent = post ? 'Edit Open Call' : 'Post Open Call';
+  document.getElementById('collab-token').value = post?.edit_token || '';
+  document.getElementById('collab-title').value = post?.title || '';
+  document.getElementById('collab-role').value = post?.role || '';
+  document.getElementById('collab-skills').value = post?.skills || '';
+  document.getElementById('collab-timeline').value = post?.timeline || '';
+  document.getElementById('collab-description').value = post?.description || '';
+  document.getElementById('collab-contact-name').value = post?.contact_name || '';
+  document.getElementById('collab-kfs-member').value = String(post?.is_kfs_member ?? true);
+  document.getElementById('collab-email').value = post?.contact_email || '';
+  document.getElementById('collab-phone').value = post?.contact_phone || '';
+  document.getElementById('collab-date').value = post?.fulfillment_date || '';
+  document.getElementById('collab-error').textContent = '';
+  document.getElementById('collab-delete-own').style.display = post ? 'inline-flex' : 'none';
+}
+
+function closeCollabForm() {
+  document.getElementById('collab-modal').classList.remove('open');
+}
+
+function collabPayload() {
+  return {
+    title:          document.getElementById('collab-title').value,
+    role:           document.getElementById('collab-role').value,
+    skills:         document.getElementById('collab-skills').value,
+    timeline:       document.getElementById('collab-timeline').value,
+    description:    document.getElementById('collab-description').value,
+    contact_name:   document.getElementById('collab-contact-name').value,
+    is_kfs_member:  document.getElementById('collab-kfs-member').value === 'true',
+    contact_email:  document.getElementById('collab-email').value,
+    contact_phone:  document.getElementById('collab-phone').value,
+    fulfillment_date: document.getElementById('collab-date').value,
+  };
+}
+
+async function saveCollabPost() {
+  const token = document.getElementById('collab-token').value;
+  let res, data;
+  try {
+    res = await fetch(token ? '/api/collaborate/' + token : '/api/collaborate', {
+      method: token ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collabPayload()),
+    });
+    data = await res.json();
+  } catch(e) {
+    document.getElementById('collab-error').textContent = 'Network error — please try again.';
+    return;
+  }
+
+  if (!res.ok) {
+    document.getElementById('collab-error').textContent = data.error || 'Could not save listing.';
+    return;
+  }
+
+  closeCollabForm();
+  loadCollaborate();
+
+  if (data.edit_url) {
+    const full = location.origin + data.edit_url;
+    const successEl = document.getElementById('collab-success');
+    if (successEl) {
+      successEl.style.display = 'block';
+      document.getElementById('collab-edit-link').value = full;
+      // Auto-select so they can copy easily
+      setTimeout(() => {
+        const input = document.getElementById('collab-edit-link');
+        if (input) { input.focus(); input.select(); }
+      }, 100);
+    }
+  }
+}
+
+async function loadCollabEditToken(token) {
+  try {
+    navigate('collaborate', false);
+    const res = await fetch('/api/collaborate/edit/' + token);
+    const post = await res.json();
+    if (!res.ok) {
+      alert(post.error || 'Invalid or expired edit link.');
+      return;
+    }
+    // Wait for page to render then open modal
+    await loadCollaborate();
+    openCollabForm(post);
+  } catch(e) {
+    alert('Could not load listing.');
+  }
+}
+
+async function deleteOwnCollabPost() {
+  const token = document.getElementById('collab-token').value;
+  if (!token || !confirm('Delete this listing? This cannot be undone.')) return;
+  try {
+    await fetch('/api/collaborate/' + token, { method: 'DELETE' });
+  } catch(e) {}
+  closeCollabForm();
+  loadCollaborate();
+}
+
+// ── ADMIN: Collaboration Board ─────────────────────────────────────────────────
+
+async function loadAdminCollaborate() {
+  let posts;
+  try {
+    const res = await fetch('/api/collaborate', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('kfs_token') || '') } });
+    posts = await res.json();
+  } catch(e) { posts = []; }
+
+  const tbody = document.getElementById('admin-collab-tbody');
+  if (!tbody) return;
+
+  if (!posts || !posts.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No active listings.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = posts.map(p => `
+    <tr>
+      <td style="font-weight:500">${escapeHtml(p.title)}</td>
+      <td style="color:var(--grey)">${escapeHtml(p.role)}</td>
+      <td><span class="tag ${p.is_kfs_member ? 'upcoming' : ''}">${p.is_kfs_member ? 'Yes' : 'No'}</span></td>
+      <td style="color:var(--grey)">${p.fulfillment_date || '—'}</td>
+      <td style="color:var(--grey)">${escapeHtml(p.contact_email || p.contact_phone || '—')}</td>
+      <td><button class="btn-sm danger" onclick="deleteAdminCollab('${p.id}')">Delete</button></td>
+    </tr>
+  `).join('');
+}
+
+async function deleteAdminCollab(id) {
+  if (!confirm('Delete this collaboration listing?')) return;
+  await apiFetch('/api/admin/collaborate/' + id, 'DELETE');
+  loadAdminCollaborate();
+}
 
 </script>
 </body>

@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const sharp = require('sharp');
 
@@ -2044,6 +2045,155 @@ app.get('/api/recommendations/:movieId', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── COLLABORATE / OPEN CALLS ──────────────────────────────────────────────────
+
+async function cleanupExpiredCollaborations() {
+  const today = new Date().toISOString().split('T')[0];
+  await supabase.from('collaborate_posts').delete().lt('fulfillment_date', today);
+}
+
+function makeEditToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function cleanCollabPayload(body) {
+  return {
+    title: (body.title || '').trim(),
+    role: (body.role || '').trim(),
+    skills: (body.skills || '').trim(),
+    timeline: (body.timeline || '').trim(),
+    description: (body.description || '').trim(),
+    contact_name: (body.contact_name || '').trim(),
+    contact_email: (body.contact_email || '').trim(),
+    contact_phone: (body.contact_phone || '').trim(),
+    is_kfs_member: body.is_kfs_member === true || body.is_kfs_member === 'true',
+    fulfillment_date: body.fulfillment_date || null,
+  };
+}
+
+app.get('/api/collaborate', async (req, res) => {
+  try {
+    await cleanupExpiredCollaborations();
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('collaborate_posts')
+      .select('id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,is_kfs_member,fulfillment_date,created_at,updated_at')
+      .gte('fulfillment_date', today)
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/collaborate', async (req, res) => {
+  try {
+    await cleanupExpiredCollaborations();
+
+    const payload = cleanCollabPayload(req.body);
+    if (!payload.title || !payload.role || !payload.description || !payload.fulfillment_date) {
+      return res.status(400).json({ error: 'Title, role, description, and fulfillment date are required.' });
+    }
+    if (!payload.contact_email && !payload.contact_phone) {
+      return res.status(400).json({ error: 'Please provide an email or phone number.' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    if (payload.fulfillment_date < today) {
+      return res.status(400).json({ error: 'Fulfillment date cannot be in the past.' });
+    }
+
+    const edit_token = makeEditToken();
+
+    const { data, error } = await supabase
+      .from('collaborate_posts')
+      .insert([{ ...payload, edit_token }])
+      .select('id,edit_token')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({
+      success: true,
+      id: data.id,
+      edit_token,
+      edit_url: `/collaborate/edit/${edit_token}`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/collaborate/edit/:token', async (req, res) => {
+  const { data, error } = await supabase
+    .from('collaborate_posts')
+    .select('*')
+    .eq('edit_token', req.params.token)
+    .maybeSingle();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Listing not found.' });
+  res.json(data);
+});
+
+app.put('/api/collaborate/:token', async (req, res) => {
+  const payload = cleanCollabPayload(req.body);
+
+  if (!payload.title || !payload.role || !payload.description || !payload.fulfillment_date) {
+    return res.status(400).json({ error: 'Title, role, description, and fulfillment date are required.' });
+  }
+  if (!payload.contact_email && !payload.contact_phone) {
+    return res.status(400).json({ error: 'Please provide an email or phone number.' });
+  }
+
+  const { data, error } = await supabase
+    .from('collaborate_posts')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('edit_token', req.params.token)
+    .select('id')
+    .maybeSingle();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Invalid edit link.' });
+  res.json({ success: true });
+});
+
+app.delete('/api/collaborate/:token', async (req, res) => {
+  const { error } = await supabase
+    .from('collaborate_posts')
+    .delete()
+    .eq('edit_token', req.params.token);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/collaborate/:id', requireSection('collaborate'), async (req, res) => {
+  const { data: post } = await supabase
+    .from('collaborate_posts')
+    .select('title')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from('collaborate_posts')
+    .delete()
+    .eq('id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  await logActivity(req.admin.id, req.admin.name, 'delete', 'collaborate', post?.title || req.params.id);
+  res.json({ success: true });
+});
+
+// Cleanup every 6 hours while server is awake
+setInterval(() => {
+  cleanupExpiredCollaborations().catch(e => console.error('[collaborate cleanup]', e.message));
+}, 1000 * 60 * 60 * 6);
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
