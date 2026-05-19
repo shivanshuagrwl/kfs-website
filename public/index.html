@@ -2677,7 +2677,7 @@ li:has(a[data-page="wrapped"]) {
       <div class="section-header">
         <p class="section-label">Open Calls</p>
         <h2 class="section-title">Collaborate</h2>
-        <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+        <p class="section-sub" style="margin-top:12px">A creative marketplace for KFS. Post a role, find a collaborator.</p>
       </div>
 
       <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:28px;border-radius:10px">+ Post an Open Call</button>
@@ -10602,7 +10602,20 @@ async function loadCollaborate() {
       ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:6px"><strong style="color:var(--white)">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
       <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
         <strong style="color:var(--white)">Contact:</strong>
-        ${escapeHtml([p.contact_name, p.contact_email, p.contact_phone].filter(Boolean).join(' · '))}
+        ${(() => {
+          const namePart = p.contact_name ? (() => {
+            const match = window._memberRegistry && window._memberRegistry.find(m =>
+              m.name && m.name.trim().toLowerCase() === p.contact_name.trim().toLowerCase()
+            );
+            if (match) {
+              const idx = window._memberRegistry.indexOf(match);
+              return `<span style="color:var(--white);cursor:pointer;border-bottom:1px solid rgba(245,245,245,.35);padding-bottom:1px" onclick="openMemberProfile(window._memberRegistry[${idx}])">${escapeHtml(p.contact_name)}</span>`;
+            }
+            return escapeHtml(p.contact_name);
+          })() : '';
+          const rest = [p.contact_email, p.contact_phone].filter(Boolean).map(escapeHtml);
+          return [namePart, ...rest].filter(Boolean).join(' · ');
+        })()}
       </p>
     </div>
   `).join('');
