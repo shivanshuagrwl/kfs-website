@@ -1716,6 +1716,16 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-crew-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-bottom:4px}
 .movie-crew-value{font-size:14px;font-weight:500}
 .movie-detail-section{margin-bottom:28px}
+/* Soundtrack dynamic color card */
+#movie-detail-spotify-section{
+  border-radius:16px;
+  padding:16px;
+  margin-left:-16px;margin-right:-16px;
+  transition:background .8s cubic-bezier(.4,0,.2,1),border-color .8s cubic-bezier(.4,0,.2,1),box-shadow .8s cubic-bezier(.4,0,.2,1);
+}
+#movie-detail-spotify-section .movie-detail-section-title{
+  transition:color .8s cubic-bezier(.4,0,.2,1),border-color .8s cubic-bezier(.4,0,.2,1);
+}
 .movie-detail-section-title{font-size:11px;letter-spacing:.15em;text-transform:uppercase;
   color:var(--grey);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .movie-cast-list{display:flex;flex-wrap:wrap;gap:8px}
@@ -2829,28 +2839,25 @@ li:has(a[data-page="wrapped"]) {
 
       <!-- SOUNDTRACK (Spotify + Apple Music) -->
       <div class="movie-detail-section" id="movie-detail-spotify-section" style="display:none">
-        <div class="movie-detail-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <!-- Title row: "SOUNDTRACK" label left, platform toggle right, both sitting on the border-bottom line -->
+        <div class="movie-detail-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px">
           <div style="display:flex;align-items:center;gap:8px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             Soundtrack
           </div>
-          <!-- Platform toggle pill -->
-          <div id="soundtrack-toggle" style="display:none;align-items:center;gap:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:3px;overflow:hidden">
-            <button id="toggle-spotify" onclick="setSoundtrackPlatform('spotify')" title="Listen on Spotify"
-              style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;border:none;font:inherit;font-size:11px;font-weight:600;letter-spacing:.03em;cursor:pointer;transition:all .2s;background:transparent;color:rgba(245,245,245,.5)">
-              <!-- Spotify logo -->
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-              Spotify
+          <!-- Platform toggle — icon-only pills, shown only when both URLs exist -->
+          <div id="soundtrack-toggle" style="display:none;align-items:center;gap:2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:2px">
+            <button id="toggle-spotify" onclick="setSoundtrackPlatform('spotify')" title="Spotify"
+              style="display:flex;align-items:center;justify-content:center;width:28px;height:24px;border-radius:14px;border:none;cursor:pointer;transition:all .22s cubic-bezier(.4,0,.2,1);background:transparent;color:rgba(245,245,245,.45);flex-shrink:0;-webkit-tap-highlight-color:transparent">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
             </button>
-            <button id="toggle-apple" onclick="setSoundtrackPlatform('apple')" title="Listen on Apple Music"
-              style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;border:none;font:inherit;font-size:11px;font-weight:600;letter-spacing:.03em;cursor:pointer;transition:all .2s;background:transparent;color:rgba(245,245,245,.5)">
-              <!-- Apple Music logo -->
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.064-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026C4.786.07 4.043.15 3.34.428 2.004.958 1.04 1.88.475 3.208A6.152 6.152 0 00.17 4.814c-.015.24-.023.48-.029.72v13.93c.006.23.013.46.026.69.072 1.3.45 2.47 1.27 3.46.73.88 1.65 1.44 2.75 1.72.45.11.91.17 1.37.19.28.01.56.02.84.02h12.02c.31 0 .62-.01.93-.03.67-.05 1.32-.18 1.93-.46 1.34-.6 2.25-1.58 2.72-2.99.2-.6.29-1.22.31-1.85.01-.26.02-.52.02-.78V7c0-.29-.005-.58-.02-.876zm-7.292 3.378h-1.168v6.114c0 .52-.087.99-.26 1.41-.174.42-.42.783-.74 1.09-.32.307-.696.543-1.128.708a3.967 3.967 0 01-1.46.248c-.5 0-.975-.087-1.425-.26a3.693 3.693 0 01-1.164-.728 3.437 3.437 0 01-.784-1.1 3.293 3.293 0 01-.284-1.364c0-.5.094-.973.284-1.42.19-.447.45-.836.784-1.168a3.61 3.61 0 011.164-.784c.45-.19.925-.284 1.425-.284.37 0 .724.05 1.062.15.337.1.645.244.922.433V6.124h4.17v3.378h-1.4z"/></svg>
-              Apple Music
+            <button id="toggle-apple" onclick="setSoundtrackPlatform('apple')" title="Apple Music"
+              style="display:flex;align-items:center;justify-content:center;width:28px;height:24px;border-radius:14px;border:none;cursor:pointer;transition:all .22s cubic-bezier(.4,0,.2,1);background:transparent;color:rgba(245,245,245,.45);flex-shrink:0;-webkit-tap-highlight-color:transparent">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.064-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026C4.786.07 4.043.15 3.34.428 2.004.958 1.04 1.88.475 3.208A6.152 6.152 0 00.17 4.814c-.015.24-.023.48-.029.72v13.93c.006.23.013.46.026.69.072 1.3.45 2.47 1.27 3.46.73.88 1.65 1.44 2.75 1.72.45.11.91.17 1.37.19.28.01.56.02.84.02h12.02c.31 0 .62-.01.93-.03.67-.05 1.32-.18 1.93-.46 1.34-.6 2.25-1.58 2.72-2.99.2-.6.29-1.22.31-1.85.01-.26.02-.52.02-.78V7c0-.29-.005-.58-.02-.876zm-7.292 3.378h-1.168v6.114c0 .52-.087.99-.26 1.41-.174.42-.42.783-.74 1.09-.32.307-.696.543-1.128.708a3.967 3.967 0 01-1.46.248c-.5 0-.975-.087-1.425-.26a3.693 3.693 0 01-1.164-.728 3.437 3.437 0 01-.784-1.1 3.293 3.293 0 01-.284-1.364c0-.5.094-.973.284-1.42.19-.447.45-.836.784-1.168a3.61 3.61 0 011.164-.784c.45-.19.925-.284 1.425-.284.37 0 .724.05 1.062.15.337.1.645.244.922.433V6.124h4.17v3.378h-1.4z"/></svg>
             </button>
           </div>
         </div>
-        <div id="movie-detail-spotify-embed" style="margin-top:12px"></div>
+        <div id="movie-detail-spotify-embed" style="margin-top:14px"></div>
       </div>
 
       <!-- REVIEWS SECTION -->
@@ -5014,39 +5021,149 @@ async function openMovie(id) {
       renderSoundtrackEmbed();
     };
 
+    // ── Dynamic color extraction from poster ──────────────────────────────
+    function extractPosterColor(callback) {
+      const posterImg = document.getElementById('movie-detail-poster-img');
+      if (!posterImg || !posterImg.src || posterImg.style.display === 'none') {
+        callback(null); return;
+      }
+      const tryExtract = (imgEl) => {
+        try {
+          const canvas = document.createElement('canvas');
+          const SIZE = 80; // sample at small size for speed
+          canvas.width = SIZE; canvas.height = SIZE;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgEl, 0, 0, SIZE, SIZE);
+          const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+
+          // Build a color frequency map, bucket into 24 hue buckets
+          // Prefer saturated, mid-brightness colors (avoid black/white/grey)
+          let bestScore = -1, bestRgb = null;
+          const buckets = {};
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+            if (a < 128) continue;
+            // Convert to HSL
+            const rf = r/255, gf = g/255, bf = b/255;
+            const max = Math.max(rf,gf,bf), min = Math.min(rf,gf,bf);
+            const l = (max+min)/2;
+            if (l < 0.08 || l > 0.92) continue; // skip near-black / near-white
+            const d = max - min;
+            if (d < 0.12) continue; // skip greys
+            const s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+            if (s < 0.25) continue; // skip desaturated
+            let h;
+            if (max===rf) h = ((gf-bf)/d + (gf<bf?6:0))/6;
+            else if (max===gf) h = ((bf-rf)/d + 2)/6;
+            else h = ((rf-gf)/d + 4)/6;
+            const bucket = Math.floor(h * 24);
+            if (!buckets[bucket]) buckets[bucket] = {count:0, r:0, g:0, b:0, s:0};
+            const bk = buckets[bucket];
+            bk.count++; bk.r+=r; bk.g+=g; bk.b+=b; bk.s+=s;
+          }
+          let topBucket = null, topScore = -1;
+          for (const key in buckets) {
+            const bk = buckets[key];
+            const score = bk.count * (bk.s / bk.count); // weighted by saturation
+            if (score > topScore) { topScore = score; topBucket = bk; }
+          }
+          if (topBucket) {
+            const c = topBucket.count;
+            callback({ r: Math.round(topBucket.r/c), g: Math.round(topBucket.g/c), b: Math.round(topBucket.b/c) });
+          } else {
+            callback(null);
+          }
+        } catch(e) { callback(null); }
+      };
+
+      if (posterImg.complete && posterImg.naturalWidth > 0) {
+        tryExtract(posterImg);
+      } else {
+        const tmp = new Image();
+        tmp.crossOrigin = 'anonymous';
+        tmp.onload = () => tryExtract(tmp);
+        tmp.onerror = () => callback(null);
+        tmp.src = posterImg.src + (posterImg.src.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+      }
+    }
+
+    function applySoundtrackColor(rgb) {
+      const sec = document.getElementById('movie-detail-spotify-section');
+      const titleEl = sec ? sec.querySelector('.movie-detail-section-title') : null;
+      if (!sec) return;
+      if (!rgb) {
+        // Reset to default
+        sec.style.background = 'transparent';
+        sec.style.border = '';
+        sec.style.boxShadow = 'none';
+        if (titleEl) { titleEl.style.color = ''; titleEl.style.borderBottomColor = ''; }
+        if (soundtrackToggle) { soundtrackToggle.style.borderColor = ''; soundtrackToggle.style.background = ''; }
+        return;
+      }
+      const {r,g,b} = rgb;
+      // Slightly boost saturation of the color for the glow
+      const bg      = `rgba(${r},${g},${b},0.13)`;
+      const border  = `rgba(${r},${g},${b},0.30)`;
+      const glow    = `rgba(${r},${g},${b},0.18)`;
+      const labelC  = `rgba(${r},${g},${b},0.85)`;
+      sec.style.background  = `linear-gradient(135deg, rgba(${r},${g},${b},0.16) 0%, rgba(${r},${g},${b},0.07) 100%)`;
+      sec.style.border      = `1px solid ${border}`;
+      sec.style.boxShadow   = `0 0 32px ${glow}, inset 0 1px 0 rgba(255,255,255,0.06)`;
+      if (titleEl) {
+        titleEl.style.color = labelC;
+        titleEl.style.borderBottomColor = border;
+      }
+      if (soundtrackToggle) {
+        soundtrackToggle.style.borderColor = border;
+        soundtrackToggle.style.background  = `rgba(${r},${g},${b},0.10)`;
+      }
+    }
+
+    // Kick off color extraction (async — applies when ready)
+    extractPosterColor(applySoundtrackColor);
+
     function renderSoundtrackEmbed() {
-      // Update toggle button styles
-      const spotifyColor = '#1DB954';
-      const appleColor = '#FC3C44';
+      // Icon-only toggle: active = platform brand color background, inactive = ghost
       if (toggleSpotifyBtn && toggleAppleBtn) {
         if (activePlatform === 'spotify') {
-          toggleSpotifyBtn.style.background = spotifyColor;
+          toggleSpotifyBtn.style.background = '#1DB954';
           toggleSpotifyBtn.style.color = '#fff';
+          toggleSpotifyBtn.style.boxShadow = '0 1px 6px rgba(29,185,84,.35)';
           toggleAppleBtn.style.background = 'transparent';
-          toggleAppleBtn.style.color = 'rgba(245,245,245,.5)';
+          toggleAppleBtn.style.color = 'rgba(245,245,245,.4)';
+          toggleAppleBtn.style.boxShadow = 'none';
         } else {
-          toggleAppleBtn.style.background = appleColor;
+          toggleAppleBtn.style.background = '#FC3C44';
           toggleAppleBtn.style.color = '#fff';
+          toggleAppleBtn.style.boxShadow = '0 1px 6px rgba(252,60,68,.35)';
           toggleSpotifyBtn.style.background = 'transparent';
-          toggleSpotifyBtn.style.color = 'rgba(245,245,245,.5)';
+          toggleSpotifyBtn.style.color = 'rgba(245,245,245,.4)';
+          toggleSpotifyBtn.style.boxShadow = 'none';
         }
       }
+
+      // Clear embed before re-rendering so switching works cleanly
+      spotifyEmbed.innerHTML = '';
 
       if (activePlatform === 'spotify' && hasSpotify) {
         const url = m.spotify_url.trim();
         const spotifyMatch = url.match(/spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/);
         if (spotifyMatch) {
           const [, type, sid] = spotifyMatch;
-          const embedUrl = `https://open.spotify.com/embed/${type}/${sid}?utm_source=generator`;
+          const embedUrl = `https://open.spotify.com/embed/${type}/${sid}?utm_source=generator&theme=0`;
           const height = type === 'track' ? '152' : '352';
           spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="${height}" frameborder="0" allowtransparency="true" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="border-radius:12px;display:block"></iframe>`;
         } else {
-          spotifyEmbed.innerHTML = `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:1px solid var(--border);border-radius:24px;font-size:13px;color:#1DB954;text-decoration:none">▶ Listen on Spotify →</a>`;
+          spotifyEmbed.innerHTML = `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:1px solid rgba(29,185,84,.3);border-radius:24px;font-size:13px;color:#1DB954;text-decoration:none;transition:border-color .2s">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+            Listen on Spotify →</a>`;
         }
       } else if (activePlatform === 'apple' && hasApple) {
         const url = m.apple_music_url.trim();
         const embedUrl = url.replace('music.apple.com', 'embed.music.apple.com');
-        spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="450" frameborder="0" allow="autoplay *; encrypted-media *; fullscreen *" loading="lazy" style="border-radius:12px;display:block;overflow:hidden;background:transparent"></iframe>`;
+        spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="450" frameborder="0" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" loading="lazy" style="border-radius:12px;display:block;overflow:hidden;background:transparent"></iframe>`;
+      } else if (!hasSpotify && !hasApple) {
+        spotifyEmbed.innerHTML = '';
       }
     }
 
@@ -5055,6 +5172,12 @@ async function openMovie(id) {
     spotifySec.style.display = 'none';
     spotifyEmbed.innerHTML = '';
     if (soundtrackToggle) soundtrackToggle.style.display = 'none';
+    // Reset dynamic color
+    spotifySec.style.background = 'transparent';
+    spotifySec.style.border = '';
+    spotifySec.style.boxShadow = 'none';
+    const _stTitle = spotifySec.querySelector('.movie-detail-section-title');
+    if (_stTitle) { _stTitle.style.color = ''; _stTitle.style.borderBottomColor = ''; }
   }
   window.scrollTo({top:0,behavior:'smooth'});
   const mslug = (m.title ? m.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
