@@ -2674,13 +2674,14 @@ li:has(a[data-page="wrapped"]) {
 <div class="page" id="page-collaborate">
   <section class="section">
     <div class="section-inner">
-      <div class="section-header">
-        <p class="section-label">Open Calls</p>
-        <h2 class="section-title">Collaborate</h2>
-        <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:8px">
+        <div class="section-header" style="margin-bottom:0">
+          <p class="section-label">Open Calls</p>
+          <h2 class="section-title">Collaborate</h2>
+          <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:16px;border-radius:10px;flex-shrink:0">+ Post an Open Call</button>
       </div>
-
-      <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:28px;border-radius:10px">+ Post an Open Call</button>
 
       <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
         <p style="color:var(--white);font-weight:600;margin-bottom:8px">Your listing is live.</p>
@@ -10596,28 +10597,36 @@ async function loadCollaborate() {
     return;
   }
 
-  list.innerHTML = posts.map(p => `
-    <div class="admin-card" style="padding:24px;margin-bottom:14px;border-radius:12px">
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
-        <div>
-          <h3 style="font-size:20px;margin-bottom:6px;color:var(--white)">${escapeHtml(p.title)}</h3>
-          <p style="color:var(--grey);font-size:13px;margin:0">
-            ${escapeHtml(p.role)}
-            <span style="margin:0 6px;opacity:.4">·</span>
-            <span style="color:${p.is_kfs_member ? 'var(--accent)' : 'var(--grey)'}">${p.is_kfs_member ? '✓ KFS Member' : 'Not a KFS member'}</span>
+  list.innerHTML = posts.map(p => {
+    // Build clickable contact parts (never show raw id/uuid)
+    const contactParts = [];
+    if (p.contact_name)  contactParts.push(`<span>${escapeHtml(p.contact_name)}</span>`);
+    if (p.contact_email) contactParts.push(`<a href="mailto:${escapeHtml(p.contact_email)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_email)}</a>`);
+    if (p.contact_phone) contactParts.push(`<a href="tel:${escapeHtml(p.contact_phone)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_phone)}</a>`);
+
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px 26px;margin-bottom:14px;transition:border-color .2s">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <h3 style="font-size:18px;font-weight:700;margin-bottom:5px;color:var(--white);letter-spacing:-.02em">${escapeHtml(p.title)}</h3>
+          <p style="color:var(--grey);font-size:13px;margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>${escapeHtml(p.role)}</span>
+            <span style="opacity:.35">·</span>
+            <span style="color:${p.is_kfs_member ? 'var(--accent)' : 'var(--grey)'}">${p.is_kfs_member ? '✓ KFS Member' : 'Guest'}</span>
           </p>
         </div>
-        <span class="tag upcoming" style="flex-shrink:0">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+        <span class="tag upcoming" style="flex-shrink:0;font-size:11px">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
       </div>
-      <p style="color:var(--white);line-height:1.65;margin-bottom:14px;font-size:15px">${escapeHtml(p.description)}</p>
-      ${p.skills ? `<p style="color:var(--grey);font-size:13px;margin-bottom:6px"><strong style="color:var(--white)">Skills needed:</strong> ${escapeHtml(p.skills)}</p>` : ''}
-      ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:6px"><strong style="color:var(--white)">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
-      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-        <strong style="color:var(--white)">Contact:</strong>
-        ${escapeHtml([p.contact_name, p.contact_email, p.contact_phone].filter(Boolean).join(' · '))}
-      </p>
-    </div>
-  `).join('');
+      <p style="color:rgba(245,245,245,.82);line-height:1.7;margin-bottom:14px;font-size:14.5px">${escapeHtml(p.description)}</p>
+      ${p.skills   ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Skills needed:</strong> ${escapeHtml(p.skills)}</p>` : ''}
+      ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
+      ${contactParts.length ? `
+      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <strong style="color:var(--white);font-weight:600">Contact:</strong>
+        ${contactParts.join('<span style="opacity:.35">·</span>')}
+      </p>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function openCollabForm(post) {
