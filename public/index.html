@@ -2685,9 +2685,21 @@ li:has(a[data-page="wrapped"]) {
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Open Calls</p>
-      <h2 class="section-title">Collaborate</h2>
-      <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS. Post a role, find a collaborator.</p>
-      <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:24px;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:0">
+        <div>
+          <h2 class="section-title">Collaborate</h2>
+          <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS members. Post a role, find a collaborator.</p>
+          <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:24px;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
+        </div>
+        <div class="blog-filter-wrap" id="collab-filter-wrap" style="display:none;margin-bottom:4px">
+          <button class="blog-filter-btn" id="collab-filter-btn" onclick="toggleCollabFilter(this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Filter
+            <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="blog-filter-dropdown" id="collab-filter-dropdown"></div>
+        </div>
+      </div>
 
       <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
         <p style="color:var(--white);font-weight:600;margin-bottom:8px">Your listing is live.</p>
@@ -3516,7 +3528,7 @@ KFS — KIIT Film Society"></textarea>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Title</th><th>Role</th><th>KFS Member</th><th>Until</th><th>Contact</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Title</th><th>Role</th><th>Domain</th><th>KFS Member</th><th>Until</th><th>Contact</th><th>Actions</th></tr></thead>
           <tbody id="admin-collab-tbody"></tbody>
         </table>
       </div>
@@ -3608,27 +3620,63 @@ KFS — KIIT Film Society"></textarea>
 
     <input type="hidden" id="collab-token">
 
-    <div class="form-group"><label>Title *</label><input id="collab-title" placeholder="Looking for a sound designer for our 10-minute short"></div>
-    <div class="form-group"><label>Role Needed *</label><input id="collab-role" placeholder="Sound designer, actor, editor…"></div>
-    <div class="form-group"><label>Skills Needed</label><input id="collab-skills" placeholder="Sync sound, Foley, acting, colour grading…"></div>
-    <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
-    <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
-    <div class="form-group"><label>Your Name</label><input id="collab-contact-name" placeholder="Your name (optional)"></div>
-    <div class="form-group">
-      <label>Are you a KFS member?</label>
-      <select id="collab-kfs-member">
-        <option value="true">Yes — I'm a KFS member</option>
-        <option value="false">No — I'm not a KFS member</option>
-      </select>
+    <!-- ── STEP 1: KIIT email gate ── -->
+    <div id="collab-gate" style="">
+      <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin-bottom:18px">This board is exclusive to KFS members. Enter your KIIT email to continue.</p>
+      <div class="form-group">
+        <label>KIIT Email *</label>
+        <input id="collab-kiit-email" type="email" placeholder="yourname@kiit.ac.in" oninput="collabGateEmailInput()" onkeydown="if(event.key==='Enter')verifyCollabMember()">
+      </div>
+      <p id="collab-gate-error" style="color:#ff5555;font-size:13px;margin-bottom:12px;display:none"></p>
+      <button class="btn btn-primary" id="collab-gate-btn" onclick="verifyCollabMember()" style="border-radius:10px">Verify & Continue</button>
     </div>
-    <div class="form-group"><label>Email (required if no phone)</label><input id="collab-email" type="email" placeholder="your@email.com"></div>
-    <div class="form-group"><label>Phone (required if no email)</label><input id="collab-phone" placeholder="+91 XXXXX XXXXX"></div>
-    <div class="form-group"><label>Listing Expiry Date *</label><input id="collab-date" type="date"><p style="font-size:12px;color:var(--grey);margin-top:6px">Your listing will be automatically removed after this date.</p></div>
 
-    <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="saveCollabPost()">Save Listing</button>
-      <button class="btn btn-secondary" id="collab-delete-own" onclick="deleteOwnCollabPost()" style="display:none">Delete Listing</button>
+    <!-- ── STEP 2: Full form (shown after email verified) ── -->
+    <div id="collab-form-body" style="display:none">
+      <!-- Verified member badge -->
+      <div id="collab-verified-badge" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.2);border-radius:10px;margin-bottom:20px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="collab-verified-name" style="font-size:13px;font-weight:600;color:#34c759"></span>
+        <span style="font-size:12px;color:var(--grey);margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="resetCollabGate()">Change</span>
+      </div>
+
+      <div class="form-group"><label>Title *</label><input id="collab-title" placeholder="Looking for a sound designer for our 10-minute short"></div>
+      <div class="form-group"><label>Role Needed *</label><input id="collab-role" placeholder="Sound designer, actor, editor…"></div>
+      <div class="form-group">
+        <label>Domain</label>
+        <select id="collab-domain">
+          <option value="">— Select domain —</option>
+          <option value="Direction">Direction</option>
+          <option value="Cinematography">Cinematography</option>
+          <option value="Scriptwriting">Scriptwriting</option>
+          <option value="Video Editing">Video Editing</option>
+          <option value="Sound Design">Sound Design</option>
+          <option value="Graphic Design">Graphic Design</option>
+          <option value="Animation">Animation</option>
+          <option value="Acting">Acting</option>
+          <option value="Photography">Photography</option>
+          <option value="Content Creation">Content Creation</option>
+          <option value="Social Media">Social Media</option>
+          <option value="HR & PR">HR &amp; PR</option>
+          <option value="Production Management">Production Management</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Skills Needed</label><input id="collab-skills" placeholder="Sync sound, Foley, acting, colour grading…"></div>
+      <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
+      <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
+      <div class="form-group">
+        <label>Your Name</label>
+        <div id="collab-name-picker" class="mpicker-wrap"></div>
+      </div>
+      <div class="form-group"><label>Email *</label><input id="collab-email" type="email" placeholder="yourname@kiit.ac.in" readonly style="opacity:.6;cursor:not-allowed"></div>
+      <div class="form-group"><label>Phone (optional)</label><input id="collab-phone" placeholder="+91 XXXXX XXXXX"></div>
+      <div class="form-group"><label>Listing Expiry Date *</label><input id="collab-date" type="date"><p style="font-size:12px;color:var(--grey);margin-top:6px">Your listing will be automatically removed after this date.</p></div>
+
+      <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="saveCollabPost()">Save Listing</button>
+        <button class="btn btn-secondary" id="collab-delete-own" onclick="deleteOwnCollabPost()" style="display:none">Delete Listing</button>
+      </div>
     </div>
   </div>
 </div>
@@ -10782,26 +10830,91 @@ async function loadCollaborate() {
     return;
   }
 
-  if (!posts || !posts.length) {
-    list.innerHTML = '<div class="admin-empty" style="text-align:center;padding:48px 24px"><p style="color:var(--grey);font-size:15px">No open calls right now. Be the first to post one!</p></div>';
+  window._allCollabPosts = posts || [];
+
+  // Build domain filter
+  const filterWrap = document.getElementById('collab-filter-wrap');
+  const domains = [...new Set((posts || []).map(p => p.domain).filter(Boolean))].sort();
+  if (domains.length && filterWrap) {
+    filterWrap.style.display = 'inline-block';
+    _buildCollabFilterDropdown(domains);
+    const btn = document.getElementById('collab-filter-btn');
+    if (btn) {
+      const textNode = Array.from(btn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+      if (textNode) textNode.textContent = ' Filter ';
+    }
+  } else if (filterWrap) {
+    filterWrap.style.display = 'none';
+  }
+
+  _renderCollabPosts(posts || [], null);
+}
+
+function _buildCollabFilterDropdown(domains) {
+  const dd = document.getElementById('collab-filter-dropdown');
+  if (!dd) return;
+  const allItem = `<button class="blog-filter-item active" id="cfi-all" onclick="applyCollabFilter(null,this)"><span class="blog-filter-item-dot"></span>All Domains<\/button>`;
+  const items = domains.map(d =>
+    `<button class="blog-filter-item" id="cfi-${d.replace(/\s+/g,'-')}" onclick="applyCollabFilter('${d}',this)"><span class="blog-filter-item-dot"></span>${d}<\/button>`
+  ).join('');
+  dd.innerHTML = allItem + '<div class="blog-filter-divider-line"><\/div>' + items;
+}
+
+function toggleCollabFilter(btn) {
+  const dd = document.getElementById('collab-filter-dropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const close = e => {
+      if (!btn.closest('.blog-filter-wrap').contains(e.target)) {
+        dd.classList.remove('open'); btn.classList.remove('open');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function applyCollabFilter(domain, btn) {
+  document.querySelectorAll('#collab-filter-dropdown .blog-filter-item').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('collab-filter-dropdown').classList.remove('open');
+  document.getElementById('collab-filter-btn')?.classList.remove('open');
+  const filterBtn = document.getElementById('collab-filter-btn');
+  if (filterBtn) {
+    const textNode = Array.from(filterBtn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+    if (textNode) textNode.textContent = domain ? ` ${domain} ` : ' Filter ';
+  }
+  _renderCollabPosts(window._allCollabPosts || [], domain);
+}
+
+function _renderCollabPosts(posts, activeDomain) {
+  const list = document.getElementById('collab-list');
+  if (!list) return;
+  const filtered = activeDomain ? posts.filter(p => p.domain === activeDomain) : posts;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="admin-empty" style="text-align:center;padding:48px 24px"><p style="color:var(--grey);font-size:15px">' +
+      (activeDomain ? `No open calls for "${activeDomain}" right now.` : 'No open calls right now. Be the first to post one!') +
+      '</p></div>';
     return;
   }
 
-  list.innerHTML = posts.map(p => {
-    // Parse contact_name — may be stored as "Name||uuid" from member picker
+  list.innerHTML = filtered.map(p => {
     const rawName = p.contact_name || '';
     const nameParts = rawName.split('||');
     const displayName = nameParts[0].trim();
     const memberUuid  = nameParts[1] ? nameParts[1].trim() : null;
 
-    // KFS Member badge — clickable if we have a member UUID
-    const memberBadge = p.is_kfs_member
-      ? (memberUuid
-          ? `<span onclick="openMemberProfileById('${memberUuid}')" style="color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">✓ KFS Member</span>`
-          : `<span style="color:var(--accent)">✓ KFS Member</span>`)
-      : `<span style="color:var(--grey)">Guest</span>`;
+    const memberBadge = memberUuid
+      ? `<span onclick="openMemberProfileById('${memberUuid}')" style="color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">✓ KFS Member</span>`
+      : `<span style="color:var(--accent)">✓ KFS Member</span>`;
 
-    // Clickable contact parts
+    const domainFlair = p.domain
+      ? `<span style="display:inline-flex;align-items:center;padding:3px 10px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--grey);letter-spacing:.04em">${escapeHtml(p.domain)}</span>`
+      : '';
+
     const contactParts = [];
     if (displayName)     contactParts.push(`<span>${escapeHtml(displayName)}</span>`);
     if (p.contact_email) contactParts.push(`<a href="mailto:${escapeHtml(p.contact_email)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_email)}</a>`);
@@ -10816,6 +10929,7 @@ async function loadCollaborate() {
             <span>${escapeHtml(p.role)}</span>
             <span style="opacity:.35">·</span>
             ${memberBadge}
+            ${p.domain ? `<span style="opacity:.35">·</span>${domainFlair}` : ''}
           </p>
         </div>
         <span class="tag upcoming" style="flex-shrink:0;font-size:11px">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
@@ -10832,22 +10946,128 @@ async function loadCollaborate() {
   }).join('');
 }
 
+// ── COLLAB: KIIT email gate ────────────────────────────────────────────────────
+let _collabVerifiedMember = null; // { id, name, role, domain, email }
+
+function collabGateEmailInput() {
+  const err = document.getElementById('collab-gate-error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+}
+
+async function verifyCollabMember() {
+  const emailInput = document.getElementById('collab-kiit-email');
+  const errEl = document.getElementById('collab-gate-error');
+  const btn = document.getElementById('collab-gate-btn');
+  const email = (emailInput?.value || '').trim();
+
+  errEl.style.display = 'none'; errEl.textContent = '';
+
+  if (!email) { errEl.textContent = 'Please enter your KIIT email.'; errEl.style.display = 'block'; return; }
+  if (!email.toLowerCase().endsWith('@kiit.ac.in')) {
+    errEl.textContent = 'This feature is exclusive to KFS members only. Contact us via mail (filmsocietykiit@gmail.com) for external support.';
+    errEl.style.display = 'block'; return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try {
+    const res = await fetch('/api/collaborate/verify-member', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.valid) {
+      errEl.textContent = data.error || 'Verification failed.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Verify & Continue';
+      return;
+    }
+    // Success
+    _collabVerifiedMember = { ...data.member, email };
+    document.getElementById('collab-gate').style.display = 'none';
+    document.getElementById('collab-form-body').style.display = 'block';
+    document.getElementById('collab-verified-name').textContent = '✓ Verified: ' + data.member.name + ' — KFS Member';
+    document.getElementById('collab-email').value = email;
+
+    // Init member name picker and pre-select verified member
+    if (!window._collabNamePicker) {
+      window._collabNamePicker = new MemberPicker('collab-name-picker', false);
+    } else {
+      window._collabNamePicker.render();
+    }
+    window._collabNamePicker._select({ id: data.member.id, name: data.member.name, photo: data.member.photo, role: data.member.role });
+
+    // Pre-select domain from member's domain if available
+    if (data.member.domain) {
+      const domainSel = document.getElementById('collab-domain');
+      if (domainSel) {
+        const opt = [...domainSel.options].find(o => o.value === data.member.domain);
+        if (opt) domainSel.value = data.member.domain;
+      }
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Verify & Continue';
+}
+
+function resetCollabGate() {
+  _collabVerifiedMember = null;
+  document.getElementById('collab-gate').style.display = 'block';
+  document.getElementById('collab-form-body').style.display = 'none';
+  document.getElementById('collab-gate-error').style.display = 'none';
+  document.getElementById('collab-kiit-email').value = '';
+}
+
 function openCollabForm(post) {
   document.getElementById('collab-modal').classList.add('open');
   document.getElementById('collab-modal-title').textContent = post ? 'Edit Open Call' : 'Post Open Call';
   document.getElementById('collab-token').value = post?.edit_token || '';
-  document.getElementById('collab-title').value = post?.title || '';
-  document.getElementById('collab-role').value = post?.role || '';
-  document.getElementById('collab-skills').value = post?.skills || '';
-  document.getElementById('collab-timeline').value = post?.timeline || '';
-  document.getElementById('collab-description').value = post?.description || '';
-  document.getElementById('collab-contact-name').value = post?.contact_name || '';
-  document.getElementById('collab-kfs-member').value = String(post?.is_kfs_member ?? true);
-  document.getElementById('collab-email').value = post?.contact_email || '';
-  document.getElementById('collab-phone').value = post?.contact_phone || '';
-  document.getElementById('collab-date').value = post?.fulfillment_date || '';
   document.getElementById('collab-error').textContent = '';
   document.getElementById('collab-delete-own').style.display = post ? 'inline-flex' : 'none';
+
+  if (post) {
+    // Editing — skip the gate, show form directly
+    document.getElementById('collab-gate').style.display = 'none';
+    document.getElementById('collab-form-body').style.display = 'block';
+    document.getElementById('collab-verified-badge').style.display = 'none';
+
+    document.getElementById('collab-title').value = post.title || '';
+    document.getElementById('collab-role').value = post.role || '';
+    document.getElementById('collab-skills').value = post.skills || '';
+    document.getElementById('collab-timeline').value = post.timeline || '';
+    document.getElementById('collab-description').value = post.description || '';
+    document.getElementById('collab-domain').value = post.domain || '';
+    document.getElementById('collab-email').value = post.contact_email || '';
+    document.getElementById('collab-email').readOnly = false;
+    document.getElementById('collab-email').style.opacity = '1';
+    document.getElementById('collab-email').style.cursor = 'auto';
+    document.getElementById('collab-phone').value = post.contact_phone || '';
+    document.getElementById('collab-date').value = post.fulfillment_date || '';
+
+    if (!window._collabNamePicker) {
+      window._collabNamePicker = new MemberPicker('collab-name-picker', false);
+    } else {
+      window._collabNamePicker.render();
+    }
+    window._collabNamePicker.setValue(post.contact_name || '');
+  } else {
+    // New post — show gate
+    document.getElementById('collab-gate').style.display = 'block';
+    document.getElementById('collab-form-body').style.display = 'none';
+    document.getElementById('collab-gate-error').style.display = 'none';
+    document.getElementById('collab-kiit-email').value = '';
+    document.getElementById('collab-gate-btn').disabled = false;
+    document.getElementById('collab-gate-btn').textContent = 'Verify & Continue';
+
+    // Reset form fields
+    ['collab-title','collab-role','collab-skills','collab-timeline','collab-description','collab-phone','collab-date'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('collab-domain').value = '';
+    document.getElementById('collab-email').value = '';
+    _collabVerifiedMember = null;
+  }
 }
 
 function closeCollabForm() {
@@ -10855,16 +11075,18 @@ function closeCollabForm() {
 }
 
 function collabPayload() {
+  const nameVal = window._collabNamePicker ? window._collabNamePicker.getValue() : '';
   return {
-    title:          document.getElementById('collab-title').value,
-    role:           document.getElementById('collab-role').value,
-    skills:         document.getElementById('collab-skills').value,
-    timeline:       document.getElementById('collab-timeline').value,
-    description:    document.getElementById('collab-description').value,
-    contact_name:   document.getElementById('collab-contact-name').value,
-    is_kfs_member:  document.getElementById('collab-kfs-member').value === 'true',
-    contact_email:  document.getElementById('collab-email').value,
-    contact_phone:  document.getElementById('collab-phone').value,
+    title:            document.getElementById('collab-title').value,
+    role:             document.getElementById('collab-role').value,
+    domain:           document.getElementById('collab-domain').value,
+    skills:           document.getElementById('collab-skills').value,
+    timeline:         document.getElementById('collab-timeline').value,
+    description:      document.getElementById('collab-description').value,
+    contact_name:     nameVal,
+    is_kfs_member:    true,
+    contact_email:    document.getElementById('collab-email').value,
+    contact_phone:    document.getElementById('collab-phone').value,
     fulfillment_date: document.getElementById('collab-date').value,
   };
 }
@@ -10898,7 +11120,6 @@ async function saveCollabPost() {
     if (successEl) {
       successEl.style.display = 'block';
       document.getElementById('collab-edit-link').value = full;
-      // Auto-select so they can copy easily
       setTimeout(() => {
         const input = document.getElementById('collab-edit-link');
         if (input) { input.focus(); input.select(); }
@@ -10955,7 +11176,8 @@ async function loadAdminCollaborate() {
     <tr>
       <td style="font-weight:500">${escapeHtml(p.title)}</td>
       <td style="color:var(--grey)">${escapeHtml(p.role)}</td>
-      <td><span class="tag ${p.is_kfs_member ? 'upcoming' : ''}">${p.is_kfs_member ? 'Yes' : 'No'}</span></td>
+      <td style="color:var(--grey)">${escapeHtml(p.domain || '—')}</td>
+      <td><span class="tag upcoming">KFS Member</span></td>
       <td style="color:var(--grey)">${p.fulfillment_date || '—'}</td>
       <td style="color:var(--grey)">${escapeHtml(p.contact_email || p.contact_phone || '—')}</td>
       <td><button class="btn-sm danger" onclick="deleteAdminCollab('${p.id}')">Delete</button></td>

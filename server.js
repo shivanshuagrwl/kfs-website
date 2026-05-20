@@ -2067,10 +2067,71 @@ function cleanCollabPayload(body) {
     contact_name: (body.contact_name || '').trim(),
     contact_email: (body.contact_email || '').trim(),
     contact_phone: (body.contact_phone || '').trim(),
-    is_kfs_member: body.is_kfs_member === true || body.is_kfs_member === 'true',
+    is_kfs_member: true, // always true — only KFS members can post
+    domain: (body.domain || '').trim(),
     fulfillment_date: body.fulfillment_date || null,
   };
 }
+
+// Validate that a KIIT email belongs to a KFS member
+app.post('/api/collaborate/verify-member', async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!email.endsWith('@kiit.ac.in')) {
+      return res.status(400).json({
+        valid: false,
+        error: 'This feature is exclusive to KFS members only. Contact us via mail (filmsocietykiit@gmail.com) for external support.',
+      });
+    }
+    // Derive name from the part before @
+    const localPart = email.split('@')[0].toLowerCase();
+    // Look for a member whose name, when lowercased and stripped of spaces, starts with the local part,
+    // OR do a broader search across all members
+    const { data: members, error } = await supabase
+      .from('members')
+      .select('id, name, role, domain, photo')
+      .eq('is_past', false);
+
+    if (error) return res.status(500).json({ valid: false, error: 'Could not verify membership.' });
+
+    // Match: email local part == name lowercased with spaces removed, OR name starts with local part
+    const match = (members || []).find(m => {
+      const nameLower = m.name.toLowerCase().replace(/\s+/g, '');
+      const nameWithDot = m.name.toLowerCase().replace(/\s+/g, '.');
+      return nameLower === localPart || nameWithDot === localPart || localPart.startsWith(nameLower);
+    });
+
+    if (!match) {
+      return res.status(403).json({
+        valid: false,
+        error: 'This feature is exclusive to KFS members only. Contact us via mail (filmsocietykiit@gmail.com) for external support.',
+      });
+    }
+
+    res.json({ valid: true, member: { id: match.id, name: match.name, role: match.role, domain: match.domain, photo: match.photo } });
+  } catch (e) {
+    res.status(500).json({ valid: false, error: e.message });
+  }
+});
+
+// Search members by name (for autocomplete in collab form)
+app.get('/api/members/suggest', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim().toLowerCase();
+    if (!q) return res.json([]);
+    const { data } = await supabase
+      .from('members')
+      .select('id, name, role, domain, photo')
+      .eq('is_past', false)
+      .order('sort_order', { ascending: true });
+    const filtered = (data || [])
+      .filter(m => m.name.toLowerCase().includes(q))
+      .slice(0, 8);
+    res.json(filtered);
+  } catch (e) {
+    res.json([]);
+  }
+});
 
 app.get('/api/collaborate', async (req, res) => {
   try {
@@ -2079,7 +2140,7 @@ app.get('/api/collaborate', async (req, res) => {
 
     const { data, error } = await supabase
       .from('collaborate_posts')
-      .select('id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,is_kfs_member,fulfillment_date,created_at,updated_at')
+      .select('id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,is_kfs_member,domain,fulfillment_date,created_at,updated_at')
       .gte('fulfillment_date', today)
       .order('created_at', { ascending: false });
 
@@ -2100,6 +2161,25 @@ app.post('/api/collaborate', async (req, res) => {
     }
     if (!payload.contact_email && !payload.contact_phone) {
       return res.status(400).json({ error: 'Please provide an email or phone number.' });
+    }
+
+    // Enforce KIIT email
+    const emailLower = payload.contact_email.toLowerCase();
+    if (!emailLower.endsWith('@kiit.ac.in')) {
+      return res.status(403).json({ error: 'This feature is exclusive to KFS members only. Contact us via mail (filmsocietykiit@gmail.com) for external support.' });
+    }
+
+    // Verify against member database
+    const localPart = emailLower.split('@')[0];
+    const { data: members } = await supabase.from('members').select('id,name').eq('is_past', false);
+    const isMember = (members || []).some(m => {
+      const nameLower = m.name.toLowerCase().replace(/\s+/g, '');
+      const nameWithDot = m.name.toLowerCase().replace(/\s+/g, '.');
+      return nameLower === localPart || nameWithDot === localPart || localPart.startsWith(nameLower);
+    });
+
+    if (!isMember) {
+      return res.status(403).json({ error: 'This feature is exclusive to KFS members only. Contact us via mail (filmsocietykiit@gmail.com) for external support.' });
     }
 
     const today = new Date().toISOString().split('T')[0];
