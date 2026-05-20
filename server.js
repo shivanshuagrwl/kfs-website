@@ -883,7 +883,7 @@ app.get('/api/movies/:id', async (req, res) => {
 });
 
 app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, runtime, language } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, apple_music_url, runtime, language } = req.body;
   // genre arrives as JSON string array from frontend
   let genreVal = null;
   if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
@@ -891,7 +891,7 @@ app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'),
   const { data, error } = await supabase.from('movies').insert([{
     title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
-    poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
+    poster_image: posterUrl, trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null, apple_music_url: apple_music_url || null,
     runtime: runtime ? parseInt(runtime, 10) : null, language: language || null,
   }]).select().single();
   if (error) return res.status(500).json({ error: error.message });
@@ -900,12 +900,12 @@ app.post('/api/admin/movies', requireSection('movies'), upload.single('poster'),
 });
 
 app.put('/api/admin/movies/:id', requireSection('movies'), upload.single('poster'), async (req, res) => {
-  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, runtime, language } = req.body;
+  const { title, release_year, genre, description, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew, trailer_url, watch_url, spotify_url, apple_music_url, runtime, language } = req.body;
   let genreVal = null;
   if (genre) { try { const p = JSON.parse(genre); genreVal = Array.isArray(p) && p.length ? JSON.stringify(p) : null; } catch { genreVal = genre || null; } }
   const updates = { title, release_year, genre: genreVal, description: description||null,
     director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew,
-    trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null,
+    trailer_url: trailer_url || null, watch_url: watch_url || null, spotify_url: spotify_url || null, apple_music_url: apple_music_url || null,
     runtime: runtime ? parseInt(runtime, 10) : null, language: language || null };
   if (req.file) updates.poster_image = await uploadImage(req.file, 'movies');
   const { data, error } = await supabase.from('movies').update(updates).eq('id', req.params.id).select().single();
