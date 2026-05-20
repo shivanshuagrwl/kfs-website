@@ -2674,13 +2674,13 @@ li:has(a[data-page="wrapped"]) {
 <div class="page" id="page-collaborate">
   <section class="section">
     <div class="section-inner">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:8px">
-        <div class="section-header" style="margin-bottom:0">
-          <p class="section-label">Open Calls</p>
+      <p class="section-label">Open Calls</p>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
           <h2 class="section-title">Collaborate</h2>
-          <p class="section-sub">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+          <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS. Post a role, find a collaborator.</p>
         </div>
-        <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:16px;border-radius:10px;flex-shrink:0">+ Post an Open Call</button>
+        <button class="btn btn-primary" onclick="openCollabForm()" style="flex-shrink:0;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
       </div>
 
       <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
@@ -10597,8 +10597,8 @@ async function loadCollaborate() {
     return;
   }
 
-  list.innerHTML = posts.map(p => {
-    // Build clickable contact parts (never show raw id/uuid)
+  list.innerHTML = posts.map(({ id: _id, created_at: _ca, updated_at: _ua, edit_token: _et, ...p }) => {
+    // Build clickable contact parts (backend-only fields stripped above)
     const contactParts = [];
     if (p.contact_name)  contactParts.push(`<span>${escapeHtml(p.contact_name)}</span>`);
     if (p.contact_email) contactParts.push(`<a href="mailto:${escapeHtml(p.contact_email)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_email)}</a>`);
