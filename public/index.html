@@ -5213,7 +5213,7 @@ async function openMovie(id) {
         const spotifyMatch = url.match(/spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/);
         if (spotifyMatch) {
           const [, type, sid] = spotifyMatch;
-          const embedUrl = `https://open.spotify.com/embed/${type}/${sid}?utm_source=generator&theme=0`;
+          const embedUrl = `https://open.spotify.com/embed/${type}/${sid}?utm_source=generator`;
           const height = type === 'track' ? '152' : '352';
           spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="${height}" frameborder="0" allowtransparency="true" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="border-radius:12px;display:block"></iframe>`;
         } else {
@@ -5224,7 +5224,7 @@ async function openMovie(id) {
       } else if (activePlatform === 'apple' && hasApple) {
         const url = m.apple_music_url.trim();
         const embedUrl = url.replace('music.apple.com', 'embed.music.apple.com');
-        spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="450" frameborder="0" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" loading="lazy" style="border-radius:12px;display:block;overflow:hidden;background:transparent"></iframe>`;
+        spotifyEmbed.innerHTML = `<iframe src="${embedUrl}" width="100%" height="450" frameborder="0" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" loading="lazy" style="border-radius:12px;display:block;overflow:hidden"></iframe>`;
       } else if (!hasSpotify && !hasApple) {
         spotifyEmbed.innerHTML = '';
       }
@@ -7474,7 +7474,7 @@ class CollabMemberPicker {
   _onInput() {
     const q = this._input.value.trim().toLowerCase();
     if (!q) { this._hideDd(); return; }
-    const members = (window.allMembers || []).filter(m => !m.is_past);
+    const members = (allMembers || []).filter(m => !m.is_past);
     const matches = members.filter(m => m.name.toLowerCase().includes(q)).slice(0, 8);
     if (!matches.length) { this._hideDd(); return; }
     this._dd.innerHTML = matches.map(m => `
