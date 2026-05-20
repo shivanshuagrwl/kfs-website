@@ -2675,13 +2675,9 @@ li:has(a[data-page="wrapped"]) {
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Open Calls</p>
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:12px">
-        <div>
-          <h2 class="section-title">Collaborate</h2>
-          <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS. Post a role, find a collaborator.</p>
-        </div>
-        <button class="btn btn-primary" onclick="openCollabForm()" style="flex-shrink:0;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
-      </div>
+      <h2 class="section-title">Collaborate</h2>
+      <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS. Post a role, find a collaborator.</p>
+      <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:24px;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
 
       <div id="collab-success" style="display:none;margin-top:24px;padding:18px;border:1px solid var(--border);background:var(--card);border-radius:12px">
         <p style="color:var(--white);font-weight:600;margin-bottom:8px">Your listing is live.</p>
@@ -10578,6 +10574,12 @@ function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
 }
 
+function openMemberProfileById(uuid) {
+  const allMembers = window._memberRegistry || [];
+  const member = allMembers.find(m => String(m.id) === String(uuid));
+  if (member) openMemberProfile(member);
+}
+
 async function loadCollaborate() {
   const list = document.getElementById('collab-list');
   if (!list) return;
@@ -10597,10 +10599,23 @@ async function loadCollaborate() {
     return;
   }
 
-  list.innerHTML = posts.map(({ id: _id, created_at: _ca, updated_at: _ua, edit_token: _et, ...p }) => {
-    // Build clickable contact parts (backend-only fields stripped above)
+  list.innerHTML = posts.map(p => {
+    // Parse contact_name — may be stored as "Name||uuid" from member picker
+    const rawName = p.contact_name || '';
+    const nameParts = rawName.split('||');
+    const displayName = nameParts[0].trim();
+    const memberUuid  = nameParts[1] ? nameParts[1].trim() : null;
+
+    // KFS Member badge — clickable if we have a member UUID
+    const memberBadge = p.is_kfs_member
+      ? (memberUuid
+          ? `<span onclick="openMemberProfileById('${memberUuid}')" style="color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">✓ KFS Member</span>`
+          : `<span style="color:var(--accent)">✓ KFS Member</span>`)
+      : `<span style="color:var(--grey)">Guest</span>`;
+
+    // Clickable contact parts
     const contactParts = [];
-    if (p.contact_name)  contactParts.push(`<span>${escapeHtml(p.contact_name)}</span>`);
+    if (displayName)     contactParts.push(`<span>${escapeHtml(displayName)}</span>`);
     if (p.contact_email) contactParts.push(`<a href="mailto:${escapeHtml(p.contact_email)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_email)}</a>`);
     if (p.contact_phone) contactParts.push(`<a href="tel:${escapeHtml(p.contact_phone)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_phone)}</a>`);
 
@@ -10612,18 +10627,18 @@ async function loadCollaborate() {
           <p style="color:var(--grey);font-size:13px;margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span>${escapeHtml(p.role)}</span>
             <span style="opacity:.35">·</span>
-            <span style="color:${p.is_kfs_member ? 'var(--accent)' : 'var(--grey)'}">${p.is_kfs_member ? '✓ KFS Member' : 'Guest'}</span>
+            ${memberBadge}
           </p>
         </div>
         <span class="tag upcoming" style="flex-shrink:0;font-size:11px">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
       </div>
-      <p style="color:rgba(245,245,245,.82);line-height:1.7;margin-bottom:14px;font-size:14.5px">${escapeHtml(p.description)}</p>
+      <p style="color:var(--white);line-height:1.7;margin-bottom:14px;font-size:14.5px">${escapeHtml(p.description)}</p>
       ${p.skills   ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Skills needed:</strong> ${escapeHtml(p.skills)}</p>` : ''}
       ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
       ${contactParts.length ? `
-      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <strong style="color:var(--white);font-weight:600">Contact:</strong>
-        ${contactParts.join('<span style="opacity:.35">·</span>')}
+        ${contactParts.join('<span style="opacity:.3">·</span>')}
       </p>` : ''}
     </div>`;
   }).join('');
