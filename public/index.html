@@ -8339,11 +8339,29 @@ async function runMemberImport() {
   if (!_memberImportNames.length) return;
   const btn = document.getElementById('member-import-btn');
   btn.disabled = true;
+  btn.textContent = 'Checking…';
+
+  // Fetch all existing member names upfront to detect duplicates before sending
+  let existingNames = new Set();
+  try {
+    const chkRes = await fetch('/api/members', { headers: { Authorization: 'Bearer ' + localStorage.getItem('kfs_token') } });
+    const existing = await chkRes.json();
+    existingNames = new Set((existing || []).map(m => m.name.trim().toLowerCase()));
+  } catch { /* if fetch fails, fall through — server-side guard still protects */ }
+
   btn.textContent = 'Importing…';
-  let ok = 0, fail = 0;
+  let ok = 0, skipped = 0, fail = 0;
   for (let i = 0; i < _memberImportNames.length; i++) {
     const name = _memberImportNames[i];
     const statusEl = document.getElementById(`import-status-${i}`);
+
+    // ── Client-side duplicate check (also catches dupes within the same sheet) ──
+    if (existingNames.has(name.trim().toLowerCase())) {
+      skipped++;
+      statusEl.innerHTML = '<span style="color:#ff9800">⚠ Duplicate</span>';
+      continue;
+    }
+
     try {
       const fd = new FormData();
       fd.append('name', name);
@@ -8360,17 +8378,28 @@ async function runMemberImport() {
       });
       if (res.ok) {
         ok++;
+        existingNames.add(name.trim().toLowerCase()); // prevent within-sheet dupes
         statusEl.innerHTML = '<span style="color:#4caf50">✓ Added</span>';
       } else {
-        fail++;
-        statusEl.innerHTML = '<span style="color:#f44">Error</span>';
+        const json = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          skipped++;
+          statusEl.innerHTML = '<span style="color:#ff9800">⚠ Duplicate</span>';
+        } else {
+          fail++;
+          statusEl.innerHTML = `<span style="color:#f44" title="${json.error || ''}">Error</span>`;
+        }
       }
     } catch {
       fail++;
       statusEl.innerHTML = '<span style="color:#f44">Error</span>';
     }
   }
-  document.getElementById('member-import-summary').textContent = `Done — ${ok} imported${fail ? ', ' + fail + ' failed' : ''}.`;
+
+  let summary = `Done — ${ok} imported`;
+  if (skipped) summary += `, ${skipped} skipped (already exists)`;
+  if (fail) summary += `, ${fail} failed`;
+  document.getElementById('member-import-summary').textContent = summary + '.';
   btn.textContent = 'Done';
   if (ok > 0) loadAdminSection('members');
 }

@@ -671,9 +671,19 @@ app.get('/api/members', async (req, res) => {
 
 app.post('/api/admin/members', requireSection('members'), upload.single('photo'), async (req, res) => {
   const { name, role, batch, bio, sort_order, is_past, domain, special_tag } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  // ── Duplicate guard: block members with same name (case-insensitive) ──────
+  const { data: existing } = await supabase
+    .from('members')
+    .select('id')
+    .ilike('name', name.trim())
+    .maybeSingle();
+  if (existing) return res.status(409).json({ error: `Member "${name.trim()}" already exists` });
+
   const photoUrl = await uploadImage(req.file, 'members');
   const { data, error } = await supabase.from('members').insert([{
-    name, role, batch, bio, domain: domain||null, photo: photoUrl,
+    name: name.trim(), role, batch, bio, domain: domain||null, photo: photoUrl,
     special_tag: special_tag || null,
     sort_order: parseInt(sort_order) || 99, is_past: is_past === 'true',
   }]).select().single();
