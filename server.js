@@ -8,6 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const sharp = require('sharp');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   global: {
     headers: { 'x-application-name': 'kfs-server' },
   },
+});
+
+// ── Cloudinary ────────────────────────────────────────────────────────────────
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // Retry wrapper for transient Supabase failures (network blips, cold starts)
@@ -162,18 +170,23 @@ async function uploadImage(file, folder = 'general') {
   // Compress before upload
   const processed = await compressImage(file);
 
-  const ext = path.extname(processed.originalname) || '.webp';
-  const filename = `${folder}/${Date.now()}${ext}`;
-  const { data, error } = await supabase.storage
-    .from('kfs-media')
-    .upload(filename, processed.buffer, { contentType: processed.mimetype, upsert: true });
-  if (error) {
-    const msg = error.message || JSON.stringify(error);
-    console.error('Storage error:', msg);
-    throw new Error('Supabase storage: ' + msg);
-  }
-  const { data: urlData } = supabase.storage.from('kfs-media').getPublicUrl(filename);
-  return urlData.publicUrl;
+  // Upload to Cloudinary via buffer stream
+  const result = await new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `kfs-media/${folder}`,
+        resource_type: 'image',
+        format: 'webp',
+      },
+      (error, result) => {
+        if (error) reject(new Error('Cloudinary upload: ' + error.message));
+        else resolve(result);
+      }
+    );
+    uploadStream.end(processed.buffer);
+  });
+
+  return result.secure_url;
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
