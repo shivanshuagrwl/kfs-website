@@ -3551,7 +3551,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group">
       <label>Author</label>
       <div id="blog-author-picker" style="position:relative"></div>
-      <p style="font-size:11px;color:var(--grey);margin-top:6px">Search KFS members, or type any name and press Enter for a free-text author.</p>
+      <p style="font-size:11px;color:var(--grey);margin-top:6px">Search KFS members or type any name and press Enter. Add as many authors as needed.</p>
     </div>
     <div class="form-group"><label>Excerpt (short summary)</label><input type="text" id="blog-excerpt"></div>
     <div class="form-group"><label>Cover Image</label><input type="file" id="blog-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
@@ -4535,6 +4535,7 @@ function renderBlogCard(b) {
       <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}<\/p>
       ${tagPills}
       <h3 class="blog-card-title">${b.title}<\/h3>
+      ${b.author ? `<p class="blog-card-author" style="font-size:11px;color:var(--grey);margin:4px 0 6px;letter-spacing:.04em">${b.author.split(';;').map(a=>{const p=a.indexOf('||');return p!==-1?a.slice(0,p).trim():a.trim();}).join(', ')}<\/p>` : ''}
       <p class="blog-card-excerpt">${b.excerpt||''}<\/p>
     <\/div>
   <\/div>`;
@@ -4571,31 +4572,36 @@ async function openBlog(id) {
   document.getElementById('blog-detail-date').textContent = blog.created_at
     ? new Date(blog.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   document.getElementById('blog-detail-title').textContent = blog.title;
-  // Author
+  // Author(s) — supports multiple authors separated by ;;
   const authorEl = document.getElementById('blog-detail-author');
   if (blog.author) {
-    // Author may be stored as "Name||memberId" (linked) or plain name (free-text)
-    const authorRaw = blog.author.trim();
-    const pipeIdx = authorRaw.indexOf('||');
-    let displayName = authorRaw;
-    let linkedMember = null;
-    if (pipeIdx !== -1) {
-      displayName = authorRaw.slice(0, pipeIdx).trim();
-      const memberId = authorRaw.slice(pipeIdx + 2).trim();
-      linkedMember = allMembers && allMembers.find(m => String(m.id) === memberId);
-    }
-    // Fallback: try name-match if no id link found
-    if (!linkedMember) {
-      linkedMember = allMembers && allMembers.find(
-        m => m.name && m.name.trim().toLowerCase() === displayName.toLowerCase()
-      );
-    }
-    if (linkedMember) {
-      window._blogAuthorMember = linkedMember;
-      authorEl.innerHTML = `By <span class="blog-author-link" style="cursor:pointer;border-bottom:1px solid rgba(245,245,245,.3);padding-bottom:1px" onclick="openMemberProfile(window._blogAuthorMember)">${displayName}</span>`;
-    } else {
-      authorEl.innerHTML = `By <span>${displayName}</span>`;
-    }
+    const _authorParts = blog.author.split(';;').map(s => s.trim()).filter(Boolean);
+    window._blogAuthorMembers = [];
+    const _resolvedSpans = _authorParts.map((_authorRaw, _idx) => {
+      const _pipeIdx = _authorRaw.indexOf('||');
+      let _displayName = _authorRaw;
+      let _linkedMember = null;
+      if (_pipeIdx !== -1) {
+        _displayName = _authorRaw.slice(0, _pipeIdx).trim();
+        const _memberId = _authorRaw.slice(_pipeIdx + 2).trim();
+        _linkedMember = allMembers && allMembers.find(m => String(m.id) === _memberId);
+      }
+      if (!_linkedMember) {
+        _linkedMember = allMembers && allMembers.find(
+          m => m.name && m.name.trim().toLowerCase() === _displayName.toLowerCase()
+        );
+      }
+      window._blogAuthorMembers[_idx] = _linkedMember || null;
+      if (_linkedMember) {
+        window._blogAuthorMember = _linkedMember; // legacy single-author compat
+        return `<span class="blog-author-link" style="cursor:pointer;border-bottom:1px solid rgba(245,245,245,.3);padding-bottom:1px" onclick="openMemberProfile(window._blogAuthorMembers[${_idx}])">${_displayName}</span>`;
+      }
+      return `<span>${_displayName}</span>`;
+    });
+    const _joined = _resolvedSpans.length > 1
+      ? _resolvedSpans.slice(0,-1).join(', ') + ' &amp; ' + _resolvedSpans[_resolvedSpans.length-1]
+      : _resolvedSpans[0];
+    authorEl.innerHTML = `By ${_joined}`;
     authorEl.style.display = 'block';
   } else {
     authorEl.style.display = 'none';
@@ -5763,9 +5769,9 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
   document.getElementById('blog-cover').value='';
-  // Init author picker (single-select member picker)
+  // Init author picker (multi-select member picker — supports multiple authors)
   if (!window._blogAuthorPicker) {
-    window._blogAuthorPicker = new MemberPicker('blog-author-picker', false);
+    window._blogAuthorPicker = new MemberPicker('blog-author-picker', true);
   } else {
     window._blogAuthorPicker.selected = [];
     window._blogAuthorPicker._renderTags();
@@ -7612,14 +7618,17 @@ async function openMemberProfile(member) {
     const memberName = member.name.trim().toLowerCase();
     const authored = allBlogs.filter(b => {
       if (!b.author) return false;
-      const raw = b.author.trim();
-      const pipeIdx = raw.indexOf('||');
-      if (pipeIdx !== -1) {
-        const id = raw.slice(pipeIdx + 2).trim();
-        const name = raw.slice(0, pipeIdx).trim().toLowerCase();
-        return id === memberId || name === memberName;
-      }
-      return raw.toLowerCase() === memberName;
+      // Support multiple authors separated by ;;
+      return b.author.split(';;').some(part => {
+        const raw = part.trim();
+        const pipeIdx = raw.indexOf('||');
+        if (pipeIdx !== -1) {
+          const id = raw.slice(pipeIdx + 2).trim();
+          const name = raw.slice(0, pipeIdx).trim().toLowerCase();
+          return id === memberId || name === memberName;
+        }
+        return raw.toLowerCase() === memberName;
+      });
     });
     if (authored.length) {
       blogsWrap.style.display = 'block';
