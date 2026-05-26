@@ -3391,7 +3391,7 @@ KFS — KIIT Film Society"></textarea>
         <div class="analytics-tab" onclick="switchAnalyticsTab('traffic','all',this)">All Time</div>
       </div>
       <div class="analytics-grid">
-        <div class="analytics-card"><div class="analytics-card-num" id="stat-total-views">—</div><div class="analytics-card-label">Total Views</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-traffic-total-views">—</div><div class="analytics-card-label">Total Views</div></div>
         <div class="analytics-card"><div class="analytics-card-num" id="stat-today-views">—</div><div class="analytics-card-label">Today</div></div>
         <div class="analytics-card"><div class="analytics-card-num" id="stat-peak-day">—</div><div class="analytics-card-label">Peak Day</div></div>
         <div class="analytics-card"><div class="analytics-card-num" id="stat-top-page">—</div><div class="analytics-card-label">Top Page</div><div class="analytics-card-sub" id="stat-top-page-views"></div></div>
@@ -8047,7 +8047,7 @@ async function loadTrafficAnalytics(range='7d') {
   const data = await apiFetch('/api/admin/analytics/traffic?range='+range);
   if (!data) return;
 
-  document.getElementById('stat-total-views').textContent = fmtNum(data.total);
+  document.getElementById('stat-traffic-total-views').textContent = fmtNum(data.total);
   document.getElementById('stat-today-views').textContent = fmtNum(data.today);
   document.getElementById('stat-peak-day').textContent = data.peak_day || '—';
 
