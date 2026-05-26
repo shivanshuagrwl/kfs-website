@@ -538,7 +538,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   border-bottom:1px solid rgba(255,255,255,.04);transition:background .3s var(--ease),border-color .3s var(--ease)}
 .nav-logo{display:flex;align-items:center;text-decoration:none;justify-self:start}
 .nav-logo-text{font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--white)}
-.nav-logo-img{width:32px;height:32px;object-fit:contain;transition:opacity .2s;content:url('/images/kfs-logo.png')}
+.nav-logo-img{width:32px;height:32px;object-fit:contain;transition:opacity .2s;content:url('/images/kfs-logo-transparent.png')}
 .nav-logo-img:hover{opacity:.75}
 body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 .nav-links{display:flex;gap:32px;list-style:none;justify-self:center}
@@ -2241,7 +2241,7 @@ li:has(a[data-page="wrapped"]) {
 <!-- NAV -->
 <nav id="main-nav">
   <a class="nav-logo" onclick="navigate('home')" style="gap:10px">
-    <img class="nav-logo-img" src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
+    <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
   </a>
   <ul class="nav-links" id="nav-links">
     <li><a onclick="navigate('home');closeMenu()" class="active" data-page="home">Home</a></li>
@@ -2689,7 +2689,13 @@ li:has(a[data-page="wrapped"]) {
         <div>
           <h2 class="section-title">Collaborate</h2>
           <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS members. Post a role, find a collaborator.</p>
-          <button class="btn btn-primary" onclick="openCollabForm()" style="margin-top:24px;border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:24px;align-items:center">
+            <button class="btn btn-primary" onclick="openCollabForm()" style="border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
+            <a class="btn btn-secondary" href="mailto:kiitfilmsociety@gmail.com?subject=Collaboration%20Enquiry%20%E2%80%94%20Non-KFS%20Member&body=Hi%20KFS%20Team%2C%0A%0AI%20am%20interested%20in%20collaborating%20with%20KIIT%20Film%20Society.%0A%0A---%20Please%20fill%20in%20your%20details%20below%20---%0A%0AName%3A%20%0AInstitution%2FOrganisation%3A%20%0ARole%2FSkill%20I%20can%20offer%3A%20%0AProject%20or%20idea%3A%20%0ATimeline%2FAvailability%3A%20%0AContact%20number%3A%20%0A%0AAdditional%20details%3A%0A%0A---" style="border-radius:10px;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              Not a KFS Member? Mail Us
+            </a>
+          </div>
         </div>
         <div class="blog-filter-wrap" id="collab-filter-wrap" style="display:none;margin-bottom:4px">
           <button class="blog-filter-btn" id="collab-filter-btn" onclick="toggleCollabFilter(this)">
