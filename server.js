@@ -1126,7 +1126,16 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   const from = fromDate.toISOString().slice(0,10);
   const today = new Date().toISOString().slice(0,10);
 
-  // Fetch ALL rows by paginating in 1000-row chunks — bypasses Supabase's default 1k cap
+  // All-time total — always fetched regardless of range, using COUNT to avoid row limits
+  let allTimeTotal = 0;
+  try {
+    const { count, error } = await supabase
+      .from('page_views')
+      .select('*', { count: 'exact', head: true });
+    if (!error) allTimeTotal = count || 0;
+  } catch(e) { /* non-fatal */ }
+
+  // Fetch range rows by paginating in 1000-row chunks — bypasses Supabase's default 1k cap
   let rows = [];
   let offset = 0;
   const CHUNK = 1000;
@@ -1142,9 +1151,8 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
     offset += CHUNK;
   }
 
-  if (!rows.length) return res.json({ total:0, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  if (!rows.length) return res.json({ total: allTimeTotal, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
 
-  const total = rows.length;
   const todayViews = rows.filter(r=>r.date===today).length;
   const dateMap = {};
   rows.forEach(r => { dateMap[r.date] = (dateMap[r.date]||0)+1; });
@@ -1155,7 +1163,7 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   const by_page = Object.entries(pageMap).sort((a,b)=>b[1]-a[1]).map(([page,views])=>({page,views}));
   const by_hour = Array(24).fill(0);
   rows.filter(r=>r.date===today).forEach(r => { by_hour[r.hour] = (by_hour[r.hour]||0)+1; });
-  res.json({ total, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
+  res.json({ total: allTimeTotal, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
 });
 
 // ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────
