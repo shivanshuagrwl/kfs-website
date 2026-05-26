@@ -597,7 +597,37 @@ app.get('/api/admin/blogs', requireSection('blogs'), async (req, res) => {
 app.get('/api/blogs/:id', async (req, res) => {
   const { data } = await supabase.from('blogs').select('*').eq('id', req.params.id).maybeSingle();
   if (!data) return res.status(404).json({ error: 'Not found' });
+
+  // Fire-and-forget view increment — never blocks the response
+  supabase.from('blogs')
+    .update({ view_count: (data.view_count || 0) + 1 })
+    .eq('id', req.params.id)
+    .then(() => {})
+    .catch(() => {});
+
   res.json(data);
+});
+
+// ── BLOG ANALYTICS (admin) ────────────────────────────────────────────────────
+app.get('/api/admin/blogs/analytics', requireSection('blogs'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('blogs')
+      .select('id, title, author, published, view_count, created_at')
+      .order('view_count', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const blogs = data || [];
+    const total_views      = blogs.reduce((sum, b) => sum + (b.view_count || 0), 0);
+    const published_count  = blogs.filter(b => b.published).length;
+    const draft_count      = blogs.filter(b => !b.published).length;
+    const top_post         = blogs[0] || null;
+
+    res.json({ total_views, published_count, draft_count, top_post, blogs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/admin/blogs', requireSection('blogs'), upload.single('cover'), async (req, res) => {

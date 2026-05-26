@@ -3010,6 +3010,28 @@ li:has(a[data-page="wrapped"]) {
         <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
         <button class="btn btn-primary" onclick="openBlogModal()">+ New Post</button>
       </div>
+
+      <!-- ── Blog Analytics Strip ── -->
+      <div id="blog-analytics-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Total Views</div>
+          <div id="stat-total-views" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Published</div>
+          <div id="stat-published" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Drafts</div>
+          <div id="stat-drafts" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;overflow:hidden">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Top Post</div>
+          <div id="stat-top-post" style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+          <div id="stat-top-post-views" style="font-size:11px;color:var(--grey);margin-top:3px"></div>
+        </div>
+      </div>
+
       <div id="bulk-bar-blogs" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-blogs" style="font-size:13px;color:var(--grey)">0 selected</span>
         <button class="btn-sm danger" onclick="bulkDelete('blogs')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
@@ -3017,7 +3039,7 @@ li:has(a[data-page="wrapped"]) {
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>👁 Views</th><th>Date</th><th>Actions</th></tr></thead>
           <tbody id="admin-blogs-tbody"></tbody>
         </table>
       </div>
@@ -5553,15 +5575,35 @@ function showAdminSection(name) {
 
 async function loadAdminData(name) {
   if (name==='blogs') {
-    const blogs = await apiFetch('/api/admin/blogs');
+    const [blogs, analytics] = await Promise.all([
+      apiFetch('/api/admin/blogs'),
+      apiFetch('/api/admin/blogs/analytics'),
+    ]);
+
+    // ── Populate analytics strip ──
+    if (analytics) {
+      const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+      el('stat-total-views',   analytics.total_views ?? 0);
+      el('stat-published',     analytics.published_count ?? 0);
+      el('stat-drafts',        analytics.draft_count ?? 0);
+      el('stat-top-post',      analytics.top_post ? analytics.top_post.title : '—');
+      el('stat-top-post-views', analytics.top_post ? `${analytics.top_post.view_count || 0} views` : '');
+    }
+
     const tbody = document.getElementById('admin-blogs-tbody');
-    if (blogs === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
-    if (!blogs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!<\/td><\/tr>`; return; }
+    if (blogs === null) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
+    if (!blogs.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!<\/td><\/tr>`; return; }
+
+    // Build a view_count map from analytics (more up-to-date, sorted by views)
+    const viewMap = {};
+    if (analytics && analytics.blogs) analytics.blogs.forEach(b => { viewMap[b.id] = b.view_count || 0; });
+
     tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"><\/td>
       <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}<\/td>
       <td style="font-weight:500">${b.title}<\/td>
       <td><span class="tag ${b.published?'upcoming':''}">${b.published?'Published':'Draft'}<\/span><\/td>
+      <td style="color:var(--grey);font-variant-numeric:tabular-nums">${(viewMap[b.id] ?? b.view_count ?? 0).toLocaleString()}<\/td>
       <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit<\/button>
