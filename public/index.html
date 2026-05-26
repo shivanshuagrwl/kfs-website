@@ -11316,7 +11316,7 @@ async function deleteAdminCollab(id) {
     <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:18px">
       <p style="font-size:10px;color:var(--grey);letter-spacing:.1em;text-transform:uppercase;margin:0 0 5px">Email us at</p>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <span style="font-size:13px;font-weight:600;color:var(--white);word-break:break-all">kiitfilmsociety@gmail.com</span>
+        <span style="font-size:13px;font-weight:600;color:var(--white);word-break:break-all">filmsocietykiit@gmail.com</span>
         <button onclick="copyCollabEmail()" id="collab-copy-btn" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--grey);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .2s">Copy</button>
       </div>
     </div>
@@ -11338,7 +11338,7 @@ async function deleteAdminCollab(id) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
         Open in Gmail
       </a>
-      <a href="mailto:kiitfilmsociety@gmail.com?subject=Collaboration%20Enquiry%20%E2%80%94%20External%20Collaborator&body=Hi%20KFS%20Team%2C%0A%0AI%20am%20interested%20in%20collaborating%20with%20KIIT%20Film%20Society.%0A%0A---%20My%20Details%20---%0A%0AName%3A%20%0AInstitution%20%2F%20Organisation%3A%20%0ARole%20%2F%20Skill%20I%20can%20offer%3A%20%0AProject%20idea%3A%20%0ATimeline%20%2F%20Availability%3A%20%0AContact%20number%3A%20%0A%0AAdditional%20details%3A%0A%0A---"
+      <a href="mailto:filmsocietykiit@gmail.com?subject=Collaboration%20Enquiry%20%E2%80%94%20External%20Collaborator&body=Hi%20KFS%20Team%2C%0A%0AI%20am%20interested%20in%20collaborating%20with%20KIIT%20Film%20Society.%0A%0A---%20My%20Details%20---%0A%0AName%3A%20%0AInstitution%20%2F%20Organisation%3A%20%0ARole%20%2F%20Skill%20I%20can%20offer%3A%20%0AProject%20idea%3A%20%0ATimeline%20%2F%20Availability%3A%20%0AContact%20number%3A%20%0A%0AAdditional%20details%3A%0A%0A---"
          style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:transparent;border:1px solid var(--border);color:var(--white);border-radius:10px;font-size:13px;font-weight:600;text-decoration:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
         Mail App
@@ -11352,7 +11352,7 @@ async function deleteAdminCollab(id) {
 function openCollabMailModal(){document.getElementById('collab-mail-modal').classList.add('open');}
 function closeCollabMailModal(){document.getElementById('collab-mail-modal').classList.remove('open');}
 function copyCollabEmail(){
-  navigator.clipboard.writeText('kiitfilmsociety@gmail.com').then(()=>{
+  navigator.clipboard.writeText('filmsocietykiit@gmail.com').then(()=>{
     const btn=document.getElementById('collab-copy-btn');
     btn.textContent='Copied!';btn.style.color='#34c759';btn.style.borderColor='#34c759';
     setTimeout(()=>{btn.textContent='Copy';btn.style.color='';btn.style.borderColor='';},2000);
@@ -11361,8 +11361,8 @@ function copyCollabEmail(){
 function openGmailCompose(e){
   e.preventDefault();
   const subject=encodeURIComponent('Collaboration Enquiry — External Collaborator');
-  const body=encodeURIComponent('Hi KFS Team,\n\nI am interested in collaborating with KIIT Film Society.\n\n--- My Details ---\n\nName: \nInstitution / Organisation: \nRole / Skill I can offer: \nProject idea: \nTimeline / Availability: \nContact number: \n\nAdditional details:\n\n---');
-  window.open('https://mail.google.com/mail/?view=cm&to=kiitfilmsociety@gmail.com&su='+subject+'&body='+body,'_blank');
+  const body=encodeURIComponent('Hi KFS Team,\n\nI am interested in collaborating with KIIT Film Society.\n\n--- My Details ---\n\nName: \nInstitution / Organisation: \nRole / Skill I can offer: \nProject idea: \nTimeline / Availability: \nContact number: \nWhat I Require: \n\nAdditional details:\n\n---');
+  window.open('https://mail.google.com/mail/?view=cm&to=filmsocietykiit@gmail.com&su='+subject+'&body='+body,'_blank');
 }
 </script>
 </body>
