@@ -3083,24 +3083,11 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
             <div class="star-field"><label>Cinematography</label><div class="star-picker" id="star-cinematography" data-cat="cinematography"></div></div>
             <div class="star-field"><label>Script</label><div class="star-picker" id="star-script" data-cat="script"></div></div>
           </div>
-          <div class="form-group" style="margin-top:16px">
-            <label style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:6px">Write a Review (optional)</label>
-            <textarea id="review-text" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:10px 14px;font-size:13px;font-family:inherit;outline:none;min-height:80px;resize:vertical" placeholder="Share your thoughts..."></textarea>
-          </div>
           <button onclick="submitReview()" class="btn btn-primary" style="margin-top:4px">Submit Review</button>
           <p id="review-submit-msg" style="font-size:12px;margin-top:10px;color:var(--grey)"></p>
         </div>
         <!-- Reviews List -->
         <div class="reviews-list" id="reviews-list"></div>
-      </div>
-
-      <!-- Smart Recommendations -->
-      <div class="film-recs-section" id="film-recs-section" style="display:none">
-        <div class="film-recs-header">
-          <svg class="film-recs-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-          <div class="film-recs-label">Because you watched <em id="film-recs-title-ref">…</em></div>
-        </div>
-        <div class="film-recs-grid" id="film-recs-grid"></div>
       </div>
 
       <!-- ── FILM COMMENTS ── -->
@@ -3138,6 +3125,15 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <div class="fc-empty">Be the first to share your thoughts.</div>
         </div>
         <button class="fc-load-more" id="fc-load-more" style="display:none" onclick="loadMoreComments()">Load more</button>
+      </div>
+
+      <!-- Smart Recommendations -->
+      <div class="film-recs-section" id="film-recs-section" style="display:none">
+        <div class="film-recs-header">
+          <svg class="film-recs-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          <div class="film-recs-label">Because you watched <em id="film-recs-title-ref">…</em></div>
+        </div>
+        <div class="film-recs-grid" id="film-recs-grid"></div>
       </div>
 
     </div>
@@ -5649,10 +5645,8 @@ function highlightStars(el, val) {
 function resetReviewForm() {
   initStarPickers();
   const nameEl = document.getElementById('review-name');
-  const textEl = document.getElementById('review-text');
   const msgEl = document.getElementById('review-submit-msg');
   if (nameEl) nameEl.value = '';
-  if (textEl) textEl.value = '';
   if (msgEl) msgEl.textContent = '';
 }
 
@@ -5730,7 +5724,6 @@ async function submitReview() {
     sound: starRatings.sound || null,
     cinematography: starRatings.cinematography || null,
     script: starRatings.script || null,
-    review_text: document.getElementById('review-text').value.trim() || null,
   };
   try {
     const res = await fetch('/api/reviews', {
