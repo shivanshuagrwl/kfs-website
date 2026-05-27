@@ -2161,6 +2161,185 @@ li:has(a[data-page="wrapped"]) {
 .film-rec-reason{font-size:10px;color:var(--grey);margin-top:4px;font-style:italic;opacity:.7}
 .film-rec-reason svg{display:inline;vertical-align:middle;margin-right:3px}
 
+/* ══════════════════════════════════════════════════════════
+   FILM COMMENTS
+══════════════════════════════════════════════════════════ */
+.film-comments-section{margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+.film-comments-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.film-comments-title{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;display:flex;align-items:center;gap:8px}
+.film-comments-count{font-size:11px;background:rgba(245,245,245,.08);border:1px solid var(--border);border-radius:20px;padding:2px 9px;color:var(--grey);font-weight:500;letter-spacing:.02em}
+body.light-mode .film-comments-count{background:rgba(0,0,0,.06);border-color:#ddd}
+
+/* Comment form */
+.fc-form{background:rgba(245,245,245,.04);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px}
+body.light-mode .fc-form{background:#fff;border-color:#e0e0e0}
+.fc-form-row{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+.fc-name-input{flex:0 0 160px;min-width:0;background:var(--black);border:1px solid var(--border);border-radius:10px;padding:10px 13px;color:var(--white);font:inherit;font-size:13px;outline:none;transition:border-color .2s}
+body.light-mode .fc-name-input{background:#f7f7f7;border-color:#ddd;color:#111}
+.fc-name-input:focus{border-color:rgba(245,245,245,.3)}
+body.light-mode .fc-name-input:focus{border-color:#aaa}
+.fc-body-input{flex:1;min-width:0;background:var(--black);border:1px solid var(--border);border-radius:10px;padding:10px 13px;color:var(--white);font:inherit;font-size:13px;outline:none;resize:none;min-height:68px;line-height:1.55;transition:border-color .2s}
+body.light-mode .fc-body-input{background:#f7f7f7;border-color:#ddd;color:#111}
+.fc-body-input:focus{border-color:rgba(245,245,245,.3)}
+body.light-mode .fc-body-input:focus{border-color:#aaa}
+.fc-name-input::placeholder,.fc-body-input::placeholder{color:var(--grey);opacity:.7}
+.fc-form-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fc-spoiler-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:12px;color:var(--grey);-webkit-tap-highlight-color:transparent}
+.fc-spoiler-toggle input{appearance:none;-webkit-appearance:none;width:14px;height:14px;border:1.5px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;position:relative;flex-shrink:0;transition:background .15s,border-color .15s}
+.fc-spoiler-toggle input:checked{background:var(--white);border-color:var(--white)}
+.fc-spoiler-toggle input:checked::after{content:"";position:absolute;top:1px;left:3px;width:4px;height:7px;border:1.5px solid var(--black);border-top:none;border-left:none;transform:rotate(45deg)}
+body.light-mode .fc-spoiler-toggle input:checked{background:#111;border-color:#111}
+body.light-mode .fc-spoiler-toggle input:checked::after{border-color:#fff}
+.fc-submit-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;background:var(--white);color:var(--black);border:none;border-radius:20px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:opacity .18s,transform .18s;flex-shrink:0}
+.fc-submit-btn:hover{opacity:.82;transform:scale(.97)}
+.fc-submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+body.light-mode .fc-submit-btn{background:#111;color:#fff}
+.fc-form-msg{font-size:12px;color:var(--grey);margin-top:8px}
+.fc-form-msg.error{color:#ff453a}
+
+/* Comments list */
+.fc-list{display:flex;flex-direction:column;gap:0}
+.fc-item{position:relative;padding:14px 0;border-bottom:1px solid rgba(245,245,245,.06)}
+body.light-mode .fc-item{border-bottom-color:#f0f0f0}
+.fc-item:last-child{border-bottom:none}
+.fc-item.is-pinned{background:rgba(245,245,245,.025);border-radius:10px;padding:14px 14px;margin:-4px -14px;border-bottom:none;margin-bottom:2px}
+body.light-mode .fc-item.is-pinned{background:rgba(0,0,0,.03)}
+.fc-item-top{display:flex;align-items:flex-start;gap:10px}
+.fc-avatar{width:30px;height:30px;border-radius:50%;background:rgba(245,245,245,.1);border:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--grey);letter-spacing:0;user-select:none}
+body.light-mode .fc-avatar{background:rgba(0,0,0,.07);border-color:#ddd;color:#888}
+.fc-avatar.is-kfs{background:var(--white);color:var(--black);border-color:var(--white)}
+body.light-mode .fc-avatar.is-kfs{background:#111;color:#fff;border-color:#111}
+.fc-meta{flex:1;min-width:0}
+.fc-meta-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+.fc-author{font-size:13px;font-weight:600;color:var(--white)}
+body.light-mode .fc-author{color:#111}
+.fc-badge{font-size:9px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:10px}
+.fc-badge.kfs{background:var(--white);color:var(--black)}
+body.light-mode .fc-badge.kfs{background:#111;color:#fff}
+.fc-badge.pinned{background:rgba(245,245,245,.1);color:var(--grey);border:1px solid var(--border)}
+body.light-mode .fc-badge.pinned{background:rgba(0,0,0,.06);border-color:#ddd;color:#666}
+.fc-time{font-size:11px;color:var(--grey);opacity:.6;margin-left:auto;flex-shrink:0}
+.fc-body{font-size:14px;color:var(--white);line-height:1.6;word-break:break-word}
+body.light-mode .fc-body{color:#111}
+.fc-body.is-blurred .fc-body-text{filter:blur(5px);user-select:none;-webkit-user-select:none;cursor:pointer;transition:filter .25s}
+.fc-body.is-blurred:hover .fc-body-text{filter:blur(3.5px)}
+.fc-spoiler-reveal{display:none;margin-top:6px}
+.fc-body.is-blurred .fc-spoiler-reveal{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--grey);cursor:pointer;background:none;border:none;font:inherit;padding:0;-webkit-tap-highlight-color:transparent}
+.fc-spoiler-label{display:inline-flex;align-items:center;gap:5px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--grey);margin-bottom:6px;font-weight:600}
+.fc-item-actions{display:flex;align-items:center;gap:6px;margin-top:8px;opacity:0;transition:opacity .18s}
+.fc-item:hover .fc-item-actions{opacity:1}
+@media(hover:none){.fc-item-actions{opacity:1}}
+.fc-action-btn{background:none;border:none;cursor:pointer;font:inherit;font-size:11px;color:var(--grey);padding:3px 7px;border-radius:6px;transition:color .15s,background .15s;display:inline-flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent}
+.fc-action-btn:hover{color:var(--white);background:rgba(245,245,245,.07)}
+body.light-mode .fc-action-btn:hover{color:#111;background:rgba(0,0,0,.06)}
+.fc-empty{text-align:center;padding:32px 0;font-size:13px;color:var(--grey);opacity:.6}
+.fc-load-more{width:100%;background:none;border:1px solid var(--border);border-radius:20px;color:var(--grey);font:inherit;font-size:12px;padding:9px;cursor:pointer;margin-top:12px;transition:border-color .2s,color .2s;letter-spacing:.04em}
+.fc-load-more:hover{border-color:var(--grey);color:var(--white)}
+body.light-mode .fc-load-more{border-color:#ddd;color:#666}
+body.light-mode .fc-load-more:hover{border-color:#aaa;color:#111}
+
+/* Admin comment reply modal */
+.fc-reply-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .25s}
+.fc-reply-modal-overlay.open{opacity:1;pointer-events:auto}
+.fc-reply-modal{background:var(--card);border:1px solid var(--border);border-radius:18px;width:100%;max-width:480px;overflow:hidden;transform:translateY(16px);transition:transform .3s var(--ease)}
+.fc-reply-modal-overlay.open .fc-reply-modal{transform:translateY(0)}
+body.light-mode .fc-reply-modal{background:#fff;border-color:#ddd}
+.fc-reply-modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+body.light-mode .fc-reply-modal-header{border-bottom-color:#eee}
+.fc-reply-modal-header h3{font-size:15px;font-weight:700;letter-spacing:-.02em}
+.fc-reply-modal-body{padding:16px 20px 20px;display:flex;flex-direction:column;gap:12px}
+.fc-reply-textarea{width:100%;background:var(--black);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--white);font:inherit;font-size:14px;outline:none;resize:none;min-height:90px;line-height:1.6;transition:border-color .2s}
+body.light-mode .fc-reply-textarea{background:#f5f5f5;border-color:#ddd;color:#111}
+.fc-reply-textarea:focus{border-color:rgba(245,245,245,.3)}
+body.light-mode .fc-reply-textarea:focus{border-color:#aaa}
+.fc-reply-modal-footer{display:flex;justify-content:flex-end;gap:10px}
+.fc-reply-cancel-btn{padding:9px 18px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--grey);font:inherit;font-size:12px;cursor:pointer;transition:all .18s}
+.fc-reply-cancel-btn:hover{border-color:var(--grey);color:var(--white)}
+body.light-mode .fc-reply-cancel-btn:hover{color:#111;border-color:#aaa}
+
+/* ══════════════════════════════════════════════════════════
+   BROADCAST — ADMIN SECTION
+══════════════════════════════════════════════════════════ */
+.bc-compose{background:rgba(245,245,245,.03);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:24px}
+body.light-mode .bc-compose{background:#fff;border-color:#e0e0e0}
+.bc-compose-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:16px}
+.bc-field{margin-bottom:14px}
+.bc-label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);font-weight:600;display:block;margin-bottom:7px}
+.bc-input,.bc-select,.bc-textarea{width:100%;background:var(--black);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,-webkit-appearance .2s;-webkit-appearance:none;appearance:none}
+body.light-mode .bc-input,.body.light-mode .bc-select,body.light-mode .bc-textarea{background:#f5f5f7;border-color:#d0d0d0;color:#111}
+.bc-input:focus,.bc-select:focus,.bc-textarea:focus{border-color:rgba(245,245,245,.3)}
+body.light-mode .bc-input:focus,body.light-mode .bc-select:focus,body.light-mode .bc-textarea:focus{border-color:#999}
+.bc-input::placeholder,.bc-textarea::placeholder{color:var(--grey);opacity:.6}
+.bc-textarea{resize:vertical;min-height:140px;line-height:1.6;font-family:inherit}
+.bc-select-wrap{position:relative}
+.bc-select-wrap::after{content:'';position:absolute;right:13px;top:50%;transform:translateY(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--grey);pointer-events:none}
+.bc-select{padding-right:32px}
+.bc-audience-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+@media(max-width:480px){.bc-audience-row{grid-template-columns:1fr}}
+.bc-audience-card{border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;cursor:pointer;transition:border-color .2s,background .2s;display:flex;align-items:flex-start;gap:10px;user-select:none;-webkit-tap-highlight-color:transparent}
+.bc-audience-card:hover{border-color:rgba(245,245,245,.25)}
+body.light-mode .bc-audience-card:hover{border-color:#aaa}
+.bc-audience-card.selected{border-color:var(--white);background:rgba(245,245,245,.05)}
+body.light-mode .bc-audience-card.selected{border-color:#111;background:rgba(0,0,0,.04)}
+.bc-audience-radio{width:16px;height:16px;border-radius:50%;border:2px solid rgba(245,245,245,.3);flex-shrink:0;margin-top:2px;transition:border-color .15s,background .15s;position:relative}
+.bc-audience-card.selected .bc-audience-radio{border-color:var(--white);background:var(--white)}
+body.light-mode .bc-audience-card.selected .bc-audience-radio{border-color:#111;background:#111}
+.bc-audience-card.selected .bc-audience-radio::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:5px;height:5px;border-radius:50%;background:var(--black)}
+body.light-mode .bc-audience-card.selected .bc-audience-radio::after{background:#fff}
+.bc-audience-info{flex:1;min-width:0}
+.bc-audience-name{font-size:13px;font-weight:600;color:var(--white);margin-bottom:2px}
+body.light-mode .bc-audience-name{color:#111}
+.bc-audience-desc{font-size:11px;color:var(--grey);line-height:1.4}
+.bc-preview-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(245,245,245,.04);border:1px solid var(--border);border-radius:10px;margin-bottom:14px}
+body.light-mode .bc-preview-row{background:rgba(0,0,0,.03);border-color:#e0e0e0}
+.bc-preview-count{font-size:22px;font-weight:700;color:var(--white);line-height:1}
+body.light-mode .bc-preview-count{color:#111}
+.bc-preview-label{font-size:12px;color:var(--grey);line-height:1.4}
+.bc-preview-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:20px;color:var(--grey);font:inherit;font-size:11px;padding:6px 13px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
+.bc-preview-btn:hover{border-color:var(--grey);color:var(--white)}
+body.light-mode .bc-preview-btn:hover{color:#111;border-color:#aaa}
+.bc-send-row{display:flex;justify-content:flex-end;gap:10px;align-items:center;flex-wrap:wrap}
+.bc-send-btn{display:inline-flex;align-items:center;gap:7px;padding:11px 26px;background:var(--white);color:var(--black);border:none;border-radius:20px;font:inherit;font-size:13px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:opacity .18s,transform .18s}
+.bc-send-btn:hover{opacity:.85;transform:scale(.97)}
+.bc-send-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+body.light-mode .bc-send-btn{background:#111;color:#fff}
+.bc-send-msg{font-size:12px;margin-top:10px;padding:10px 14px;border-radius:10px;border:1px solid var(--border)}
+.bc-send-msg.success{border-color:rgba(52,199,89,.3);background:rgba(52,199,89,.08);color:#34c759}
+.bc-send-msg.error{border-color:rgba(255,69,58,.3);background:rgba(255,69,58,.08);color:#ff453a}
+
+/* Broadcast history table */
+.bc-history-section{margin-top:0}
+.bc-history-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:14px}
+.bc-stat-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--grey)}
+.bc-open-bar{height:4px;border-radius:4px;background:rgba(245,245,245,.1);margin-top:4px;overflow:hidden;width:80px}
+body.light-mode .bc-open-bar{background:#e8e8e8}
+.bc-open-bar-fill{height:100%;border-radius:4px;background:var(--white);transition:width .5s var(--ease)}
+body.light-mode .bc-open-bar-fill{background:#111}
+.bc-loading{text-align:center;padding:32px;font-size:13px;color:var(--grey);opacity:.6}
+
+/* admin comments panel */
+.admin-comments-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.admin-comment-filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--grey);font:inherit;font-size:12px;cursor:pointer;transition:all .18s}
+.admin-comment-filter-btn.active,.admin-comment-filter-btn:hover{background:var(--white);color:var(--black);border-color:var(--white)}
+body.light-mode .admin-comment-filter-btn.active,body.light-mode .admin-comment-filter-btn:hover{background:#111;color:#fff;border-color:#111}
+.admin-comment-row{padding:13px 0;border-bottom:1px solid rgba(245,245,245,.06);display:flex;flex-direction:column;gap:6px}
+body.light-mode .admin-comment-row{border-bottom-color:#f0f0f0}
+.admin-comment-row:last-child{border-bottom:none}
+.admin-comment-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.admin-comment-film{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--grey);opacity:.6}
+.admin-comment-author{font-size:13px;font-weight:600;color:var(--white)}
+body.light-mode .admin-comment-author{color:#111}
+.admin-comment-time{font-size:11px;color:var(--grey);opacity:.5;margin-left:auto}
+.admin-comment-body{font-size:13px;color:var(--white);line-height:1.55;word-break:break-word}
+body.light-mode .admin-comment-body{color:#222}
+.admin-comment-actions{display:flex;gap:6px;flex-wrap:wrap}
+.admin-comment-action{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--grey);font:inherit;font-size:11px;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:5px}
+.admin-comment-action:hover{border-color:var(--grey);color:var(--white)}
+body.light-mode .admin-comment-action:hover{color:#111;border-color:#999}
+.admin-comment-action.danger:hover{border-color:#ff453a;color:#ff453a}
+.admin-comment-action.pinned{border-color:var(--white);color:var(--white)}
+body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -2924,6 +3103,43 @@ li:has(a[data-page="wrapped"]) {
         <div class="film-recs-grid" id="film-recs-grid"></div>
       </div>
 
+      <!-- ── FILM COMMENTS ── -->
+      <div class="film-comments-section" id="film-comments-section">
+        <div class="film-comments-header">
+          <div class="film-comments-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Discussion
+            <span class="film-comments-count" id="fc-count">0</span>
+          </div>
+        </div>
+
+        <!-- Post form -->
+        <div class="fc-form">
+          <div class="fc-form-row">
+            <input class="fc-name-input" id="fc-name" type="text" placeholder="Your name" maxlength="60" autocomplete="off">
+            <textarea class="fc-body-input" id="fc-body" placeholder="Share your thoughts on this film…" rows="2" maxlength="2000"></textarea>
+          </div>
+          <div class="fc-form-footer">
+            <label class="fc-spoiler-toggle">
+              <input type="checkbox" id="fc-spoiler">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              Contains spoiler
+            </label>
+            <button class="fc-submit-btn" id="fc-submit-btn" onclick="submitFilmComment()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Post
+            </button>
+          </div>
+          <p class="fc-form-msg" id="fc-form-msg"></p>
+        </div>
+
+        <!-- Comments list -->
+        <div class="fc-list" id="fc-list">
+          <div class="fc-empty">Be the first to share your thoughts.</div>
+        </div>
+        <button class="fc-load-more" id="fc-load-more" style="display:none" onclick="loadMoreComments()">Load more</button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -2988,6 +3204,8 @@ li:has(a[data-page="wrapped"]) {
     <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('reg-analytics')" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('comments')" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('broadcast')" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
@@ -3467,6 +3685,115 @@ KFS — KIIT Film Society"></textarea>
           <thead><tr><th>#</th><th>Event</th><th>Date</th><th>Form Open</th><th>Registrations</th></tr></thead>
           <tbody id="reg-analytics-tbody"><tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- COMMENTS MODERATION -->
+    <div class="admin-section" id="section-comments">
+      <div class="admin-header">
+        <div><h2>Film Comments</h2><p>Moderate discussions across all films</p></div>
+        <button class="btn btn-primary" onclick="openKfsReplyModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          KFS Team Reply
+        </button>
+      </div>
+      <div class="admin-comments-filters">
+        <button class="admin-comment-filter-btn active" onclick="filterAdminComments('all',this)">All</button>
+        <button class="admin-comment-filter-btn" onclick="filterAdminComments('pinned',this)">Pinned</button>
+        <button class="admin-comment-filter-btn" onclick="filterAdminComments('spoiler',this)">Spoilers</button>
+        <button class="admin-comment-filter-btn" onclick="filterAdminComments('kfs',this)">KFS Replies</button>
+      </div>
+      <div class="admin-card" style="padding:4px 20px" id="admin-comments-list">
+        <div class="bc-loading">Loading comments…</div>
+      </div>
+    </div>
+
+    <!-- BROADCAST -->
+    <div class="admin-section" id="section-broadcast">
+      <div class="admin-header">
+        <div><h2>Broadcast</h2><p>Send emails to your registered audience</p></div>
+      </div>
+
+      <!-- Compose -->
+      <div class="bc-compose">
+        <div class="bc-compose-title">New Broadcast</div>
+
+        <div class="bc-field">
+          <label class="bc-label">Audience</label>
+          <div class="bc-audience-row">
+            <div class="bc-audience-card selected" id="bc-aud-all" onclick="selectBcAudience('all_registrants')">
+              <div class="bc-audience-radio"></div>
+              <div class="bc-audience-info">
+                <div class="bc-audience-name">All Registrants</div>
+                <div class="bc-audience-desc">Everyone who has ever registered for any event</div>
+              </div>
+            </div>
+            <div class="bc-audience-card" id="bc-aud-event" onclick="selectBcAudience('event')">
+              <div class="bc-audience-radio"></div>
+              <div class="bc-audience-info">
+                <div class="bc-audience-name">Specific Event</div>
+                <div class="bc-audience-desc">Registrants of one event only</div>
+              </div>
+            </div>
+          </div>
+          <div id="bc-event-picker" style="display:none;margin-top:-4px;margin-bottom:14px">
+            <div class="bc-select-wrap">
+              <select class="bc-select" id="bc-event-select">
+                <option value="">Loading events…</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bc-field">
+          <label class="bc-label">Subject</label>
+          <input class="bc-input" id="bc-subject" type="text" placeholder="e.g. Upcoming screening this Saturday — KFS" maxlength="150">
+        </div>
+
+        <div class="bc-field">
+          <label class="bc-label">Message</label>
+          <textarea class="bc-textarea" id="bc-body" placeholder="Write your message here. Plain text — links and basic formatting are supported."></textarea>
+        </div>
+
+        <div class="bc-preview-row" id="bc-preview-row">
+          <div>
+            <div class="bc-preview-count" id="bc-recipient-count">—</div>
+            <div class="bc-preview-label">estimated recipients</div>
+          </div>
+          <button class="bc-preview-btn" onclick="previewBroadcastRecipients()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Check count
+          </button>
+        </div>
+
+        <div class="bc-send-row">
+          <button class="bc-send-btn" id="bc-send-btn" onclick="sendBroadcast()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Broadcast
+          </button>
+        </div>
+        <div class="bc-send-msg" id="bc-send-msg" style="display:none"></div>
+      </div>
+
+      <!-- History -->
+      <div class="bc-history-section">
+        <div class="bc-history-title">Sent Broadcasts</div>
+        <div class="admin-card" style="padding:0">
+          <table class="admin-table" id="bc-history-table">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Audience</th>
+                <th>Sent</th>
+                <th>Recipients</th>
+                <th>Open Rate</th>
+              </tr>
+            </thead>
+            <tbody id="bc-history-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -11415,6 +11742,477 @@ function openGmailCompose(e){
   const body=encodeURIComponent('Hi KFS Team,\n\nI am interested in collaborating with KIIT Film Society.\n\n--- My Details ---\n\nName: \nInstitution / Organisation: \nRole / Skill I can offer: \nProject idea: \nTimeline / Availability: \nContact number: \nWhat I Require: \n\nAdditional details:\n\n---');
   window.open('https://mail.google.com/mail/?view=cm&to=filmsocietykiit@gmail.com&su='+subject+'&body='+body,'_blank');
 }
+
+// ══════════════════════════════════════════════════════════
+// FILM COMMENTS — PUBLIC
+// ══════════════════════════════════════════════════════════
+let _fcMovieId = null;
+let _fcAllComments = [];
+let _fcShowing = 10;
+const FC_PAGE = 10;
+
+function timeAgo(dateStr) {
+  const d = new Date(dateStr);
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  if (s < 604800) return Math.floor(s/86400) + 'd ago';
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+
+function initials(name) {
+  const parts = (name || '?').trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+async function loadFilmComments(movieId) {
+  _fcMovieId = movieId;
+  _fcAllComments = [];
+  _fcShowing = FC_PAGE;
+  document.getElementById('fc-list').innerHTML = '<div class="fc-empty">Loading…</div>';
+  document.getElementById('fc-form-msg').textContent = '';
+  try {
+    const data = await fetch('/api/films/' + movieId + '/comments').then(r => r.json());
+    _fcAllComments = Array.isArray(data) ? data : [];
+    renderFilmComments();
+  } catch(e) {
+    document.getElementById('fc-list').innerHTML = '<div class="fc-empty">Could not load comments.</div>';
+  }
+}
+
+function renderFilmComments() {
+  const list = document.getElementById('fc-list');
+  const countEl = document.getElementById('fc-count');
+  const moreBtn = document.getElementById('fc-load-more');
+  const total = _fcAllComments.length;
+  countEl.textContent = total;
+  if (!total) {
+    list.innerHTML = '<div class="fc-empty">Be the first to share your thoughts.</div>';
+    moreBtn.style.display = 'none';
+    return;
+  }
+  const slice = _fcAllComments.slice(0, _fcShowing);
+  list.innerHTML = slice.map(c => renderComment(c)).join('');
+  moreBtn.style.display = _fcShowing < total ? 'block' : 'none';
+}
+
+function renderComment(c) {
+  const av = c.is_kfs_reply
+    ? `<div class="fc-avatar is-kfs">K</div>`
+    : `<div class="fc-avatar">${initials(c.author_name)}</div>`;
+
+  const badges = [];
+  if (c.is_kfs_reply) badges.push('<span class="fc-badge kfs">KFS Team</span>');
+  if (c.is_pinned && !c.is_kfs_reply) badges.push('<span class="fc-badge pinned">Pinned</span>');
+
+  const bodyClass = c.is_spoiler ? 'fc-body is-blurred' : 'fc-body';
+  const spoilerLabel = c.is_spoiler
+    ? '<div class="fc-spoiler-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> Spoiler</div>'
+    : '';
+
+  return `<div class="fc-item${c.is_pinned?' is-pinned':''}" data-id="${c.id}">
+    <div class="fc-item-top">
+      ${av}
+      <div class="fc-meta">
+        <div class="fc-meta-row">
+          <span class="fc-author">${escHtml(c.author_name)}</span>
+          ${badges.join('')}
+          <span class="fc-time">${timeAgo(c.created_at)}</span>
+        </div>
+        <div class="${bodyClass}" id="fc-body-${c.id}">
+          ${spoilerLabel}
+          <div class="fc-body-text">${escHtml(c.body)}</div>
+          ${c.is_spoiler ? `<button class="fc-spoiler-reveal" onclick="revealSpoiler('${c.id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Reveal spoiler</button>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function revealSpoiler(id) {
+  const el = document.getElementById('fc-body-' + id);
+  if (el) el.classList.remove('is-blurred');
+}
+
+function loadMoreComments() {
+  _fcShowing += FC_PAGE;
+  renderFilmComments();
+}
+
+async function submitFilmComment() {
+  const nameEl = document.getElementById('fc-name');
+  const bodyEl = document.getElementById('fc-body');
+  const spoilerEl = document.getElementById('fc-spoiler');
+  const msgEl = document.getElementById('fc-form-msg');
+  const btn = document.getElementById('fc-submit-btn');
+
+  const name = (nameEl.value || '').trim();
+  const body = (bodyEl.value || '').trim();
+  const is_spoiler = spoilerEl.checked;
+
+  msgEl.className = 'fc-form-msg';
+  if (!name) { msgEl.textContent = 'Please enter your name.'; msgEl.classList.add('error'); return; }
+  if (!body) { msgEl.textContent = 'Comment cannot be empty.'; msgEl.classList.add('error'); return; }
+  if (!_fcMovieId) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Posting…';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch('/api/films/' + _fcMovieId + '/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_name: name, body, is_spoiler }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.textContent = data.error || 'Failed to post comment.';
+      msgEl.classList.add('error');
+    } else {
+      bodyEl.value = '';
+      spoilerEl.checked = false;
+      // Insert at top of list (after any pinned items)
+      const firstUnpinned = _fcAllComments.findIndex(c => !c.is_pinned);
+      if (firstUnpinned === -1) _fcAllComments.push(data);
+      else _fcAllComments.splice(firstUnpinned, 0, data);
+      _fcShowing = Math.max(_fcShowing, _fcAllComments.length);
+      renderFilmComments();
+      msgEl.textContent = 'Comment posted!';
+      setTimeout(() => { msgEl.textContent = ''; }, 3000);
+    }
+  } catch(e) {
+    msgEl.textContent = 'Network error. Please try again.';
+    msgEl.classList.add('error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Post';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// FILM COMMENTS — ADMIN MODERATION
+// ══════════════════════════════════════════════════════════
+let _adminAllComments = [];
+let _adminCommentFilter = 'all';
+let _kfsReplyTargetMovieId = null;
+
+async function loadAdminComments() {
+  const listEl = document.getElementById('admin-comments-list');
+  listEl.innerHTML = '<div class="bc-loading">Loading…</div>';
+  try {
+    const data = await apiFetch('/api/admin/comments');
+    _adminAllComments = Array.isArray(data) ? data : [];
+    renderAdminComments();
+  } catch(e) {
+    listEl.innerHTML = '<div class="bc-loading">Failed to load comments.</div>';
+  }
+}
+
+function filterAdminComments(filter, btn) {
+  _adminCommentFilter = filter;
+  document.querySelectorAll('.admin-comment-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAdminComments();
+}
+
+function renderAdminComments() {
+  const listEl = document.getElementById('admin-comments-list');
+  let comments = _adminAllComments;
+  if (_adminCommentFilter === 'pinned') comments = comments.filter(c => c.is_pinned);
+  else if (_adminCommentFilter === 'spoiler') comments = comments.filter(c => c.is_spoiler);
+  else if (_adminCommentFilter === 'kfs') comments = comments.filter(c => c.is_kfs_reply);
+
+  if (!comments.length) {
+    listEl.innerHTML = '<div class="bc-loading">No comments match this filter.</div>';
+    return;
+  }
+  listEl.innerHTML = comments.map(c => `
+    <div class="admin-comment-row" data-id="${c.id}">
+      <div class="admin-comment-meta">
+        <span class="admin-comment-film">${escHtml(c.movies?.title || 'Unknown Film')}</span>
+        <span class="admin-comment-author">${escHtml(c.author_name)}</span>
+        ${c.is_kfs_reply ? '<span class="fc-badge kfs" style="font-size:9px">KFS Team</span>' : ''}
+        ${c.is_pinned ? '<span class="fc-badge pinned" style="font-size:9px">Pinned</span>' : ''}
+        ${c.is_spoiler ? '<span class="fc-badge pinned" style="font-size:9px">Spoiler</span>' : ''}
+        <span class="admin-comment-time">${timeAgo(c.created_at)}</span>
+      </div>
+      <div class="admin-comment-body">${escHtml(c.body)}</div>
+      <div class="admin-comment-actions">
+        <button class="admin-comment-action${c.is_pinned?' pinned':''}" onclick="adminTogglePin('${c.id}',${!c.is_pinned})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+          ${c.is_pinned ? 'Unpin' : 'Pin'}
+        </button>
+        <button class="admin-comment-action" onclick="openKfsReplyModal('${c.movie_id}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Reply as KFS
+        </button>
+        <button class="admin-comment-action danger" onclick="adminDeleteComment('${c.id}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Delete
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function adminTogglePin(commentId, pin) {
+  const res = await apiFetch('/api/admin/comments/' + commentId + '/pin', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_pinned: pin }),
+  });
+  if (res) {
+    const idx = _adminAllComments.findIndex(c => c.id === commentId);
+    if (idx !== -1) _adminAllComments[idx].is_pinned = pin;
+    renderAdminComments();
+  }
+}
+
+async function adminDeleteComment(commentId) {
+  if (!confirm('Delete this comment? This cannot be undone.')) return;
+  const res = await apiFetch('/api/admin/comments/' + commentId, { method: 'DELETE' });
+  if (res) {
+    _adminAllComments = _adminAllComments.filter(c => c.id !== commentId);
+    renderAdminComments();
+  }
+}
+
+// KFS Team reply modal
+function openKfsReplyModal(movieId) {
+  _kfsReplyTargetMovieId = movieId || null;
+  const overlay = document.getElementById('fc-reply-modal-overlay');
+  const select = document.getElementById('kfs-reply-movie-select');
+  // Populate movie dropdown if no movieId pre-selected
+  if (!movieId && select) {
+    apiFetch('/api/movies').then(movies => {
+      if (!movies) return;
+      select.innerHTML = movies.map(m => `<option value="${m.id}">${escHtml(m.title)}</option>`).join('');
+    });
+    document.getElementById('kfs-reply-movie-wrap').style.display = 'block';
+  } else {
+    if (document.getElementById('kfs-reply-movie-wrap')) document.getElementById('kfs-reply-movie-wrap').style.display = 'none';
+  }
+  document.getElementById('kfs-reply-body').value = '';
+  document.getElementById('kfs-reply-msg').textContent = '';
+  overlay.classList.add('open');
+}
+
+function closeKfsReplyModal() {
+  document.getElementById('fc-reply-modal-overlay').classList.remove('open');
+  _kfsReplyTargetMovieId = null;
+}
+
+async function submitKfsReply() {
+  const body = (document.getElementById('kfs-reply-body').value || '').trim();
+  const msgEl = document.getElementById('kfs-reply-msg');
+  const movieId = _kfsReplyTargetMovieId || document.getElementById('kfs-reply-movie-select')?.value;
+  if (!body) { msgEl.textContent = 'Reply cannot be empty.'; return; }
+  if (!movieId) { msgEl.textContent = 'Please select a film.'; return; }
+  msgEl.textContent = '';
+  const btn = document.getElementById('kfs-reply-send-btn');
+  btn.disabled = true;
+  try {
+    const res = await apiFetch('/api/admin/films/' + movieId + '/comments/reply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    });
+    if (res) {
+      closeKfsReplyModal();
+      loadAdminComments();
+    } else {
+      msgEl.textContent = 'Failed to post reply.';
+    }
+  } catch(e) {
+    msgEl.textContent = 'Network error.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// BROADCAST — ADMIN
+// ══════════════════════════════════════════════════════════
+let _bcAudienceType = 'all_registrants';
+
+function selectBcAudience(type) {
+  _bcAudienceType = type;
+  document.getElementById('bc-aud-all').classList.toggle('selected', type === 'all_registrants');
+  document.getElementById('bc-aud-event').classList.toggle('selected', type === 'event');
+  document.getElementById('bc-event-picker').style.display = type === 'event' ? 'block' : 'none';
+  document.getElementById('bc-recipient-count').textContent = '—';
+}
+
+async function loadBcEvents() {
+  const sel = document.getElementById('bc-event-select');
+  if (!sel) return;
+  try {
+    const events = await apiFetch('/api/admin/broadcast/events-with-registrants');
+    if (!events || !events.length) {
+      sel.innerHTML = '<option value="">No events with registrants yet</option>';
+      return;
+    }
+    sel.innerHTML = events.map(e =>
+      `<option value="${e.id}">${escHtml(e.title)}${e.event_date ? ' — ' + e.event_date : ''}</option>`
+    ).join('');
+  } catch(e) {}
+}
+
+async function previewBroadcastRecipients() {
+  const countEl = document.getElementById('bc-recipient-count');
+  countEl.textContent = '…';
+  const eventId = _bcAudienceType === 'event' ? (document.getElementById('bc-event-select')?.value || null) : null;
+  try {
+    const res = await apiFetch('/api/admin/broadcast/preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audience_type: _bcAudienceType, event_id: eventId }),
+    });
+    countEl.textContent = res?.count ?? '—';
+  } catch(e) {
+    countEl.textContent = '—';
+  }
+}
+
+async function sendBroadcast() {
+  const subject = (document.getElementById('bc-subject').value || '').trim();
+  const bodyText = (document.getElementById('bc-body').value || '').trim();
+  const msgEl = document.getElementById('bc-send-msg');
+  const btn = document.getElementById('bc-send-btn');
+
+  msgEl.style.display = 'none';
+  if (!subject) { showBcMsg('Subject is required.', 'error'); return; }
+  if (!bodyText) { showBcMsg('Message body is required.', 'error'); return; }
+
+  const recipientCount = parseInt(document.getElementById('bc-recipient-count').textContent) || 0;
+  if (!recipientCount) {
+    const go = confirm('Recipient count not checked — send anyway?');
+    if (!go) return;
+  } else {
+    const go = confirm(`Send to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}?`);
+    if (!go) return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Sending…';
+
+  const eventId = _bcAudienceType === 'event' ? (document.getElementById('bc-event-select')?.value || null) : null;
+
+  // Build minimal HTML from plain text
+  const bodyHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;max-width:560px">
+  <tr><td style="background:#0a0a0a;padding:28px 36px;border-bottom:1px solid #1e1e1e">
+    <span style="font-size:18px;font-weight:700;color:#f5f5f5;letter-spacing:-.02em">KFS — KIIT Film Society</span>
+  </td></tr>
+  <tr><td style="padding:32px 36px">
+    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.replace(/</g,'&lt;').replace(/>/g,'&gt;').split('\n').join('<br>')}</div>
+  </td></tr>
+  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    <p style="font-size:12px;color:#444;margin:0">This message was sent by KFS — KIIT Film Society. <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a></p>
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
+
+  try {
+    const res = await apiFetch('/api/admin/broadcast/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, body_html: bodyHtml, body_text: bodyText, audience_type: _bcAudienceType, event_id: eventId }),
+    });
+    if (res && res.success) {
+      showBcMsg(`Sent to ${res.sent} recipient${res.sent !== 1 ? 's' : ''}${res.failed ? ` (${res.failed} failed)` : ''}.`, 'success');
+      document.getElementById('bc-subject').value = '';
+      document.getElementById('bc-body').value = '';
+      document.getElementById('bc-recipient-count').textContent = '—';
+      loadBroadcastHistory();
+    } else {
+      showBcMsg(res?.error || 'Send failed.', 'error');
+    }
+  } catch(e) {
+    showBcMsg('Network error. Please try again.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Broadcast';
+  }
+}
+
+function showBcMsg(text, type) {
+  const el = document.getElementById('bc-send-msg');
+  el.textContent = text;
+  el.className = 'bc-send-msg ' + type;
+  el.style.display = 'block';
+}
+
+async function loadBroadcastHistory() {
+  const tbody = document.getElementById('bc-history-tbody');
+  try {
+    const data = await apiFetch('/api/admin/broadcasts');
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:32px">No broadcasts sent yet.</td></tr>';
+      return;
+    }
+    // Fetch stats for each broadcast (parallel, capped at 20)
+    const slice = data.slice(0, 20);
+    const stats = await Promise.all(slice.map(b =>
+      apiFetch('/api/admin/broadcasts/' + b.id + '/stats').catch(() => null)
+    ));
+    tbody.innerHTML = slice.map((b, i) => {
+      const st = stats[i] || {};
+      const opens = st.opens ?? '—';
+      const rate = st.open_rate != null ? st.open_rate + '%' : '—';
+      const fillW = st.open_rate ? Math.min(st.open_rate, 100) : 0;
+      const audLabel = b.audience_type === 'all_registrants'
+        ? 'All Registrants'
+        : (b.events?.title ? escHtml(b.events.title) : 'Event');
+      return `<tr>
+        <td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(b.subject)}</td>
+        <td style="color:var(--grey);font-size:12px">${audLabel}</td>
+        <td style="color:var(--grey);font-size:12px;white-space:nowrap">${b.sent_at ? new Date(b.sent_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}</td>
+        <td style="color:var(--grey);font-variant-numeric:tabular-nums">${b.recipient_count ?? '—'}</td>
+        <td>
+          <span style="font-size:13px;font-weight:600;color:var(--white)">${rate}</span>
+          <div class="bc-open-bar"><div class="bc-open-bar-fill" style="width:${fillW}%"></div></div>
+          <span style="font-size:10px;color:var(--grey)">${opens !== '—' ? opens + ' opens' : ''}</span>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--grey);padding:32px">Failed to load history.</td></tr>';
+  }
+}
 </script>
+
+<!-- KFS Team Reply Modal -->
+<div class="fc-reply-modal-overlay" id="fc-reply-modal-overlay" onclick="if(event.target===this)closeKfsReplyModal()">
+  <div class="fc-reply-modal">
+    <div class="fc-reply-modal-header">
+      <h3>Reply as KFS Team</h3>
+      <button class="fb-close-btn" onclick="closeKfsReplyModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="fc-reply-modal-body">
+      <div id="kfs-reply-movie-wrap" style="display:none;margin-bottom:4px">
+        <label class="bc-label" style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--grey);margin-bottom:6px;display:block">Film</label>
+        <div class="bc-select-wrap">
+          <select class="bc-select" id="kfs-reply-movie-select"></select>
+        </div>
+      </div>
+      <textarea class="fc-reply-textarea" id="kfs-reply-body" placeholder="Write an official KFS Team response…" rows="4" maxlength="2000"></textarea>
+      <p style="font-size:11px;color:var(--grey);margin-top:-4px">This will post as <strong>KFS Team</strong> with a badge, and will be pinned automatically.</p>
+      <p class="fc-form-msg error" id="kfs-reply-msg"></p>
+      <div class="fc-reply-modal-footer">
+        <button class="fc-reply-cancel-btn" onclick="closeKfsReplyModal()">Cancel</button>
+        <button class="fc-submit-btn" id="kfs-reply-send-btn" onclick="submitKfsReply()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Post Reply
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

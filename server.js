@@ -1164,7 +1164,7 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
     offset += CHUNK;
   }
 
-  if (!rows.length) return res.json({ total: 0, all_time_total: allTimeTotal, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  if (!rows.length) return res.json({ total: allTimeTotal, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
 
   const todayViews = rows.filter(r=>r.date===today).length;
   const dateMap = {};
@@ -1176,9 +1176,7 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   const by_page = Object.entries(pageMap).sort((a,b)=>b[1]-a[1]).map(([page,views])=>({page,views}));
   const by_hour = Array(24).fill(0);
   rows.filter(r=>r.date===today).forEach(r => { by_hour[r.hour] = (by_hour[r.hour]||0)+1; });
-  // total = views within the selected range; all_time_total = every view ever recorded
-  const rangeTotal = range === 'all' ? allTimeTotal : rows.length;
-  res.json({ total: rangeTotal, all_time_total: allTimeTotal, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
+  res.json({ total: allTimeTotal, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
 });
 
 // ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────
@@ -2109,6 +2107,185 @@ app.get('/api/recommendations/:movieId', async (req, res) => {
   }
 });
 
+// ── FILM COMMENTS ─────────────────────────────────────────────────────────────
+//
+// Supabase table required:
+//
+//   create table film_comments (
+//     id           uuid primary key default gen_random_uuid(),
+//     movie_id     uuid not null references movies(id) on delete cascade,
+//     author_name  text not null,
+//     body         text not null,
+//     is_spoiler   boolean not null default false,
+//     is_pinned    boolean not null default false,
+//     is_kfs_reply boolean not null default false,   -- KFS Team badge
+//     parent_id    uuid references film_comments(id) on delete cascade,
+//     created_at   timestamptz not null default now()
+//   );
+//   create index on film_comments(movie_id, created_at);
+//
+// No RLS needed — server mediates all access.
+
+// PUBLIC: Get all comments for a film (pinned first, then chronological)
+app.get('/api/films/:movieId/comments', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('film_comments')
+      .select('id,movie_id,author_name,body,is_spoiler,is_pinned,is_kfs_reply,parent_id,created_at')
+      .eq('movie_id', req.params.movieId)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUBLIC: Post a comment (name only, no login)
+app.post('/api/films/:movieId/comments', async (req, res) => {
+  try {
+    const { author_name, body, is_spoiler } = req.body;
+
+    if (!author_name || !author_name.trim()) {
+      return res.status(400).json({ error: 'Name is required.' });
+    }
+    if (!body || !body.trim()) {
+      return res.status(400).json({ error: 'Comment cannot be empty.' });
+    }
+    if (body.trim().length > 2000) {
+      return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
+    }
+
+    // Verify movie exists
+    const { data: movie } = await supabase
+      .from('movies')
+      .select('id')
+      .eq('id', req.params.movieId)
+      .maybeSingle();
+    if (!movie) return res.status(404).json({ error: 'Film not found.' });
+
+    const { data, error } = await supabase
+      .from('film_comments')
+      .insert([{
+        movie_id:    req.params.movieId,
+        author_name: author_name.trim().slice(0, 60),
+        body:        body.trim(),
+        is_spoiler:  is_spoiler === true || is_spoiler === 'true',
+        is_pinned:   false,
+        is_kfs_reply: false,
+      }])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Get all comments across all films (for moderation panel)
+app.get('/api/admin/comments', requireSection('movies'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('film_comments')
+      .select('id,movie_id,author_name,body,is_spoiler,is_pinned,is_kfs_reply,created_at,movies(title)')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Get comments for a specific film
+app.get('/api/admin/films/:movieId/comments', requireSection('movies'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('film_comments')
+      .select('*')
+      .eq('movie_id', req.params.movieId)
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Pin or unpin a comment
+app.patch('/api/admin/comments/:id/pin', requireSection('movies'), async (req, res) => {
+  try {
+    const { is_pinned } = req.body;
+    const { data, error } = await supabase
+      .from('film_comments')
+      .update({ is_pinned: !!is_pinned })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Comment not found.' });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Delete a comment
+app.delete('/api/admin/comments/:id', requireSection('movies'), async (req, res) => {
+  try {
+    const { data: comment } = await supabase
+      .from('film_comments')
+      .select('author_name, movie_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    const { error } = await supabase
+      .from('film_comments')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    await logActivity(req.admin.id, req.admin.name, 'delete', 'film_comment', `Comment by ${comment?.author_name || 'unknown'}`);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Reply as KFS Team (posts a special badged comment)
+app.post('/api/admin/films/:movieId/comments/reply', requireSection('movies'), async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body || !body.trim()) return res.status(400).json({ error: 'Reply body is required.' });
+
+    const { data, error } = await supabase
+      .from('film_comments')
+      .insert([{
+        movie_id:     req.params.movieId,
+        author_name:  'KFS Team',
+        body:         body.trim(),
+        is_spoiler:   false,
+        is_pinned:    true,       // KFS replies always pinned to top
+        is_kfs_reply: true,
+      }])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    await logActivity(req.admin.id, req.admin.name, 'create', 'film_comment', `KFS Team reply on film ${req.params.movieId}`);
+    res.status(201).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── COLLABORATE / OPEN CALLS ──────────────────────────────────────────────────
 
 async function cleanupExpiredCollaborations() {
@@ -2270,6 +2447,309 @@ app.delete('/api/admin/collaborate/:id', requireSection('collaborate'), async (r
 setInterval(() => {
   cleanupExpiredCollaborations().catch(e => console.error('[collaborate cleanup]', e.message));
 }, 1000 * 60 * 60 * 6);
+
+// ── BROADCAST EMAILS ──────────────────────────────────────────────────────────
+//
+// Supabase tables required:
+//
+//   create table broadcasts (
+//     id             uuid primary key default gen_random_uuid(),
+//     subject        text not null,
+//     body_html      text not null,
+//     body_text      text not null,
+//     audience_type  text not null,   -- 'all_registrants' | 'event'
+//     event_id       uuid references events(id) on delete set null,
+//     sent_by        text not null,
+//     sent_at        timestamptz not null default now(),
+//     recipient_count int not null default 0
+//   );
+//
+//   create table broadcast_opens (
+//     id            uuid primary key default gen_random_uuid(),
+//     broadcast_id  uuid not null references broadcasts(id) on delete cascade,
+//     recipient_hash text not null,   -- sha256(email) — no PII stored
+//     opened_at     timestamptz not null default now(),
+//     unique(broadcast_id, recipient_hash)
+//   );
+//   create index on broadcast_opens(broadcast_id);
+//
+// 1px open-tracking pixel: embedded in every email as:
+//   <img src="https://kiitfilmsociety.in/api/track-open/{broadcastId}/{sha256(email)}"
+//        width="1" height="1" style="display:none" />
+
+// Helper: sha256 hex of a string (for open-tracking — no PII in DB)
+function hashEmail(email) {
+  return crypto.createHash('sha256').update((email || '').toLowerCase().trim()).digest('hex');
+}
+
+// Helper: collect unique recipient emails for a broadcast
+async function collectRecipients(audienceType, eventId) {
+  const emails = new Set();
+
+  if (audienceType === 'all_registrants' || !eventId) {
+    // All form_responses across all events — extract email answers
+    const { data: allResponses } = await supabase
+      .from('form_responses')
+      .select('answers, event_id');
+
+    for (const row of (allResponses || [])) {
+      try {
+        const answers = JSON.parse(row.answers || '{}');
+        for (const val of Object.values(answers)) {
+          if (typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) {
+            emails.add(val.trim().toLowerCase());
+            break; // one email per response
+          }
+        }
+      } catch { /* skip malformed rows */ }
+    }
+  } else {
+    // Event-specific: only responses for that event
+    const { data: responses } = await supabase
+      .from('form_responses')
+      .select('answers')
+      .eq('event_id', eventId);
+
+    for (const row of (responses || [])) {
+      try {
+        const answers = JSON.parse(row.answers || '{}');
+        for (const val of Object.values(answers)) {
+          if (typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) {
+            emails.add(val.trim().toLowerCase());
+            break;
+          }
+        }
+      } catch { /* skip */ }
+    }
+  }
+
+  return [...emails];
+}
+
+// 1px open-tracking pixel endpoint
+// GET /api/track-open/:broadcastId/:recipientHash
+app.get('/api/track-open/:broadcastId/:recipientHash', async (req, res) => {
+  // Return the pixel immediately — never block
+  const GIF1x1 = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  res.setHeader('Content-Type', 'image/gif');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.end(GIF1x1);
+
+  // Record open async (fire-and-forget, deduplicated by unique constraint)
+  const { broadcastId, recipientHash } = req.params;
+  supabase
+    .from('broadcast_opens')
+    .insert([{ broadcast_id: broadcastId, recipient_hash: recipientHash }])
+    .then(() => {})
+    .catch(() => {}); // unique constraint violation = already opened, fine
+});
+
+// ADMIN: Preview recipients count for a broadcast (before sending)
+app.post('/api/admin/broadcast/preview', requireSection('settings'), async (req, res) => {
+  try {
+    const { audience_type, event_id } = req.body;
+    if (!audience_type) return res.status(400).json({ error: 'audience_type required' });
+
+    const emails = await collectRecipients(audience_type, event_id || null);
+    res.json({ count: emails.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Get all events (for broadcast audience picker dropdown)
+// Reuse existing /api/events but scoped to events that have responses
+app.get('/api/admin/broadcast/events-with-registrants', requireSection('settings'), async (req, res) => {
+  try {
+    // Get distinct event_ids that have at least one form_response
+    const { data: responses } = await supabase
+      .from('form_responses')
+      .select('event_id');
+
+    const eventIds = [...new Set((responses || []).map(r => r.event_id).filter(Boolean))];
+    if (!eventIds.length) return res.json([]);
+
+    const { data: events } = await supabase
+      .from('events')
+      .select('id,title,event_date')
+      .in('id', eventIds)
+      .order('event_date', { ascending: false });
+
+    res.json(events || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Send a broadcast
+app.post('/api/admin/broadcast/send', requireSection('settings'), async (req, res) => {
+  try {
+    const { subject, body_html, body_text, audience_type, event_id } = req.body;
+
+    if (!subject || !subject.trim()) return res.status(400).json({ error: 'Subject is required.' });
+    if (!body_html || !body_html.trim()) return res.status(400).json({ error: 'Email body is required.' });
+    if (!audience_type) return res.status(400).json({ error: 'Audience type is required.' });
+
+    // Collect recipients
+    const emails = await collectRecipients(audience_type, event_id || null);
+    if (!emails.length) {
+      return res.status(400).json({ error: 'No recipients found for this audience.' });
+    }
+
+    // Fetch Brevo API key from settings
+    const { data: rows } = await supabase
+      .from('settings')
+      .select('key,value')
+      .in('key', ['brevo_api_key', 'smtp_from_name']);
+    const s = {};
+    (rows || []).forEach(r => { s[r.key] = r.value; });
+
+    if (!s.brevo_api_key) {
+      return res.status(500).json({ error: 'Brevo API key not configured in settings.' });
+    }
+
+    const fromName = s.smtp_from_name || 'KFS — KIIT Film Society';
+
+    // Create broadcast record first (to get the ID for tracking pixel)
+    const { data: broadcast, error: broadcastErr } = await supabase
+      .from('broadcasts')
+      .insert([{
+        subject:         subject.trim(),
+        body_html:       body_html,
+        body_text:       body_text || '',
+        audience_type:   audience_type,
+        event_id:        event_id || null,
+        sent_by:         req.admin.name,
+        recipient_count: emails.length,
+      }])
+      .select('id')
+      .single();
+
+    if (broadcastErr) return res.status(500).json({ error: broadcastErr.message });
+
+    const broadcastId = broadcast.id;
+    const BASE_URL = process.env.BASE_URL || 'https://kiitfilmsociety.in';
+
+    // Send via Brevo batch (up to 50 per request to stay within limits)
+    const BATCH = 50;
+    let sentCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < emails.length; i += BATCH) {
+      const chunk = emails.slice(i, i + BATCH);
+
+      const toArr = chunk.map(email => ({ email, name: email.split('@')[0] }));
+
+      // Inject tracking pixel per recipient using messageVersions
+      const messageVersions = chunk.map(email => {
+        const hash = hashEmail(email);
+        const pixelUrl = `${BASE_URL}/api/track-open/${broadcastId}/${hash}`;
+        const trackingPixel = `<img src="${pixelUrl}" width="1" height="1" style="display:none;border:0;outline:none" alt="" />`;
+        const personalHtml = body_html + '\n' + trackingPixel;
+
+        return {
+          to: [{ email, name: email.split('@')[0] }],
+          htmlContent: personalHtml,
+        };
+      });
+
+      try {
+        const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'accept':       'application/json',
+            'api-key':      s.brevo_api_key,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            sender:          { name: fromName, email: 'noreply@kiitfilmsociety.in' },
+            to:              toArr,
+            subject:         subject.trim(),
+            htmlContent:     body_html, // fallback, overridden by messageVersions
+            textContent:     body_text || '',
+            messageVersions: messageVersions,
+          }),
+        });
+
+        if (brevoRes.ok) {
+          sentCount += chunk.length;
+        } else {
+          const errText = await brevoRes.text();
+          console.error(`[broadcast] Brevo batch ${i}-${i+BATCH} failed:`, errText);
+          failCount += chunk.length;
+        }
+      } catch (e) {
+        console.error('[broadcast] fetch error:', e.message);
+        failCount += chunk.length;
+      }
+
+      // Small delay between batches to respect Brevo rate limits
+      if (i + BATCH < emails.length) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+
+    await logActivity(req.admin.id, req.admin.name, 'create', 'broadcast', `"${subject.trim()}" → ${sentCount} recipients`);
+
+    res.json({
+      success:    true,
+      broadcast_id: broadcastId,
+      sent:       sentCount,
+      failed:     failCount,
+      total:      emails.length,
+    });
+  } catch (e) {
+    console.error('[broadcast] error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: List all broadcasts (for history view)
+app.get('/api/admin/broadcasts', requireSection('settings'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('broadcasts')
+      .select('id,subject,audience_type,event_id,sent_by,sent_at,recipient_count,events(title)')
+      .order('sent_at', { ascending: false })
+      .limit(100);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Get open-rate stats for a specific broadcast
+app.get('/api/admin/broadcasts/:id/stats', requireSection('settings'), async (req, res) => {
+  try {
+    const { data: broadcast, error: bErr } = await supabase
+      .from('broadcasts')
+      .select('id,subject,sent_at,recipient_count,audience_type')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (bErr || !broadcast) return res.status(404).json({ error: 'Broadcast not found.' });
+
+    const { count: openCount } = await supabase
+      .from('broadcast_opens')
+      .select('*', { count: 'exact', head: true })
+      .eq('broadcast_id', req.params.id);
+
+    const opens = openCount || 0;
+    const total = broadcast.recipient_count || 0;
+    const open_rate = total > 0 ? Math.round((opens / total) * 100) : 0;
+
+    res.json({
+      ...broadcast,
+      opens,
+      open_rate,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
