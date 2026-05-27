@@ -11957,10 +11957,7 @@ function renderAdminComments() {
 }
 
 async function adminTogglePin(commentId, pin) {
-  const res = await apiFetch('/api/admin/comments/' + commentId + '/pin', {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ is_pinned: pin }),
-  });
+  const res = await apiFetch('/api/admin/comments/' + commentId + '/pin', 'PATCH', { is_pinned: pin });
   if (res) {
     const idx = _adminAllComments.findIndex(c => c.id === commentId);
     if (idx !== -1) _adminAllComments[idx].is_pinned = pin;
@@ -11970,7 +11967,7 @@ async function adminTogglePin(commentId, pin) {
 
 async function adminDeleteComment(commentId) {
   if (!confirm('Delete this comment? This cannot be undone.')) return;
-  const res = await apiFetch('/api/admin/comments/' + commentId, { method: 'DELETE' });
+  const res = await apiFetch('/api/admin/comments/' + commentId, 'DELETE');
   if (res) {
     _adminAllComments = _adminAllComments.filter(c => c.id !== commentId);
     renderAdminComments();
@@ -12012,10 +12009,7 @@ async function submitKfsReply() {
   const btn = document.getElementById('kfs-reply-send-btn');
   btn.disabled = true;
   try {
-    const res = await apiFetch('/api/admin/films/' + movieId + '/comments/reply', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body }),
-    });
+    const res = await apiFetch('/api/admin/films/' + movieId + '/comments/reply', 'POST', { body });
     if (res) {
       closeKfsReplyModal();
       loadAdminComments();
@@ -12062,10 +12056,7 @@ async function previewBroadcastRecipients() {
   countEl.textContent = '…';
   const eventId = _bcAudienceType === 'event' ? (document.getElementById('bc-event-select')?.value || null) : null;
   try {
-    const res = await apiFetch('/api/admin/broadcast/preview', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audience_type: _bcAudienceType, event_id: eventId }),
-    });
+    const res = await apiFetch('/api/admin/broadcast/preview', 'POST', { audience_type: _bcAudienceType, event_id: eventId });
     countEl.textContent = res?.count ?? '—';
   } catch(e) {
     countEl.textContent = '—';
@@ -12114,10 +12105,7 @@ async function sendBroadcast() {
 </td></tr></table></body></html>`;
 
   try {
-    const res = await apiFetch('/api/admin/broadcast/send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject, body_html: bodyHtml, body_text: bodyText, audience_type: _bcAudienceType, event_id: eventId }),
-    });
+    const res = await apiFetch('/api/admin/broadcast/send', 'POST', { subject, body_html: bodyHtml, body_text: bodyText, audience_type: _bcAudienceType, event_id: eventId });
     if (res && res.success) {
       showBcMsg(`Sent to ${res.sent} recipient${res.sent !== 1 ? 's' : ''}${res.failed ? ` (${res.failed} failed)` : ''}.`, 'success');
       document.getElementById('bc-subject').value = '';
