@@ -1164,7 +1164,7 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
     offset += CHUNK;
   }
 
-  if (!rows.length) return res.json({ total: allTimeTotal, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
+  if (!rows.length) return res.json({ total: 0, all_time_total: allTimeTotal, today:0, peak_day:'—', by_page:[], by_date:[], by_hour:Array(24).fill(0) });
 
   const todayViews = rows.filter(r=>r.date===today).length;
   const dateMap = {};
@@ -1176,7 +1176,9 @@ app.get('/api/admin/analytics/traffic', requireSection('analytics'), async (req,
   const by_page = Object.entries(pageMap).sort((a,b)=>b[1]-a[1]).map(([page,views])=>({page,views}));
   const by_hour = Array(24).fill(0);
   rows.filter(r=>r.date===today).forEach(r => { by_hour[r.hour] = (by_hour[r.hour]||0)+1; });
-  res.json({ total: allTimeTotal, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
+  // total = views within the selected range; all_time_total = every view ever recorded
+  const rangeTotal = range === 'all' ? allTimeTotal : rows.length;
+  res.json({ total: rangeTotal, all_time_total: allTimeTotal, today: todayViews, peak_day: peak.date, by_page, by_date, by_hour });
 });
 
 // ── REVIEW ANALYTICS ──────────────────────────────────────────────────────────
