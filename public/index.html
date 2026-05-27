@@ -5612,6 +5612,7 @@ async function openMovie(id) {
     url: '/films/' + mslug,
   });
   loadReviews(id);
+  loadFilmComments(id);
   resetReviewForm();
 }
 
