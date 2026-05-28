@@ -1521,7 +1521,7 @@ app.get("/api/movies", async (req, res) => {
   cacheFor(res, 300); // 5 min
   let query = supabase
     .from("movies")
-    .select("id,title,release_year,genre,director,poster_image,description,trailer_url,watch_url")
+    .select("id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url")
     .order("release_year", { ascending: false });
   const { data } = await query;
   let movies = data || [];
