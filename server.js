@@ -220,6 +220,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// ── Response cache helper ──────────────────────────────────────────────────────
+// maxAge in seconds. Sends Cache-Control: public, max-age=N, stale-while-revalidate=60
+function cacheFor(res, seconds = 60) {
+  res.setHeader('Cache-Control', `public, max-age=${seconds}, stale-while-revalidate=60`);
+}
+
 // ── Auth middleware ───────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
@@ -696,6 +702,7 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get("/api/settings", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   const { data } = await supabase
     .from("settings")
     .select("*")
@@ -854,9 +861,10 @@ app.post(
 );
 
 app.get("/api/blogs", async (req, res) => {
+  cacheFor(res, 120); // 2 min
   const { data } = await supabase
     .from("blogs")
-    .select("*")
+    .select("id,title,author,excerpt,cover_image,published,created_at,sections,view_count")
     .eq("published", true)
     .order("created_at", { ascending: false });
   res.json(data || []);
@@ -865,12 +873,15 @@ app.get("/api/blogs", async (req, res) => {
 app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
   const { data } = await supabase
     .from("blogs")
-    .select("*")
-    .order("created_at", { ascending: false });
+    .select("id,title,author,published,view_count,cover_image,created_at,sections")
+    // Don't fetch `content` in the list — it's huge HTML. Only needed in /api/blogs/:id
+    .order("created_at", { ascending: false })
+    .limit(200);
   res.json(data || []);
 });
 
 app.get("/api/blogs/:id", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   const { data } = await supabase
     .from("blogs")
     .select("*")
@@ -996,6 +1007,7 @@ app.delete(
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
+  cacheFor(res, 120); // 2 min
   const { data } = await supabase
     .from("events")
     .select("*")
@@ -1095,9 +1107,10 @@ app.delete(
 
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
+  cacheFor(res, 600); // 10 min
   const { data } = await supabase
     .from("members")
-    .select("*")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
     .order("sort_order", { ascending: true });
   res.json(data || []);
 });
@@ -1200,6 +1213,7 @@ app.delete(
 
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
+  cacheFor(res, 600); // 10 min
   const { data } = await supabase
     .from("testimonials")
     .select("*")
@@ -1280,6 +1294,7 @@ app.delete(
 
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
+  cacheFor(res, 600); // 10 min
   const { data } = await supabase
     .from("achievements")
     .select("*")
@@ -1503,9 +1518,10 @@ app.get("/api/yt-duration", async (req, res) => {
 });
 
 app.get("/api/movies", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   let query = supabase
     .from("movies")
-    .select("*")
+    .select("id,title,release_year,genre,director,poster_image,description,trailer_url,watch_url")
     .order("release_year", { ascending: false });
   const { data } = await query;
   let movies = data || [];
@@ -1522,6 +1538,7 @@ app.get("/api/movies", async (req, res) => {
 });
 
 app.get("/api/movies/:id", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   const { data } = await supabase
     .from("movies")
     .select("*")
@@ -1699,6 +1716,7 @@ app.delete(
 // ── CHITRA VICHITRA — PUBLIC ──────────────────────────────────────────────────
 // Get all CV editions (with movie count)
 app.get("/api/chitra-vichitra", async (req, res) => {
+  cacheFor(res, 600); // 10 min
   const { data: editions, error } = await supabase
     .from("chitra_vichitra")
     .select("*")
@@ -2000,21 +2018,15 @@ app.get(
       /* non-fatal */
     }
 
-    // Fetch range rows by paginating in 1000-row chunks — bypasses Supabase's default 1k cap
+    // Fetch range rows — limit to 5000 max, enough for any reasonable chart
     let rows = [];
-    let offset = 0;
-    const CHUNK = 1000;
-    while (true) {
-      const { data: chunk, error } = await supabase
-        .from("page_views")
-        .select("page,date,hour")
-        .gte("date", from)
-        .range(offset, offset + CHUNK - 1);
-      if (error || !chunk || chunk.length === 0) break;
-      rows = rows.concat(chunk);
-      if (chunk.length < CHUNK) break; // last page
-      offset += CHUNK;
-    }
+    const { data: chunk, error } = await supabase
+      .from("page_views")
+      .select("page,date,hour")
+      .gte("date", from)
+      .order("date", { ascending: false })
+      .limit(5000); // CRITICAL: was fetching unlimited rows via pagination
+    if (!error && chunk) rows = chunk;
 
     if (!rows.length)
       return res.json({
@@ -2120,6 +2132,7 @@ app.get(
 
 // ── REVIEWS ───────────────────────────────────────────────────────────────────
 app.get("/api/reviews/all", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   const { data } = await supabase.from("reviews").select("movie_id,overall");
   res.json(data || []);
 });
@@ -3119,6 +3132,7 @@ app.get("/events/:slug", async (req, res) => {
 // ── KFS WRAPPED ───────────────────────────────────────────────────────────────
 // Public: get the wrapped config (year, taglines, fun cards) set by admin
 app.get("/api/wrapped/config", async (req, res) => {
+  cacheFor(res, 300); // 5 min
   const { data } = await supabase
     .from("settings")
     .select("value")
@@ -3314,6 +3328,7 @@ app.get("/api/wrapped/stats", async (req, res) => {
 // ── RECOMMENDATIONS ────────────────────────────────────────────────────────────
 // Returns films similar to a given film by tag/genre overlap
 app.get("/api/recommendations/:movieId", async (req, res) => {
+  cacheFor(res, 1800); // 30 min — almost never changes
   try {
     const { data: source } = await supabase
       .from("movies")
@@ -4188,6 +4203,20 @@ setInterval(
   },
   1000 * 60 * 4,
 );
+
+// Trim old page_view rows older than 90 days — run once per day
+setInterval(async () => {
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    await supabase
+      .from("page_views")
+      .delete()
+      .lt("date", cutoff.toISOString().slice(0, 10));
+  } catch(e) {
+    console.error("[page_views trim]", e.message);
+  }
+}, 1000 * 60 * 60 * 24); // every 24h
 
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
