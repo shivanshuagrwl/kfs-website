@@ -121,6 +121,43 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+<!-- ── EVENT THEME LOADER — runs before styles render to prevent flash ── -->
+<script>
+(function() {
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/theme', false); // synchronous to block render
+    xhr.send();
+    if (xhr.status === 200) {
+      var theme = JSON.parse(xhr.responseText);
+      if (theme) {
+        var css = ':root{';
+        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
+        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
+        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
+        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
+        if (theme.border_color) css += '--border:' + theme.border_color + ';';
+        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
+        css += '}';
+        var styleEl = document.createElement('style');
+        styleEl.id = 'event-theme-vars';
+        styleEl.textContent = css;
+        document.head.appendChild(styleEl);
+        if (theme.font_family) {
+          var fontLink = document.createElement('link');
+          fontLink.rel = 'stylesheet';
+          fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
+          document.head.appendChild(fontLink);
+          var fontStyle = document.createElement('style');
+          fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
+          document.head.appendChild(fontStyle);
+        }
+        window.__kfsEventTheme = theme;
+      }
+    }
+  } catch(e) { /* silent fail — site loads with default theme */ }
+})();
+</script>
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1840,6 +1877,12 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-story-dl-btn:hover{border-color:var(--white);color:var(--white);background:rgba(245,245,245,.06)}
 body.light-mode .movie-story-dl-btn:hover{border-color:#111;color:#111;background:rgba(0,0,0,.04)}
 
+/* ── EVENT BANNER ──────────────────────────────────────────────────── */
+#event-banner{display:none;width:100%;padding:10px 20px;text-align:center;
+  font-size:13px;font-weight:600;letter-spacing:.04em;z-index:1001;position:relative}
+#event-banner.visible{display:block}
+#event-banner a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
 /* ── MEMBER SPOTLIGHT ──────────────────────────────────────────────── */
 .spotlight-wrap{margin-top:80px;display:grid;grid-template-columns:200px 1fr;
   gap:48px;align-items:center;padding:48px;border:1px solid var(--border);
@@ -2416,6 +2459,42 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
 </div>
+
+<!-- EVENT BANNER -->
+<div id="event-banner"></div>
+<script>
+// Apply banner + hero overrides from theme loaded in <head>
+(function() {
+  var t = window.__kfsEventTheme;
+  if (!t) return;
+  // Banner
+  if (t.banner_message) {
+    var b = document.getElementById('event-banner');
+    b.textContent = t.banner_message;
+    b.style.background = t.banner_bg || 'var(--accent)';
+    b.style.color = t.banner_text_color || 'var(--black)';
+    b.classList.add('visible');
+  }
+  // Logo swap
+  if (t.logo_url) {
+    var img = document.querySelector('.nav-logo-img');
+    if (img) img.src = t.logo_url;
+  }
+  // Hero title/tagline overrides — applied after DOM ready
+  if (t.hero_title || t.hero_tagline) {
+    document.addEventListener('DOMContentLoaded', function() {
+      if (t.hero_title) {
+        var el = document.querySelector('.hero-title, .glow-word, h1');
+        if (el) el.textContent = t.hero_title;
+      }
+      if (t.hero_tagline) {
+        var el2 = document.querySelector('.hero-tagline');
+        if (el2) el2.textContent = t.hero_tagline;
+      }
+    });
+  }
+})();
+</script>
 
 <!-- NAV -->
 <nav id="main-nav">
@@ -3202,6 +3281,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-sidebar-item" onclick="showAdminSection('reg-analytics')" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('comments')" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('broadcast')" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('themes')" data-section="themes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span> Event Themes</div>
     <div class="admin-sidebar-group">System</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
@@ -3594,6 +3674,168 @@ KFS — KIIT Film Society"></textarea>
         <thead><tr><th>Title</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="notif-tbody"><tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr></tbody>
       </table>
+    </div>
+
+    <!-- EVENT THEMES -->
+    <div class="admin-section" id="section-themes">
+      <!-- LIST VIEW -->
+      <div id="themes-list-view">
+        <div class="admin-header">
+          <div><h2>Event Themes</h2><p>Temporarily retheme the site for events. Zero layout changes.</p></div>
+          <button class="btn btn-primary" onclick="openThemeEditor(null)">+ New Theme</button>
+        </div>
+        <div id="themes-list-grid" style="display:grid;gap:16px"></div>
+      </div>
+      <!-- EDITOR VIEW -->
+      <div id="themes-editor-view" style="display:none">
+        <div class="admin-header" style="margin-bottom:24px">
+          <div>
+            <h2 id="theme-editor-title">New Theme</h2>
+            <p>Changes apply within 60 seconds of saving</p>
+          </div>
+          <button class="btn btn-secondary" onclick="closeThemeEditor()">← Back to list</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:28px;align-items:start">
+          <!-- Form -->
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <input type="hidden" id="te-id">
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">THEME NAME *</label>
+              <input type="text" id="te-name" placeholder="e.g. Chitra Vichitra 2025" style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BACKGROUND</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-bg" value="#0a0a0a" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-bg-hex" placeholder="#0a0a0a" oninput="syncColorFromHex('te-bg','te-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">TEXT</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-text" value="#f5f5f5" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-text-hex" placeholder="#f5f5f5" oninput="syncColorFromHex('te-text','te-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">ACCENT</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-accent" value="#f5f5f5" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-accent-hex" placeholder="#f5f5f5" oninput="syncColorFromHex('te-accent','te-accent-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">CARD</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-card" value="#111111" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-card-hex" placeholder="#111111" oninput="syncColorFromHex('te-card','te-card-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BORDER</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-border" value="#1e1e1e" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-border-hex" placeholder="#1e1e1e" oninput="syncColorFromHex('te-border','te-border-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">GREY / MUTED</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-grey" value="#888888" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-grey-hex" placeholder="#888888" oninput="syncColorFromHex('te-grey','te-grey-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FONT FAMILY <span style="font-weight:400;text-transform:none;letter-spacing:0">(Google Font name — leave blank to keep DM Serif Display)</span></label>
+              <input type="text" id="te-font" placeholder="e.g. Bebas Neue" style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">HERO TITLE OVERRIDE</label>
+                <input type="text" id="te-hero-title" placeholder="Leave blank for default" style="border-radius:10px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">HERO TAGLINE OVERRIDE</label>
+                <input type="text" id="te-hero-tagline" placeholder="Leave blank for default" style="border-radius:10px">
+              </div>
+            </div>
+            <div style="padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600">Banner Strip</div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600">BANNER MESSAGE <span style="font-weight:400;text-transform:none">(leave blank for no banner)</span></label>
+                <input type="text" id="te-banner-msg" placeholder='e.g. Chitra Vichitra is LIVE — Register Now' style="border-radius:10px">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                  <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER BG</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="color" id="te-banner-bg" value="#e63946" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-bg-hex" placeholder="#e63946" oninput="syncColorFromHex('te-banner-bg','te-banner-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER TEXT</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="color" id="te-banner-text" value="#ffffff" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-text-hex" placeholder="#ffffff" oninput="syncColorFromHex('te-banner-text','te-banner-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">LOGO URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(Cloudinary URL — leave blank to keep default logo)</span></label>
+              <input type="text" id="te-logo-url" placeholder="https://res.cloudinary.com/..." style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">SCHEDULE START <span style="font-weight:400;text-transform:none">(optional)</span></label>
+                <input type="datetime-local" id="te-from" style="border-radius:10px;color-scheme:dark">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">SCHEDULE END <span style="font-weight:400;text-transform:none">(optional — auto-reverts)</span></label>
+                <input type="datetime-local" id="te-until" style="border-radius:10px;color-scheme:dark">
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.02)">
+              <input type="checkbox" id="te-activate-now" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
+              <span style="font-size:13px;font-weight:600">Activate immediately on save</span>
+              <span style="font-size:12px;color:var(--grey);margin-left:auto">Deactivates all other themes</span>
+            </label>
+            <p id="te-error" style="color:#e74c3c;font-size:13px;display:none"></p>
+            <div style="display:flex;gap:12px;margin-top:4px">
+              <button class="btn btn-secondary" style="border-radius:12px" onclick="saveTheme(false)">Save as Draft</button>
+              <button class="btn btn-primary" style="border-radius:12px" onclick="saveTheme(true)">Save &amp; Activate</button>
+            </div>
+          </div>
+          <!-- Live Preview -->
+          <div style="position:sticky;top:20px">
+            <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:12px">Live Preview</div>
+            <div id="theme-preview-box" style="border-radius:14px;overflow:hidden;border:1px solid var(--border);transition:all .2s">
+              <div id="tp-banner" style="display:none;padding:8px 14px;font-size:12px;font-weight:600;text-align:center"></div>
+              <div id="tp-nav" style="padding:14px 18px;border-bottom:1px solid;display:flex;align-items:center;gap:10px">
+                <div style="font-size:13px;font-weight:700;letter-spacing:-.02em">KFS</div>
+                <div style="margin-left:auto;display:flex;gap:10px">
+                  <span id="tp-nav-link1" style="font-size:10px">Home</span>
+                  <span id="tp-nav-link2" style="font-size:10px">Films</span>
+                  <span id="tp-nav-link3" style="font-size:10px">Events</span>
+                </div>
+              </div>
+              <div id="tp-body" style="padding:20px 18px">
+                <div id="tp-hero-title" style="font-size:22px;font-weight:800;letter-spacing:-.04em;margin-bottom:6px">KIIT Film Society</div>
+                <div id="tp-hero-sub" style="font-size:11px;margin-bottom:16px">Lights. Camera. KFS.</div>
+                <div id="tp-card" style="border-radius:8px;border:1px solid;padding:12px 14px;margin-bottom:10px">
+                  <div style="font-size:12px;font-weight:600;margin-bottom:4px">Sample Card</div>
+                  <div id="tp-card-sub" style="font-size:11px">Card subtitle text</div>
+                </div>
+                <div id="tp-btn" style="display:inline-block;padding:7px 16px;border-radius:20px;border:2px solid;font-size:11px;font-weight:600;margin-right:8px">Primary</div>
+                <div id="tp-btn2" style="display:inline-block;padding:7px 16px;border-radius:20px;border:1px solid;font-size:11px;font-weight:600">Secondary</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TRAFFIC ANALYTICS -->
@@ -5895,6 +6137,7 @@ function showAdminSection(name) {
 }
 
 async function loadAdminData(name) {
+  if (name==='themes') { loadThemes(); return; }
   if (name==='blogs') {
     const [blogs, analytics] = await Promise.all([
       apiFetch('/api/admin/blogs'),
@@ -7615,9 +7858,186 @@ async function bulkDelete(section) {
   loadAdminData(section);
   // Show toast if available
   if (typeof showToast === 'function') showToast(`${ids.length} item(s) deleted`, 'success');
+// ── EVENT THEMES ADMIN ───────────────────────────────────────────────
+
+async function loadThemes() {
+  const themes = await apiFetch('/api/admin/themes');
+  const grid = document.getElementById('themes-list-grid');
+  if (!grid) return;
+  if (!themes || !themes.length) {
+    grid.innerHTML = '<p style="color:var(--grey);padding:40px 0;text-align:center">No themes yet. Create your first event theme.</p>';
+    return;
+  }
+  const now = new Date();
+  grid.innerHTML = themes.map(t => {
+    const isLive = t.is_active && (!t.active_until || new Date(t.active_until) > now);
+    const isScheduled = !t.is_active && t.active_from && new Date(t.active_from) > now;
+    const badge = isLive
+      ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;font-size:10px;font-weight:700;letter-spacing:.08em"><span style="width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e"></span>LIVE</span>`
+      : isScheduled
+      ? `<span style="padding:3px 10px;border-radius:20px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;font-size:10px;font-weight:700;letter-spacing:.08em">SCHEDULED</span>`
+      : `<span style="padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--grey);font-size:10px;font-weight:700;letter-spacing:.08em">INACTIVE</span>`;
+    const swatches = [t.bg_color, t.accent_color, t.card_color, t.border_color, t.text_color].map(c =>
+      `<span title="${c||'default'}" style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${c||'var(--border)'};border:1px solid rgba(255,255,255,.15);flex-shrink:0"></span>`
+    ).join('');
+    const dates = (t.active_from || t.active_until)
+      ? `<div style="font-size:11px;color:var(--grey);margin-top:6px">${t.active_from?'From '+new Date(t.active_from).toLocaleDateString('en-IN'):''} ${t.active_until?'→ Until '+new Date(t.active_until).toLocaleDateString('en-IN'):''}</div>`
+      : '';
+    return `<div style="background:var(--card);border:1px solid ${isLive?'rgba(34,197,94,.3)':'var(--border)'};border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:15px;font-weight:700">${t.name}</span>
+          ${badge}
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">${swatches}</div>
+        ${t.font_family?`<div style="font-size:11px;color:var(--grey)">Font: ${t.font_family}</div>`:''}
+        ${dates}
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
+        <button class="btn-sm" onclick="toggleThemeActive('${t.id}',${!t.is_active})" style="${isLive?'background:rgba(231,76,60,.1);border-color:#e74c3c;color:#e74c3c':''}">${isLive?'Deactivate':'Activate'}</button>
+        <button class="btn-sm" onclick="openThemeEditor(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn-sm btn-danger" onclick="deleteTheme('${t.id}','${t.name.replace(/'/g,"\\'")}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleThemeActive(id, activate) {
+  const ok = await apiFetch(`/api/admin/themes/${id}`, 'PUT', { is_active: activate });
+  if (ok) loadThemes();
+}
+
+async function deleteTheme(id, name) {
+  if (!confirm(`Delete theme "${name}"?`)) return;
+  const res = await apiFetch(`/api/admin/themes/${id}`, 'DELETE');
+  if (res && res.success) loadThemes();
+}
+
+function openThemeEditor(theme) {
+  document.getElementById('themes-list-view').style.display = 'none';
+  document.getElementById('themes-editor-view').style.display = 'block';
+  document.getElementById('theme-editor-title').textContent = theme ? 'Edit Theme' : 'New Theme';
+  document.getElementById('te-id').value = theme ? theme.id : '';
+  document.getElementById('te-name').value = theme ? theme.name : '';
+  setColorField('te-bg', theme ? theme.bg_color : '#0a0a0a');
+  setColorField('te-text', theme ? theme.text_color : '#f5f5f5');
+  setColorField('te-accent', theme ? theme.accent_color : '#f5f5f5');
+  setColorField('te-card', theme ? theme.card_color : '#111111');
+  setColorField('te-border', theme ? theme.border_color : '#1e1e1e');
+  setColorField('te-grey', theme ? theme.grey_color : '#888888');
+  setColorField('te-banner-bg', theme ? theme.banner_bg : '#e63946');
+  setColorField('te-banner-text', theme ? theme.banner_text_color : '#ffffff');
+  document.getElementById('te-font').value = theme ? (theme.font_family || '') : '';
+  document.getElementById('te-hero-title').value = theme ? (theme.hero_title || '') : '';
+  document.getElementById('te-hero-tagline').value = theme ? (theme.hero_tagline || '') : '';
+  document.getElementById('te-banner-msg').value = theme ? (theme.banner_message || '') : '';
+  document.getElementById('te-logo-url').value = theme ? (theme.logo_url || '') : '';
+  document.getElementById('te-from').value = theme && theme.active_from ? theme.active_from.slice(0,16) : '';
+  document.getElementById('te-until').value = theme && theme.active_until ? theme.active_until.slice(0,16) : '';
+  document.getElementById('te-activate-now').checked = theme ? !!theme.is_active : false;
+  const err = document.getElementById('te-error');
+  if (err) { err.textContent = ''; err.style.display = 'none'; }
+  updateThemePreview();
+}
+
+function setColorField(id, value) {
+  const picker = document.getElementById(id);
+  const hex = document.getElementById(id + '-hex');
+  if (picker) picker.value = value || '#000000';
+  if (hex) hex.value = value || '';
+}
+
+function syncColorFromHex(pickerId, hexId) {
+  const hex = document.getElementById(hexId).value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    document.getElementById(pickerId).value = hex;
+    updateThemePreview();
+  }
+}
+
+function updateThemePreview() {
+  const g = id => document.getElementById(id)?.value || '';
+  const bg = g('te-bg') || '#0a0a0a';
+  const text = g('te-text') || '#f5f5f5';
+  const accent = g('te-accent') || '#f5f5f5';
+  const card = g('te-card') || '#111111';
+  const border = g('te-border') || '#1e1e1e';
+  const grey = g('te-grey') || '#888888';
+  const bannerMsg = g('te-banner-msg');
+  const bannerBg = g('te-banner-bg') || '#e63946';
+  const bannerText = g('te-banner-text') || '#ffffff';
+  // Also sync hex inputs from pickers
+  ['te-bg','te-text','te-accent','te-card','te-border','te-grey','te-banner-bg','te-banner-text'].forEach(id => {
+    const picker = document.getElementById(id);
+    const hexEl = document.getElementById(id + '-hex');
+    if (picker && hexEl && document.activeElement !== hexEl) hexEl.value = picker.value;
+  });
+  const box = document.getElementById('theme-preview-box');
+  if (!box) return;
+  box.style.background = bg;
+  box.style.borderColor = border;
+  const nav = document.getElementById('tp-nav');
+  if (nav) { nav.style.background = bg; nav.style.borderColor = border; nav.style.color = text; nav.querySelector('div').style.color = text; }
+  ['tp-nav-link1','tp-nav-link2','tp-nav-link3'].forEach(id => { const el = document.getElementById(id); if (el) el.style.color = grey; });
+  const heroTitle = document.getElementById('tp-hero-title');
+  if (heroTitle) { heroTitle.style.color = text; heroTitle.textContent = g('te-hero-title') || 'KIIT Film Society'; }
+  const heroSub = document.getElementById('tp-hero-sub');
+  if (heroSub) { heroSub.style.color = grey; heroSub.textContent = g('te-hero-tagline') || 'Lights. Camera. KFS.'; }
+  const cardEl = document.getElementById('tp-card');
+  if (cardEl) { cardEl.style.background = card; cardEl.style.borderColor = border; cardEl.style.color = text; }
+  const cardSub = document.getElementById('tp-card-sub');
+  if (cardSub) cardSub.style.color = grey;
+  const btn = document.getElementById('tp-btn');
+  if (btn) { btn.style.background = accent; btn.style.borderColor = accent; btn.style.color = bg; }
+  const btn2 = document.getElementById('tp-btn2');
+  if (btn2) { btn2.style.background = 'transparent'; btn2.style.borderColor = border; btn2.style.color = text; }
+  const banner = document.getElementById('tp-banner');
+  if (banner) { banner.style.display = bannerMsg ? 'block' : 'none'; banner.style.background = bannerBg; banner.style.color = bannerText; banner.textContent = bannerMsg || ''; }
+}
+
+function closeThemeEditor() {
+  document.getElementById('themes-list-view').style.display = 'block';
+  document.getElementById('themes-editor-view').style.display = 'none';
+}
+
+async function saveTheme(activate) {
+  const id = document.getElementById('te-id').value;
+  const name = document.getElementById('te-name').value.trim();
+  const errEl = document.getElementById('te-error');
+  if (!name) { errEl.textContent = 'Theme name is required.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  const forceActivate = activate || document.getElementById('te-activate-now').checked;
+  const payload = {
+    name,
+    is_active: forceActivate,
+    bg_color: document.getElementById('te-bg').value || null,
+    text_color: document.getElementById('te-text').value || null,
+    accent_color: document.getElementById('te-accent').value || null,
+    card_color: document.getElementById('te-card').value || null,
+    border_color: document.getElementById('te-border').value || null,
+    grey_color: document.getElementById('te-grey').value || null,
+    font_family: document.getElementById('te-font').value.trim() || null,
+    hero_title: document.getElementById('te-hero-title').value.trim() || null,
+    hero_tagline: document.getElementById('te-hero-tagline').value.trim() || null,
+    banner_message: document.getElementById('te-banner-msg').value.trim() || null,
+    banner_bg: document.getElementById('te-banner-bg').value || null,
+    banner_text_color: document.getElementById('te-banner-text').value || null,
+    logo_url: document.getElementById('te-logo-url').value.trim() || null,
+    active_from: document.getElementById('te-from').value || null,
+    active_until: document.getElementById('te-until').value || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/admin/themes/${id}` : '/api/admin/themes';
+  const res = await apiFetch(url, method, payload);
+  if (res && !res.error) {
+    closeThemeEditor();
+    loadThemes();
+  } else {
+    errEl.textContent = (res && res.error) || 'Save failed.';
+    errEl.style.display = 'block';
+  }
 }
 </script>
-
 <style>
   .ep-actions{flex-direction:column;}
 </style>

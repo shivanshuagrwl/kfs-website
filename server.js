@@ -4239,6 +4239,167 @@ app.get(
   },
 );
 
+// ── EVENT THEMES ──────────────────────────────────────────────────────────────
+
+// PUBLIC: Get the currently active theme (or null)
+app.get("/api/theme", async (req, res) => {
+  try {
+    cacheFor(res, 60);
+    const theme = await memCache("theme:active", 60, async () => {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("event_themes")
+        .select("*")
+        .eq("is_active", true)
+        .or(`active_until.is.null,active_until.gt.${now}`)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data || null;
+    });
+    res.json(theme);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: List all themes
+app.get("/api/admin/themes", requireSection("settings"), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("event_themes")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Create a new theme
+app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
+  try {
+    const {
+      name, is_active, active_from, active_until,
+      accent_color, bg_color, card_color, border_color, text_color, grey_color,
+      font_family, hero_title, hero_tagline,
+      banner_message, banner_bg, banner_text_color, logo_url,
+    } = req.body;
+
+    if (!name) return res.status(400).json({ error: "Theme name is required." });
+
+    // If activating, deactivate all others first
+    if (is_active) {
+      await supabase.from("event_themes").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
+    }
+
+    const { data, error } = await supabase
+      .from("event_themes")
+      .insert([{
+        name, is_active: !!is_active,
+        active_from: active_from || null,
+        active_until: active_until || null,
+        accent_color: accent_color || null,
+        bg_color: bg_color || null,
+        card_color: card_color || null,
+        border_color: border_color || null,
+        text_color: text_color || null,
+        grey_color: grey_color || null,
+        font_family: font_family || null,
+        hero_title: hero_title || null,
+        hero_tagline: hero_tagline || null,
+        banner_message: banner_message || null,
+        banner_bg: banner_bg || null,
+        banner_text_color: banner_text_color || null,
+        logo_url: logo_url || null,
+      }])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    memInvalidate("theme:active");
+    await logActivity(req.admin.id, req.admin.name, "create", "event_theme", name);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Update a theme (colors, name, dates, is_active toggle)
+app.put("/api/admin/themes/:id", requireSection("settings"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name, is_active, active_from, active_until,
+      accent_color, bg_color, card_color, border_color, text_color, grey_color,
+      font_family, hero_title, hero_tagline,
+      banner_message, banner_bg, banner_text_color, logo_url,
+    } = req.body;
+
+    // If activating this theme, deactivate all others first
+    if (is_active === true) {
+      await supabase.from("event_themes").update({ is_active: false }).neq("id", id);
+    }
+
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (is_active !== undefined) updates.is_active = is_active;
+    if (active_from !== undefined) updates.active_from = active_from || null;
+    if (active_until !== undefined) updates.active_until = active_until || null;
+    if (accent_color !== undefined) updates.accent_color = accent_color || null;
+    if (bg_color !== undefined) updates.bg_color = bg_color || null;
+    if (card_color !== undefined) updates.card_color = card_color || null;
+    if (border_color !== undefined) updates.border_color = border_color || null;
+    if (text_color !== undefined) updates.text_color = text_color || null;
+    if (grey_color !== undefined) updates.grey_color = grey_color || null;
+    if (font_family !== undefined) updates.font_family = font_family || null;
+    if (hero_title !== undefined) updates.hero_title = hero_title || null;
+    if (hero_tagline !== undefined) updates.hero_tagline = hero_tagline || null;
+    if (banner_message !== undefined) updates.banner_message = banner_message || null;
+    if (banner_bg !== undefined) updates.banner_bg = banner_bg || null;
+    if (banner_text_color !== undefined) updates.banner_text_color = banner_text_color || null;
+    if (logo_url !== undefined) updates.logo_url = logo_url || null;
+
+    const { data, error } = await supabase
+      .from("event_themes")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    memInvalidate("theme:active");
+    await logActivity(req.admin.id, req.admin.name, "update", "event_theme", data.name || id);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ADMIN: Delete a theme (cannot delete an active one)
+app.delete("/api/admin/themes/:id", requireSection("settings"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: theme, error: fetchErr } = await supabase
+      .from("event_themes")
+      .select("id,name,is_active")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchErr || !theme) return res.status(404).json({ error: "Theme not found." });
+    if (theme.is_active) return res.status(400).json({ error: "Cannot delete an active theme. Deactivate it first." });
+
+    const { error } = await supabase.from("event_themes").delete().eq("id", id);
+    if (error) return res.status(500).json({ error: error.message });
+
+    memInvalidate("theme:active");
+    await logActivity(req.admin.id, req.admin.name, "delete", "event_theme", theme.name);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
