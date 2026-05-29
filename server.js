@@ -2987,8 +2987,6 @@ app.get("/og/blog/:id", async (req, res) => {
 // social crawlers (WhatsApp, Twitter, Telegram…) get real previews AND
 // real users land on the correct deep-linked page.
 
-const fs = require("fs");
-
 // Read the base HTML once (cached).  We'll inject <meta> tags into <head>.
 function injectOgTags(
   html,
