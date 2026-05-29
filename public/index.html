@@ -2417,7 +2417,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
-        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="collaborate" checked> Collaborate</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="collaborate" checked> Collaborate</label>
+        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="themes" checked> Event Themes</label>
       </div>
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
@@ -2444,8 +2445,9 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
-      <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
-      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="collaborate"> Collaborate</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="collaborate"> Collaborate</label>
+      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="themes"> Event Themes</label>
     </div>
     <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
     <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
@@ -4487,7 +4489,7 @@ let adminToken = localStorage.getItem('kfs_token');
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','change-password'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access

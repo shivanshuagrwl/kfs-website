@@ -4288,9 +4288,9 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 
     if (!name) return res.status(400).json({ error: "Theme name is required." });
 
-    // If activating, deactivate all others first
+    // If activating, deactivate all existing themes first (no ID yet for new row)
     if (is_active) {
-      await supabase.from("event_themes").update({ is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
+      await supabase.from("event_themes").update({ is_active: false }).eq("is_active", true);
     }
 
     const { data, error } = await supabase
