@@ -6189,7 +6189,7 @@ async function loadAdminData(name) {
       <td style="color:var(--grey)">${e.location||'—'}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editEvent(${eJson})">Edit<\/button>
-        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,"\\'")}')">Form<\/button>
+        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,'\\x27')}')">Form<\/button>
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
@@ -7860,6 +7860,7 @@ async function bulkDelete(section) {
   loadAdminData(section);
   // Show toast if available
   if (typeof showToast === 'function') showToast(`${ids.length} item(s) deleted`, 'success');
+}
 // ── EVENT THEMES ADMIN ───────────────────────────────────────────────
 
 async function loadThemes() {
@@ -7898,7 +7899,7 @@ async function loadThemes() {
       <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
         <button class="btn-sm" onclick="toggleThemeActive('${t.id}',${!t.is_active})" style="${isLive?'background:rgba(231,76,60,.1);border-color:#e74c3c;color:#e74c3c':''}">${isLive?'Deactivate':'Activate'}</button>
         <button class="btn-sm" onclick="openThemeEditor(${tJson})">Edit</button>
-        <button class="btn-sm btn-danger" onclick="deleteTheme('${t.id}','${t.name.replace(/'/g,"\\'")}')">Delete</button>
+        <button class="btn-sm btn-danger" onclick="deleteTheme('${t.id}','${t.name.replace(/'/g,'\\x27')}')">Delete</button>
       </div>
     </div>`;
   }).join('');
