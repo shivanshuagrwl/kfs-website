@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="dns-prefetch" href="https://supabase.co">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" data-static="1">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
@@ -7907,13 +7907,33 @@ async function loadThemes() {
 
 async function toggleThemeActive(id, activate) {
   const ok = await apiFetch(`/api/admin/themes/${id}`, 'PUT', { is_active: activate });
-  if (ok) loadThemes();
+  if (ok) {
+    if (!activate) removeActiveThemeFromPage();
+    loadThemes();
+  }
 }
 
 async function deleteTheme(id, name) {
   if (!confirm(`Delete theme "${name}"?`)) return;
   const res = await apiFetch(`/api/admin/themes/${id}`, 'DELETE');
-  if (res && res.success) loadThemes();
+  if (res && res.success) {
+    removeActiveThemeFromPage();
+    loadThemes();
+  }
+}
+
+function removeActiveThemeFromPage() {
+  const el = document.getElementById('event-theme-vars');
+  if (el) el.remove();
+  // Remove dynamically injected font override styles
+  document.querySelectorAll('head style:not([id])').forEach(s => {
+    if (s.textContent.includes('font-family') && s.textContent.includes('!important')) s.remove();
+  });
+  // Remove dynamically injected font links (not the static preconnect ones)
+  document.querySelectorAll('head link[rel=stylesheet][href*="fonts.googleapis"]').forEach(l => {
+    if (!l.dataset.static) l.remove();
+  });
+  window.__kfsEventTheme = null;
 }
 
 function openThemeEditor(theme) {
