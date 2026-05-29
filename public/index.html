@@ -4771,13 +4771,13 @@ async function loadHomeData() {
   const achievements = await apiFetch('/api/achievements');
   const ag = document.getElementById('achievements-grid');
   if (achievements && achievements.length) {
-    ag.innerHTML = achievements.map(a=>`
+    ag.innerHTML = achievements.map(a=>{ const aJson=JSON.stringify(a).replace(/"/g,'&quot;'); return `
       <div class="achievement-card">
         <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : (a.icon||'🏆')}<\/div>
         <div class="achievement-title">${a.title}<\/div>
         <div class="achievement-year">${a.year||''}<\/div>
         <div class="achievement-desc">${a.description||''}<\/div>
-      <\/div>`).join('');
+      <\/div>`; }).join('');
   } else {
     ag.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No achievements yet.<\/p><\/div>`;
   }
@@ -6164,7 +6164,7 @@ async function loadAdminData(name) {
     const viewMap = {};
     if (analytics && analytics.blogs) analytics.blogs.forEach(b => { viewMap[b.id] = b.view_count || 0; });
 
-    tbody.innerHTML = blogs.map(b=>`<tr data-id="${b.id}">
+    tbody.innerHTML = blogs.map(b=>{ const bJson=JSON.stringify(b).replace(/"/g,'&quot;'); return `<tr data-id="${b.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${b.id}" onchange="updateBulkBar('blogs')"><\/td>
       <td>${b.cover_image?`<img src="${b.cover_image}" alt="">`:'—'}<\/td>
       <td style="font-weight:500">${b.title}<\/td>
@@ -6172,27 +6172,27 @@ async function loadAdminData(name) {
       <td style="color:var(--grey);font-variant-numeric:tabular-nums">${(viewMap[b.id] ?? b.view_count ?? 0).toLocaleString()}<\/td>
       <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editBlog(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editBlog(${bJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='events') {
     const events = await apiFetch('/api/events');
     const tbody = document.getElementById('admin-events-tbody');
     if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
     if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = events.map(e=>`<tr>
+    tbody.innerHTML = events.map(e=>{ const eJson=JSON.stringify(e).replace(/"/g,'&quot;'); return `<tr>
       <td style="font-weight:500">${e.title}<\/td>
       <td style="color:var(--grey)">${e.event_date||'—'}<\/td>
       <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span><\/td>
       <td style="color:var(--grey)">${e.location||'—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editEvent(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editEvent(${eJson})">Edit<\/button>
         <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,"\\'")}')">Form<\/button>
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='members') {
     const members = await apiFetch('/api/members');
@@ -6202,7 +6202,7 @@ async function loadAdminData(name) {
     const clearBtn = document.getElementById('member-search-clear-btn');
     if (clearBtn) clearBtn.classList.remove('visible');
     if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = members.map(m=>`<tr data-id="${m.id}">
+    tbody.innerHTML = members.map(m=>{ const mJson=JSON.stringify(m).replace(/"/g,'&quot;'); return `<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"><\/td>
       <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
       <td style="font-weight:500">${m.name}<\/td>
@@ -6210,55 +6210,55 @@ async function loadAdminData(name) {
       <td style="color:var(--grey)">${m.batch||'—'}<\/td>
       <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMember(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='testimonials') {
     const testimonials = await apiFetch('/api/testimonials');
     const tbody = document.getElementById('admin-testimonials-tbody');
     if (!testimonials || !testimonials.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No testimonials yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = testimonials.map(t=>`<tr>
+    tbody.innerHTML = testimonials.map(t=>{ const tJson=JSON.stringify(t).replace(/"/g,'&quot;'); return `<tr>
       <td>${t.photo?`<img src="${t.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
       <td style="font-weight:500">${t.name}<\/td>
       <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${t.quote}"<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editTestimonial(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editTestimonial(${tJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteTestimonial('${t.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='achievements') {
     const achievements = await apiFetch('/api/achievements');
     const tbody = document.getElementById('admin-achievements-tbody');
     if (!achievements || !achievements.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--grey)">No achievements yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = achievements.map(a=>`<tr>
+    tbody.innerHTML = achievements.map(a=>{ const aJson=JSON.stringify(a).replace(/"/g,'&quot;'); return `<tr>
       
       <td style="font-weight:500">${a.title}<\/td>
       <td style="color:var(--grey)">${a.year||'—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editAchievement(${JSON.stringify(a).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editAchievement(${aJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteAchievement('${a.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='movies') {
     const movies = await apiFetch('/api/movies');
     const tbody = document.getElementById('admin-movies-tbody');
     if (movies === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
     if (!movies.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = movies.map(m=>`<tr data-id="${m.id}">
+    tbody.innerHTML = movies.map(m=>{ const mJson=JSON.stringify(m).replace(/"/g,'&quot;'); return `<tr data-id="${m.id}">
       <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('movies')"><\/td>
       <td>${m.poster_image?`<img src="${m.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}<\/td>
       <td style="font-weight:500">${m.title}<\/td>
       <td style="color:var(--grey)">${m.release_year||'—'}<\/td>
       <td style="color:var(--grey)">${m.director ? splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : '—'}<\/td>
       <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMovie(${JSON.stringify(m).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editMovie(${mJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteMovie('${m.id}')">Delete<\/button>
       <\/div><\/td>
-    <\/tr>`).join('');
+    <\/tr>`; }).join('');
   }
   else if (name==='chitra-vichitra') {
     loadAdminCV();
@@ -7871,7 +7871,7 @@ async function loadThemes() {
     return;
   }
   const now = new Date();
-  grid.innerHTML = themes.map(t => {
+  grid.innerHTML = themes.map(t => { const tJson=JSON.stringify(t).replace(/"/g,'&quot;');
     const isLive = t.is_active && (!t.active_until || new Date(t.active_until) > now);
     const isScheduled = !t.is_active && t.active_from && new Date(t.active_from) > now;
     const badge = isLive
@@ -7897,7 +7897,7 @@ async function loadThemes() {
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
         <button class="btn-sm" onclick="toggleThemeActive('${t.id}',${!t.is_active})" style="${isLive?'background:rgba(231,76,60,.1);border-color:#e74c3c;color:#e74c3c':''}">${isLive?'Deactivate':'Activate'}</button>
-        <button class="btn-sm" onclick="openThemeEditor(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn-sm" onclick="openThemeEditor(${tJson})">Edit</button>
         <button class="btn-sm btn-danger" onclick="deleteTheme('${t.id}','${t.name.replace(/'/g,"\\'")}')">Delete</button>
       </div>
     </div>`;
@@ -8623,7 +8623,7 @@ async function loadAdminCV() {
     list.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center"><p>No CV editions yet. Add one to get started.<\/p><\/div>`;
     return;
   }
-  list.innerHTML = editions.map(cv => `
+  list.innerHTML = editions.map(cv => { const cvJson=JSON.stringify(cv).replace(/"/g,'&quot;'); return `
     <div class="admin-card" style="margin-bottom:12px;display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;padding:16px 20px">
       <div>
         ${cv.cover_image
@@ -8636,10 +8636,10 @@ async function loadAdminCV() {
       <\/div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn-sm" onclick="openCVMoviesModal('${cv.id}','${cv.year}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg> Manage Films<\/button>
-        <button class="btn-sm" onclick="editCV(${JSON.stringify(cv).replace(/"/g,'&quot;')})">Edit<\/button>
+        <button class="btn-sm" onclick="editCV(${cvJson})">Edit<\/button>
         <button class="btn-sm danger" onclick="deleteCV('${cv.id}','${cv.year}')">Delete<\/button>
       <\/div>
-    <\/div>`).join('');
+    <\/div>`; }).join('');
 }
 
 function openCVModal(cv=null) {
