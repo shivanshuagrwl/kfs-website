@@ -4586,7 +4586,7 @@ setInterval(
       console.error("Supabase keepalive failed:", e.message);
     }
   },
-  1000 * 60 * 4,
+  1000 * 60 * 29,
 );
 
 // Trim old page_view rows older than 90 days — run once per day
