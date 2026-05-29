@@ -1273,15 +1273,17 @@ app.put(
   async (req, res) => {
     const { name, role, batch, bio, sort_order, is_past, domain, special_tag } =
       req.body;
+    if (!name || !name.trim())
+      return res.status(400).json({ error: "Name is required" });
     const updates = {
-      name,
-      role,
-      batch,
-      bio,
+      name: name.trim(),
+      role: role || null,
+      batch: batch || null,
+      bio: bio || null,
       domain: domain || null,
       special_tag: special_tag || null,
       sort_order: parseInt(sort_order) || 99,
-      is_past: is_past === "true",
+      is_past: is_past === "true" || is_past === true,
     };
     if (req.file) updates.photo = await uploadImage(req.file, "members");
     const { data, error } = await supabase
@@ -3005,6 +3007,14 @@ function injectOgTags(
     })
     .join("\n");
 
+  // Update canonical link to match this page's URL
+  if (url) {
+    html = html.replace(
+      /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+      `<link rel="canonical" href="${url}" />`,
+    );
+  }
+
   const KFS_LOGO = "https://kiitfilmsociety.in/images/kfs-logo.png";
   const siteName = "KFS — KIIT Film Society";
   const ogType = type || "website";
@@ -3053,7 +3063,15 @@ function injectOgTags(
   <meta name="twitter:image:alt"   content="${safeTitle}" />`;
 
   if (html.includes("</head>")) {
-    return html.replace("</head>", tags + "\n</head>");
+    let result = html.replace("</head>", tags + "\n</head>");
+    // Also update the <title> so Google picks up the right title for this page
+    if (title) {
+      result = result.replace(
+        /<title>[^<]*<\/title>/i,
+        `<title>${safeTitle}</title>`,
+      );
+    }
+    return result;
   }
   return html.replace("<body", tags + "\n<body");
 }
@@ -3093,13 +3111,14 @@ async function serveWithOg(res, ogData) {
 app.get("/blog/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const { data: b } = id
+    const blogResult = id
       ? await supabase
           .from("blogs")
           .select("id,title,excerpt,cover_image,author,created_at")
           .eq("id", id)
           .maybeSingle()
-      : null;
+      : { data: null };
+    const b = blogResult?.data ?? null;
 
     if (!b) {
       // Unknown blog — serve SPA without special OG so the app can show its own 404
@@ -3151,13 +3170,14 @@ app.get("/blog/:slug", async (req, res) => {
 app.get("/films/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const { data: m } = id
+    const queryResult = id
       ? await supabase
           .from("movies")
-          .select("id,title,description,poster_image,director,release_year")
+          .select("id,title,description,poster_image,director,release_year,genre")
           .eq("id", id)
           .maybeSingle()
-      : null;
+      : { data: null };
+    const m = queryResult?.data ?? null;
 
     if (!m) {
       return res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -3208,13 +3228,14 @@ app.get("/films/:slug", async (req, res) => {
 app.get("/events/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const { data: e } = id
+    const eventResult = id
       ? await supabase
           .from("events")
           .select("id,title,description,cover_image,event_date,location")
           .eq("id", id)
           .maybeSingle()
-      : null;
+      : { data: null };
+    const e = eventResult?.data ?? null;
 
     if (!e) {
       return res.sendFile(path.join(__dirname, "public", "index.html"));
