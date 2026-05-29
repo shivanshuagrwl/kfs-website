@@ -226,6 +226,35 @@ function cacheFor(res, seconds = 60) {
   res.setHeader('Cache-Control', `public, max-age=${seconds}, stale-while-revalidate=60`);
 }
 
+// ── Server-side in-memory cache ────────────────────────────────────────────────
+// Keeps Supabase query count (and thus cached egress) very low.
+// Call: await memCache('key', ttlSeconds, () => supabase.from(...).select(...))
+// Invalidate a key after a write:  memInvalidate('key')  or  memInvalidate('prefix:')
+const _memStore = new Map();
+
+function memCache(key, ttlSeconds, fn) {
+  const hit = _memStore.get(key);
+  if (hit && Date.now() < hit.expires) return Promise.resolve(hit.data);
+  return fn().then(data => {
+    _memStore.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
+    return data;
+  });
+}
+
+// Invalidate one key or all keys that start with a prefix (e.g. 'movies')
+function memInvalidate(...keys) {
+  for (const key of keys) {
+    if (key.endsWith(':') || key.endsWith('_')) {
+      // prefix invalidation
+      for (const k of _memStore.keys()) {
+        if (k.startsWith(key)) _memStore.delete(k);
+      }
+    } else {
+      _memStore.delete(key);
+    }
+  }
+}
+
 // ── Auth middleware ───────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
@@ -702,13 +731,13 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get("/api/settings", async (req, res) => {
-  cacheFor(res, 300); // 5 min
-  const { data } = await supabase
-    .from("settings")
-    .select("*")
-    .neq("key", "admin_password");
-  const obj = {};
-  (data || []).forEach((r) => (obj[r.key] = r.value));
+  cacheFor(res, 300); // 5 min HTTP cache
+  const obj = await memCache('settings', 300, async () => {
+    const { data } = await supabase.from("settings").select("*").neq("key", "admin_password");
+    const o = {};
+    (data || []).forEach((r) => (o[r.key] = r.value));
+    return o;
+  });
   res.json(obj);
 });
 
@@ -784,6 +813,7 @@ app.post(
           .from("settings")
           .upsert({ key, value }, { onConflict: "key" });
       }
+      memInvalidate('settings');
       try {
         await logActivity(
           req.admin.id,
@@ -804,16 +834,15 @@ app.post(
 // ── CUSTOM SEARCH EASTER EGGS ─────────────────────────────────────────────────
 // Get all custom eggs
 app.get("/api/settings/custom-eggs", async (req, res) => {
-  const { data } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "custom_search_eggs")
-    .maybeSingle();
-  try {
-    res.json(JSON.parse(data?.value || "[]"));
-  } catch {
-    res.json([]);
-  }
+  const data = await memCache('settings:custom-eggs', 300, async () => {
+    const { data } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "custom_search_eggs")
+      .maybeSingle();
+    try { return JSON.parse(data?.value || "[]"); } catch { return []; }
+  });
+  res.json(data);
 });
 
 // ADMIN: Upload an image for a custom search easter egg (does NOT touch easter_egg_img setting)
@@ -856,18 +885,22 @@ app.post(
       "settings",
       "Custom Search Easter Eggs",
     );
+    memInvalidate('settings:custom-eggs', 'settings');
     res.json({ success: true });
   },
 );
 
 app.get("/api/blogs", async (req, res) => {
-  cacheFor(res, 120); // 2 min
-  const { data } = await supabase
-    .from("blogs")
-    .select("id,title,author,excerpt,cover_image,published,created_at,sections,view_count")
-    .eq("published", true)
-    .order("created_at", { ascending: false });
-  res.json(data || []);
+  cacheFor(res, 120);
+  const data = await memCache('blogs:list', 120, async () => {
+    const { data } = await supabase
+      .from("blogs")
+      .select("id,title,author,excerpt,cover_image,published,created_at,sections,view_count")
+      .eq("published", true)
+      .order("created_at", { ascending: false });
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
@@ -881,12 +914,11 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
 });
 
 app.get("/api/blogs/:id", async (req, res) => {
-  cacheFor(res, 300); // 5 min
-  const { data } = await supabase
-    .from("blogs")
-    .select("*")
-    .eq("id", req.params.id)
-    .maybeSingle();
+  cacheFor(res, 300);
+  const data = await memCache(`blogs:${req.params.id}`, 300, async () => {
+    const { data } = await supabase.from("blogs").select("*").eq("id", req.params.id).maybeSingle();
+    return data;
+  });
   if (!data) return res.status(404).json({ error: "Not found" });
 
   // Fire-and-forget view increment — never blocks the response
@@ -952,6 +984,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('blogs:list');
     await logActivity(req.admin.id, req.admin.name, "create", "blog", title);
     res.json(data);
   },
@@ -979,6 +1012,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('blogs:list', `blogs:${req.params.id}`);
     await logActivity(req.admin.id, req.admin.name, "update", "blog", title);
     res.json(data);
   },
@@ -994,6 +1028,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("blogs").delete().eq("id", req.params.id);
+    memInvalidate('blogs:list', `blogs:${req.params.id}`);
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1007,12 +1042,12 @@ app.delete(
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
-  cacheFor(res, 120); // 2 min
-  const { data } = await supabase
-    .from("events")
-    .select("*")
-    .order("event_date", { ascending: false });
-  res.json(data || []);
+  cacheFor(res, 120);
+  const data = await memCache('events:list', 120, async () => {
+    const { data } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.post(
@@ -1045,6 +1080,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('events:list');
     await logActivity(req.admin.id, req.admin.name, "create", "event", title);
     res.json(data);
   },
@@ -1079,6 +1115,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('events:list');
     await logActivity(req.admin.id, req.admin.name, "update", "event", title);
     res.json(data);
   },
@@ -1094,6 +1131,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("events").delete().eq("id", req.params.id);
+    memInvalidate('events:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1107,12 +1145,14 @@ app.delete(
 
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
-  cacheFor(res, 600); // 10 min
-  const { data } = await supabase
-    .from("members")
-    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
-    .order("sort_order", { ascending: true });
-  res.json(data || []);
+  cacheFor(res, 600);
+  const data = await memCache('members:list', 600, async () => {
+    const { data } = await supabase.from("members")
+      .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+      .order("sort_order", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.post(
@@ -1155,6 +1195,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('members:list');
     await logActivity(req.admin.id, req.admin.name, "create", "member", name);
     res.json(data);
   },
@@ -1185,6 +1226,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('members:list');
     await logActivity(req.admin.id, req.admin.name, "update", "member", name);
     res.json(data);
   },
@@ -1200,6 +1242,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("members").delete().eq("id", req.params.id);
+    memInvalidate('members:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1213,12 +1256,12 @@ app.delete(
 
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
-  cacheFor(res, 600); // 10 min
-  const { data } = await supabase
-    .from("testimonials")
-    .select("*")
-    .order("created_at", { ascending: false });
-  res.json(data || []);
+  cacheFor(res, 600);
+  const data = await memCache('testimonials:list', 600, async () => {
+    const { data } = await supabase.from("testimonials").select("*").order("created_at", { ascending: false });
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.post(
@@ -1241,6 +1284,7 @@ app.post(
       "testimonial",
       name,
     );
+    memInvalidate('testimonials:list');
     res.json(data);
   },
 );
@@ -1260,6 +1304,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('testimonials:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1281,6 +1326,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("testimonials").delete().eq("id", req.params.id);
+    memInvalidate('testimonials:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1294,12 +1340,12 @@ app.delete(
 
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
-  cacheFor(res, 600); // 10 min
-  const { data } = await supabase
-    .from("achievements")
-    .select("*")
-    .order("sort_order", { ascending: true });
-  res.json(data || []);
+  cacheFor(res, 600);
+  const data = await memCache('achievements:list', 600, async () => {
+    const { data } = await supabase.from("achievements").select("*").order("sort_order", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.post(
@@ -1323,6 +1369,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('achievements:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1354,6 +1401,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('achievements:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1375,6 +1423,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("achievements").delete().eq("id", req.params.id);
+    memInvalidate('achievements:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1518,32 +1567,33 @@ app.get("/api/yt-duration", async (req, res) => {
 });
 
 app.get("/api/movies", async (req, res) => {
-  cacheFor(res, 300); // 5 min
-  let query = supabase
-    .from("movies")
-    .select("id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url")
-    .order("release_year", { ascending: false });
-  const { data } = await query;
-  let movies = data || [];
-  // Genre filter: ?genre=Drama
-  if (req.query.genre) {
-    const filterGenre = req.query.genre.toLowerCase();
-    movies = movies.filter((m) =>
-      parseGenre(m.genre).some((g) => g.toLowerCase() === filterGenre),
-    );
-  }
-  // Parse genre array for each movie before sending
-  movies = movies.map((m) => ({ ...m, genre: parseGenre(m.genre) }));
+  cacheFor(res, 300);
+  // genre filter busts the general cache key
+  const cacheKey = req.query.genre ? `movies:genre:${req.query.genre}` : 'movies:list';
+  const movies = await memCache(cacheKey, 300, async () => {
+    let query = supabase
+      .from("movies")
+      .select("id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url")
+      .order("release_year", { ascending: false });
+    const { data } = await query;
+    let result = data || [];
+    if (req.query.genre) {
+      const filterGenre = req.query.genre.toLowerCase();
+      result = result.filter((m) =>
+        parseGenre(m.genre).some((g) => g.toLowerCase() === filterGenre),
+      );
+    }
+    return result.map((m) => ({ ...m, genre: parseGenre(m.genre) }));
+  });
   res.json(movies);
 });
 
 app.get("/api/movies/:id", async (req, res) => {
-  cacheFor(res, 300); // 5 min
-  const { data } = await supabase
-    .from("movies")
-    .select("*")
-    .eq("id", req.params.id)
-    .maybeSingle();
+  cacheFor(res, 300);
+  const data = await memCache(`movies:${req.params.id}`, 300, async () => {
+    const { data } = await supabase.from("movies").select("*").eq("id", req.params.id).maybeSingle();
+    return data;
+  });
   if (!data) return res.status(404).json({ error: "Not found" });
   res.json({ ...data, genre: parseGenre(data.genre) });
 });
@@ -1616,6 +1666,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('movies:list', 'movies:genre:');
     await logActivity(req.admin.id, req.admin.name, "create", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1687,6 +1738,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('movies:list', 'movies:genre:', `movies:${req.params.id}`);
     await logActivity(req.admin.id, req.admin.name, "update", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1702,6 +1754,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("movies").delete().eq("id", req.params.id);
+    memInvalidate('movies:list', 'movies:genre:', `movies:${req.params.id}`);
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1716,29 +1769,23 @@ app.delete(
 // ── CHITRA VICHITRA — PUBLIC ──────────────────────────────────────────────────
 // Get all CV editions (with movie count)
 app.get("/api/chitra-vichitra", async (req, res) => {
-  cacheFor(res, 600); // 10 min
-  const { data: editions, error } = await supabase
-    .from("chitra_vichitra")
-    .select("*")
-    .order("sort_order", { ascending: true });
-  if (error) return res.status(500).json({ error: error.message });
-
-  if (!editions || editions.length === 0) return res.json([]);
-
-  // Fetch all CV-movie rows in one query instead of N+1 individual count queries
-  const { data: allCvMovies } = await supabase
-    .from("chitra_vichitra_movies")
-    .select("cv_id");
-
-  const countMap = {};
-  (allCvMovies || []).forEach((row) => {
-    countMap[row.cv_id] = (countMap[row.cv_id] || 0) + 1;
+  cacheFor(res, 600);
+  const result = await memCache('cv:list', 600, async () => {
+    const { data: editions, error } = await supabase
+      .from("chitra_vichitra")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    if (!editions || editions.length === 0) return [];
+    const { data: allCvMovies } = await supabase
+      .from("chitra_vichitra_movies")
+      .select("cv_id");
+    const countMap = {};
+    (allCvMovies || []).forEach((row) => {
+      countMap[row.cv_id] = (countMap[row.cv_id] || 0) + 1;
+    });
+    return editions.map((cv) => ({ ...cv, movie_count: countMap[cv.id] || 0 }));
   });
-
-  const result = editions.map((cv) => ({
-    ...cv,
-    movie_count: countMap[cv.id] || 0,
-  }));
   res.json(result);
 });
 
@@ -1801,6 +1848,7 @@ app.post(
       "chitra_vichitra",
       `CV ${year}`,
     );
+    memInvalidate('cv:list');
     res.json(data);
   },
 );
@@ -1825,6 +1873,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('cv:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1847,6 +1896,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("chitra_vichitra").delete().eq("id", req.params.id);
+    memInvalidate('cv:list');
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1880,15 +1930,11 @@ app.post(
 
     const { data, error } = await supabase
       .from("chitra_vichitra_movies")
-      .insert([
-        {
-          cv_id: req.params.id,
-          movie_id,
-        },
-      ])
+      .insert([{ cv_id: req.params.id, movie_id }])
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('cv:list');
     res.json(data);
   },
 );
@@ -1902,19 +1948,24 @@ app.delete(
       .from("chitra_vichitra_movies")
       .delete()
       .eq("id", req.params.cvMovieId);
+    memInvalidate('cv:list');
     res.json({ success: true });
   },
 );
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 app.get("/api/notifications/active", async (req, res) => {
-  const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle();
-  res.json(data || null);
+  cacheFor(res, 60);
+  const data = await memCache('notifications:active', 60, async () => {
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle();
+    return data || null;
+  });
+  res.json(data);
 });
 
 app.get(
@@ -1949,6 +2000,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('notifications:active');
     res.json(data);
   },
 );
@@ -1972,6 +2024,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
+    memInvalidate('notifications:active');
     res.json(data);
   },
 );
@@ -1981,6 +2034,7 @@ app.delete(
   requireSection("notifications"),
   async (req, res) => {
     await supabase.from("notifications").delete().eq("id", req.params.id);
+    memInvalidate('notifications:active');
     res.json({ success: true });
   },
 );
