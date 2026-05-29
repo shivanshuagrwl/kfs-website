@@ -9,6 +9,8 @@ const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -217,7 +219,16 @@ async function uploadImage(file, folder = "general") {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
+app.use(
+  "/api/",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { error: "Too many requests. Slow down." },
+  }),
+);
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Response cache helper ──────────────────────────────────────────────────────
@@ -542,41 +553,49 @@ app.get("/api/health", async (req, res) => {
 });
 
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
-app.post("/api/admin/login", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password)
-    return res.status(400).json({ error: "Username and password required" });
+app.post(
+  "/api/admin/login",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { error: "Too many login attempts. Try again later." },
+  }),
+  async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password)
+      return res.status(400).json({ error: "Username and password required" });
 
-  const { data: admin } = await supabase
-    .from("admins")
-    .select("*")
-    .eq("username", username.trim())
-    .maybeSingle();
-  if (!admin) return res.status(401).json({ error: "Invalid credentials" });
+    const { data: admin } = await supabase
+      .from("admins")
+      .select("*")
+      .eq("username", username.trim())
+      .maybeSingle();
+    if (!admin) return res.status(401).json({ error: "Invalid credentials" });
 
-  const valid = await bcrypt.compare(password, admin.password_hash);
-  if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    const valid = await bcrypt.compare(password, admin.password_hash);
+    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
 
-  const perms = (() => {
-    try {
-      return JSON.parse(admin.permissions || "[]");
-    } catch {
-      return [];
-    }
-  })();
-  const token = jwt.sign(
-    {
-      id: admin.id,
-      name: admin.name,
-      username: admin.username,
-      role: admin.role,
-      permissions: perms,
-    },
-    JWT_SECRET,
-    { expiresIn: "7d" },
-  );
-  res.json({ token, name: admin.name, role: admin.role, permissions: perms });
-});
+    const perms = (() => {
+      try {
+        return JSON.parse(admin.permissions || "[]");
+      } catch {
+        return [];
+      }
+    })();
+    const token = jwt.sign(
+      {
+        id: admin.id,
+        name: admin.name,
+        username: admin.username,
+        role: admin.role,
+        permissions: perms,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    res.json({ token, name: admin.name, role: admin.role, permissions: perms });
+  },
+);
 
 app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   const { newPassword } = req.body;
@@ -2079,14 +2098,13 @@ app.delete(
 
 // ── TRAFFIC ───────────────────────────────────────────────────────────────────
 app.post("/api/track", async (req, res) => {
-  const { page, hour } = req.body;
+  const allowed = ["home", "films", "events", "blog", "members", "collaborate"];
+  const page = allowed.includes(req.body.page) ? req.body.page : "home";
+  const hour = parseInt(req.body.hour) || 0;
   const today = new Date().toISOString().slice(0, 10);
-  await supabase
-    .from("page_views")
-    .insert([{ page: page || "home", date: today, hour: hour || 0 }]);
+  await supabase.from("page_views").insert([{ page, date: today, hour }]);
   res.json({ ok: true });
 });
-
 app.get(
   "/api/admin/analytics/traffic",
   requireSection("analytics"),
@@ -2255,7 +2273,7 @@ app.post("/api/reviews", async (req, res) => {
     .insert([
       {
         movie_id,
-        reviewer_name: reviewer_name || "Anonymous",
+        reviewer_name: (reviewer_name || "Anonymous").toString().slice(0, 60),
         overall: parseInt(overall),
         direction: direction ? parseInt(direction) : null,
         sound: sound ? parseInt(sound) : null,
@@ -4488,11 +4506,9 @@ app.delete(
       if (fetchErr || !theme)
         return res.status(404).json({ error: "Theme not found." });
       if (theme.is_active)
-        return res
-          .status(400)
-          .json({
-            error: "Cannot delete an active theme. Deactivate it first.",
-          });
+        return res.status(400).json({
+          error: "Cannot delete an active theme. Deactivate it first.",
+        });
 
       const { error } = await supabase
         .from("event_themes")
