@@ -223,7 +223,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // ── Response cache helper ──────────────────────────────────────────────────────
 // maxAge in seconds. Sends Cache-Control: public, max-age=N, stale-while-revalidate=60
 function cacheFor(res, seconds = 60) {
-  res.setHeader('Cache-Control', `public, max-age=${seconds}, stale-while-revalidate=60`);
+  res.setHeader(
+    "Cache-Control",
+    `public, max-age=${seconds}, stale-while-revalidate=60`,
+  );
 }
 
 // ── Server-side in-memory cache ────────────────────────────────────────────────
@@ -235,7 +238,7 @@ const _memStore = new Map();
 function memCache(key, ttlSeconds, fn) {
   const hit = _memStore.get(key);
   if (hit && Date.now() < hit.expires) return Promise.resolve(hit.data);
-  return fn().then(data => {
+  return fn().then((data) => {
     _memStore.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
     return data;
   });
@@ -244,7 +247,7 @@ function memCache(key, ttlSeconds, fn) {
 // Invalidate one key or all keys that start with a prefix (e.g. 'movies')
 function memInvalidate(...keys) {
   for (const key of keys) {
-    if (key.endsWith(':') || key.endsWith('_')) {
+    if (key.endsWith(":") || key.endsWith("_")) {
       // prefix invalidation
       for (const k of _memStore.keys()) {
         if (k.startsWith(key)) _memStore.delete(k);
@@ -732,8 +735,11 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get("/api/settings", async (req, res) => {
   cacheFor(res, 300); // 5 min HTTP cache
-  const obj = await memCache('settings', 300, async () => {
-    const { data } = await supabase.from("settings").select("*").neq("key", "admin_password");
+  const obj = await memCache("settings", 300, async () => {
+    const { data } = await supabase
+      .from("settings")
+      .select("*")
+      .neq("key", "admin_password");
     const o = {};
     (data || []).forEach((r) => (o[r.key] = r.value));
     return o;
@@ -813,7 +819,7 @@ app.post(
           .from("settings")
           .upsert({ key, value }, { onConflict: "key" });
       }
-      memInvalidate('settings');
+      memInvalidate("settings");
       try {
         await logActivity(
           req.admin.id,
@@ -834,13 +840,17 @@ app.post(
 // ── CUSTOM SEARCH EASTER EGGS ─────────────────────────────────────────────────
 // Get all custom eggs
 app.get("/api/settings/custom-eggs", async (req, res) => {
-  const data = await memCache('settings:custom-eggs', 300, async () => {
+  const data = await memCache("settings:custom-eggs", 300, async () => {
     const { data } = await supabase
       .from("settings")
       .select("value")
       .eq("key", "custom_search_eggs")
       .maybeSingle();
-    try { return JSON.parse(data?.value || "[]"); } catch { return []; }
+    try {
+      return JSON.parse(data?.value || "[]");
+    } catch {
+      return [];
+    }
   });
   res.json(data);
 });
@@ -885,17 +895,19 @@ app.post(
       "settings",
       "Custom Search Easter Eggs",
     );
-    memInvalidate('settings:custom-eggs', 'settings');
+    memInvalidate("settings:custom-eggs", "settings");
     res.json({ success: true });
   },
 );
 
 app.get("/api/blogs", async (req, res) => {
   cacheFor(res, 120);
-  const data = await memCache('blogs:list', 120, async () => {
+  const data = await memCache("blogs:list", 120, async () => {
     const { data } = await supabase
       .from("blogs")
-      .select("id,title,author,excerpt,cover_image,published,created_at,sections,view_count")
+      .select(
+        "id,title,author,excerpt,cover_image,published,created_at,sections,view_count",
+      )
       .eq("published", true)
       .order("created_at", { ascending: false });
     return data || [];
@@ -906,7 +918,9 @@ app.get("/api/blogs", async (req, res) => {
 app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
   const { data } = await supabase
     .from("blogs")
-    .select("id,title,author,published,view_count,cover_image,created_at,sections")
+    .select(
+      "id,title,author,published,view_count,cover_image,created_at,sections",
+    )
     // Don't fetch `content` in the list — it's huge HTML. Only needed in /api/blogs/:id
     .order("created_at", { ascending: false })
     .limit(200);
@@ -916,7 +930,11 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
 app.get("/api/blogs/:id", async (req, res) => {
   cacheFor(res, 300);
   const data = await memCache(`blogs:${req.params.id}`, 300, async () => {
-    const { data } = await supabase.from("blogs").select("*").eq("id", req.params.id).maybeSingle();
+    const { data } = await supabase
+      .from("blogs")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
     return data;
   });
   if (!data) return res.status(404).json({ error: "Not found" });
@@ -984,7 +1002,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('blogs:list');
+    memInvalidate("blogs:list");
     await logActivity(req.admin.id, req.admin.name, "create", "blog", title);
     res.json(data);
   },
@@ -1012,7 +1030,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('blogs:list', `blogs:${req.params.id}`);
+    memInvalidate("blogs:list", `blogs:${req.params.id}`);
     await logActivity(req.admin.id, req.admin.name, "update", "blog", title);
     res.json(data);
   },
@@ -1028,7 +1046,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("blogs").delete().eq("id", req.params.id);
-    memInvalidate('blogs:list', `blogs:${req.params.id}`);
+    memInvalidate("blogs:list", `blogs:${req.params.id}`);
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1043,8 +1061,11 @@ app.delete(
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
   cacheFor(res, 120);
-  const data = await memCache('events:list', 120, async () => {
-    const { data } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+  const data = await memCache("events:list", 120, async () => {
+    const { data } = await supabase
+      .from("events")
+      .select("*")
+      .order("event_date", { ascending: false });
     return data || [];
   });
   res.json(data);
@@ -1080,7 +1101,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('events:list');
+    memInvalidate("events:list");
     await logActivity(req.admin.id, req.admin.name, "create", "event", title);
     res.json(data);
   },
@@ -1115,7 +1136,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('events:list');
+    memInvalidate("events:list");
     await logActivity(req.admin.id, req.admin.name, "update", "event", title);
     res.json(data);
   },
@@ -1131,7 +1152,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("events").delete().eq("id", req.params.id);
-    memInvalidate('events:list');
+    memInvalidate("events:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1146,9 +1167,12 @@ app.delete(
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
   cacheFor(res, 600);
-  const data = await memCache('members:list', 600, async () => {
-    const { data } = await supabase.from("members")
-      .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+  const data = await memCache("members:list", 600, async () => {
+    const { data } = await supabase
+      .from("members")
+      .select(
+        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past",
+      )
       .order("sort_order", { ascending: true });
     return data || [];
   });
@@ -1195,7 +1219,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('members:list');
+    memInvalidate("members:list");
     await logActivity(req.admin.id, req.admin.name, "create", "member", name);
     res.json(data);
   },
@@ -1226,7 +1250,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('members:list');
+    memInvalidate("members:list");
     await logActivity(req.admin.id, req.admin.name, "update", "member", name);
     res.json(data);
   },
@@ -1242,7 +1266,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("members").delete().eq("id", req.params.id);
-    memInvalidate('members:list');
+    memInvalidate("members:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1257,8 +1281,11 @@ app.delete(
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
   cacheFor(res, 600);
-  const data = await memCache('testimonials:list', 600, async () => {
-    const { data } = await supabase.from("testimonials").select("*").order("created_at", { ascending: false });
+  const data = await memCache("testimonials:list", 600, async () => {
+    const { data } = await supabase
+      .from("testimonials")
+      .select("*")
+      .order("created_at", { ascending: false });
     return data || [];
   });
   res.json(data);
@@ -1284,7 +1311,7 @@ app.post(
       "testimonial",
       name,
     );
-    memInvalidate('testimonials:list');
+    memInvalidate("testimonials:list");
     res.json(data);
   },
 );
@@ -1304,7 +1331,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('testimonials:list');
+    memInvalidate("testimonials:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1326,7 +1353,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("testimonials").delete().eq("id", req.params.id);
-    memInvalidate('testimonials:list');
+    memInvalidate("testimonials:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1341,8 +1368,11 @@ app.delete(
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
   cacheFor(res, 600);
-  const data = await memCache('achievements:list', 600, async () => {
-    const { data } = await supabase.from("achievements").select("*").order("sort_order", { ascending: true });
+  const data = await memCache("achievements:list", 600, async () => {
+    const { data } = await supabase
+      .from("achievements")
+      .select("*")
+      .order("sort_order", { ascending: true });
     return data || [];
   });
   res.json(data);
@@ -1369,7 +1399,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('achievements:list');
+    memInvalidate("achievements:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1401,7 +1431,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('achievements:list');
+    memInvalidate("achievements:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1423,7 +1453,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("achievements").delete().eq("id", req.params.id);
-    memInvalidate('achievements:list');
+    memInvalidate("achievements:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1569,11 +1599,15 @@ app.get("/api/yt-duration", async (req, res) => {
 app.get("/api/movies", async (req, res) => {
   cacheFor(res, 300);
   // genre filter busts the general cache key
-  const cacheKey = req.query.genre ? `movies:genre:${req.query.genre}` : 'movies:list';
+  const cacheKey = req.query.genre
+    ? `movies:genre:${req.query.genre}`
+    : "movies:list";
   const movies = await memCache(cacheKey, 300, async () => {
     let query = supabase
       .from("movies")
-      .select("id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url")
+      .select(
+        "id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url",
+      )
       .order("release_year", { ascending: false });
     const { data } = await query;
     let result = data || [];
@@ -1591,7 +1625,11 @@ app.get("/api/movies", async (req, res) => {
 app.get("/api/movies/:id", async (req, res) => {
   cacheFor(res, 300);
   const data = await memCache(`movies:${req.params.id}`, 300, async () => {
-    const { data } = await supabase.from("movies").select("*").eq("id", req.params.id).maybeSingle();
+    const { data } = await supabase
+      .from("movies")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
     return data;
   });
   if (!data) return res.status(404).json({ error: "Not found" });
@@ -1666,7 +1704,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('movies:list', 'movies:genre:');
+    memInvalidate("movies:list", "movies:genre:");
     await logActivity(req.admin.id, req.admin.name, "create", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1738,7 +1776,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('movies:list', 'movies:genre:', `movies:${req.params.id}`);
+    memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
     await logActivity(req.admin.id, req.admin.name, "update", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1754,7 +1792,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("movies").delete().eq("id", req.params.id);
-    memInvalidate('movies:list', 'movies:genre:', `movies:${req.params.id}`);
+    memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1770,7 +1808,7 @@ app.delete(
 // Get all CV editions (with movie count)
 app.get("/api/chitra-vichitra", async (req, res) => {
   cacheFor(res, 600);
-  const result = await memCache('cv:list', 600, async () => {
+  const result = await memCache("cv:list", 600, async () => {
     const { data: editions, error } = await supabase
       .from("chitra_vichitra")
       .select("*")
@@ -1848,7 +1886,7 @@ app.post(
       "chitra_vichitra",
       `CV ${year}`,
     );
-    memInvalidate('cv:list');
+    memInvalidate("cv:list");
     res.json(data);
   },
 );
@@ -1873,7 +1911,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('cv:list');
+    memInvalidate("cv:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1896,7 +1934,7 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("chitra_vichitra").delete().eq("id", req.params.id);
-    memInvalidate('cv:list');
+    memInvalidate("cv:list");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1934,7 +1972,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('cv:list');
+    memInvalidate("cv:list");
     res.json(data);
   },
 );
@@ -1948,7 +1986,7 @@ app.delete(
       .from("chitra_vichitra_movies")
       .delete()
       .eq("id", req.params.cvMovieId);
-    memInvalidate('cv:list');
+    memInvalidate("cv:list");
     res.json({ success: true });
   },
 );
@@ -1956,7 +1994,7 @@ app.delete(
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 app.get("/api/notifications/active", async (req, res) => {
   cacheFor(res, 60);
-  const data = await memCache('notifications:active', 60, async () => {
+  const data = await memCache("notifications:active", 60, async () => {
     const { data } = await supabase
       .from("notifications")
       .select("*")
@@ -2000,7 +2038,7 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('notifications:active');
+    memInvalidate("notifications:active");
     res.json(data);
   },
 );
@@ -2024,7 +2062,7 @@ app.put(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    memInvalidate('notifications:active');
+    memInvalidate("notifications:active");
     res.json(data);
   },
 );
@@ -2034,7 +2072,7 @@ app.delete(
   requireSection("notifications"),
   async (req, res) => {
     await supabase.from("notifications").delete().eq("id", req.params.id);
-    memInvalidate('notifications:active');
+    memInvalidate("notifications:active");
     res.json({ success: true });
   },
 );
@@ -4280,45 +4318,71 @@ app.get("/api/admin/themes", requireSection("settings"), async (req, res) => {
 app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
   try {
     const {
-      name, is_active, active_from, active_until,
-      accent_color, bg_color, card_color, border_color, text_color, grey_color,
-      font_family, hero_title, hero_tagline,
-      banner_message, banner_bg, banner_text_color, logo_url,
+      name,
+      is_active,
+      active_from,
+      active_until,
+      accent_color,
+      bg_color,
+      card_color,
+      border_color,
+      text_color,
+      grey_color,
+      font_family,
+      hero_title,
+      hero_tagline,
+      banner_message,
+      banner_bg,
+      banner_text_color,
+      logo_url,
     } = req.body;
 
-    if (!name) return res.status(400).json({ error: "Theme name is required." });
+    if (!name)
+      return res.status(400).json({ error: "Theme name is required." });
 
     // If activating, deactivate all existing themes first (no ID yet for new row)
     if (is_active) {
-      await supabase.from("event_themes").update({ is_active: false }).eq("is_active", true);
+      await supabase
+        .from("event_themes")
+        .update({ is_active: false })
+        .eq("is_active", true);
     }
 
     const { data, error } = await supabase
       .from("event_themes")
-      .insert([{
-        name, is_active: !!is_active,
-        active_from: active_from || null,
-        active_until: active_until || null,
-        accent_color: accent_color || null,
-        bg_color: bg_color || null,
-        card_color: card_color || null,
-        border_color: border_color || null,
-        text_color: text_color || null,
-        grey_color: grey_color || null,
-        font_family: font_family || null,
-        hero_title: hero_title || null,
-        hero_tagline: hero_tagline || null,
-        banner_message: banner_message || null,
-        banner_bg: banner_bg || null,
-        banner_text_color: banner_text_color || null,
-        logo_url: logo_url || null,
-      }])
+      .insert([
+        {
+          name,
+          is_active: !!is_active,
+          active_from: active_from || null,
+          active_until: active_until || null,
+          accent_color: accent_color || null,
+          bg_color: bg_color || null,
+          card_color: card_color || null,
+          border_color: border_color || null,
+          text_color: text_color || null,
+          grey_color: grey_color || null,
+          font_family: font_family || null,
+          hero_title: hero_title || null,
+          hero_tagline: hero_tagline || null,
+          banner_message: banner_message || null,
+          banner_bg: banner_bg || null,
+          banner_text_color: banner_text_color || null,
+          logo_url: logo_url || null,
+        },
+      ])
       .select()
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("theme:active");
-    await logActivity(req.admin.id, req.admin.name, "create", "event_theme", name);
+    await logActivity(
+      req.admin.id,
+      req.admin.name,
+      "create",
+      "event_theme",
+      name,
+    );
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4326,78 +4390,137 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 });
 
 // ADMIN: Update a theme (colors, name, dates, is_active toggle)
-app.put("/api/admin/themes/:id", requireSection("settings"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      name, is_active, active_from, active_until,
-      accent_color, bg_color, card_color, border_color, text_color, grey_color,
-      font_family, hero_title, hero_tagline,
-      banner_message, banner_bg, banner_text_color, logo_url,
-    } = req.body;
+app.put(
+  "/api/admin/themes/:id",
+  requireSection("settings"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        name,
+        is_active,
+        active_from,
+        active_until,
+        accent_color,
+        bg_color,
+        card_color,
+        border_color,
+        text_color,
+        grey_color,
+        font_family,
+        hero_title,
+        hero_tagline,
+        banner_message,
+        banner_bg,
+        banner_text_color,
+        logo_url,
+      } = req.body;
 
-    // If activating this theme, deactivate all others first
-    if (is_active === true) {
-      await supabase.from("event_themes").update({ is_active: false }).neq("id", id);
+      // If activating this theme, deactivate all others first
+      if (is_active === true) {
+        await supabase
+          .from("event_themes")
+          .update({ is_active: false })
+          .neq("id", id);
+      }
+
+      const updates = {};
+      if (name !== undefined) updates.name = name;
+      if (is_active !== undefined) updates.is_active = is_active;
+      if (active_from !== undefined) updates.active_from = active_from || null;
+      if (active_until !== undefined)
+        updates.active_until = active_until || null;
+      if (accent_color !== undefined)
+        updates.accent_color = accent_color || null;
+      if (bg_color !== undefined) updates.bg_color = bg_color || null;
+      if (card_color !== undefined) updates.card_color = card_color || null;
+      if (border_color !== undefined)
+        updates.border_color = border_color || null;
+      if (text_color !== undefined) updates.text_color = text_color || null;
+      if (grey_color !== undefined) updates.grey_color = grey_color || null;
+      if (font_family !== undefined) updates.font_family = font_family || null;
+      if (hero_title !== undefined) updates.hero_title = hero_title || null;
+      if (hero_tagline !== undefined)
+        updates.hero_tagline = hero_tagline || null;
+      if (banner_message !== undefined)
+        updates.banner_message = banner_message || null;
+      if (banner_bg !== undefined) updates.banner_bg = banner_bg || null;
+      if (banner_text_color !== undefined)
+        updates.banner_text_color = banner_text_color || null;
+      if (logo_url !== undefined) updates.logo_url = logo_url || null;
+
+      const { data, error } = await supabase
+        .from("event_themes")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message });
+      memInvalidate("theme:active");
+      await logActivity(
+        req.admin.id,
+        req.admin.name,
+        "update",
+        "event_theme",
+        data.name || id,
+      );
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
-
-    const updates = {};
-    if (name !== undefined) updates.name = name;
-    if (is_active !== undefined) updates.is_active = is_active;
-    if (active_from !== undefined) updates.active_from = active_from || null;
-    if (active_until !== undefined) updates.active_until = active_until || null;
-    if (accent_color !== undefined) updates.accent_color = accent_color || null;
-    if (bg_color !== undefined) updates.bg_color = bg_color || null;
-    if (card_color !== undefined) updates.card_color = card_color || null;
-    if (border_color !== undefined) updates.border_color = border_color || null;
-    if (text_color !== undefined) updates.text_color = text_color || null;
-    if (grey_color !== undefined) updates.grey_color = grey_color || null;
-    if (font_family !== undefined) updates.font_family = font_family || null;
-    if (hero_title !== undefined) updates.hero_title = hero_title || null;
-    if (hero_tagline !== undefined) updates.hero_tagline = hero_tagline || null;
-    if (banner_message !== undefined) updates.banner_message = banner_message || null;
-    if (banner_bg !== undefined) updates.banner_bg = banner_bg || null;
-    if (banner_text_color !== undefined) updates.banner_text_color = banner_text_color || null;
-    if (logo_url !== undefined) updates.logo_url = logo_url || null;
-
-    const { data, error } = await supabase
-      .from("event_themes")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    memInvalidate("theme:active");
-    await logActivity(req.admin.id, req.admin.name, "update", "event_theme", data.name || id);
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+  },
+);
 
 // ADMIN: Delete a theme (cannot delete an active one)
-app.delete("/api/admin/themes/:id", requireSection("settings"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: theme, error: fetchErr } = await supabase
-      .from("event_themes")
-      .select("id,name,is_active")
-      .eq("id", id)
-      .maybeSingle();
+app.delete(
+  "/api/admin/themes/:id",
+  requireSection("settings"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { data: theme, error: fetchErr } = await supabase
+        .from("event_themes")
+        .select("id,name,is_active")
+        .eq("id", id)
+        .maybeSingle();
 
-    if (fetchErr || !theme) return res.status(404).json({ error: "Theme not found." });
-    if (theme.is_active) return res.status(400).json({ error: "Cannot delete an active theme. Deactivate it first." });
+      if (fetchErr || !theme)
+        return res.status(404).json({ error: "Theme not found." });
+      if (theme.is_active)
+        return res
+          .status(400)
+          .json({
+            error: "Cannot delete an active theme. Deactivate it first.",
+          });
 
-    const { error } = await supabase.from("event_themes").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: error.message });
+      const { error } = await supabase
+        .from("event_themes")
+        .delete()
+        .eq("id", id);
+      if (error) return res.status(500).json({ error: error.message });
 
-    memInvalidate("theme:active");
-    await logActivity(req.admin.id, req.admin.name, "delete", "event_theme", theme.name);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+      memInvalidate("theme:active");
+      await logActivity(
+        req.admin.id,
+        req.admin.name,
+        "delete",
+        "event_theme",
+        theme.name,
+      );
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// ── Legal pages ───────────────────────────────────────────────────────────────
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "privacy.html"));
+});
+app.get("/terms", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
@@ -4420,18 +4543,21 @@ setInterval(
 );
 
 // Trim old page_view rows older than 90 days — run once per day
-setInterval(async () => {
-  try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
-    await supabase
-      .from("page_views")
-      .delete()
-      .lt("date", cutoff.toISOString().slice(0, 10));
-  } catch(e) {
-    console.error("[page_views trim]", e.message);
-  }
-}, 1000 * 60 * 60 * 24); // every 24h
+setInterval(
+  async () => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      await supabase
+        .from("page_views")
+        .delete()
+        .lt("date", cutoff.toISOString().slice(0, 10));
+    } catch (e) {
+      console.error("[page_views trim]", e.message);
+    }
+  },
+  1000 * 60 * 60 * 24,
+); // every 24h
 
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
