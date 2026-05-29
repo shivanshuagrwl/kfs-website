@@ -2248,12 +2248,20 @@ app.get("/api/reviews/all", async (req, res) => {
 });
 
 app.get("/api/reviews/:movieId", async (req, res) => {
-  const { data } = await supabase
-    .from("reviews")
-    .select("*")
-    .eq("movie_id", req.params.movieId)
-    .order("created_at", { ascending: false });
-  res.json(data || []);
+  cacheFor(res, 300);
+  const data = await memCache(
+    `reviews:${req.params.movieId}`,
+    300,
+    async () => {
+      const { data } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("movie_id", req.params.movieId)
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
+  );
+  res.json(data);
 });
 
 app.post("/api/reviews", async (req, res) => {
@@ -2284,6 +2292,7 @@ app.post("/api/reviews", async (req, res) => {
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
+  memInvalidate(`reviews:${movie_id}`);
   res.json(data);
 });
 
