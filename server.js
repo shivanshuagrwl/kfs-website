@@ -6,6 +6,7 @@ const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
 const crypto = require("crypto");
+const fs = require("fs"); // 👈 ADD THIS LINE
 const { createClient } = require("@supabase/supabase-js");
 const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
@@ -54,10 +55,16 @@ async function sendConfirmationEmail({
   eventDate,
   eventVenue,
 }) {
-  const { data: rows } = await supabase
-    .from("settings")
-    .select("key,value")
-    .in("key", ["brevo_api_key", "smtp_from_name", "email_confirmation_body"]);
+  const { data: rows } = await memCache("settings:email", 300, () =>
+    supabase
+      .from("settings")
+      .select("key,value")
+      .in("key", [
+        "brevo_api_key",
+        "smtp_from_name",
+        "email_confirmation_body",
+      ]),
+  );
   const s = {};
   (rows || []).forEach((r) => (s[r.key] = r.value));
 
@@ -245,16 +252,31 @@ function cacheFor(res, seconds = 60) {
 // Call: await memCache('key', ttlSeconds, () => supabase.from(...).select(...))
 // Invalidate a key after a write:  memInvalidate('key')  or  memInvalidate('prefix:')
 const _memStore = new Map();
+const CACHE_FILE = path.join(__dirname, ".memcache.json");
+
+// Load cache from disk on startup (survives server restarts)
+try {
+  const saved = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+  for (const [k, v] of Object.entries(saved)) {
+    if (Date.now() < v.expires) _memStore.set(k, v);
+  }
+  console.log("[cache] Restored", _memStore.size, "entries from disk");
+} catch {}
 
 function memCache(key, ttlSeconds, fn) {
   const hit = _memStore.get(key);
   if (hit && Date.now() < hit.expires) return Promise.resolve(hit.data);
   return fn().then((data) => {
     _memStore.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
+    // Persist to disk async — does NOT block your routes
+    fs.writeFile(
+      CACHE_FILE,
+      JSON.stringify(Object.fromEntries(_memStore)),
+      () => {},
+    );
     return data;
   });
 }
-
 // Invalidate one key or all keys that start with a prefix (e.g. 'movies')
 function memInvalidate(...keys) {
   for (const key of keys) {
