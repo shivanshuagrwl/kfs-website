@@ -247,6 +247,12 @@ function cacheFor(res, seconds = 60) {
   );
 }
 
+// For mutable content: no browser cache so SSE-triggered refreshes always get fresh data.
+// Server-side memCache still handles DB load.
+function noStore(res) {
+  res.setHeader("Cache-Control", "no-store");
+}
+
 // ── Server-side in-memory cache ────────────────────────────────────────────────
 // Keeps Supabase query count (and thus cached egress) very low.
 // Call: await memCache('key', ttlSeconds, () => supabase.from(...).select(...))
@@ -288,19 +294,6 @@ function memInvalidate(...keys) {
     } else {
       _memStore.delete(key);
     }
-  }
-}
-
-// ── SSE Live-update broadcast ──────────────────────────────────────────────────
-// Keeps a Set of active SSE response objects. When admin makes any change,
-// broadcast() pushes a tiny event to every connected browser tab — no polling,
-// no WebSocket upgrade, no extra packages needed.
-const _sseClients = new Set();
-
-function broadcast(type) {
-  const msg = `data: ${JSON.stringify({ type, ts: Date.now() })}\n\n`;
-  for (const res of _sseClients) {
-    try { res.write(msg); } catch (_) { _sseClients.delete(res); }
   }
 }
 
@@ -587,30 +580,6 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ── LIVE UPDATES (Server-Sent Events) ────────────────────────────────────────
-// Public endpoint — browsers connect here on page load to receive instant
-// push notifications when admin changes any content.
-app.get("/api/live", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.flushHeaders();
-
-  // Send a heartbeat comment every 25 s to keep the connection alive through
-  // proxies and Render's 55-second idle timeout.
-  const heartbeat = setInterval(() => {
-    try { res.write(": heartbeat\n\n"); } catch (_) {}
-  }, 25000);
-
-  _sseClients.add(res);
-
-  req.on("close", () => {
-    clearInterval(heartbeat);
-    _sseClients.delete(res);
-  });
-});
-
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 app.post(
   "/api/admin/login",
@@ -812,7 +781,7 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get("/api/settings", async (req, res) => {
-  cacheFor(res, 300); // 5 min HTTP cache
+  noStore(res);
   const obj = await memCache("settings", 300, async () => {
     const { data } = await supabase
       .from("settings")
@@ -898,7 +867,6 @@ app.post(
           .upsert({ key, value }, { onConflict: "key" });
       }
       memInvalidate("settings");
-      broadcast("settings");
       try {
         await logActivity(
           req.admin.id,
@@ -980,7 +948,7 @@ app.post(
 );
 
 app.get("/api/blogs", async (req, res) => {
-  cacheFor(res, 120);
+  noStore(res);
   const data = await memCache("blogs:list", 120, async () => {
     const { data } = await supabase
       .from("blogs")
@@ -1007,7 +975,7 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
 });
 
 app.get("/api/blogs/:id", async (req, res) => {
-  cacheFor(res, 300);
+  noStore(res);
   const data = await memCache(`blogs:${req.params.id}`, 300, async () => {
     const { data } = await supabase
       .from("blogs")
@@ -1082,7 +1050,6 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list");
-    broadcast("blogs");
     await logActivity(req.admin.id, req.admin.name, "create", "blog", title);
     res.json(data);
   },
@@ -1111,7 +1078,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
-    broadcast("blogs");
     await logActivity(req.admin.id, req.admin.name, "update", "blog", title);
     res.json(data);
   },
@@ -1128,7 +1094,6 @@ app.delete(
       .single();
     await supabase.from("blogs").delete().eq("id", req.params.id);
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
-    broadcast("blogs");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1142,7 +1107,7 @@ app.delete(
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
-  cacheFor(res, 120);
+  noStore(res);
   const data = await memCache("events:list", 120, async () => {
     const { data } = await supabase
       .from("events")
@@ -1184,7 +1149,6 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
-    broadcast("events");
     await logActivity(req.admin.id, req.admin.name, "create", "event", title);
     res.json(data);
   },
@@ -1220,7 +1184,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
-    broadcast("events");
     await logActivity(req.admin.id, req.admin.name, "update", "event", title);
     res.json(data);
   },
@@ -1237,7 +1200,6 @@ app.delete(
       .single();
     await supabase.from("events").delete().eq("id", req.params.id);
     memInvalidate("events:list");
-    broadcast("events");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1251,7 +1213,7 @@ app.delete(
 
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
-  cacheFor(res, 600);
+  noStore(res);
   const data = await memCache("members:list", 600, async () => {
     const { data } = await supabase
       .from("members")
@@ -1305,7 +1267,6 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
-    broadcast("members");
     await logActivity(req.admin.id, req.admin.name, "create", "member", name);
     res.json(data);
   },
@@ -1339,7 +1300,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
-    broadcast("members");
     await logActivity(req.admin.id, req.admin.name, "update", "member", name);
     res.json(data);
   },
@@ -1356,7 +1316,6 @@ app.delete(
       .single();
     await supabase.from("members").delete().eq("id", req.params.id);
     memInvalidate("members:list");
-    broadcast("members");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1370,7 +1329,7 @@ app.delete(
 
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
-  cacheFor(res, 600);
+  noStore(res);
   const data = await memCache("testimonials:list", 600, async () => {
     const { data } = await supabase
       .from("testimonials")
@@ -1402,7 +1361,6 @@ app.post(
       name,
     );
     memInvalidate("testimonials:list");
-    broadcast("home");
     res.json(data);
   },
 );
@@ -1423,7 +1381,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("testimonials:list");
-    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1446,7 +1403,6 @@ app.delete(
       .single();
     await supabase.from("testimonials").delete().eq("id", req.params.id);
     memInvalidate("testimonials:list");
-    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1460,7 +1416,7 @@ app.delete(
 
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
-  cacheFor(res, 600);
+  noStore(res);
   const data = await memCache("achievements:list", 600, async () => {
     const { data } = await supabase
       .from("achievements")
@@ -1493,7 +1449,6 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
-    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1526,7 +1481,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
-    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1549,7 +1503,6 @@ app.delete(
       .single();
     await supabase.from("achievements").delete().eq("id", req.params.id);
     memInvalidate("achievements:list");
-    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1693,7 +1646,7 @@ app.get("/api/yt-duration", async (req, res) => {
 });
 
 app.get("/api/movies", async (req, res) => {
-  cacheFor(res, 300);
+  noStore(res);
   // genre filter busts the general cache key
   const cacheKey = req.query.genre
     ? `movies:genre:${req.query.genre}`
@@ -1719,7 +1672,7 @@ app.get("/api/movies", async (req, res) => {
 });
 
 app.get("/api/movies/:id", async (req, res) => {
-  cacheFor(res, 300);
+  noStore(res);
   const data = await memCache(`movies:${req.params.id}`, 300, async () => {
     const { data } = await supabase
       .from("movies")
@@ -1801,7 +1754,6 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:");
-    broadcast("movies");
     await logActivity(req.admin.id, req.admin.name, "create", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1874,7 +1826,6 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
-    broadcast("movies");
     await logActivity(req.admin.id, req.admin.name, "update", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1891,7 +1842,6 @@ app.delete(
       .single();
     await supabase.from("movies").delete().eq("id", req.params.id);
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
-    broadcast("movies");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1906,7 +1856,7 @@ app.delete(
 // ── CHITRA VICHITRA — PUBLIC ──────────────────────────────────────────────────
 // Get all CV editions (with movie count)
 app.get("/api/chitra-vichitra", async (req, res) => {
-  cacheFor(res, 600);
+  noStore(res);
   const result = await memCache("cv:list", 600, async () => {
     const { data: editions, error } = await supabase
       .from("chitra_vichitra")
@@ -2092,7 +2042,7 @@ app.delete(
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 app.get("/api/notifications/active", async (req, res) => {
-  cacheFor(res, 60);
+  noStore(res);
   const data = await memCache("notifications:active", 60, async () => {
     const { data } = await supabase
       .from("notifications")
@@ -3348,7 +3298,7 @@ app.get("/events/:slug", async (req, res) => {
 // ── KFS WRAPPED ───────────────────────────────────────────────────────────────
 // Public: get the wrapped config (year, taglines, fun cards) set by admin
 app.get("/api/wrapped/config", async (req, res) => {
-  cacheFor(res, 300); // 5 min
+  noStore(res);
   const { data } = await supabase
     .from("settings")
     .select("value")
@@ -4406,7 +4356,7 @@ app.get(
 // PUBLIC: Get the currently active theme (or null)
 app.get("/api/theme", async (req, res) => {
   try {
-    cacheFor(res, 60);
+    noStore(res);
     const theme = await memCache("theme:active", 60, async () => {
       const now = new Date().toISOString();
       const { data, error } = await supabase
@@ -4500,7 +4450,6 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("theme:active");
-    broadcast("theme");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -4583,7 +4532,6 @@ app.put(
 
       if (error) return res.status(500).json({ error: error.message });
       memInvalidate("theme:active");
-      broadcast("theme");
       await logActivity(
         req.admin.id,
         req.admin.name,
@@ -4625,7 +4573,6 @@ app.delete(
       if (error) return res.status(500).json({ error: error.message });
 
       memInvalidate("theme:active");
-      broadcast("theme");
       await logActivity(
         req.admin.id,
         req.admin.name,
