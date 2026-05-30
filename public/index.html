@@ -6549,9 +6549,10 @@ loadCustomTags();
 
 async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
+  const btn = document.querySelector('button[onclick="saveBlog()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('blog-title').value);
-  // Author from MemberPicker (Name||memberId for linked, plain name for free-text)
   const authorVal = window._blogAuthorPicker ? window._blogAuthorPicker.getValue() : '';
   fd.append('author', authorVal);
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
@@ -6561,16 +6562,53 @@ async function saveBlog() {
   const cover = document.getElementById('blog-cover').files[0];
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
-  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { window._allBlogsCache = null; closeBlogModal(); loadAdminData('blogs'); }
-  else alert('Error saving post');
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    if (!res.ok) { alert('Error saving post'); return; }
+    const saved = await res.json();
+    window._allBlogsCache = null;
+    closeBlogModal();
+    // Instant DOM update
+    const tbody = document.getElementById('admin-blogs-tbody');
+    const bJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const viewCount = saved.view_count || 0;
+    const newRow = `<tr data-id="${saved.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('blogs')"></td>
+      <td>${saved.cover_image?`<img src="${saved.cover_image}" alt="">`:'—'}</td>
+      <td style="font-weight:500">${saved.title}</td>
+      <td><span class="tag ${saved.published?'upcoming':''}">${saved.published?'Published':'Draft'}</span></td>
+      <td style="color:var(--grey);font-variant-numeric:tabular-nums">${viewCount.toLocaleString()}</td>
+      <td style="color:var(--grey)">${saved.created_at?new Date(saved.created_at).toLocaleDateString():''}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editBlog(${bJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteBlog('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('blogs'); }
+    } else {
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Post'; }
+  }
 }
 
 async function deleteBlog(id) {
   if (!confirm('Delete this post?')) return;
   await apiFetch('/api/admin/blogs/'+id,'DELETE');
   window._allBlogsCache = null;
-  loadAdminData('blogs');
+  const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => {
+      row.remove();
+      const tbody = document.getElementById('admin-blogs-tbody');
+      if (!tbody.querySelector('tr[data-id]')) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No posts yet. Create your first post!</td></tr>`;
+    }, 200);
+  }
 }
 
 function openEventModal(ev=null) {
@@ -6590,6 +6628,8 @@ function closeEventModal() { document.getElementById('event-modal').classList.re
 
 async function saveEvent() {
   const id = document.getElementById('event-edit-id').value;
+  const btn = document.querySelector('#event-modal .btn-success') || document.querySelector('#event-modal button[onclick="saveEvent()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('event-title').value);
   fd.append('description', document.getElementById('event-description').value);
@@ -6600,15 +6640,55 @@ async function saveEvent() {
   const cover = document.getElementById('event-cover').files[0];
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
-  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeEventModal(); loadAdminData('events'); }
-  else alert('Error saving event');
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    if (!res.ok) { let msg='Error saving event'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
+    const saved = await res.json();
+    closeEventModal();
+    // Instant DOM update — no re-fetch needed
+    const tbody = document.getElementById('admin-events-tbody');
+    const eJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const newRow = `<tr data-id="${saved.id}">
+      <td style="font-weight:500">${saved.title}</td>
+      <td style="color:var(--grey)">${saved.event_date||'—'}</td>
+      <td><span class="tag ${saved.is_upcoming?'upcoming':''}">${saved.is_upcoming?'Upcoming':'Past'}</span></td>
+      <td style="color:var(--grey)">${saved.location||'—'}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editEvent(${eJson})">Edit</button>
+        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${saved.id}','${saved.title.replace(/'/g,'\\x27')}')">Form</button>
+        <button class="btn-sm danger" onclick="deleteEvent('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('events'); }
+    } else {
+      // New event — prepend to top
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      // Remove "no events" placeholder if present
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Event'; }
+  }
 }
 
 async function deleteEvent(id) {
   if (!confirm('Delete this event?')) return;
   await apiFetch('/api/admin/events/'+id,'DELETE');
-  loadAdminData('events');
+  // Instant DOM removal
+  const row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s';
+    row.style.opacity = '0';
+    setTimeout(() => {
+      row.remove();
+      const tbody = document.getElementById('admin-events-tbody');
+      if (!tbody.querySelector('tr[data-id]')) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`;
+      }
+    }, 200);
+  }
 }
 
 function openMemberModal(m=null) {
@@ -6631,6 +6711,8 @@ function closeMemberModal() { document.getElementById('member-modal').classList.
 
 async function saveMember() {
   const id = document.getElementById('member-edit-id').value;
+  const btn = document.querySelector('#member-modal button[onclick="saveMember()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('name', document.getElementById('member-name').value);
   fd.append('role', document.getElementById('member-role').value);
@@ -6644,15 +6726,50 @@ async function saveMember() {
   const photo = document.getElementById('member-photo').files[0];
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
-  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeMemberModal(); loadAdminData('members'); }
-  else alert('Error saving member');
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    if (!res.ok) { let msg='Error saving member'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
+    const saved = await res.json();
+    closeMemberModal();
+    // Instant DOM update
+    const tbody = document.getElementById('admin-members-tbody');
+    const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const newRow = `<tr data-id="${saved.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('members')"></td>
+      <td>${saved.photo?`<img src="${saved.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}</td>
+      <td style="font-weight:500">${saved.name}</td>
+      <td style="color:var(--grey)">${saved.role||'—'}</td>
+      <td style="color:var(--grey)">${saved.batch||'—'}</td>
+      <td><span class="tag ${saved.is_past?'':'upcoming'}">${saved.is_past?'Alumni':'Current'}</span></td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editMember(${mJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteMember('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('members'); }
+    } else {
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Member'; }
+  }
 }
 
 async function deleteMember(id) {
   if (!confirm('Delete this member?')) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
-  loadAdminData('members');
+  const row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => {
+      row.remove();
+      const tbody = document.getElementById('admin-members-tbody');
+      if (!tbody.querySelector('tr[data-id]')) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`;
+    }, 200);
+  }
 }
 
 // ── GENRE TAG-PILL INPUT ──────────────────────────────────────────────────────
@@ -6771,12 +6888,14 @@ function tryAutoFetchYTRuntime(url) {
 
 async function saveMovie() {
   const id = document.getElementById('movie-edit-id').value;
+  const btn = document.querySelector('#movie-modal button[onclick="saveMovie()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('movie-title').value);
   fd.append('release_year', document.getElementById('movie-year').value);
   fd.append('runtime', document.getElementById('movie-runtime').value.trim());
   fd.append('language', document.getElementById('movie-language').value.trim());
-  fd.append('genre', document.getElementById('movie-genre').value); // set by tag input as JSON array string
+  fd.append('genre', document.getElementById('movie-genre').value);
   fd.append('description', document.getElementById('movie-description').value);
   fd.append('director', _moviePickers['director'].getValue());
   fd.append('producer', _moviePickers['producer'].getValue());
@@ -6795,15 +6914,50 @@ async function saveMovie() {
   const poster = document.getElementById('movie-poster').files[0];
   if (poster) fd.append('poster', poster);
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
-  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeMovieModal(); loadAdminData('movies'); }
-  else { let msg='Error saving film'; try { const e=await res.json(); msg=(e.error||msg); } catch(x){} alert(msg); }
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    if (!res.ok) { let msg='Error saving film'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
+    const saved = await res.json();
+    closeMovieModal();
+    // Instant DOM update
+    const tbody = document.getElementById('admin-movies-tbody');
+    const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const dirDisplay = saved.director ? splitCrew(saved.director).map(p=>p.split('||')[0].trim()).join(', ') : '—';
+    const newRow = `<tr data-id="${saved.id}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('movies')"></td>
+      <td>${saved.poster_image?`<img src="${saved.poster_image}" alt="" style="aspect-ratio:2/3;width:36px;object-fit:cover">`:svgFilm(18)}</td>
+      <td style="font-weight:500">${saved.title}</td>
+      <td style="color:var(--grey)">${saved.release_year||'—'}</td>
+      <td style="color:var(--grey)">${dirDisplay}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editMovie(${mJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteMovie('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('movies'); }
+    } else {
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Film'; }
+  }
 }
 
 async function deleteMovie(id) {
   if (!confirm('Delete this film?')) return;
   await apiFetch('/api/admin/movies/'+id,'DELETE');
-  loadAdminData('movies');
+  const row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => {
+      row.remove();
+      const tbody = document.getElementById('admin-movies-tbody');
+      if (!tbody.querySelector('tr[data-id]')) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No films yet.</td></tr>`;
+    }, 200);
+  }
 }
 
 function openTestimonialModal(t=null) {
@@ -6821,6 +6975,8 @@ function closeTestimonialModal() { document.getElementById('testimonial-modal').
 
 async function saveTestimonial() {
   const id = document.getElementById('testimonial-edit-id').value;
+  const btn = document.querySelector('button[onclick="saveTestimonial()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('name', document.getElementById('testimonial-name').value);
   fd.append('role', document.getElementById('testimonial-role').value);
@@ -6829,15 +6985,42 @@ async function saveTestimonial() {
   const photo = document.getElementById('testimonial-photo').files[0];
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/testimonials/'+id : '/api/admin/testimonials';
-  const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
-  if (res.ok) { closeTestimonialModal(); loadAdminData('testimonials'); }
-  else alert('Error saving testimonial');
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    if (!res.ok) { alert('Error saving testimonial'); return; }
+    const saved = await res.json();
+    closeTestimonialModal();
+    const tbody = document.getElementById('admin-testimonials-tbody');
+    const tJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const newRow = `<tr data-id="${saved.id}">
+      <td>${saved.photo?`<img src="${saved.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}</td>
+      <td style="font-weight:500">${saved.name}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--grey)">"${saved.quote}"</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editTestimonial(${tJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteTestimonial('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('testimonials'); }
+    } else {
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Testimonial'; }
+  }
 }
 
 async function deleteTestimonial(id) {
   if (!confirm('Delete this testimonial?')) return;
   await apiFetch('/api/admin/testimonials/'+id,'DELETE');
-  loadAdminData('testimonials');
+  const row = document.querySelector(`#admin-testimonials-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => { row.remove(); }, 200);
+  }
 }
 
 function openAchievementModal(a=null) {
@@ -6855,6 +7038,8 @@ function closeAchievementModal() { document.getElementById('achievement-modal').
 
 async function saveAchievement() {
   const id = document.getElementById('achievement-edit-id').value;
+  const btn = document.querySelector('button[onclick="saveAchievement()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const body = {
     title: document.getElementById('achievement-title').value,
     year: document.getElementById('achievement-year').value,
@@ -6862,17 +7047,43 @@ async function saveAchievement() {
     sort_order: document.getElementById('achievement-sort').value,
   };
   const url = id ? '/api/admin/achievements/'+id : '/api/admin/achievements';
-  const res = await fetch(url,{method:id?'PUT':'POST',
-    headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
-    body:JSON.stringify(body)});
-  if (res.ok) { closeAchievementModal(); loadAdminData('achievements'); }
-  else alert('Error saving achievement');
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST',
+      headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+    if (!res.ok) { alert('Error saving achievement'); return; }
+    const saved = await res.json();
+    closeAchievementModal();
+    const tbody = document.getElementById('admin-achievements-tbody');
+    const aJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+    const newRow = `<tr data-id="${saved.id}">
+      <td style="font-weight:500">${saved.title}</td>
+      <td style="color:var(--grey)">${saved.year||'—'}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editAchievement(${aJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteAchievement('${saved.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+    if (id) {
+      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
+      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('achievements'); }
+    } else {
+      tbody.insertAdjacentHTML('afterbegin', newRow);
+      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
 }
 
 async function deleteAchievement(id) {
   if (!confirm('Delete this achievement?')) return;
   await apiFetch('/api/admin/achievements/'+id,'DELETE');
-  loadAdminData('achievements');
+  const row = document.querySelector(`#admin-achievements-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => { row.remove(); }, 200);
+  }
 }
 
 async function saveSettings() {
@@ -12641,149 +12852,5 @@ async function loadBroadcastHistory() {
     </div>
   </div>
 </div>
-<!-- ── KFS LIVE UPDATES (SSE) ─────────────────────────────────────────────────
-  Connects to /api/live and silently re-fetches whichever section just changed.
-  No page refresh needed — admin saves, users see it within ~1 second.
-──────────────────────────────────────────────────────────────────────────── -->
-<script>
-(function kfsLive() {
-  // Don't run if EventSource isn't available (very old browser)
-  if (typeof EventSource === 'undefined') return;
-
-  var _es = null;
-  var _retryMs = 3000;
-  var _retryTimer = null;
-
-  // Debounce per-type so rapid multi-saves don't fire 10 fetches
-  var _debounceTimers = {};
-  function debounce(key, fn, ms) {
-    clearTimeout(_debounceTimers[key]);
-    _debounceTimers[key] = setTimeout(fn, ms || 600);
-  }
-
-  // ── Silent section refreshers ─────────────────────────────────────────────
-  // Each function re-fetches its data and re-renders ONLY IF the user is
-  // currently viewing that section (or home). Never interrupts the admin panel.
-
-  function isAdminOpen() {
-    var ap = document.getElementById('admin-panel');
-    return ap && ap.classList.contains('active');
-  }
-
-  function onEvents() {
-    debounce('events', function() {
-      if (currentPage !== 'events') return;
-      loadEvents();
-    });
-  }
-
-  function onBlogs() {
-    debounce('blogs', function() {
-      if (currentPage !== 'blog') return;
-      loadBlog();
-    });
-  }
-
-  function onMovies() {
-    debounce('movies', function() {
-      if (currentPage !== 'movies') return;
-      loadMovies();
-    });
-  }
-
-  function onMembers() {
-    debounce('members', function() {
-      if (currentPage !== 'members') return;
-      loadMembers();
-    });
-  }
-
-  function onHome() {
-    debounce('home', function() {
-      if (currentPage !== 'home') return;
-      loadHomeData();
-    });
-  }
-
-  function onSettings() {
-    // Settings change can affect the theme, banner, tagline — reload page if not admin
-    debounce('settings', function() {
-      if (isAdminOpen()) return; // admin is making the change; they don't need a reload
-      // Soft: just re-fetch theme CSS vars so colors update instantly
-      fetch('/api/theme').then(function(r){ return r.ok ? r.json() : null; }).then(function(theme) {
-        if (!theme) return;
-        var existing = document.getElementById('event-theme-vars');
-        var css = ':root{';
-        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
-        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
-        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
-        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
-        if (theme.border_color) css += '--border:' + theme.border_color + ';';
-        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
-        css += '}';
-        if (existing) {
-          existing.textContent = css;
-        } else {
-          var s = document.createElement('style');
-          s.id = 'event-theme-vars'; s.textContent = css;
-          document.head.appendChild(s);
-        }
-        // Reload home section if visible so tagline/banner updates show
-        if (currentPage === 'home') loadHomeData();
-      }).catch(function(){});
-    });
-  }
-
-  function onTheme() {
-    // Theme change is the most impactful — re-apply CSS vars immediately
-    onSettings();
-  }
-
-  var _handlers = {
-    events:   onEvents,
-    blogs:    onBlogs,
-    movies:   onMovies,
-    members:  onMembers,
-    home:     onHome,
-    settings: onSettings,
-    theme:    onTheme,
-  };
-
-  // ── Connect ───────────────────────────────────────────────────────────────
-  function connect() {
-    if (_es) { try { _es.close(); } catch(_) {} }
-    clearTimeout(_retryTimer);
-
-    _es = new EventSource('/api/live');
-
-    _es.onmessage = function(e) {
-      try {
-        var payload = JSON.parse(e.data);
-        var handler = _handlers[payload.type];
-        if (handler) handler();
-      } catch(_) {}
-    };
-
-    _es.onopen = function() {
-      _retryMs = 3000; // reset back-off on successful connect
-    };
-
-    _es.onerror = function() {
-      // Connection dropped (Render sleep, network blip) — reconnect with back-off
-      try { _es.close(); } catch(_) {}
-      _es = null;
-      _retryTimer = setTimeout(connect, _retryMs);
-      _retryMs = Math.min(_retryMs * 2, 30000); // cap at 30s
-    };
-  }
-
-  // Start after DOM is ready so currentPage and load functions exist
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', connect);
-  } else {
-    connect();
-  }
-})();
-</script>
 </body>
 </html>
