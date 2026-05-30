@@ -291,6 +291,19 @@ function memInvalidate(...keys) {
   }
 }
 
+// ── SSE Live-update broadcast ──────────────────────────────────────────────────
+// Keeps a Set of active SSE response objects. When admin makes any change,
+// broadcast() pushes a tiny event to every connected browser tab — no polling,
+// no WebSocket upgrade, no extra packages needed.
+const _sseClients = new Set();
+
+function broadcast(type) {
+  const msg = `data: ${JSON.stringify({ type, ts: Date.now() })}\n\n`;
+  for (const res of _sseClients) {
+    try { res.write(msg); } catch (_) { _sseClients.delete(res); }
+  }
+}
+
 // ── Auth middleware ───────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
@@ -572,6 +585,30 @@ app.get("/api/health", async (req, res) => {
       latencyMs: Date.now() - start,
     });
   }
+});
+
+// ── LIVE UPDATES (Server-Sent Events) ────────────────────────────────────────
+// Public endpoint — browsers connect here on page load to receive instant
+// push notifications when admin changes any content.
+app.get("/api/live", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+
+  // Send a heartbeat comment every 25 s to keep the connection alive through
+  // proxies and Render's 55-second idle timeout.
+  const heartbeat = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch (_) {}
+  }, 25000);
+
+  _sseClients.add(res);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    _sseClients.delete(res);
+  });
 });
 
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
@@ -861,6 +898,7 @@ app.post(
           .upsert({ key, value }, { onConflict: "key" });
       }
       memInvalidate("settings");
+      broadcast("settings");
       try {
         await logActivity(
           req.admin.id,
@@ -1044,6 +1082,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list");
+    broadcast("blogs");
     await logActivity(req.admin.id, req.admin.name, "create", "blog", title);
     res.json(data);
   },
@@ -1072,6 +1111,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
+    broadcast("blogs");
     await logActivity(req.admin.id, req.admin.name, "update", "blog", title);
     res.json(data);
   },
@@ -1088,6 +1128,7 @@ app.delete(
       .single();
     await supabase.from("blogs").delete().eq("id", req.params.id);
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
+    broadcast("blogs");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1143,6 +1184,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
+    broadcast("events");
     await logActivity(req.admin.id, req.admin.name, "create", "event", title);
     res.json(data);
   },
@@ -1178,6 +1220,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
+    broadcast("events");
     await logActivity(req.admin.id, req.admin.name, "update", "event", title);
     res.json(data);
   },
@@ -1194,6 +1237,7 @@ app.delete(
       .single();
     await supabase.from("events").delete().eq("id", req.params.id);
     memInvalidate("events:list");
+    broadcast("events");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1261,6 +1305,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
+    broadcast("members");
     await logActivity(req.admin.id, req.admin.name, "create", "member", name);
     res.json(data);
   },
@@ -1294,6 +1339,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
+    broadcast("members");
     await logActivity(req.admin.id, req.admin.name, "update", "member", name);
     res.json(data);
   },
@@ -1310,6 +1356,7 @@ app.delete(
       .single();
     await supabase.from("members").delete().eq("id", req.params.id);
     memInvalidate("members:list");
+    broadcast("members");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1355,6 +1402,7 @@ app.post(
       name,
     );
     memInvalidate("testimonials:list");
+    broadcast("home");
     res.json(data);
   },
 );
@@ -1375,6 +1423,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("testimonials:list");
+    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1397,6 +1446,7 @@ app.delete(
       .single();
     await supabase.from("testimonials").delete().eq("id", req.params.id);
     memInvalidate("testimonials:list");
+    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1443,6 +1493,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
+    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1475,6 +1526,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
+    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1497,6 +1549,7 @@ app.delete(
       .single();
     await supabase.from("achievements").delete().eq("id", req.params.id);
     memInvalidate("achievements:list");
+    broadcast("home");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -1748,6 +1801,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:");
+    broadcast("movies");
     await logActivity(req.admin.id, req.admin.name, "create", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1820,6 +1874,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
+    broadcast("movies");
     await logActivity(req.admin.id, req.admin.name, "update", "movie", title);
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
@@ -1836,6 +1891,7 @@ app.delete(
       .single();
     await supabase.from("movies").delete().eq("id", req.params.id);
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
+    broadcast("movies");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -4444,6 +4500,7 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("theme:active");
+    broadcast("theme");
     await logActivity(
       req.admin.id,
       req.admin.name,
@@ -4526,6 +4583,7 @@ app.put(
 
       if (error) return res.status(500).json({ error: error.message });
       memInvalidate("theme:active");
+      broadcast("theme");
       await logActivity(
         req.admin.id,
         req.admin.name,
@@ -4567,6 +4625,7 @@ app.delete(
       if (error) return res.status(500).json({ error: error.message });
 
       memInvalidate("theme:active");
+      broadcast("theme");
       await logActivity(
         req.admin.id,
         req.admin.name,

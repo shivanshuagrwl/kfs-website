@@ -12641,5 +12641,149 @@ async function loadBroadcastHistory() {
     </div>
   </div>
 </div>
+<!-- ── KFS LIVE UPDATES (SSE) ─────────────────────────────────────────────────
+  Connects to /api/live and silently re-fetches whichever section just changed.
+  No page refresh needed — admin saves, users see it within ~1 second.
+──────────────────────────────────────────────────────────────────────────── -->
+<script>
+(function kfsLive() {
+  // Don't run if EventSource isn't available (very old browser)
+  if (typeof EventSource === 'undefined') return;
+
+  var _es = null;
+  var _retryMs = 3000;
+  var _retryTimer = null;
+
+  // Debounce per-type so rapid multi-saves don't fire 10 fetches
+  var _debounceTimers = {};
+  function debounce(key, fn, ms) {
+    clearTimeout(_debounceTimers[key]);
+    _debounceTimers[key] = setTimeout(fn, ms || 600);
+  }
+
+  // ── Silent section refreshers ─────────────────────────────────────────────
+  // Each function re-fetches its data and re-renders ONLY IF the user is
+  // currently viewing that section (or home). Never interrupts the admin panel.
+
+  function isAdminOpen() {
+    var ap = document.getElementById('admin-panel');
+    return ap && ap.classList.contains('active');
+  }
+
+  function onEvents() {
+    debounce('events', function() {
+      if (currentPage !== 'events') return;
+      loadEvents();
+    });
+  }
+
+  function onBlogs() {
+    debounce('blogs', function() {
+      if (currentPage !== 'blog') return;
+      loadBlog();
+    });
+  }
+
+  function onMovies() {
+    debounce('movies', function() {
+      if (currentPage !== 'movies') return;
+      loadMovies();
+    });
+  }
+
+  function onMembers() {
+    debounce('members', function() {
+      if (currentPage !== 'members') return;
+      loadMembers();
+    });
+  }
+
+  function onHome() {
+    debounce('home', function() {
+      if (currentPage !== 'home') return;
+      loadHomeData();
+    });
+  }
+
+  function onSettings() {
+    // Settings change can affect the theme, banner, tagline — reload page if not admin
+    debounce('settings', function() {
+      if (isAdminOpen()) return; // admin is making the change; they don't need a reload
+      // Soft: just re-fetch theme CSS vars so colors update instantly
+      fetch('/api/theme').then(function(r){ return r.ok ? r.json() : null; }).then(function(theme) {
+        if (!theme) return;
+        var existing = document.getElementById('event-theme-vars');
+        var css = ':root{';
+        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
+        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
+        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
+        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
+        if (theme.border_color) css += '--border:' + theme.border_color + ';';
+        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
+        css += '}';
+        if (existing) {
+          existing.textContent = css;
+        } else {
+          var s = document.createElement('style');
+          s.id = 'event-theme-vars'; s.textContent = css;
+          document.head.appendChild(s);
+        }
+        // Reload home section if visible so tagline/banner updates show
+        if (currentPage === 'home') loadHomeData();
+      }).catch(function(){});
+    });
+  }
+
+  function onTheme() {
+    // Theme change is the most impactful — re-apply CSS vars immediately
+    onSettings();
+  }
+
+  var _handlers = {
+    events:   onEvents,
+    blogs:    onBlogs,
+    movies:   onMovies,
+    members:  onMembers,
+    home:     onHome,
+    settings: onSettings,
+    theme:    onTheme,
+  };
+
+  // ── Connect ───────────────────────────────────────────────────────────────
+  function connect() {
+    if (_es) { try { _es.close(); } catch(_) {} }
+    clearTimeout(_retryTimer);
+
+    _es = new EventSource('/api/live');
+
+    _es.onmessage = function(e) {
+      try {
+        var payload = JSON.parse(e.data);
+        var handler = _handlers[payload.type];
+        if (handler) handler();
+      } catch(_) {}
+    };
+
+    _es.onopen = function() {
+      _retryMs = 3000; // reset back-off on successful connect
+    };
+
+    _es.onerror = function() {
+      // Connection dropped (Render sleep, network blip) — reconnect with back-off
+      try { _es.close(); } catch(_) {}
+      _es = null;
+      _retryTimer = setTimeout(connect, _retryMs);
+      _retryMs = Math.min(_retryMs * 2, 30000); // cap at 30s
+    };
+  }
+
+  // Start after DOM is ready so currentPage and load functions exist
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connect);
+  } else {
+    connect();
+  }
+})();
+</script>
 </body>
 </html>
