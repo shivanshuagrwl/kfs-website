@@ -226,7 +226,10 @@ async function uploadImage(file, folder = "general") {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+}));
 app.use(express.json());
 app.use(
   "/api/",
