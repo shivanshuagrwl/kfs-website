@@ -1234,9 +1234,9 @@ footer{border-top:1px solid var(--border);padding:60px 40px;
 /* ── ADMIN LOGIN ────────────────────────────────────────────────────────── */
 #admin-login{display:none;min-height:100vh;align-items:center;justify-content:center}
 #admin-login.active{display:flex;animation:fadeUp .6s var(--ease) both}
-.login-box{width:400px;padding:60px 48px;border:1px solid var(--border);text-align:center;background:var(--card)}
-.login-box h2{font-size:28px;font-weight:700;margin-bottom:6px;letter-spacing:-.02em}
-.login-box p{font-size:13px;color:var(--grey);margin-bottom:40px}
+.login-box{width:400px;padding:64px 52px;border:1px solid var(--border);text-align:center;background:var(--card);border-radius:4px}
+.login-box h2{font-size:28px;font-weight:700;margin-bottom:8px;letter-spacing:-.02em}
+.login-box p{font-size:13px;color:var(--grey);margin-bottom:44px}
 .form-group{margin-bottom:20px;text-align:left}
 .form-group label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);display:block;margin-bottom:8px}
 .form-group input,.form-group textarea,.form-group select{
@@ -3021,8 +3021,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </button>
       </div>
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="adminLogin()">Sign In</button>
-    <p class="login-error" id="login-error"></p>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="adminLogin()">Sign In</button>
+    <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
   </div>
 </div>
 
@@ -5364,7 +5364,7 @@ async function openMovie(id) {
   if (m.trailer_url || m.watch_url) {
     actionBtns.style.display = 'flex';
     actionBtns.innerHTML = [
-      m.watch_url ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now<\/a>` : '',
+      m.watch_url && /^https:\/\//i.test(m.watch_url) ? `<a class="movie-watch-btn" href="${m.watch_url}" target="_blank" rel="noopener">▶ Watch Now<\/a>` : '',
       m.trailer_url ? `<button class="movie-trailer-btn" onclick="openTrailer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points='5 3 19 12 5 21 5 3'/><\/svg> Trailer<\/button>` : '',
     ].join('');
   } else {
@@ -6712,6 +6712,17 @@ async function saveMovie() {
   fd.append('support_crew', _moviePickers['support'].getValue());
   fd.append('trailer_url', document.getElementById('movie-trailer').value.trim());
   fd.append('watch_url', document.getElementById('movie-watch').value.trim());
+  // Client-side URL validation — mirrors the server rule (https:// only)
+  const trailerVal = document.getElementById('movie-trailer').value.trim();
+  const watchVal   = document.getElementById('movie-watch').value.trim();
+  if (trailerVal && !/^https:\/\//i.test(trailerVal)) {
+    alert('Trailer URL must start with https://');
+    return;
+  }
+  if (watchVal && !/^https:\/\//i.test(watchVal)) {
+    alert('Watch Now URL must start with https://');
+    return;
+  }
   fd.append('spotify_url', document.getElementById('movie-spotify').value.trim());
   fd.append('apple_music_url', document.getElementById('movie-apple-music').value.trim());
   const poster = document.getElementById('movie-poster').files[0];

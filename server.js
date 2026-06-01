@@ -145,9 +145,31 @@ async function sendConfirmationEmail({
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ── File uploads ──────────────────────────────────────────────────────────────
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+]);
+
+function imageFileFilter(req, file, cb) {
+  if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      Object.assign(new Error("Only image files are allowed (JPEG, PNG, WebP, GIF, SVG)."), {
+        code: "INVALID_FILE_TYPE",
+      }),
+      false,
+    );
+  }
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
 });
 
 // ── Image compression config ──────────────────────────────────────────────────
@@ -323,7 +345,7 @@ function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token" });
   try {
-    req.admin = jwt.verify(token, JWT_SECRET);
+    req.admin = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
@@ -335,7 +357,7 @@ function masterMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token" });
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
     console.log(
       "masterMiddleware decoded role:",
       decoded.role,
@@ -357,7 +379,7 @@ function requireSection(section) {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "No token" });
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
       req.admin = decoded;
       if (decoded.role === "master") return next(); // master always passes
       const perms = decoded.permissions || [];
@@ -610,6 +632,41 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// ── Login lockout ─────────────────────────────────────────────────────────────
+// Tracks failed login attempts per username in memory.
+// After MAX_ATTEMPTS failures the account is locked for LOCKOUT_MS.
+const LOGIN_ATTEMPTS = new Map(); // username → { count, lockedUntil }
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkLoginLockout(username) {
+  const entry = LOGIN_ATTEMPTS.get(username);
+  if (!entry) return null; // no failures yet
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+    return `Account locked. Try again in ${Math.ceil(secsLeft / 60)} minute(s).`;
+  }
+  // Lockout expired — reset
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+    LOGIN_ATTEMPTS.delete(username);
+  }
+  return null;
+}
+
+function recordLoginFailure(username) {
+  const entry = LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null };
+  entry.count += 1;
+  if (entry.count >= MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOCKOUT_MS;
+    console.warn(`[auth] Account "${username}" locked after ${MAX_ATTEMPTS} failed attempts`);
+  }
+  LOGIN_ATTEMPTS.set(username, entry);
+}
+
+function clearLoginFailures(username) {
+  LOGIN_ATTEMPTS.delete(username);
+}
+
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 app.post(
   "/api/admin/login",
@@ -623,15 +680,30 @@ app.post(
     if (!username || !password)
       return res.status(400).json({ error: "Username and password required" });
 
+    const normalised = username.trim().toLowerCase();
+
+    // Check lockout before touching the DB
+    const lockMsg = checkLoginLockout(normalised);
+    if (lockMsg) return res.status(429).json({ error: lockMsg });
+
     const { data: admin } = await supabase
       .from("admins")
       .select("*")
-      .eq("username", username.trim())
+      .eq("username", normalised)
       .maybeSingle();
-    if (!admin) return res.status(401).json({ error: "Invalid credentials" });
+    if (!admin) {
+      recordLoginFailure(normalised);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     const valid = await bcrypt.compare(password, admin.password_hash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!valid) {
+      recordLoginFailure(normalised);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Successful login — clear any accumulated failures
+    clearLoginFailures(normalised);
 
     const perms = (() => {
       try {
@@ -657,8 +729,8 @@ app.post(
 
 app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   const { newPassword } = req.body;
-  if (!newPassword || newPassword.length < 6)
-    return res.status(400).json({ error: "Password too short" });
+  if (!newPassword || newPassword.length < 8)
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
   const hash = await bcrypt.hash(newPassword, 10);
   await supabase
     .from("admins")
@@ -724,10 +796,10 @@ app.post("/api/master/admins", masterMiddleware, async (req, res) => {
     return res
       .status(400)
       .json({ error: "Name, username and password required" });
-  if (password.length < 6)
+  if (password.length < 8)
     return res
       .status(400)
-      .json({ error: "Password must be at least 6 characters" });
+      .json({ error: "Password must be at least 8 characters" });
   const hash = await bcrypt.hash(password, 10);
   const permsArr = Array.isArray(permissions) ? permissions : [];
   const { data, error } = await supabase
@@ -837,6 +909,8 @@ app.post(
           return res.status(400).json({
             error: "Photo too large — please use an image under 20MB",
           });
+        if (err.code === "INVALID_FILE_TYPE")
+          return res.status(400).json({ error: err.message });
         return res.status(400).json({ error: "Upload error: " + err.message });
       }
       next();
@@ -1758,6 +1832,13 @@ app.post(
       }
     }
     const posterUrl = await uploadImage(req.file, "movies");
+    // Validate external URLs — only https:// is allowed to prevent javascript: XSS
+    if (watch_url && !/^https:\/\//i.test(watch_url)) {
+      return res.status(400).json({ error: "watch_url must start with https://" });
+    }
+    if (trailer_url && !/^https:\/\//i.test(trailer_url)) {
+      return res.status(400).json({ error: "trailer_url must start with https://" });
+    }
     const { data, error } = await supabase
       .from("movies")
       .insert([
@@ -1829,6 +1910,13 @@ app.put(
       } catch {
         genreVal = genre || null;
       }
+    }
+    // Validate external URLs — only https:// is allowed to prevent javascript: XSS
+    if (watch_url && !/^https:\/\//i.test(watch_url)) {
+      return res.status(400).json({ error: "watch_url must start with https://" });
+    }
+    if (trailer_url && !/^https:\/\//i.test(trailer_url)) {
+      return res.status(400).json({ error: "trailer_url must start with https://" });
     }
     const updates = {
       title,
@@ -2162,7 +2250,22 @@ app.delete(
 );
 
 // ── TRAFFIC ───────────────────────────────────────────────────────────────────
-app.post("/api/track", async (req, res) => {
+const trackLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many track requests." },
+  keyGenerator: (req) => req.ip,
+});
+
+// Rough bot detector — matches common crawler/bot User-Agents
+const BOT_UA_RE = /bot|crawler|spider|crawling|slurp|mediapartners|adsbot|googlebot|bingbot|yandex|duckduck|facebookexternalhit|twitterbot|linkedinbot|whatsapp|slack|telegram|curl|wget|python-requests|axios|node-fetch/i;
+
+app.post("/api/track", trackLimit, async (req, res) => {
+  const ua = req.headers["user-agent"] || "";
+  if (BOT_UA_RE.test(ua)) return res.json({ ok: true }); // silently drop bot hits
+
   const allowed = ["home", "films", "events", "blog", "members", "collaborate"];
   const page = allowed.includes(req.body.page) ? req.body.page : "home";
   const hour = parseInt(req.body.hour) || 0;
@@ -2522,7 +2625,7 @@ app.delete(
 
 // PUBLIC: Submit a response to an event registration form
 // Handles multipart/form-data so image files can be uploaded per-question
-app.post("/api/events/:id/form/submit", upload.any(), async (req, res) => {
+app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (req, res) => {
   // 1. Verify the form exists and is open
   const { data: form, error: formErr } = await supabase
     .from("event_forms")
