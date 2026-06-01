@@ -19,7 +19,6 @@
 
 <!-- ── Canonical ────────────────────────────────────────────────────────── -->
 <link rel="canonical" href="https://kiitfilmsociety.in/">
-<meta name="referrer" content="origin">
 
 <!-- ── Resource Hints (Core Web Vitals) ─────────────────────────────────── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2335,7 +2334,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 <div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
   <div id="trailer-modal-inner">
     <button id="trailer-close" onclick="closeTrailer()">✕</button>
-    <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media" referrerpolicy="origin"></iframe>
+    <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
 </div>
 
@@ -5443,6 +5442,8 @@ async function openMovie(id) {
       activePlatform = platform;
       localStorage.setItem('kfs_music_platform', platform);
       renderSoundtrackEmbed();
+      // Re-derive color from the newly active platform's artwork
+      fetchAlbumColorAndApply();
     };
 
     // -- Dynamic color extraction from album art --
@@ -5495,7 +5496,7 @@ async function openMovie(id) {
     }
 
     async function fetchAlbumColorAndApply() {
-      // 1. Try Spotify oEmbed thumbnail (most reliable - album art exact match)
+      // 1. Try Spotify oEmbed thumbnail (most reliable — album art exact match)
       if (hasSpotify && m.spotify_url) {
         try {
           const oembedUrl = 'https://open.spotify.com/oembed?url=' + encodeURIComponent(m.spotify_url.trim());
@@ -5504,6 +5505,33 @@ async function openMovie(id) {
             const json = await res.json();
             if (json.thumbnail_url) {
               extractColorFromImg(json.thumbnail_url, rgb => {
+                if (rgb) { applySoundtrackColor(rgb); return; }
+                _tryAppleArtwork();
+              });
+              return;
+            }
+          }
+        } catch(e) {}
+      }
+      // 2. Try Apple Music oEmbed artwork
+      _tryAppleArtwork();
+    }
+
+    async function _tryAppleArtwork() {
+      // Apple Music exposes artwork via their oEmbed endpoint — no API key needed.
+      // The returned thumbnail_url is the album cover at a usable resolution.
+      if (hasApple && m.apple_music_url) {
+        try {
+          const oembedUrl = 'https://music.apple.com/oembed?url=' + encodeURIComponent(m.apple_music_url.trim());
+          const res = await fetch(oembedUrl);
+          if (res.ok) {
+            const json = await res.json();
+            // Apple returns artwork_url_100 or thumbnail_url
+            const artUrl = json.artwork_url_100 || json.thumbnail_url;
+            if (artUrl) {
+              // Scale up for better color sample (100px → 300px)
+              const largerArt = artUrl.replace('/100x100bb', '/300x300bb');
+              extractColorFromImg(largerArt, rgb => {
                 if (rgb) { applySoundtrackColor(rgb); return; }
                 _fallbackColor();
               });

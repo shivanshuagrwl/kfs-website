@@ -226,10 +226,7 @@ async function uploadImage(file, folder = "general") {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(helmet({
-  contentSecurityPolicy: false,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
-}));
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(
   "/api/",
@@ -239,6 +236,18 @@ app.use(
     message: { error: "Too many requests. Slow down." },
   }),
 );
+
+// ── Strict rate limiters for public write endpoints ───────────────────────────
+// Prevents bots from flooding comments/reviews within the global 100-req window.
+const strictWriteLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,                    // 5 submissions per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many submissions. Please wait 15 minutes and try again." },
+  keyGenerator: (req) => req.ip,
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Response cache helper ──────────────────────────────────────────────────────
@@ -277,14 +286,23 @@ function memCache(key, ttlSeconds, fn) {
   if (hit && Date.now() < hit.expires) return Promise.resolve(hit.data);
   return fn().then((data) => {
     _memStore.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
-    // Persist to disk async — does NOT block your routes
-    fs.writeFile(
-      CACHE_FILE,
-      JSON.stringify(Object.fromEntries(_memStore)),
-      () => {},
-    );
+    debouncedCacheFlush();
     return data;
   });
+}
+
+// Debounced disk flush — writes at most once every 2 seconds, never on every set.
+// Also skips keys that may contain sensitive data (settings, email keys).
+let _cacheFlushTimer = null;
+function debouncedCacheFlush() {
+  clearTimeout(_cacheFlushTimer);
+  _cacheFlushTimer = setTimeout(() => {
+    const SKIP_KEYS = ["settings", "settings:email"];
+    const safe = Object.fromEntries(
+      [..._memStore.entries()].filter(([k]) => !SKIP_KEYS.some(sk => k === sk || k.startsWith(sk + ":")))
+    );
+    fs.writeFile(CACHE_FILE, JSON.stringify(safe), () => {});
+  }, 2000);
 }
 // Invalidate one key or all keys that start with a prefix (e.g. 'movies')
 function memInvalidate(...keys) {
@@ -384,7 +402,16 @@ async function initDB() {
       throw new Error("admins table query failed: " + masterErr.message);
 
     if (!master) {
-      const hash = await bcrypt.hash("KFS@master2024!", 10);
+      const defaultPw = process.env.MASTER_DEFAULT_PW;
+      if (!defaultPw) {
+        console.error(
+          "[initDB] FATAL: MASTER_DEFAULT_PW env var is not set. " +
+          "Cannot create master admin account safely. " +
+          "Set this env var in your Render dashboard and restart.",
+        );
+        return; // Don't create master with no password
+      }
+      const hash = await bcrypt.hash(defaultPw, 10);
       const { error: insertErr } = await supabase.from("admins").insert([
         {
           name: "KFS Master",
@@ -396,7 +423,7 @@ async function initDB() {
       if (insertErr)
         throw new Error("Master admin insert failed: " + insertErr.message);
       console.log(
-        "Master admin created: username=kfsmaster password=KFS@master2024!",
+        "Master admin created: username=kfsmaster (password from MASTER_DEFAULT_PW env var)",
       );
     }
 
@@ -989,13 +1016,18 @@ app.get("/api/blogs/:id", async (req, res) => {
   });
   if (!data) return res.status(404).json({ error: "Not found" });
 
-  // Fire-and-forget view increment — never blocks the response
-  supabase
-    .from("blogs")
-    .update({ view_count: (data.view_count || 0) + 1 })
-    .eq("id", req.params.id)
+  // Fire-and-forget view increment — runs on every real HTTP request (not on cache hits),
+  // because this code is outside the memCache fn. Uses DB increment to avoid race conditions.
+  supabase.rpc("increment_blog_view", { blog_id: req.params.id })
     .then(() => {})
-    .catch(() => {});
+    .catch(() => {
+      // Fallback if RPC doesn't exist yet: raw update still better than nothing
+      supabase
+        .from("blogs")
+        .update({ view_count: (data.view_count || 0) + 1 })
+        .eq("id", req.params.id)
+        .then(() => {}).catch(() => {});
+    });
 
   res.json(data);
 });
@@ -2297,7 +2329,7 @@ app.get("/api/reviews/:movieId", async (req, res) => {
   res.json(data);
 });
 
-app.post("/api/reviews", async (req, res) => {
+app.post("/api/reviews", strictWriteLimit, async (req, res) => {
   const {
     movie_id,
     reviewer_name,
@@ -3599,7 +3631,7 @@ app.get("/api/films/:movieId/comments", async (req, res) => {
 });
 
 // PUBLIC: Post a comment (name only, no login)
-app.post("/api/films/:movieId/comments", async (req, res) => {
+app.post("/api/films/:movieId/comments", strictWriteLimit, async (req, res) => {
   try {
     const { author_name, body, is_spoiler } = req.body;
 
@@ -3830,7 +3862,7 @@ app.get("/api/collaborate", async (req, res) => {
   }
 });
 
-app.post("/api/collaborate", async (req, res) => {
+app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
   try {
     await cleanupExpiredCollaborations();
 
@@ -3937,6 +3969,15 @@ app.put("/api/collaborate/:token", async (req, res) => {
 });
 
 app.delete("/api/collaborate/:token", async (req, res) => {
+  // First confirm the post exists — prevents silent success on bad/guessed tokens
+  const { data: existing } = await supabase
+    .from("collaborate_posts")
+    .select("id")
+    .eq("edit_token", req.params.token)
+    .maybeSingle();
+
+  if (!existing) return res.status(404).json({ error: "Post not found or token invalid." });
+
   const { error } = await supabase
     .from("collaborate_posts")
     .delete()
@@ -4604,7 +4645,8 @@ app.get("*", (req, res) => {
 });
 
 // ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
-// Ping every 4 minutes to prevent connection from going cold
+// Ping every 29 minutes to prevent the connection from going idle.
+// Supabase times out idle connections at 30 min — this stays safely inside that window.
 setInterval(
   async () => {
     try {
