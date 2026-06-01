@@ -247,9 +247,49 @@ async function uploadImage(file, folder = "general") {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
+// Fix 1: Lock CORS to production domain only (was open to all origins)
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://kiitfilmsociety.in', 'https://www.kiitfilmsociety.in']
+    : true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Fix 2: Enable a real CSP instead of disabling it entirely
+// frameSrc covers all embed iframes — add new platforms here as needed
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: [
+        "'self'", "data:",
+        "https://res.cloudinary.com",
+        "https://*.supabase.co",
+        "https://img.youtube.com",       // YouTube thumbnails
+        "https://i.ytimg.com",           // YouTube thumbnails (alternate CDN)
+      ],
+      connectSrc: [
+        "'self'",
+        "https://api.brevo.com",
+        "https://*.supabase.co",         // Supabase realtime + API calls
+      ],
+      frameSrc: [
+        "https://www.youtube.com",       // YouTube embeds
+        "https://open.spotify.com",      // Spotify embeds
+        "https://embed.music.apple.com", // Apple Music embeds
+      ],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// Fix 3: Add body size limit to prevent large payload DoS attacks (was unlimited)
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(
   "/api/",
   rateLimit({
@@ -303,10 +343,17 @@ try {
   console.log("[cache] Restored", _memStore.size, "entries from disk");
 } catch {}
 
+const MAX_CACHE_ENTRIES = 500; // prevent unbounded memory growth
+
 function memCache(key, ttlSeconds, fn) {
   const hit = _memStore.get(key);
   if (hit && Date.now() < hit.expires) return Promise.resolve(hit.data);
   return fn().then((data) => {
+    if (_memStore.size >= MAX_CACHE_ENTRIES) {
+      // Evict the soonest-to-expire entry
+      const oldest = [..._memStore.entries()].sort((a, b) => a[1].expires - b[1].expires)[0];
+      if (oldest) _memStore.delete(oldest[0]);
+    }
     _memStore.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
     debouncedCacheFlush();
     return data;
@@ -504,6 +551,12 @@ function slugify(str) {
 // ── SITEMAP.XML ───────────────────────────────────────────────────────────────
 app.get("/sitemap.xml", async (req, res) => {
   const today = new Date().toISOString().split("T")[0];
+  const cachedXml = _memStore.get("sitemap:xml");
+  if (cachedXml && Date.now() < cachedXml.expires) {
+    res.header("Content-Type", "application/xml");
+    res.header("Cache-Control", "public, max-age=3600");
+    return res.send(cachedXml.data);
+  }
 
   // ── Movies ────────────────────────────────────────────────────────────────
   let movieUrls = "";
@@ -574,9 +627,7 @@ app.get("/sitemap.xml", async (req, res) => {
     /* non-fatal */
   }
 
-  res.header("Content-Type", "application/xml");
-  res.header("Cache-Control", "public, max-age=3600");
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+  const xmlString = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://kiitfilmsociety.in/</loc>
@@ -612,14 +663,22 @@ app.get("/sitemap.xml", async (req, res) => {
 ${movieUrls}
 ${blogUrls}
 ${eventUrls}
-</urlset>`);
+</urlset>`;
+  // Cache for 1 hour
+  _memStore.set("sitemap:xml", { data: xmlString, expires: Date.now() + 3600 * 1000 });
+  res.header("Content-Type", "application/xml");
+  res.header("Cache-Control", "public, max-age=3600");
+  res.send(xmlString);
 });
 
 // ── HEALTH CHECK ──────────────────────────────────────────────────────────────
 app.get("/api/health", async (req, res) => {
+  if (req.headers['x-health-secret'] !== process.env.HEALTH_SECRET) {
+    return res.status(404).send('Not found');
+  }
   const start = Date.now();
   try {
-    const { error } = await supabase.from("settings").select("key").limit(1);
+    const { error } = await supabase.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
     if (error) throw new Error(error.message);
     res.json({ status: "ok", db: "connected", latencyMs: Date.now() - start });
   } catch (e) {
@@ -721,7 +780,7 @@ app.post(
         permissions: perms,
       },
       JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "24h" },
     );
     res.json({ token, name: admin.name, role: admin.role, permissions: perms });
   },
@@ -764,7 +823,7 @@ app.post("/api/admin/refresh", authMiddleware, async (req, res) => {
       permissions: perms,
     },
     JWT_SECRET,
-    { expiresIn: "7d" },
+    { expiresIn: "24h" },
   );
   console.log(`[refresh] ${admin.username} — role: ${admin.role}`);
   res.json({ token, name: admin.name, role: admin.role, permissions: perms });
@@ -859,13 +918,13 @@ app.put(
       .update({ permissions: JSON.stringify(permissions) })
       .eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "admin_permissions",
       `Permissions for admin ${req.params.id}`,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true, permissions });
   },
 );
@@ -972,13 +1031,13 @@ app.post(
       }
       memInvalidate("settings");
       try {
-        await logActivity(
+        logActivity(
           req.admin.id,
           req.admin.name,
           "update",
           "settings",
           "Site Settings",
-        );
+        ).catch(e => console.error("[activity]", e.message));
       } catch (e) {}
       res.json({ success: true });
     } catch (e) {
@@ -1039,13 +1098,13 @@ app.post(
     await supabase
       .from("settings")
       .upsert({ key: "custom_search_eggs", value }, { onConflict: "key" });
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "settings",
       "Custom Search Easter Eggs",
-    );
+    ).catch(e => console.error("[activity]", e.message));
     memInvalidate("settings:custom-eggs", "settings");
     res.json({ success: true });
   },
@@ -1159,7 +1218,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list");
-    await logActivity(req.admin.id, req.admin.name, "create", "blog", title);
+    logActivity(req.admin.id, req.admin.name, "create", "blog", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1187,7 +1246,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
-    await logActivity(req.admin.id, req.admin.name, "update", "blog", title);
+    logActivity(req.admin.id, req.admin.name, "update", "blog", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1203,13 +1262,13 @@ app.delete(
       .single();
     await supabase.from("blogs").delete().eq("id", req.params.id);
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "blog",
       b?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -1258,7 +1317,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
-    await logActivity(req.admin.id, req.admin.name, "create", "event", title);
+    logActivity(req.admin.id, req.admin.name, "create", "event", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1293,7 +1352,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("events:list");
-    await logActivity(req.admin.id, req.admin.name, "update", "event", title);
+    logActivity(req.admin.id, req.admin.name, "update", "event", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1309,13 +1368,13 @@ app.delete(
       .single();
     await supabase.from("events").delete().eq("id", req.params.id);
     memInvalidate("events:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "event",
       e?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -1376,7 +1435,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
-    await logActivity(req.admin.id, req.admin.name, "create", "member", name);
+    logActivity(req.admin.id, req.admin.name, "create", "member", name).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1409,7 +1468,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("members:list");
-    await logActivity(req.admin.id, req.admin.name, "update", "member", name);
+    logActivity(req.admin.id, req.admin.name, "update", "member", name).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1425,13 +1484,13 @@ app.delete(
       .single();
     await supabase.from("members").delete().eq("id", req.params.id);
     memInvalidate("members:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "member",
       m?.name || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -1462,13 +1521,13 @@ app.post(
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "create",
       "testimonial",
       name,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     memInvalidate("testimonials:list");
     res.json(data);
   },
@@ -1490,13 +1549,13 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("testimonials:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "testimonial",
       name,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1512,13 +1571,13 @@ app.delete(
       .single();
     await supabase.from("testimonials").delete().eq("id", req.params.id);
     memInvalidate("testimonials:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "testimonial",
       t?.name || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -1558,13 +1617,13 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "create",
       "achievement",
       title,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1590,13 +1649,13 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("achievements:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "achievement",
       title,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -1612,13 +1671,13 @@ app.delete(
       .single();
     await supabase.from("achievements").delete().eq("id", req.params.id);
     memInvalidate("achievements:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "achievement",
       a?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -1870,7 +1929,7 @@ app.post(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:");
-    await logActivity(req.admin.id, req.admin.name, "create", "movie", title);
+    logActivity(req.admin.id, req.admin.name, "create", "movie", title).catch(e => console.error("[activity]", e.message));
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
 );
@@ -1949,7 +2008,7 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
-    await logActivity(req.admin.id, req.admin.name, "update", "movie", title);
+    logActivity(req.admin.id, req.admin.name, "update", "movie", title).catch(e => console.error("[activity]", e.message));
     res.json({ ...data, genre: parseGenre(data.genre) });
   },
 );
@@ -1965,13 +2024,13 @@ app.delete(
       .single();
     await supabase.from("movies").delete().eq("id", req.params.id);
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "movie",
       mv?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -2051,13 +2110,13 @@ app.post(
           ? "A CV edition for this year already exists"
           : error.message,
       });
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "create",
       "chitra_vichitra",
       `CV ${year}`,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     memInvalidate("cv:list");
     res.json(data);
   },
@@ -2084,13 +2143,13 @@ app.put(
       .single();
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("cv:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "chitra_vichitra",
       `CV ${year}`,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -2107,13 +2166,13 @@ app.delete(
       .single();
     await supabase.from("chitra_vichitra").delete().eq("id", req.params.id);
     memInvalidate("cv:list");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "chitra_vichitra",
       `CV ${cv?.year || req.params.id}`,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -2277,9 +2336,9 @@ app.get(
   "/api/admin/analytics/traffic",
   requireSection("analytics"),
   async (req, res) => {
-    const range = req.query.range || "7d";
+    const range = req.query.range || "24h";
     let fromDate = new Date();
-    if (range === "7d") fromDate.setDate(fromDate.getDate() - 7);
+    if (range === "24h") fromDate.setDate(fromDate.getDate() - 7);
     else if (range === "30d") fromDate.setDate(fromDate.getDate() - 30);
     else fromDate = new Date("2020-01-01");
     const from = fromDate.toISOString().slice(0, 10);
@@ -2444,17 +2503,27 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
   } = req.body;
   if (!movie_id || !overall)
     return res.status(400).json({ error: "movie_id and overall are required" });
+
+  // Validate score ranges (prevent overall:999 or overall:"DROP TABLE" etc.)
+  function parseScore(val) {
+    const n = parseInt(val);
+    return (!isNaN(n) && n >= 1 && n <= 10) ? n : null;
+  }
+  const overallScore = parseScore(overall);
+  if (overallScore === null)
+    return res.status(400).json({ error: "overall must be an integer between 1 and 10" });
+
   const { data, error } = await supabase
     .from("reviews")
     .insert([
       {
         movie_id,
-        reviewer_name: (reviewer_name || "Anonymous").toString().slice(0, 60),
-        overall: parseInt(overall),
-        direction: direction ? parseInt(direction) : null,
-        sound: sound ? parseInt(sound) : null,
-        cinematography: cinematography ? parseInt(cinematography) : null,
-        script: script ? parseInt(script) : null,
+        reviewer_name: (reviewer_name || "Anonymous").toString().replace(/[<>]/g, "").slice(0, 60),
+        overall: overallScore,
+        direction: parseScore(direction),
+        sound: parseScore(sound),
+        cinematography: parseScore(cinematography),
+        script: parseScore(script),
       },
     ])
     .select()
@@ -2468,17 +2537,23 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
 
 // PUBLIC: Get the registration form for an event (schema only, no responses)
 app.get("/api/events/:id/form", async (req, res) => {
-  const { data, error } = await supabase
-    .from("event_forms")
-    .select(
-      "id,event_id,title,description,questions,is_open,created_at,updated_at",
-    )
-    .eq("event_id", req.params.id)
-    .maybeSingle();
-  if (error) return res.status(500).json({ error: error.message });
-  if (!data)
-    return res.status(404).json({ error: "No form found for this event" });
-  res.json(data);
+  cacheFor(res, 120); // 2-min cache — form rarely changes
+  try {
+    const data = await memCache(`event:form:${req.params.id}`, 120, async () => {
+      const { data, error } = await supabase
+        .from("event_forms")
+        .select("id,event_id,title,description,questions,is_open,created_at,updated_at")
+        .eq("event_id", req.params.id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    });
+    if (!data)
+      return res.status(404).json({ error: "No form found for this event" });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ADMIN: Create or update (upsert) the registration form for an event
@@ -2545,13 +2620,13 @@ app.post(
       .select("title")
       .eq("id", req.params.id)
       .maybeSingle();
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       existing ? "update" : "create",
       "event_form",
       ev?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   },
 );
@@ -2586,13 +2661,13 @@ app.delete(
       .select("title")
       .eq("id", req.params.id)
       .maybeSingle();
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "form_responses",
       `Responses for ${ev?.title || req.params.id}`,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -2612,13 +2687,13 @@ app.delete(
       .select("title")
       .eq("id", req.params.id)
       .maybeSingle();
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "event_form",
       ev?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -3463,13 +3538,13 @@ app.post(
         { key: "wrapped_config", value: JSON.stringify(config) },
         { onConflict: "key" },
       );
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "update",
       "settings",
       "KFS Wrapped Config",
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -3494,23 +3569,34 @@ app.post(
 
 // Public: aggregate stats for Wrapped (all-time + per-year totals)
 app.get("/api/wrapped/stats", async (req, res) => {
+  cacheFor(res, 300); // 5-min browser cache
   try {
     const year = req.query.year ? parseInt(req.query.year) : null;
+    const cacheKey = `wrapped:stats:${year || 'all'}`;
 
-    // All movies
-    const { data: movies } = await supabase
-      .from("movies")
-      .select("id,title,genre,release_year,director,poster_image");
+    // Collapse 7 sequential Supabase round-trips into 3 parallel ones, cached 5 min
+    const result = await memCache(cacheKey, 300, async () => {
+      const [moviesRes, blogsRes, reviewsRes, eventsCountRes] = await Promise.all([
+        supabase.from("movies").select("id,title,genre,release_year,director,poster_image"),
+        supabase.from("blogs").select("id,title,cover_image").eq("published", true),
+        supabase.from("reviews").select("movie_id,overall"),
+        supabase.from("events").select("id", { count: "exact", head: true }),
+      ]);
 
-    // All published blogs (for personalized blog-read cards)
-    const { data: blogs } = await supabase
-      .from("blogs")
-      .select("id,title,cover_image")
-      .eq("published", true);
+      const movies = moviesRes.data || [];
+      const blogs  = blogsRes.data  || [];
+      const reviews = reviewsRes.data || [];
+      const totalEvents = eventsCountRes.count || 0;
+
+      // Derive counts from already-fetched data — no extra COUNT queries needed
+      const totalMovies  = movies.length;
+      const totalBlogs   = blogs.length;
+      const totalReviews = reviews.length;
+      const yearMovies   = year ? movies.filter(m => m.release_year === year).length : null;
 
     // Genre frequency map across all KFS films
     const genreCount = {};
-    (movies || []).forEach((m) => {
+    movies.forEach((m) => {
       let genres = [];
       try {
         genres = JSON.parse(m.genre || "[]");
@@ -3526,36 +3612,6 @@ app.get("/api/wrapped/stats", async (req, res) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([g, c]) => ({ genre: g, count: c }));
-
-    // Total counts
-    const { count: totalMovies } = await supabase
-      .from("movies")
-      .select("id", { count: "exact", head: true });
-    const { count: totalBlogs } = await supabase
-      .from("blogs")
-      .select("id", { count: "exact", head: true })
-      .eq("published", true);
-    const { count: totalEvents } = await supabase
-      .from("events")
-      .select("id", { count: "exact", head: true });
-    const { count: totalReviews } = await supabase
-      .from("reviews")
-      .select("id", { count: "exact", head: true });
-
-    // Year-specific counts (films released that year)
-    let yearMovies = null;
-    if (year) {
-      const { count } = await supabase
-        .from("movies")
-        .select("id", { count: "exact", head: true })
-        .eq("release_year", year);
-      yearMovies = count;
-    }
-
-    // Top reviewed film
-    const { data: reviews } = await supabase
-      .from("reviews")
-      .select("movie_id,overall");
     const filmScores = {};
     (reviews || []).forEach((r) => {
       if (!filmScores[r.movie_id]) filmScores[r.movie_id] = [];
@@ -3574,55 +3630,57 @@ app.get("/api/wrapped/stats", async (req, res) => {
       ? (movies || []).find((m) => String(m.id) === String(topRated))
       : null;
 
-    res.json({
-      totalMovies: totalMovies || 0,
-      totalBlogs: totalBlogs || 0,
-      totalEvents: totalEvents || 0,
-      totalReviews: totalReviews || 0,
-      yearMovies,
-      topGenres,
-      topRatedMovie: topRatedMovie
-        ? {
-            id: topRatedMovie.id,
-            title: topRatedMovie.title,
-            poster_image: topRatedMovie.poster_image,
-            score: Math.round(bestScore * 10) / 10,
-          }
-        : null,
-      movieRatings: Object.fromEntries(
-        Object.entries(filmScores).map(([mid, scores]) => [
-          mid,
-          {
-            avg:
-              Math.round(
-                (scores.reduce((a, b) => a + b, 0) / scores.length) * 10,
-              ) / 10,
-            count: scores.length,
-          },
-        ]),
-      ),
-      allMovies: (movies || []).map((m) => {
-        let genres = [];
-        try {
-          genres = JSON.parse(m.genre || "[]");
-        } catch {
-          genres = m.genre ? [m.genre] : [];
-        }
-        return {
-          id: m.id,
-          title: m.title,
-          genre: Array.isArray(genres) ? genres : [genres],
-          release_year: m.release_year,
-          director: m.director,
-          poster_image: m.poster_image,
-        };
-      }),
-      allBlogs: (blogs || []).map((b) => ({
-        id: b.id,
-        title: b.title,
-        cover_image: b.cover_image,
-      })),
-    });
+      // Top reviewed film (derived from already-fetched reviews + movies)
+      const filmScores = {};
+      reviews.forEach((r) => {
+        if (!filmScores[r.movie_id]) filmScores[r.movie_id] = [];
+        filmScores[r.movie_id].push(r.overall);
+      });
+      let topRated = null;
+      let bestScore = 0;
+      Object.entries(filmScores).forEach(([mid, scores]) => {
+        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+        if (avg > bestScore && scores.length >= 2) { bestScore = avg; topRated = mid; }
+      });
+      const topRatedMovie = topRated ? movies.find((m) => String(m.id) === String(topRated)) : null;
+
+      return {
+        totalMovies,
+        totalBlogs,
+        totalEvents,
+        totalReviews,
+        yearMovies,
+        topGenres,
+        topRatedMovie: topRatedMovie
+          ? {
+              id: topRatedMovie.id,
+              title: topRatedMovie.title,
+              poster_image: topRatedMovie.poster_image,
+              score: Math.round(bestScore * 10) / 10,
+            }
+          : null,
+        movieRatings: Object.fromEntries(
+          Object.entries(filmScores).map(([mid, scores]) => [
+            mid,
+            {
+              avg: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10,
+              count: scores.length,
+            },
+          ]),
+        ),
+        allMovies: movies.map((m) => {
+          let genres = [];
+          try { genres = JSON.parse(m.genre || "[]"); } catch { genres = m.genre ? [m.genre] : []; }
+          return {
+            id: m.id, title: m.title,
+            genre: Array.isArray(genres) ? genres : [genres],
+            release_year: m.release_year, director: m.director, poster_image: m.poster_image,
+          };
+        }),
+        allBlogs: blogs.map((b) => ({ id: b.id, title: b.title, cover_image: b.cover_image })),
+      };
+    }); // end memCache
+    res.json(result);
   } catch (e) {
     console.error("[wrapped/stats]", e.message);
     res.status(500).json({ error: e.message });
@@ -3859,13 +3917,13 @@ app.delete(
         .eq("id", req.params.id);
 
       if (error) return res.status(500).json({ error: error.message });
-      await logActivity(
+      logActivity(
         req.admin.id,
         req.admin.name,
         "delete",
         "film_comment",
         `Comment by ${comment?.author_name || "unknown"}`,
-      );
+      ).catch(e => console.error("[activity]", e.message));
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -3899,13 +3957,13 @@ app.post(
         .single();
 
       if (error) return res.status(500).json({ error: error.message });
-      await logActivity(
+      logActivity(
         req.admin.id,
         req.admin.name,
         "create",
         "film_comment",
         `KFS Team reply on film ${req.params.movieId}`,
-      );
+      ).catch(e => console.error("[activity]", e.message));
       res.status(201).json(data);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -4107,13 +4165,13 @@ app.delete(
 
     if (error) return res.status(500).json({ error: error.message });
 
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "delete",
       "collaborate",
       post?.title || req.params.id,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
 );
@@ -4419,13 +4477,13 @@ app.post(
         }
       }
 
-      await logActivity(
+      logActivity(
         req.admin.id,
         req.admin.name,
         "create",
         "broadcast",
         `"${subject.trim()}" → ${sentCount} recipients`,
-      );
+      ).catch(e => console.error("[activity]", e.message));
 
       res.json({
         success: true,
@@ -4597,13 +4655,13 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
     memInvalidate("theme:active");
-    await logActivity(
+    logActivity(
       req.admin.id,
       req.admin.name,
       "create",
       "event_theme",
       name,
-    );
+    ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4679,13 +4737,13 @@ app.put(
 
       if (error) return res.status(500).json({ error: error.message });
       memInvalidate("theme:active");
-      await logActivity(
+      logActivity(
         req.admin.id,
         req.admin.name,
         "update",
         "event_theme",
         data.name || id,
-      );
+      ).catch(e => console.error("[activity]", e.message));
       res.json(data);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -4720,13 +4778,13 @@ app.delete(
       if (error) return res.status(500).json({ error: error.message });
 
       memInvalidate("theme:active");
-      await logActivity(
+      logActivity(
         req.admin.id,
         req.admin.name,
         "delete",
         "event_theme",
         theme.name,
-      );
+      ).catch(e => console.error("[activity]", e.message));
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -4753,7 +4811,7 @@ app.get("*", (req, res) => {
 setInterval(
   async () => {
     try {
-      await supabase.from("settings").select("key").limit(1);
+      await supabase.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
       // Silent success — log only on failure
     } catch (e) {
       console.error("Supabase keepalive failed:", e.message);

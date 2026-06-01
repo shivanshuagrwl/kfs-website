@@ -5229,7 +5229,17 @@ async function loadMovies() {
 
   // Build genre filter dropdown (matching blog filter style)
   window._activeGenreFilter = null;
-  const allGenres = [...new Set((movies||[]).flatMap(m => Array.isArray(m.genre) ? m.genre : []).filter(Boolean))].sort();
+  // Normalize to Title Case before deduplicating so "short film" / "SHORT FILM" / "Short Film"
+  // all collapse into a single "Short Film" entry instead of appearing 3 times.
+  function toTitleCase(s) {
+    return s.trim().replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+  const allGenres = [...new Map(
+    (movies||[])
+      .flatMap(m => Array.isArray(m.genre) ? m.genre : [])
+      .filter(Boolean)
+      .map(g => [toTitleCase(g).toLowerCase(), toTitleCase(g)])  // key=lowercase for dedup, value=display
+  ).values()].sort();
   const filterBar = document.getElementById('movie-genre-filter-bar');
   const dd = document.getElementById('movie-genre-dropdown');
   if (allGenres.length > 1 && filterBar && dd) {
@@ -5273,8 +5283,9 @@ function applyMovieGenreFilter(genre, btn) {
     if (badge) badge.style.display = 'none';
   }
   const movies = window._allMoviesCache || [];
-  const filtered = genre
-    ? movies.filter(m => (Array.isArray(m.genre) ? m.genre : []).map(g=>g.toLowerCase()).includes(genre.toLowerCase()))
+  const genreLower = genre ? genre.toLowerCase().trim() : null;
+  const filtered = genreLower
+    ? movies.filter(m => (Array.isArray(m.genre) ? m.genre : []).some(g => g.toLowerCase().trim() === genreLower))
     : movies;
   renderMoviesGrid(filtered);
 }
