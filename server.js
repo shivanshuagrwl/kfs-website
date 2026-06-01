@@ -254,7 +254,7 @@ app.use(
   "/api/",
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 500, // raised from 100 — home page fires 7 requests at once, admin panel fires 20+
     message: { error: "Too many requests. Slow down." },
   }),
 );
@@ -883,7 +883,7 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get("/api/settings", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 60); // 1-min browser cache; server memCache handles DB load
   const obj = await memCache("settings", 300, async () => {
     const { data } = await supabase
       .from("settings")
@@ -1052,7 +1052,7 @@ app.post(
 );
 
 app.get("/api/blogs", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 60);
   const data = await memCache("blogs:list", 120, async () => {
     const { data } = await supabase
       .from("blogs")
@@ -1079,7 +1079,7 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
 });
 
 app.get("/api/blogs/:id", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const data = await memCache(`blogs:${req.params.id}`, 300, async () => {
     const { data } = await supabase
       .from("blogs")
@@ -1216,7 +1216,7 @@ app.delete(
 
 // ── EVENTS ────────────────────────────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 60);
   const data = await memCache("events:list", 120, async () => {
     const { data } = await supabase
       .from("events")
@@ -1322,7 +1322,7 @@ app.delete(
 
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const data = await memCache("members:list", 600, async () => {
     const { data } = await supabase
       .from("members")
@@ -1438,7 +1438,7 @@ app.delete(
 
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const data = await memCache("testimonials:list", 600, async () => {
     const { data } = await supabase
       .from("testimonials")
@@ -1525,7 +1525,7 @@ app.delete(
 
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const data = await memCache("achievements:list", 600, async () => {
     const { data } = await supabase
       .from("achievements")
@@ -1755,7 +1755,7 @@ app.get("/api/yt-duration", async (req, res) => {
 });
 
 app.get("/api/movies", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 60);
   // genre filter busts the general cache key
   const cacheKey = req.query.genre
     ? `movies:genre:${req.query.genre}`
@@ -1781,7 +1781,7 @@ app.get("/api/movies", async (req, res) => {
 });
 
 app.get("/api/movies/:id", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const data = await memCache(`movies:${req.params.id}`, 300, async () => {
     const { data } = await supabase
       .from("movies")
@@ -1979,7 +1979,7 @@ app.delete(
 // ── CHITRA VICHITRA — PUBLIC ──────────────────────────────────────────────────
 // Get all CV editions (with movie count)
 app.get("/api/chitra-vichitra", async (req, res) => {
-  noStore(res);
+  cacheFor(res, 120);
   const result = await memCache("cv:list", 600, async () => {
     const { data: editions, error } = await supabase
       .from("chitra_vichitra")
