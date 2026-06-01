@@ -3612,23 +3612,6 @@ app.get("/api/wrapped/stats", async (req, res) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([g, c]) => ({ genre: g, count: c }));
-    const filmScores = {};
-    (reviews || []).forEach((r) => {
-      if (!filmScores[r.movie_id]) filmScores[r.movie_id] = [];
-      filmScores[r.movie_id].push(r.overall);
-    });
-    let topRated = null;
-    let bestScore = 0;
-    Object.entries(filmScores).forEach(([mid, scores]) => {
-      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      if (avg > bestScore && scores.length >= 2) {
-        bestScore = avg;
-        topRated = mid;
-      }
-    });
-    const topRatedMovie = topRated
-      ? (movies || []).find((m) => String(m.id) === String(topRated))
-      : null;
 
       // Top reviewed film (derived from already-fetched reviews + movies)
       const filmScores = {};
