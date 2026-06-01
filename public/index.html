@@ -4441,23 +4441,28 @@ function toggleTheme() {
   setTimeout(function(){ _setThemeUI(isLight); }, 0);
 })();
 
-// Pre-load members so linked member lookups work on any page
-document.addEventListener('DOMContentLoaded', async function prefetchMembers(){
-  const data = await apiFetch('/api/members');
+// Pre-load members so linked member lookups work on any page.
+// Deferred 2s so it doesn't compete with loadHomeData's parallel fetch burst on first paint.
+setTimeout(async function prefetchMembers(){
+  if (allMembers && allMembers.length) return; // already loaded by a page section
+  const data = await apiFetch('/api/members').catch(() => null);
   if (data) {
     allMembers = data;
-    // Pre-populate registry so indices are stable
     if (!window._memberRegistry) window._memberRegistry = [];
     data.forEach(m => {
       if (!window._memberRegistry.find(r => r.id === m.id))
         window._memberRegistry.push(m);
     });
   }
-});
+}, 2000);
 
 function animateCounters() {
   document.querySelectorAll('.counter').forEach(el=>{
     const target = parseInt(el.dataset.target);
+    if (!target) return;
+    // Don't re-animate if already showing the correct value
+    if (el.textContent === target + '+') return;
+    el.textContent = '0+';
     let current = 0;
     const step = target / 60;
     const timer = setInterval(()=>{
@@ -4469,7 +4474,19 @@ function animateCounters() {
 }
 
 async function loadHomeData() {
-  const settings = await apiFetch('/api/settings');
+  // Fetch everything in parallel — no more sequential awaits causing content
+  // to pop in one section at a time (the "numbers/links coming and going" bug).
+  const [settings, achievements, events, blogs, testimonials, movies, allReviews] = await Promise.all([
+    apiFetch('/api/settings').catch(() => null),
+    apiFetch('/api/achievements').catch(() => []),
+    apiFetch('/api/events').catch(() => []),
+    apiFetch('/api/blogs').catch(() => []),
+    apiFetch('/api/testimonials').catch(() => []),
+    apiFetch('/api/movies').catch(() => []),
+    fetch('/api/reviews/all').then(r => r.ok ? r.json() : []).catch(() => [])
+  ]);
+
+  // ── Settings / hero / footer ──────────────────────────────────────────────
   if (settings) {
     const tagEl = document.getElementById('hero-tagline');
     if (settings.site_tagline) {
@@ -4499,7 +4516,7 @@ async function loadHomeData() {
     if (settings.instagram) { ig.href=settings.instagram; ig.style.display='block'; }
     if (settings.youtube) { yt.href=settings.youtube; yt.style.display='block'; }
     if (settings.email) em.href='mailto:'+settings.email;
-    // update stat counters from settings
+    // update stat counters from settings — set data-target BEFORE animateCounters runs
     if (settings.stat_members) document.querySelector('[data-target="500"]')?.setAttribute('data-target', settings.stat_members);
     if (settings.stat_events) document.querySelector('[data-target="50"]')?.setAttribute('data-target', settings.stat_events);
     if (settings.stat_films) document.querySelector('[data-target="30"]')?.setAttribute('data-target', settings.stat_films);
@@ -4518,31 +4535,31 @@ async function loadHomeData() {
         ldEl.textContent = JSON.stringify(ld);
       }
     } catch(e) {}
+
+    // Member Spotlight
+    if (settings.spotlight_name) {
+      const sec = document.getElementById('spotlight-section');
+      const div = document.getElementById('spotlight-divider');
+      const wrap = document.getElementById('spotlight-wrap');
+      sec.style.display = 'block';
+      div.style.display = 'block';
+      wrap.innerHTML = `
+        <div>
+          ${settings.spotlight_photo
+            ? `<img class="spotlight-photo" src="${settings.spotlight_photo}" alt="${settings.spotlight_name}">`
+            : `<div class="spotlight-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
+        <\/div>
+        <div>
+          <div class="spotlight-label">Member Spotlight<\/div>
+          <p class="spotlight-quote">${settings.spotlight_quote || ''}<\/p>
+          <div class="spotlight-name">${settings.spotlight_name}<\/div>
+          <div class="spotlight-role">${settings.spotlight_role || ''}<\/div>
+        <\/div>`;
+    }
   }
   document.getElementById('footer-year').textContent = new Date().getFullYear();
 
-  // Member Spotlight
-  if (settings && settings.spotlight_name) {
-    const sec = document.getElementById('spotlight-section');
-    const div = document.getElementById('spotlight-divider');
-    const wrap = document.getElementById('spotlight-wrap');
-    sec.style.display = 'block';
-    div.style.display = 'block';
-    wrap.innerHTML = `
-      <div>
-        ${settings.spotlight_photo
-          ? `<img class="spotlight-photo" src="${settings.spotlight_photo}" alt="${settings.spotlight_name}">`
-          : `<div class="spotlight-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
-      <\/div>
-      <div>
-        <div class="spotlight-label">Member Spotlight<\/div>
-        <p class="spotlight-quote">${settings.spotlight_quote || ''}<\/p>
-        <div class="spotlight-name">${settings.spotlight_name}<\/div>
-        <div class="spotlight-role">${settings.spotlight_role || ''}<\/div>
-      <\/div>`;
-  }
-
-  const achievements = await apiFetch('/api/achievements');
+  // ── Achievements ──────────────────────────────────────────────────────────
   const ag = document.getElementById('achievements-grid');
   if (achievements && achievements.length) {
     ag.innerHTML = achievements.map(a=>{ const aJson=JSON.stringify(a).replace(/"/g,'&quot;'); return `
@@ -4556,7 +4573,7 @@ async function loadHomeData() {
     ag.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No achievements yet.<\/p><\/div>`;
   }
 
-  const events = await apiFetch('/api/events');
+  // ── Events ────────────────────────────────────────────────────────────────
   const homeEvents = document.getElementById('home-events');
   const upcoming = (events||[]).filter(e=>e.is_upcoming).slice(0,3);
   if (upcoming.length) {
@@ -4565,7 +4582,7 @@ async function loadHomeData() {
     homeEvents.innerHTML = `<div class="empty-state"><p>No upcoming events. Check back soon.<\/p><\/div>`;
   }
 
-  const blogs = await apiFetch('/api/blogs');
+  // ── Blog ──────────────────────────────────────────────────────────────────
   const hbg = document.getElementById('home-blog-grid');
   if (blogs && blogs.length) {
     window._allBlogs = blogs;
@@ -4593,15 +4610,11 @@ async function loadHomeData() {
     hbg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No posts yet.<\/p><\/div>`;
   }
 
-  const testimonials = await apiFetch('/api/testimonials');
+  // ── Testimonials ──────────────────────────────────────────────────────────
   renderTestimonials(testimonials||[]);
 
-  const [movies, allReviews] = await Promise.all([
-    apiFetch('/api/movies'),
-    fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
-  ]);
+  // ── Movies + Reviews ──────────────────────────────────────────────────────
   window._allMoviesCache = movies || [];
-  // Build rating averages keyed by movie id
   window._movieRatings = {};
   if (Array.isArray(allReviews)) {
     const grouped = {};
@@ -4638,6 +4651,7 @@ async function loadHomeData() {
     hmg.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films yet.<\/p><\/div>`;
   }
 
+  // Counters animate after all data-target values are set
   animateCounters();
 }
 
