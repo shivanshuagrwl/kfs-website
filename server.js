@@ -11,12 +11,14 @@ const { createClient } = require("@supabase/supabase-js");
 const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = rateLimit;
 const helmet = require("helmet");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
 const cookieParser = require("cookie-parser");
 
 const app = express();
+app.set('trust proxy', 1); // Render reverse-proxy ke peeche X-Forwarded-For trusted hai
 const PORT = process.env.PORT || 3000;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -312,7 +314,7 @@ const strictWriteLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many submissions. Please wait 15 minutes and try again." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -857,24 +859,30 @@ async function recordLoginFailureDurable(username) {
   recordLoginFailure(username);
   const entry = LOGIN_ATTEMPTS.get(username);
   if (entry) {
-    await supabase
-      .from("admins")
-      .update({
-        login_failures: entry.count,
-        locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
-      })
-      .eq("username", username)
-      .catch(e => console.error("[auth] lockout persist failed:", e.message));
+    try {
+      await supabase
+        .from("admins")
+        .update({
+          login_failures: entry.count,
+          locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
+        })
+        .eq("username", username);
+    } catch (e) {
+      console.error("[auth] lockout persist failed:", e.message);
+    }
   }
 }
 
 async function clearLoginFailuresDurable(username) {
   clearLoginFailures(username);
-  await supabase
-    .from("admins")
-    .update({ login_failures: 0, locked_until: null })
-    .eq("username", username)
-    .catch(e => console.error("[auth] lockout clear failed:", e.message));
+  try {
+    await supabase
+      .from("admins")
+      .update({ login_failures: 0, locked_until: null })
+      .eq("username", username);
+  } catch (e) {
+    console.error("[auth] lockout clear failed:", e.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -910,7 +918,7 @@ function csrfProtect(req, res, next) {
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION D — Updated /api/admin/login (supports TOTP second factor)
-// NOTE: Login route is defined BEFORE csrfProtect middleware so it is exempt.
+// NOTE: Login route defined BEFORE csrfProtect middleware so it is exempt.
 // ─────────────────────────────────────────────────────────────────────────────
 app.post(
   "/api/admin/login",
@@ -1005,7 +1013,7 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
-// Protect all admin and master write routes (placed AFTER login route so login is exempt)
+// Protect all admin and master write routes (AFTER login so login is exempt)
 app.use("/api/admin", csrfProtect);
 app.use("/api/master", csrfProtect);
 
@@ -2660,7 +2668,7 @@ const trackLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many track requests." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
 // Rough bot detector — matches common crawler/bot User-Agents
