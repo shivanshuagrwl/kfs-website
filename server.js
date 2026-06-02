@@ -867,24 +867,30 @@ async function recordLoginFailureDurable(username) {
   recordLoginFailure(username);
   const entry = LOGIN_ATTEMPTS.get(username);
   if (entry) {
-    await supabasePublic
-      .from("admins")
-      .update({
-        login_failures: entry.count,
-        locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
-      })
-      .eq("username", username)
-      .catch(e => console.error("[auth] lockout persist failed:", e.message));
+    try {
+      await supabasePublic
+        .from("admins")
+        .update({
+          login_failures: entry.count,
+          locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
+        })
+        .eq("username", username);
+    } catch(e) {
+      console.error("[auth] lockout persist failed:", e.message);
+    }
   }
 }
 
 async function clearLoginFailuresDurable(username) {
   clearLoginFailures(username);
-  await supabasePublic
-    .from("admins")
-    .update({ login_failures: 0, locked_until: null })
-    .eq("username", username)
-    .catch(e => console.error("[auth] lockout clear failed:", e.message));
+  try {
+    await supabasePublic
+      .from("admins")
+      .update({ login_failures: 0, locked_until: null })
+      .eq("username", username);
+  } catch(e) {
+    console.error("[auth] lockout clear failed:", e.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
