@@ -4795,6 +4795,29 @@ app.delete(
   },
 );
 
+// ── Route-based page shells ────────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/films", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "films.html"));
+});
+app.get("/events", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "events.html"));
+});
+app.get("/blog", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "blog.html"));
+});
+app.get("/members", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "members.html"));
+});
+app.get("/wrapped", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "wrapped.html"));
+});
+app.get("/collaborate", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "collaborate.html"));
+});
+
 // ── Legal pages ───────────────────────────────────────────────────────────────
 app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"));
