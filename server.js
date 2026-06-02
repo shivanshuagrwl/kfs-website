@@ -308,7 +308,7 @@ const strictWriteLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many submissions. Please wait 15 minutes and try again." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => rateLimit.ipKeyGenerator(req, res),
 });
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -2335,7 +2335,7 @@ const trackLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many track requests." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => rateLimit.ipKeyGenerator(req, res),
 });
 
 // Rough bot detector — matches common crawler/bot User-Agents
@@ -4803,8 +4803,71 @@ app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
 
+// ── PROTECTED ADMIN PANEL ─────────────────────────────────────────────────────
+// admin.html is NOT in the public static directory — it lives outside it and is
+// served only after the server verifies a valid JWT. This means the admin UI,
+// all its JavaScript logic, API endpoint names, and section structure are never
+// exposed to unauthenticated visitors.
+app.get("/admin", (req, res) => {
+  // Extract token from the Authorization header OR from a query param on the
+  // initial page load (the client stores it in localStorage after login and
+  // adds it as ?_t=... for the first navigation — we clear it immediately).
+  let token = null;
+
+  // Primary: Authorization header (used by fetch / XHR)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.slice(7);
+  }
+
+  // Fallback: cookie named kfs_admin_token (set by the login endpoint below)
+  if (!token && req.headers.cookie) {
+    const cookieMatch = req.headers.cookie.match(/(?:^|;\s*)kfs_admin_token=([^;]+)/);
+    if (cookieMatch) token = decodeURIComponent(cookieMatch[1]);
+  }
+
+  // If no token at all → the browser is making a direct GET (not a fetch).
+  // We can't check localStorage server-side, so we serve a tiny bootstrap page
+  // that reads the token from localStorage and either redirects back here with
+  // the token in a short-lived cookie, or sends the user to / if they're not logged in.
+  if (!token) {
+    return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>KFS Admin</title></head><body>
+<script>
+(function(){
+  var t = localStorage.getItem('kfs_token');
+  if (!t) { window.location.replace('/'); return; }
+  // Store in a short-lived cookie so the server can verify on the reload
+  document.cookie = 'kfs_admin_token=' + encodeURIComponent(t) + '; path=/admin; max-age=10; SameSite=Strict';
+  window.location.reload();
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=/"></noscript>
+</body></html>`);
+  }
+
+  // Verify the token
+  try {
+    jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    // Clear the short-lived bootstrap cookie immediately after verification
+    res.setHeader("Set-Cookie", "kfs_admin_token=; path=/admin; max-age=0; SameSite=Strict");
+    // Prevent caching of the admin page
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.sendFile(path.join(__dirname, "admin.html"));
+  } catch {
+    // Invalid or expired token — clear the cookie and redirect to login
+    res.setHeader("Set-Cookie", "kfs_admin_token=; path=/admin; max-age=0; SameSite=Strict");
+    res.redirect("/");
+  }
+});
+
+// Block any direct request to admin.html as a static file
+app.get("/admin.html", (req, res) => {
+  res.status(404).send("Not found");
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
-app.get("*", (req, res) => {
+app.get("/{*path}", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
