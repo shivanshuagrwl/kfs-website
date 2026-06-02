@@ -1188,7 +1188,7 @@ app.post("/api/admin/2fa/disable", authMiddleware, async (req, res) => {
 app.get("/api/master/admins", masterMiddleware, async (req, res) => {
   const { data } = await supabase
     .from("admins")
-    .select("id,name,username,role,permissions,created_at")
+    .select("id,name,username,role,permissions,created_at,totp_enabled")
     .order("created_at");
   res.json(
     (data || []).map((a) => ({
