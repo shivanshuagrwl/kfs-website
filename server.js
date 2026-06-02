@@ -266,7 +266,7 @@ app.use(cors({
     ? ['https://kiitfilmsociety.in', 'https://www.kiitfilmsociety.in']
     : true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
 }));
 
 // Fix 2: Enable a real CSP instead of disabling it entirely
@@ -846,7 +846,7 @@ function clearLoginFailures(username) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function loadActiveLockouts() {
-  const { data } = await supabasePublic
+  const { data } = await supabase
     .from("admins")
     .select("username, login_failures, locked_until")
     .not("locked_until", "is", null)
@@ -868,7 +868,7 @@ async function recordLoginFailureDurable(username) {
   const entry = LOGIN_ATTEMPTS.get(username);
   if (entry) {
     try {
-      await supabasePublic
+      await supabase
         .from("admins")
         .update({
           login_failures: entry.count,
@@ -884,7 +884,7 @@ async function recordLoginFailureDurable(username) {
 async function clearLoginFailuresDurable(username) {
   clearLoginFailures(username);
   try {
-    await supabasePublic
+    await supabase
       .from("admins")
       .update({ login_failures: 0, locked_until: null })
       .eq("username", username);
@@ -946,7 +946,7 @@ app.post(
     const lockMsg = checkLoginLockout(normalised);
     if (lockMsg) return res.status(429).json({ error: lockMsg });
 
-    const { data: admin } = await supabasePublic
+    const { data: admin } = await supabase
       .from("admins")
       .select("*")
       .eq("username", normalised)
