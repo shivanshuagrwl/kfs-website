@@ -18,18 +18,26 @@ const QRCode = require("qrcode");
 const cookieParser = require("cookie-parser");
 
 const app = express();
-app.set('trust proxy', 1); // Render reverse-proxy ke peeche X-Forwarded-For trusted hai
+app.set('trust proxy', 1); // Render reverse-proxy ke peeche
 const PORT = process.env.PORT || 3000;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;         // service_role key — admin writes only
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY; // anon key — public reads
+
+// Admin client — service_role, bypasses RLS — use ONLY for admin/internal routes
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
   db: { schema: "public" },
-  global: {
-    headers: { "x-application-name": "kfs-server" },
-  },
+  global: { headers: { "x-application-name": "kfs-server" } },
+});
+
+// Public client — anon key, respects RLS — use for all public-facing GET routes
+const supabasePublic = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false },
+  db: { schema: "public" },
+  global: { headers: { "x-application-name": "kfs-public" } },
 });
 
 // ── Cloudinary ────────────────────────────────────────────────────────────────
@@ -649,7 +657,7 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Movies ────────────────────────────────────────────────────────────────
   let movieUrls = "";
   try {
-    const { data: movies } = await supabase
+    const { data: movies } = await supabasePublic
       .from("movies")
       .select("id, title, updated_at")
       .order("release_year", { ascending: false })
@@ -670,7 +678,7 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Blogs ─────────────────────────────────────────────────────────────────
   let blogUrls = "";
   try {
-    const { data: blogs } = await supabase
+    const { data: blogs } = await supabasePublic
       .from("blogs")
       .select("id, title, updated_at, created_at")
       .eq("published", true)
@@ -696,7 +704,7 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Events ────────────────────────────────────────────────────────────────
   let eventUrls = "";
   try {
-    const { data: evs } = await supabase
+    const { data: evs } = await supabasePublic
       .from("events")
       .select("id, title, updated_at, event_date")
       .order("event_date", { ascending: false })
@@ -766,7 +774,7 @@ app.get("/api/health", async (req, res) => {
   }
   const start = Date.now();
   try {
-    const { error } = await supabase.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
+    const { error } = await supabasePublic.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
     if (error) throw new Error(error.message);
     res.json({ status: "ok", db: "connected", latencyMs: Date.now() - start });
   } catch (e) {
@@ -838,7 +846,7 @@ function clearLoginFailures(username) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function loadActiveLockouts() {
-  const { data } = await supabase
+  const { data } = await supabasePublic
     .from("admins")
     .select("username, login_failures, locked_until")
     .not("locked_until", "is", null)
@@ -859,30 +867,24 @@ async function recordLoginFailureDurable(username) {
   recordLoginFailure(username);
   const entry = LOGIN_ATTEMPTS.get(username);
   if (entry) {
-    try {
-      await supabase
-        .from("admins")
-        .update({
-          login_failures: entry.count,
-          locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
-        })
-        .eq("username", username);
-    } catch (e) {
-      console.error("[auth] lockout persist failed:", e.message);
-    }
+    await supabasePublic
+      .from("admins")
+      .update({
+        login_failures: entry.count,
+        locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
+      })
+      .eq("username", username)
+      .catch(e => console.error("[auth] lockout persist failed:", e.message));
   }
 }
 
 async function clearLoginFailuresDurable(username) {
   clearLoginFailures(username);
-  try {
-    await supabase
-      .from("admins")
-      .update({ login_failures: 0, locked_until: null })
-      .eq("username", username);
-  } catch (e) {
-    console.error("[auth] lockout clear failed:", e.message);
-  }
+  await supabasePublic
+    .from("admins")
+    .update({ login_failures: 0, locked_until: null })
+    .eq("username", username)
+    .catch(e => console.error("[auth] lockout clear failed:", e.message));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -938,7 +940,7 @@ app.post(
     const lockMsg = checkLoginLockout(normalised);
     if (lockMsg) return res.status(429).json({ error: lockMsg });
 
-    const { data: admin } = await supabase
+    const { data: admin } = await supabasePublic
       .from("admins")
       .select("*")
       .eq("username", normalised)
@@ -1297,7 +1299,7 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
 app.get("/api/settings", async (req, res) => {
   cacheFor(res, 60); // 1-min browser cache; server memCache handles DB load
   const obj = await memCache("settings", 300, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("settings")
       .select("*")
       .neq("key", "admin_password");
@@ -1404,7 +1406,7 @@ app.post(
 // Get all custom eggs
 app.get("/api/settings/custom-eggs", async (req, res) => {
   const data = await memCache("settings:custom-eggs", 300, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("settings")
       .select("value")
       .eq("key", "custom_search_eggs")
@@ -1466,7 +1468,7 @@ app.post(
 app.get("/api/blogs", async (req, res) => {
   cacheFor(res, 60);
   const data = await memCache("blogs:list", 120, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("blogs")
       .select(
         "id,title,author,excerpt,cover_image,published,created_at,sections,view_count",
@@ -1493,7 +1495,7 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
 app.get("/api/blogs/:id", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache(`blogs:${req.params.id}`, 300, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("blogs")
       .select("*")
       .eq("id", req.params.id)
@@ -1504,11 +1506,11 @@ app.get("/api/blogs/:id", async (req, res) => {
 
   // Fire-and-forget view increment — runs on every real HTTP request (not on cache hits),
   // because this code is outside the memCache fn. Uses DB increment to avoid race conditions.
-  supabase.rpc("increment_blog_view", { blog_id: req.params.id })
+  supabasePublic.rpc("increment_blog_view", { blog_id: req.params.id })
     .then(() => {})
     .catch(() => {
       // Fallback if RPC doesn't exist yet: raw update still better than nothing
-      supabase
+      supabasePublic
         .from("blogs")
         .update({ view_count: (data.view_count || 0) + 1 })
         .eq("id", req.params.id)
@@ -1630,7 +1632,7 @@ app.delete(
 app.get("/api/events", async (req, res) => {
   cacheFor(res, 60);
   const data = await memCache("events:list", 120, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("events")
       .select("*")
       .order("event_date", { ascending: false });
@@ -1736,7 +1738,7 @@ app.delete(
 app.get("/api/members", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache("members:list", 600, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("members")
       .select(
         "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past",
@@ -1852,7 +1854,7 @@ app.delete(
 app.get("/api/testimonials", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache("testimonials:list", 600, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("testimonials")
       .select("*")
       .order("created_at", { ascending: false });
@@ -1939,7 +1941,7 @@ app.delete(
 app.get("/api/achievements", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache("achievements:list", 600, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("achievements")
       .select("*")
       .order("sort_order", { ascending: true });
@@ -2173,7 +2175,7 @@ app.get("/api/movies", async (req, res) => {
     ? `movies:genre:${req.query.genre}`
     : "movies:list";
   const movies = await memCache(cacheKey, 300, async () => {
-    let query = supabase
+    let query = supabasePublic
       .from("movies")
       .select(
         "id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url",
@@ -2195,7 +2197,7 @@ app.get("/api/movies", async (req, res) => {
 app.get("/api/movies/:id", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache(`movies:${req.params.id}`, 300, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("movies")
       .select("*")
       .eq("id", req.params.id)
@@ -2393,13 +2395,13 @@ app.delete(
 app.get("/api/chitra-vichitra", async (req, res) => {
   cacheFor(res, 120);
   const result = await memCache("cv:list", 600, async () => {
-    const { data: editions, error } = await supabase
+    const { data: editions, error } = await supabasePublic
       .from("chitra_vichitra")
       .select("*")
       .order("sort_order", { ascending: true });
     if (error) throw error;
     if (!editions || editions.length === 0) return [];
-    const { data: allCvMovies } = await supabase
+    const { data: allCvMovies } = await supabasePublic
       .from("chitra_vichitra_movies")
       .select("cv_id");
     const countMap = {};
@@ -2413,7 +2415,7 @@ app.get("/api/chitra-vichitra", async (req, res) => {
 
 // Get movies for a specific CV edition
 app.get("/api/chitra-vichitra/:id/movies", async (req, res) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabasePublic
     .from("chitra_vichitra_movies")
     .select(
       `
@@ -2579,7 +2581,7 @@ app.delete(
 app.get("/api/notifications/active", async (req, res) => {
   noStore(res);
   const data = await memCache("notifications:active", 60, async () => {
-    const { data } = await supabase
+    const { data } = await supabasePublic
       .from("notifications")
       .select("*")
       .eq("active", true)
@@ -2682,7 +2684,7 @@ app.post("/api/track", trackLimit, async (req, res) => {
   const page = allowed.includes(req.body.page) ? req.body.page : "home";
   const hour = parseInt(req.body.hour) || 0;
   const today = new Date().toISOString().slice(0, 10);
-  await supabase.from("page_views").insert([{ page, date: today, hour }]);
+  await supabasePublic.from("page_views").insert([{ page, date: today, hour }]);
   res.json({ ok: true });
 });
 app.get(
@@ -2823,7 +2825,7 @@ app.get(
 // ── REVIEWS ───────────────────────────────────────────────────────────────────
 app.get("/api/reviews/all", async (req, res) => {
   cacheFor(res, 300); // 5 min
-  const { data } = await supabase.from("reviews").select("movie_id,overall");
+  const { data } = await supabasePublic.from("reviews").select("movie_id,overall");
   res.json(data || []);
 });
 
@@ -2833,7 +2835,7 @@ app.get("/api/reviews/:movieId", async (req, res) => {
     `reviews:${req.params.movieId}`,
     300,
     async () => {
-      const { data } = await supabase
+      const { data } = await supabasePublic
         .from("reviews")
         .select("*")
         .eq("movie_id", req.params.movieId)
@@ -2866,7 +2868,7 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
   if (overallScore === null)
     return res.status(400).json({ error: "overall must be an integer between 1 and 10" });
 
-  const { data, error } = await supabase
+  const { data, error } = await supabasePublic
     .from("reviews")
     .insert([
       {
@@ -2893,7 +2895,7 @@ app.get("/api/events/:id/form", async (req, res) => {
   cacheFor(res, 120); // 2-min cache — form rarely changes
   try {
     const data = await memCache(`event:form:${req.params.id}`, 120, async () => {
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from("event_forms")
         .select("id,event_id,title,description,questions,is_open,created_at,updated_at")
         .eq("event_id", req.params.id)
@@ -3055,7 +3057,7 @@ app.delete(
 // Handles multipart/form-data so image files can be uploaded per-question
 app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (req, res) => {
   // 1. Verify the form exists and is open
-  const { data: form, error: formErr } = await supabase
+  const { data: form, error: formErr } = await supabasePublic
     .from("event_forms")
     .select("id,is_open,questions")
     .eq("event_id", req.params.id)
@@ -3112,7 +3114,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   if (dedupeKeys.length > 0) {
     // Fetch existing responses for this event
-    const { data: existing } = await supabase
+    const { data: existing } = await supabasePublic
       .from("form_responses")
       .select("answers")
       .eq("event_id", req.params.id);
@@ -3159,7 +3161,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
   const finalAnswers = { ...answers, ...imageUrls };
 
   // 6. Store response
-  const { data: response, error: insertErr } = await supabase
+  const { data: response, error: insertErr } = await supabasePublic
     .from("form_responses")
     .insert([
       {
@@ -3210,7 +3212,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
     if (toEmail) {
       // Fetch event details for the email
-      const { data: ev } = await supabase
+      const { data: ev } = await supabasePublic
         .from("events")
         .select("title,event_date,location")
         .eq("id", req.params.id)
@@ -3405,7 +3407,7 @@ function svgToPng(svgStr) {
 // Falls back to the generated SVG card when no cover image exists.
 app.get("/og/event/:id", async (req, res) => {
   try {
-    const { data: e } = await supabase
+    const { data: e } = await supabasePublic
       .from("events")
       .select("*")
       .eq("id", req.params.id)
@@ -3461,7 +3463,7 @@ app.get("/og/event/:id", async (req, res) => {
 // ── /og/film/:id ──────────────────────────────────────────────────────────────
 app.get("/og/film/:id", async (req, res) => {
   try {
-    const { data: m } = await supabase
+    const { data: m } = await supabasePublic
       .from("movies")
       .select("*")
       .eq("id", req.params.id)
@@ -3515,7 +3517,7 @@ app.get("/og/film/:id", async (req, res) => {
 // ── /og/blog/:id ──────────────────────────────────────────────────────────────
 app.get("/og/blog/:id", async (req, res) => {
   try {
-    const { data: b } = await supabase
+    const { data: b } = await supabasePublic
       .from("blogs")
       .select("*")
       .eq("id", req.params.id)
@@ -3684,7 +3686,7 @@ app.get("/blog/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
     const blogResult = id
-      ? await supabase
+      ? await supabasePublic
           .from("blogs")
           .select("id,title,excerpt,cover_image,author,created_at")
           .eq("id", id)
@@ -3743,7 +3745,7 @@ app.get("/films/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
     const queryResult = id
-      ? await supabase
+      ? await supabasePublic
           .from("movies")
           .select("id,title,description,poster_image,director,release_year,genre")
           .eq("id", id)
@@ -3801,7 +3803,7 @@ app.get("/events/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
     const eventResult = id
-      ? await supabase
+      ? await supabasePublic
           .from("events")
           .select("id,title,description,cover_image,event_date,location")
           .eq("id", id)
@@ -3865,7 +3867,7 @@ app.get("/events/:slug", async (req, res) => {
 // Public: get the wrapped config (year, taglines, fun cards) set by admin
 app.get("/api/wrapped/config", async (req, res) => {
   noStore(res);
-  const { data } = await supabase
+  const { data } = await supabasePublic
     .from("settings")
     .select("value")
     .eq("key", "wrapped_config")
@@ -3930,10 +3932,10 @@ app.get("/api/wrapped/stats", async (req, res) => {
     // Collapse 7 sequential Supabase round-trips into 3 parallel ones, cached 5 min
     const result = await memCache(cacheKey, 300, async () => {
       const [moviesRes, blogsRes, reviewsRes, eventsCountRes] = await Promise.all([
-        supabase.from("movies").select("id,title,genre,release_year,director,poster_image"),
-        supabase.from("blogs").select("id,title,cover_image").eq("published", true),
-        supabase.from("reviews").select("movie_id,overall"),
-        supabase.from("events").select("id", { count: "exact", head: true }),
+        supabasePublic.from("movies").select("id,title,genre,release_year,director,poster_image"),
+        supabasePublic.from("blogs").select("id,title,cover_image").eq("published", true),
+        supabasePublic.from("reviews").select("movie_id,overall"),
+        supabasePublic.from("events").select("id", { count: "exact", head: true }),
       ]);
 
       const movies = moviesRes.data || [];
@@ -4028,7 +4030,7 @@ app.get("/api/wrapped/stats", async (req, res) => {
 app.get("/api/recommendations/:movieId", async (req, res) => {
   cacheFor(res, 1800); // 30 min — almost never changes
   try {
-    const { data: source } = await supabase
+    const { data: source } = await supabasePublic
       .from("movies")
       .select("id,genre,director")
       .eq("id", req.params.movieId)
@@ -4044,7 +4046,7 @@ app.get("/api/recommendations/:movieId", async (req, res) => {
     if (!Array.isArray(srcGenres)) srcGenres = [srcGenres];
     srcGenres = srcGenres.map((g) => g.toLowerCase().trim());
 
-    const { data: all } = await supabase
+    const { data: all } = await supabasePublic
       .from("movies")
       .select("id,title,genre,director,poster_image,release_year")
       .neq("id", req.params.movieId);
@@ -4111,7 +4113,7 @@ app.get("/api/recommendations/:movieId", async (req, res) => {
 // PUBLIC: Get all comments for a film (pinned first, then chronological)
 app.get("/api/films/:movieId/comments", async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabasePublic
       .from("film_comments")
       .select(
         "id,movie_id,author_name,body,is_spoiler,is_pinned,is_kfs_reply,parent_id,created_at",
@@ -4145,14 +4147,14 @@ app.post("/api/films/:movieId/comments", strictWriteLimit, async (req, res) => {
     }
 
     // Verify movie exists
-    const { data: movie } = await supabase
+    const { data: movie } = await supabasePublic
       .from("movies")
       .select("id")
       .eq("id", req.params.movieId)
       .maybeSingle();
     if (!movie) return res.status(404).json({ error: "Film not found." });
 
-    const { data, error } = await supabase
+    const { data, error } = await supabasePublic
       .from("film_comments")
       .insert([
         {
@@ -4344,7 +4346,7 @@ app.get("/api/collaborate", async (req, res) => {
     await cleanupExpiredCollaborations();
     const today = new Date().toISOString().split("T")[0];
 
-    const { data, error } = await supabase
+    const { data, error } = await supabasePublic
       .from("collaborate_posts")
       .select(
         "id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,is_kfs_member,domain,fulfillment_date,created_at,updated_at",
@@ -4403,7 +4405,7 @@ app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
 
     const edit_token = makeEditToken();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabasePublic
       .from("collaborate_posts")
       .insert([{ ...payload, edit_token }])
       .select("id,edit_token")
@@ -4423,7 +4425,7 @@ app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
 });
 
 app.get("/api/collaborate/edit/:token", async (req, res) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabasePublic
     .from("collaborate_posts")
     .select("*")
     .eq("edit_token", req.params.token)
@@ -4453,7 +4455,7 @@ app.put("/api/collaborate/:token", async (req, res) => {
       .json({ error: "Please provide an email or phone number." });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabasePublic
     .from("collaborate_posts")
     .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("edit_token", req.params.token)
@@ -4467,7 +4469,7 @@ app.put("/api/collaborate/:token", async (req, res) => {
 
 app.delete("/api/collaborate/:token", async (req, res) => {
   // First confirm the post exists — prevents silent success on bad/guessed tokens
-  const { data: existing } = await supabase
+  const { data: existing } = await supabasePublic
     .from("collaborate_posts")
     .select("id")
     .eq("edit_token", req.params.token)
@@ -4475,7 +4477,7 @@ app.delete("/api/collaborate/:token", async (req, res) => {
 
   if (!existing) return res.status(404).json({ error: "Post not found or token invalid." });
 
-  const { error } = await supabase
+  const { error } = await supabasePublic
     .from("collaborate_posts")
     .delete()
     .eq("edit_token", req.params.token);
@@ -4628,7 +4630,7 @@ app.get("/api/track-open/:broadcastId/:recipientHash", async (req, res) => {
 
   // Record open async (fire-and-forget, deduplicated by unique constraint)
   const { broadcastId, recipientHash } = req.params;
-  supabase
+  supabasePublic
     .from("broadcast_opens")
     .insert([{ broadcast_id: broadcastId, recipient_hash: recipientHash }])
     .then(() => {})
@@ -4900,7 +4902,7 @@ app.get("/api/theme", async (req, res) => {
     noStore(res);
     const theme = await memCache("theme:active", 60, async () => {
       const now = new Date().toISOString();
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from("event_themes")
         .select("*")
         .eq("is_active", true)
@@ -5147,7 +5149,7 @@ app.get("*", (req, res) => {
 setInterval(
   async () => {
     try {
-      await supabase.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
+      await supabasePublic.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
       // Silent success — log only on failure
     } catch (e) {
       console.error("Supabase keepalive failed:", e.message);
@@ -5162,7 +5164,7 @@ setInterval(
     try {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 90);
-      await supabase
+      await supabasePublic
         .from("page_views")
         .delete()
         .lt("date", cutoff.toISOString().slice(0, 10));
