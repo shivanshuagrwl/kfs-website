@@ -3503,7 +3503,7 @@ KFS — KIIT Film Society"></textarea>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Permissions</th><th>2FA</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Permissions</th><th>2FA</th><th>2FA Deadline</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody id="admins-tbody"></tbody>
         </table>
       </div>
@@ -6369,7 +6369,7 @@ async function loadAdminData(name) {
     if (currentAdminRole !== 'master') return;
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
-    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
+    if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
     const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate'};
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
@@ -6384,6 +6384,27 @@ async function loadAdminData(name) {
       const twoFaBadge = a.totp_enabled
         ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;background:rgba(80,200,120,.1);border:1px solid rgba(80,200,120,.25);color:#50c878"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"\/><\/svg>On<\/span>`
         : `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em;background:rgba(245,245,245,.05);border:1px solid var(--border);color:var(--grey)">Off<\/span>`;
+      // 2FA deadline cell — only for non-master admins who haven't enabled 2FA
+      let deadlineCell = '<span style="color:var(--grey);font-size:12px">—<\/span>';
+      if (a.role !== 'master' && !a.totp_enabled && a.created_at) {
+        const deadline = new Date(new Date(a.created_at).getTime() + 48 * 60 * 60 * 1000);
+        const msLeft   = deadline - Date.now();
+        if (msLeft <= 0) {
+          deadlineCell = `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(255,60,60,.12);border:1px solid rgba(255,60,60,.3);color:#ff6060">Overdue<\/span>`;
+        } else {
+          const hLeft = Math.floor(msLeft / 3600000);
+          const mLeft = Math.floor((msLeft % 3600000) / 60000);
+          const urgent = msLeft < 6 * 3600000; // less than 6h
+          const color  = urgent ? '#f59e0b' : 'var(--grey)';
+          const bg     = urgent ? 'rgba(245,158,11,.1)'  : 'rgba(245,245,245,.05)';
+          const border = urgent ? 'rgba(245,158,11,.3)'  : 'var(--border)';
+          deadlineCell = `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${bg};border:1px solid ${border};color:${color};white-space:nowrap">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"\/><polyline points="12 6 12 12 16 14"\/><\/svg>
+            ${hLeft}h ${mLeft}m left<\/span>`;
+        }
+      } else if (a.role !== 'master' && a.totp_enabled) {
+        deadlineCell = `<span style="color:#50c878;font-size:12px;font-weight:600">Secured<\/span>`;
+      }
       const twoFaDisableBtn = (a.role !== 'master' && a.totp_enabled)
         ? `<button class="admin-action-btn" onclick="masterDisable2FA('${a.id}','${a.name.replace(/'/g,"\\'")}')" style="color:#ff8080;border-color:rgba(255,80,80,.2)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"\/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"\/><\/svg> Disable 2FA<\/button>`
         : '';
@@ -6396,6 +6417,7 @@ async function loadAdminData(name) {
         <td><span class="tag ${a.role==='master'?'upcoming':''}">${a.role==='master'?'Master':'Admin'}<\/span><\/td>
         <td style="max-width:220px">${permsDisplay}<\/td>
         <td>${twoFaBadge}<\/td>
+        <td>${deadlineCell}<\/td>
         <td style="color:var(--grey);font-size:12px">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}<\/td>
         <td>${actions}<\/td>
       <\/tr>`;
