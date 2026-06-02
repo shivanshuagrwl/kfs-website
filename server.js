@@ -907,13 +907,10 @@ function csrfProtect(req, res, next) {
   next();
 }
 
-// Protect all admin and master write routes
-app.use("/api/admin", csrfProtect);
-app.use("/api/master", csrfProtect);
-
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION D — Updated /api/admin/login (supports TOTP second factor)
+// NOTE: Login route is defined BEFORE csrfProtect middleware so it is exempt.
 // ─────────────────────────────────────────────────────────────────────────────
 app.post(
   "/api/admin/login",
@@ -1007,6 +1004,10 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
     .eq("id", req.admin.id);
   res.json({ success: true });
 });
+
+// Protect all admin and master write routes (placed AFTER login route so login is exempt)
+app.use("/api/admin", csrfProtect);
+app.use("/api/master", csrfProtect);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION E — Updated /api/admin/refresh (single-use httpOnly cookie)
