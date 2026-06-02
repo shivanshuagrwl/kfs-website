@@ -12,6 +12,9 @@ const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
+const speakeasy = require("speakeasy");
+const QRCode = require("qrcode");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -291,6 +294,7 @@ app.use(helmet({
 // Fix 3: Add body size limit to prevent large payload DoS attacks (was unlimited)
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+app.use(cookieParser());
 app.use(
   "/api/",
   rateLimit({
@@ -389,11 +393,86 @@ function memInvalidate(...keys) {
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION A — JWT helpers (short-lived access tokens + jti for revocation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function signAccessToken(payload) {
+  const jti = crypto.randomBytes(16).toString("hex");
+  return jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: "15m" });
+}
+
+async function issueRefreshToken(adminId) {
+  const raw  = crypto.randomBytes(40).toString("hex");
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+  const exp  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const { error } = await supabase.from("refresh_tokens").insert([{
+    admin_id:   adminId,
+    token_hash: hash,
+    expires_at: exp.toISOString(),
+  }]);
+  if (error) throw new Error("Could not store refresh token: " + error.message);
+  return raw;
+}
+
+function setRefreshCookie(res, raw) {
+  res.cookie("kfs_refresh", raw, {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge:   7 * 24 * 60 * 60 * 1000,
+    path:     "/api/admin/refresh",
+  });
+}
+
+function clearRefreshCookie(res) {
+  res.clearCookie("kfs_refresh", { path: "/api/admin/refresh" });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION B — JWT revocation (in-memory Set, synced from Supabase on boot)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _revokedJtis = new Set();
+
+async function loadRevokedTokens() {
+  const { data } = await supabase
+    .from("revoked_tokens")
+    .select("jti")
+    .gt("expires_at", new Date().toISOString());
+  (data || []).forEach(r => _revokedJtis.add(r.jti));
+  console.log(`[auth] Loaded ${_revokedJtis.size} revoked token JTIs from DB`);
+}
+
+async function revokeToken(jti, expiresAt) {
+  _revokedJtis.add(jti);
+  await supabase.from("revoked_tokens").upsert([{
+    jti,
+    expires_at: new Date(expiresAt * 1000).toISOString(),
+  }]).catch(e => console.error("[auth] revoke persist failed:", e.message));
+}
+
+async function revokeAllForAdmin(adminId) {
+  await supabase
+    .from("refresh_tokens")
+    .update({ used: true })
+    .eq("admin_id", adminId);
+  console.log(`[auth] All refresh tokens revoked for admin ${adminId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION C — Updated middleware (all check revocation Set)
+// ─────────────────────────────────────────────────────────────────────────────
+
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token" });
   try {
-    req.admin = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    if (decoded.jti && _revokedJtis.has(decoded.jti)) {
+      return res.status(401).json({ error: "Token revoked" });
+    }
+    req.admin = decoded;
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
@@ -412,6 +491,9 @@ function masterMiddleware(req, res, next) {
       "username:",
       decoded.username,
     );
+    if (decoded.jti && _revokedJtis.has(decoded.jti)) {
+      return res.status(401).json({ error: "Token revoked" });
+    }
     if (decoded.role !== "master")
       return res.status(403).json({ error: "Master access only" });
     req.admin = decoded;
@@ -428,6 +510,9 @@ function requireSection(section) {
     if (!token) return res.status(401).json({ error: "No token" });
     try {
       const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+      if (decoded.jti && _revokedJtis.has(decoded.jti)) {
+        return res.status(401).json({ error: "Token revoked" });
+      }
       req.admin = decoded;
       if (decoded.role === "master") return next(); // master always passes
       const perms = decoded.permissions || [];
@@ -746,7 +831,90 @@ function clearLoginFailures(username) {
   LOGIN_ATTEMPTS.delete(username);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION J — Durable lockout helpers (persisted to Supabase, survive restarts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadActiveLockouts() {
+  const { data } = await supabase
+    .from("admins")
+    .select("username, login_failures, locked_until")
+    .not("locked_until", "is", null)
+    .gt("locked_until", new Date().toISOString());
+  (data || []).forEach(admin => {
+    if (admin.locked_until) {
+      LOGIN_ATTEMPTS.set(admin.username, {
+        count:       admin.login_failures,
+        lockedUntil: new Date(admin.locked_until).getTime(),
+        tier:        0,
+      });
+    }
+  });
+  console.log(`[auth] Restored ${data?.length || 0} active lockouts from DB`);
+}
+
+async function recordLoginFailureDurable(username) {
+  recordLoginFailure(username);
+  const entry = LOGIN_ATTEMPTS.get(username);
+  if (entry) {
+    await supabase
+      .from("admins")
+      .update({
+        login_failures: entry.count,
+        locked_until:   entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null,
+      })
+      .eq("username", username)
+      .catch(e => console.error("[auth] lockout persist failed:", e.message));
+  }
+}
+
+async function clearLoginFailuresDurable(username) {
+  clearLoginFailures(username);
+  await supabase
+    .from("admins")
+    .update({ login_failures: 0, locked_until: null })
+    .eq("username", username)
+    .catch(e => console.error("[auth] lockout clear failed:", e.message));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION I — CSRF double-submit cookie protection
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/csrf-token", (req, res) => {
+  const token = crypto.randomBytes(32).toString("hex");
+  res.cookie("kfs_csrf", token, {
+    httpOnly: false, // JS must read this to send as header
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge:   4 * 60 * 60 * 1000,
+  });
+  res.json({ csrf_token: token });
+});
+
+function csrfProtect(req, res, next) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  const cookieToken = req.cookies?.kfs_csrf;
+  const headerToken = req.headers["x-csrf-token"];
+  if (!cookieToken || !headerToken) {
+    return res.status(403).json({ error: "CSRF token missing" });
+  }
+  const a = Buffer.from(cookieToken);
+  const b = Buffer.from(headerToken);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(403).json({ error: "CSRF token mismatch" });
+  }
+  next();
+}
+
+// Protect all admin and master write routes
+app.use("/api/admin", csrfProtect);
+app.use("/api/master", csrfProtect);
+
 // ── AUTH ROUTES ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION D — Updated /api/admin/login (supports TOTP second factor)
+// ─────────────────────────────────────────────────────────────────────────────
 app.post(
   "/api/admin/login",
   rateLimit({
@@ -755,7 +923,7 @@ app.post(
     message: { error: "Too many login attempts. Try again later." },
   }),
   async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, totp_code } = req.body;
     if (!username || !password)
       return res.status(400).json({ error: "Username and password required" });
 
@@ -771,18 +939,36 @@ app.post(
       .eq("username", normalised)
       .maybeSingle();
     if (!admin) {
-      recordLoginFailure(normalised);
+      await recordLoginFailureDurable(normalised);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const valid = await bcrypt.compare(password, admin.password_hash);
     if (!valid) {
-      recordLoginFailure(normalised);
+      await recordLoginFailureDurable(normalised);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    // ── 2FA check (only if totp_enabled) ─────────────────────────────────────
+    if (admin.totp_enabled) {
+      if (!totp_code) {
+        // Password correct but no TOTP code — tell client to prompt for it
+        return res.status(200).json({ require_totp: true });
+      }
+      const verified = speakeasy.totp.verify({
+        secret:   admin.totp_secret,
+        encoding: "base32",
+        token:    totp_code.replace(/\s/g, ""),
+        window:   1,
+      });
+      if (!verified) {
+        await recordLoginFailureDurable(normalised);
+        return res.status(401).json({ error: "Invalid 2FA code" });
+      }
+    }
+
     // Successful login — clear any accumulated failures
-    clearLoginFailures(normalised);
+    await clearLoginFailuresDurable(normalised);
 
     const perms = (() => {
       try {
@@ -791,18 +977,22 @@ app.post(
         return [];
       }
     })();
-    const token = jwt.sign(
-      {
-        id: admin.id,
-        name: admin.name,
-        username: admin.username,
-        role: admin.role,
-        permissions: perms,
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" },
-    );
-    res.json({ token, name: admin.name, role: admin.role, permissions: perms });
+
+    const accessToken = signAccessToken({
+      id: admin.id, name: admin.name,
+      username: admin.username, role: admin.role, permissions: perms,
+    });
+
+    const refreshRaw = await issueRefreshToken(admin.id);
+    setRefreshCookie(res, refreshRaw);
+
+    res.json({
+      token:        accessToken,
+      name:         admin.name,
+      role:         admin.role,
+      permissions:  perms,
+      totp_enabled: !!admin.totp_enabled,
+    });
   },
 );
 
@@ -818,15 +1008,54 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
-// ── TOKEN REFRESH ─────────────────────────────────────────────────────────────
-app.post("/api/admin/refresh", authMiddleware, async (req, res) => {
-  const { data: admin, error } = await supabase
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION E — Updated /api/admin/refresh (single-use httpOnly cookie)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post("/api/admin/refresh", async (req, res) => {
+  const raw = req.cookies?.kfs_refresh;
+  if (!raw) return res.status(401).json({ error: "No refresh token" });
+
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+
+  const { data: stored, error } = await supabase
+    .from("refresh_tokens")
+    .select("*")
+    .eq("token_hash", hash)
+    .maybeSingle();
+
+  if (error || !stored)
+    return res.status(401).json({ error: "Invalid refresh token" });
+
+  if (stored.used) {
+    // Token reuse detected — possible theft, revoke ALL tokens for this admin
+    await revokeAllForAdmin(stored.admin_id);
+    clearRefreshCookie(res);
+    return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
+  }
+
+  if (new Date(stored.expires_at) < new Date()) {
+    clearRefreshCookie(res);
+    return res.status(401).json({ error: "Refresh token expired" });
+  }
+
+  // Mark as used (single-use)
+  await supabase
+    .from("refresh_tokens")
+    .update({ used: true })
+    .eq("id", stored.id);
+
+  // Fetch fresh admin data (picks up permission changes)
+  const { data: admin } = await supabase
     .from("admins")
     .select("id,name,username,role,permissions")
-    .eq("id", req.admin.id)
+    .eq("id", stored.admin_id)
     .maybeSingle();
-  if (error || !admin)
+
+  if (!admin) {
+    clearRefreshCookie(res);
     return res.status(401).json({ error: "Admin not found" });
+  }
+
   const perms = (() => {
     try {
       return JSON.parse(admin.permissions || "[]");
@@ -834,19 +1063,114 @@ app.post("/api/admin/refresh", authMiddleware, async (req, res) => {
       return [];
     }
   })();
-  const token = jwt.sign(
-    {
-      id: admin.id,
-      name: admin.name,
-      username: admin.username,
-      role: admin.role,
-      permissions: perms,
-    },
-    JWT_SECRET,
-    { expiresIn: "24h" },
-  );
+
+  // Issue new access token + new refresh token (rotation)
+  const accessToken = signAccessToken({
+    id: admin.id, name: admin.name,
+    username: admin.username, role: admin.role, permissions: perms,
+  });
+
+  const newRefreshRaw = await issueRefreshToken(admin.id);
+  setRefreshCookie(res, newRefreshRaw);
+
   console.log(`[refresh] ${admin.username} — role: ${admin.role}`);
-  res.json({ token, name: admin.name, role: admin.role, permissions: perms });
+  res.json({ token: accessToken, name: admin.name, role: admin.role, permissions: perms });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION F — Logout (revoke current token + refresh cookie)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post("/api/admin/logout", authMiddleware, async (req, res) => {
+  if (req.admin?.jti && req.admin?.exp) {
+    await revokeToken(req.admin.jti, req.admin.exp);
+  }
+  const raw = req.cookies?.kfs_refresh;
+  if (raw) {
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    await supabase.from("refresh_tokens").update({ used: true }).eq("token_hash", hash);
+  }
+  clearRefreshCookie(res);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION G — Logout ALL sessions (master or self only)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post("/api/admin/logout-all", authMiddleware, async (req, res) => {
+  const targetId = req.body.admin_id || req.admin.id;
+  if (targetId !== req.admin.id && req.admin.role !== "master") {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+  await revokeAllForAdmin(targetId);
+  if (targetId === req.admin.id) {
+    if (req.admin?.jti && req.admin?.exp) {
+      await revokeToken(req.admin.jti, req.admin.exp);
+    }
+    clearRefreshCookie(res);
+  }
+  res.json({ success: true, message: "All sessions revoked" });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION H — TOTP 2FA Setup (3-step flow)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Step 1 — Generate secret and QR code
+app.get("/api/admin/2fa/setup", authMiddleware, async (req, res) => {
+  const secret = speakeasy.generateSecret({
+    name:   `KFS Admin (${req.admin.username})`,
+    issuer: "KFS — KIIT Film Society",
+    length: 20,
+  });
+  await supabase
+    .from("admins")
+    .update({ totp_pending: secret.base32 })
+    .eq("id", req.admin.id);
+  const qrDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+  res.json({
+    secret:  secret.base32,
+    qr_code: qrDataUrl,
+    message: "Scan the QR code with Google Authenticator or Authy, then POST the 6-digit code to /api/admin/2fa/verify",
+  });
+});
+
+// Step 2 — Verify and activate
+app.post("/api/admin/2fa/verify", authMiddleware, async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: "code is required" });
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("totp_pending, totp_enabled")
+    .eq("id", req.admin.id)
+    .maybeSingle();
+  if (!admin?.totp_pending)
+    return res.status(400).json({ error: "No pending 2FA setup. Call GET /api/admin/2fa/setup first." });
+  const verified = speakeasy.totp.verify({
+    secret:   admin.totp_pending,
+    encoding: "base32",
+    token:    code.replace(/\s/g, ""),
+    window:   1,
+  });
+  if (!verified)
+    return res.status(400).json({ error: "Invalid code. Make sure your authenticator clock is correct." });
+  await supabase
+    .from("admins")
+    .update({ totp_secret: admin.totp_pending, totp_enabled: true, totp_pending: null })
+    .eq("id", req.admin.id);
+  res.json({ success: true, message: "2FA is now active on your account." });
+});
+
+// Step 3 — Disable
+app.post("/api/admin/2fa/disable", authMiddleware, async (req, res) => {
+  const targetId = req.body.admin_id || req.admin.id;
+  if (targetId !== req.admin.id && req.admin.role !== "master") {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+  await supabase
+    .from("admins")
+    .update({ totp_secret: null, totp_enabled: false, totp_pending: null })
+    .eq("id", targetId);
+  res.json({ success: true, message: "2FA disabled." });
 });
 
 // ── MASTER: Admin management ──────────────────────────────────────────────────
@@ -4844,5 +5168,7 @@ setInterval(
 app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
   await initDB();
+  await loadRevokedTokens();
+  await loadActiveLockouts();
   console.log("DB initialized");
 });

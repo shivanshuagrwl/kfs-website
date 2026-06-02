@@ -3025,6 +3025,14 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="adminLogin()">Sign In</button>
     <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
+    <!-- TOTP step — hidden until server returns require_totp:true -->
+    <div id="totp-step" style="display:none;margin-top:16px">
+      <div class="form-group">
+        <label>2FA Code</label>
+        <input type="text" id="admin-totp" placeholder="6-digit code from authenticator" inputmode="numeric" maxlength="6" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;letter-spacing:.2em;text-align:center" autocomplete="one-time-code">
+      </div>
+      <p style="font-size:12px;color:var(--grey);margin-top:6px">Enter the code from Google Authenticator or Authy.</p>
+    </div>
   </div>
 </div>
 
@@ -4240,6 +4248,16 @@ KFS — KIIT Film Society"></textarea>
 <script>
 let currentPage = 'home';
 let adminToken = localStorage.getItem('kfs_token');
+let _csrfToken = null;
+
+// Fetch CSRF token once on page load
+(async function initCsrf() {
+  try {
+    const r = await fetch('/api/csrf-token');
+    const d = await r.json();
+    _csrfToken = d.csrf_token;
+  } catch(e) {}
+})();
 
 // Decode JWT payload to get the real role baked in at login time
 (function syncRoleFromToken() {
@@ -4268,12 +4286,13 @@ function hasPermission(section) {
 }
 let allEvents = [];
 
-// ── AUTO-REFRESH TOKEN ────────────────────────────────────────────────────────
+// ── AUTO-REFRESH TOKEN — every 12 min (token is 15-min short-lived) ──────────
 (function autoRefreshToken() {
   if (!adminToken) return;
+  // Immediate refresh on page load to get a fresh token + httpOnly cookie
   fetch('/api/admin/refresh', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + adminToken }
+    credentials: 'include' // send httpOnly refresh cookie
   }).then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       if (!data || !data.token) return;
@@ -4288,6 +4307,29 @@ let allEvents = [];
       var panel = document.getElementById('admin-panel');
       if (panel && panel.classList.contains('active')) { showAdminPanel(); }
     }).catch(function() {});
+  // Then every 12 minutes proactively
+  setInterval(async function() {
+    if (!adminToken) return;
+    try {
+      const r = await fetch('/api/admin/refresh', { method: 'POST', credentials: 'include' });
+      if (r.ok) {
+        const d = await r.json();
+        adminToken = d.token;
+        currentAdminRole = d.role || 'admin';
+        currentAdminName = d.name || '';
+        currentAdminPermissions = d.permissions || [];
+        localStorage.setItem('kfs_token', d.token);
+        localStorage.setItem('kfs_role', d.role);
+        localStorage.setItem('kfs_admin_name', d.name || '');
+        localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
+      } else {
+        // Refresh failed — force re-login
+        adminToken = null;
+        ['kfs_token','kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
+        navigate('admin');
+      }
+    } catch(e) {}
+  }, 12 * 60 * 1000);
 })();
 
 
@@ -5956,12 +5998,23 @@ async function adminLogin() {
   const username = document.getElementById('admin-username').value.trim();
   const password = document.getElementById('admin-password').value;
   const err = document.getElementById('login-error');
+  const totpStep = document.getElementById('totp-step');
+  const totpVal = document.getElementById('admin-totp')?.value?.replace(/\s/g,'');
   if (!username || !password) { err.textContent = 'Enter username and password.'; return; }
+  const body = { username, password };
+  if (totpVal) body.totp_code = totpVal;
   const res = await fetch('/api/admin/login',{
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({username, password})
+    body: JSON.stringify(body)
   });
   const data = await res.json();
+  if (data.require_totp) {
+    // Password OK but 2FA needed — show TOTP input
+    if (totpStep) totpStep.style.display = 'block';
+    err.textContent = 'Enter your 6-digit authenticator code.';
+    document.getElementById('admin-totp')?.focus();
+    return;
+  }
   if (data.token) {
     adminToken = data.token;
     currentAdminRole = data.role || 'admin';
@@ -5972,6 +6025,10 @@ async function adminLogin() {
     localStorage.setItem('kfs_admin_name', currentAdminName);
     localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
     err.textContent = '';
+    if (totpStep) { totpStep.style.display = 'none'; }
+    if (document.getElementById('admin-totp')) document.getElementById('admin-totp').value = '';
+    // Refresh CSRF token after login
+    try { const r = await fetch('/api/csrf-token'); const d = await r.json(); _csrfToken = d.csrf_token; } catch(e) {}
     showAdminPanel();
   } else {
     err.textContent = data.error || 'Invalid credentials.';
@@ -5979,6 +6036,14 @@ async function adminLogin() {
 }
 
 function adminLogout() {
+  // Tell server to revoke current JTI and refresh cookie
+  if (adminToken) {
+    fetch('/api/admin/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }
+    }).catch(()=>{});
+  }
   adminToken = null;
   currentAdminRole = 'admin';
   currentAdminName = '';
@@ -7308,8 +7373,12 @@ async function deleteCustomEgg(idx) {
 
 
 async function apiFetch(url, method='GET', body=null) {
-  const opts = { method, headers:{} };
+  const opts = { method, headers:{}, credentials: 'include' };
   if (adminToken) opts.headers['Authorization'] = 'Bearer '+adminToken;
+  // Include CSRF token on all write requests
+  if (_csrfToken && !['GET','HEAD'].includes(method)) {
+    opts.headers['X-CSRF-Token'] = _csrfToken;
+  }
   if (body) {
     if (body instanceof FormData) {
       opts.body = body;
