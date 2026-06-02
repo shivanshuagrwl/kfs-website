@@ -194,9 +194,35 @@ const IMAGE_QUALITY = 82; // WebP quality (0-100). 82 is visually lossless for p
 async function compressImage(file) {
   if (!file) return null;
 
-  // Skip SVG / GIF — sharp can't meaningfully compress them
   const mime = file.mimetype || "";
-  if (mime === "image/svg+xml" || mime === "image/gif") return file;
+
+  // ── SVG sanitisation — strip embedded scripts and event-handler attributes ──
+  // SVGs can carry <script> tags and onX= attributes that execute in browsers.
+  // We sanitise the buffer in-place before it reaches Cloudinary.
+  if (mime === "image/svg+xml") {
+    const svgText = file.buffer.toString("utf8");
+
+    // Remove <script>...</script> blocks (including multiline)
+    let safe = svgText.replace(/<script[\s\S]*?<\/script>/gi, "");
+
+    // Remove <?xml-stylesheet ...?> processing instructions (can load external CSS)
+    safe = safe.replace(/<\?xml-stylesheet[\s\S]*?\?>/gi, "");
+
+    // Remove on* event handler attributes (onclick=, onload=, onerror=, etc.)
+    safe = safe.replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+
+    // Remove javascript: href / xlink:href values
+    safe = safe.replace(/(?:href|xlink:href)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, "");
+
+    // Remove <use xlink:href="data:..."> or external references
+    safe = safe.replace(/<use[^>]+xlink:href\s*=\s*["'][^"']*["'][^>]*>/gi, "");
+
+    console.log(`[img] SVG sanitised: ${file.originalname}`);
+    return { ...file, buffer: Buffer.from(safe, "utf8") };
+  }
+
+  // Skip GIF — sharp can't meaningfully compress them
+  if (mime === "image/gif") return file;
 
   try {
     const before = file.buffer.length;
@@ -1014,9 +1040,25 @@ app.post(
 );
 
 app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
-  const { newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword)
+    return res.status(400).json({ error: "Current password is required" });
   if (!newPassword || newPassword.length < 8)
     return res.status(400).json({ error: "Password must be at least 8 characters" });
+
+  // Fetch current hash from DB and verify before allowing change
+  const { data: admin, error } = await supabase
+    .from("admins")
+    .select("password_hash")
+    .eq("id", req.admin.id)
+    .maybeSingle();
+  if (error || !admin)
+    return res.status(500).json({ error: "Could not verify identity" });
+
+  const valid = await bcrypt.compare(currentPassword, admin.password_hash);
+  if (!valid)
+    return res.status(401).json({ error: "Current password is incorrect" });
+
   const hash = await bcrypt.hash(newPassword, 10);
   await supabase
     .from("admins")
