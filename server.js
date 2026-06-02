@@ -1060,10 +1060,14 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
     return res.status(401).json({ error: "Current password is incorrect" });
 
   const hash = await bcrypt.hash(newPassword, 10);
-  await supabase
+  const { error: updateError } = await supabase
     .from("admins")
     .update({ password_hash: hash })
     .eq("id", req.admin.id);
+  if (updateError) {
+    console.error("change-password DB error:", updateError);
+    return res.status(500).json({ error: "Failed to update password. Please try again." });
+  }
   res.json({ success: true });
 });
 
