@@ -5144,6 +5144,60 @@ app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
 
+// ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────
+// Usage: GET /api/admin/emergency-unlock?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
+// Set UNLOCK_SECRET env var in Render dashboard — keep it private
+app.get("/api/admin/emergency-unlock", async (req, res) => {
+  const { username, secret } = req.query;
+  const UNLOCK_SECRET = process.env.UNLOCK_SECRET;
+  if (!UNLOCK_SECRET) {
+    return res.status(503).json({ error: "UNLOCK_SECRET env var not configured on server." });
+  }
+  if (!secret || secret !== UNLOCK_SECRET) {
+    return res.status(403).json({ error: "Invalid secret." });
+  }
+  if (!username) {
+    return res.status(400).json({ error: "username query param required." });
+  }
+  const normalised = username.trim().toLowerCase();
+  LOGIN_ATTEMPTS.delete(normalised);
+  try {
+    await supabase
+      .from("admins")
+      .update({ login_failures: 0, locked_until: null })
+      .eq("username", normalised);
+  } catch(e) {
+    console.error("[unlock] DB clear failed:", e.message);
+  }
+  console.log(`[unlock] Emergency unlock triggered for "${normalised}"`);
+  res.json({ success: true, message: `Lockout cleared for "${normalised}". You can now log in.` });
+});
+
+// ── LOCKOUT STATUS CHECK (secret-key protected) ───────────────────────────────
+// Usage: GET /api/admin/lockout-status?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
+app.get("/api/admin/lockout-status", async (req, res) => {
+  const { username, secret } = req.query;
+  const UNLOCK_SECRET = process.env.UNLOCK_SECRET;
+  if (!UNLOCK_SECRET || !secret || secret !== UNLOCK_SECRET) {
+    return res.status(403).json({ error: "Invalid or missing secret." });
+  }
+  if (!username) return res.status(400).json({ error: "username required." });
+  const normalised = username.trim().toLowerCase();
+  const entry = LOGIN_ATTEMPTS.get(normalised);
+  const { data: dbAdmin } = await supabase
+    .from("admins")
+    .select("username, login_failures, locked_until, password_hash")
+    .eq("username", normalised)
+    .maybeSingle();
+  res.json({
+    username: normalised,
+    found_in_db: !!dbAdmin,
+    in_memory_lockout: entry ? { count: entry.count, lockedUntil: entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null } : null,
+    db_lockout: dbAdmin ? { login_failures: dbAdmin.login_failures, locked_until: dbAdmin.locked_until } : null,
+    has_password_hash: !!(dbAdmin?.password_hash),
+  });
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -5182,62 +5236,6 @@ setInterval(
 ); // every 24h
 
 // ── START ─────────────────────────────────────────────────────────────────────
-// ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────
-// Usage: GET /api/admin/emergency-unlock?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
-// Set UNLOCK_SECRET env var in Render dashboard — keep it private
-app.get("/api/admin/emergency-unlock", async (req, res) => {
-  const { username, secret } = req.query;
-  const UNLOCK_SECRET = process.env.UNLOCK_SECRET;
-  if (!UNLOCK_SECRET) {
-    return res.status(503).json({ error: "UNLOCK_SECRET env var not configured on server." });
-  }
-  if (!secret || secret !== UNLOCK_SECRET) {
-    return res.status(403).json({ error: "Invalid secret." });
-  }
-  if (!username) {
-    return res.status(400).json({ error: "username query param required." });
-  }
-  const normalised = username.trim().toLowerCase();
-  // Clear in-memory lockout
-  LOGIN_ATTEMPTS.delete(normalised);
-  // Clear DB lockout
-  try {
-    await supabase
-      .from("admins")
-      .update({ login_failures: 0, locked_until: null })
-      .eq("username", normalised);
-  } catch(e) {
-    console.error("[unlock] DB clear failed:", e.message);
-  }
-  console.log(`[unlock] Emergency unlock triggered for "${normalised}"`);
-  res.json({ success: true, message: `Lockout cleared for "${normalised}". You can now log in.` });
-});
-
-// ── LOCKOUT STATUS CHECK (secret-key protected) ───────────────────────────────
-// Usage: GET /api/admin/lockout-status?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
-app.get("/api/admin/lockout-status", async (req, res) => {
-  const { username, secret } = req.query;
-  const UNLOCK_SECRET = process.env.UNLOCK_SECRET;
-  if (!UNLOCK_SECRET || !secret || secret !== UNLOCK_SECRET) {
-    return res.status(403).json({ error: "Invalid or missing secret." });
-  }
-  if (!username) return res.status(400).json({ error: "username required." });
-  const normalised = username.trim().toLowerCase();
-  const entry = LOGIN_ATTEMPTS.get(normalised);
-  const { data: dbAdmin } = await supabase
-    .from("admins")
-    .select("username, login_failures, locked_until, password_hash")
-    .eq("username", normalised)
-    .maybeSingle();
-  res.json({
-    username: normalised,
-    found_in_db: !!dbAdmin,
-    in_memory_lockout: entry ? { count: entry.count, lockedUntil: entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null } : null,
-    db_lockout: dbAdmin ? { login_failures: dbAdmin.login_failures, locked_until: dbAdmin.locked_until } : null,
-    has_password_hash: !!(dbAdmin?.password_hash),
-  });
-});
-
 app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
   await initDB();
