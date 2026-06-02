@@ -693,32 +693,20 @@ app.get("/api/health", async (req, res) => {
 });
 
 // ── Login lockout ─────────────────────────────────────────────────────────────
-// Progressive lockout tiers per username (stored in memory):
-//   Tier 1 — after 3 failures  → locked 1 minute
-//   Tier 2 — after 6 failures  → locked 5 minutes
-//   Tier 3 — after 9 failures  → locked 2 weeks
-const LOGIN_ATTEMPTS = new Map(); // username → { count, lockedUntil, tier }
-
-const LOCKOUT_TIERS = [
-  { afterAttempts: 3, durationMs: 1  * 60 * 1000,              label: '1 minute'  },
-  { afterAttempts: 6, durationMs: 5  * 60 * 1000,              label: '5 minutes' },
-  { afterAttempts: 9, durationMs: 14 * 24 * 60 * 60 * 1000,   label: '2 weeks'   },
-];
+// Tracks failed login attempts per username in memory.
+// After MAX_ATTEMPTS failures the account is locked for LOCKOUT_MS.
+const LOGIN_ATTEMPTS = new Map(); // username → { count, lockedUntil }
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 function checkLoginLockout(username) {
   const entry = LOGIN_ATTEMPTS.get(username);
   if (!entry) return null; // no failures yet
   if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
-    const msLeft = entry.lockedUntil - Date.now();
-    const secsLeft = Math.ceil(msLeft / 1000);
-    let timeStr;
-    if (secsLeft < 120)        timeStr = `${secsLeft} second(s)`;
-    else if (secsLeft < 7200)  timeStr = `${Math.ceil(secsLeft / 60)} minute(s)`;
-    else if (secsLeft < 172800) timeStr = `${Math.ceil(secsLeft / 3600)} hour(s)`;
-    else                        timeStr = `${Math.ceil(secsLeft / 86400)} day(s)`;
-    return `Account locked. Try again in ${timeStr}.`;
+    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+    return `Account locked. Try again in ${Math.ceil(secsLeft / 60)} minute(s).`;
   }
-  // Lockout expired — clear it so the next attempt counts fresh
+  // Lockout expired — reset
   if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
     LOGIN_ATTEMPTS.delete(username);
   }
@@ -726,18 +714,11 @@ function checkLoginLockout(username) {
 }
 
 function recordLoginFailure(username) {
-  const entry = LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null, tier: 0 };
+  const entry = LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null };
   entry.count += 1;
-  // Find the highest tier whose threshold has been reached
-  for (let i = LOCKOUT_TIERS.length - 1; i >= 0; i--) {
-    if (entry.count >= LOCKOUT_TIERS[i].afterAttempts && entry.tier <= i) {
-      entry.tier = i + 1; // mark tier consumed
-      entry.lockedUntil = Date.now() + LOCKOUT_TIERS[i].durationMs;
-      console.warn(
-        `[auth] Account "${username}" locked (tier ${i + 1}) after ${entry.count} failed attempts — ${LOCKOUT_TIERS[i].label}`
-      );
-      break;
-    }
+  if (entry.count >= MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOCKOUT_MS;
+    console.warn(`[auth] Account "${username}" locked after ${MAX_ATTEMPTS} failed attempts`);
   }
   LOGIN_ATTEMPTS.set(username, entry);
 }
@@ -4794,29 +4775,6 @@ app.delete(
     }
   },
 );
-
-// ── Route-based page shells ────────────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-app.get("/films", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "films.html"));
-});
-app.get("/events", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "events.html"));
-});
-app.get("/blog", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "blog.html"));
-});
-app.get("/members", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "members.html"));
-});
-app.get("/wrapped", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "wrapped.html"));
-});
-app.get("/collaborate", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "collaborate.html"));
-});
 
 // ── Legal pages ───────────────────────────────────────────────────────────────
 app.get("/privacy", (req, res) => {
