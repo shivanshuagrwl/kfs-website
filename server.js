@@ -456,10 +456,14 @@ async function loadRevokedTokens() {
 
 async function revokeToken(jti, expiresAt) {
   _revokedJtis.add(jti);
-  await supabase.from("revoked_tokens").upsert([{
-    jti,
-    expires_at: new Date(expiresAt * 1000).toISOString(),
-  }]).catch(e => console.error("[auth] revoke persist failed:", e.message));
+  try {
+    await supabase.from("revoked_tokens").upsert([{
+      jti,
+      expires_at: new Date(expiresAt * 1000).toISOString(),
+    }]);
+  } catch(e) {
+    console.error("[auth] revoke persist failed:", e.message);
+  }
 }
 
 async function revokeAllForAdmin(adminId) {
