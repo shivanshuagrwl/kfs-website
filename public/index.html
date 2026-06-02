@@ -3023,8 +3023,6 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </button>
       </div>
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="adminLogin()">Sign In</button>
-    <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
     <!-- TOTP step — hidden until server returns require_totp:true -->
     <div id="totp-step" style="display:none;margin-top:16px">
       <div class="form-group">
@@ -3033,6 +3031,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
       <p style="font-size:12px;color:var(--grey);margin-top:6px">Enter the code from Google Authenticator or Authy.</p>
     </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="adminLogin()">Sign In</button>
+    <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
   </div>
 </div>
 
@@ -4621,14 +4621,15 @@ async function loadHomeData() {
   if (settings) {
     const tagEl = document.getElementById('hero-tagline');
     if (settings.site_tagline) {
+      const _esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       var parts = settings.site_tagline.match(/([^.]+\.)[\s]*([^.]+\.)[\s]*(.+)/);
       if (parts) {
         tagEl.innerHTML =
-          '<span class="glow-word" id="glow-lights">'+parts[1].trim()+'<\/span><br>'+
-          '<em><span class="glow-word" id="glow-camera">'+parts[2].trim()+'<\/span><\/em><br>'+
-          '<span class="glow-word" id="glow-kfs">'+parts[3].trim()+'<\/span>';
+          '<span class="glow-word" id="glow-lights">'+_esc(parts[1].trim())+'<\/span><br>'+
+          '<em><span class="glow-word" id="glow-camera">'+_esc(parts[2].trim())+'<\/span><\/em><br>'+
+          '<span class="glow-word" id="glow-kfs">'+_esc(parts[3].trim())+'<\/span>';
       } else {
-        tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+settings.site_tagline+'<\/span>';
+        tagEl.innerHTML = '<span class="glow-word" id="glow-lights">'+_esc(settings.site_tagline)+'<\/span>';
       }
       if(window.glowUpdate) window.glowUpdate();
     }
