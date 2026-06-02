@@ -693,20 +693,32 @@ app.get("/api/health", async (req, res) => {
 });
 
 // ── Login lockout ─────────────────────────────────────────────────────────────
-// Tracks failed login attempts per username in memory.
-// After MAX_ATTEMPTS failures the account is locked for LOCKOUT_MS.
-const LOGIN_ATTEMPTS = new Map(); // username → { count, lockedUntil }
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+// Progressive lockout tiers per username (stored in memory):
+//   Tier 1 — after 3 failures  → locked 1 minute
+//   Tier 2 — after 6 failures  → locked 5 minutes
+//   Tier 3 — after 9 failures  → locked 2 weeks
+const LOGIN_ATTEMPTS = new Map(); // username → { count, lockedUntil, tier }
+
+const LOCKOUT_TIERS = [
+  { afterAttempts: 3, durationMs: 1  * 60 * 1000,              label: '1 minute'  },
+  { afterAttempts: 6, durationMs: 5  * 60 * 1000,              label: '5 minutes' },
+  { afterAttempts: 9, durationMs: 14 * 24 * 60 * 60 * 1000,   label: '2 weeks'   },
+];
 
 function checkLoginLockout(username) {
   const entry = LOGIN_ATTEMPTS.get(username);
   if (!entry) return null; // no failures yet
   if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
-    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
-    return `Account locked. Try again in ${Math.ceil(secsLeft / 60)} minute(s).`;
+    const msLeft = entry.lockedUntil - Date.now();
+    const secsLeft = Math.ceil(msLeft / 1000);
+    let timeStr;
+    if (secsLeft < 120)        timeStr = `${secsLeft} second(s)`;
+    else if (secsLeft < 7200)  timeStr = `${Math.ceil(secsLeft / 60)} minute(s)`;
+    else if (secsLeft < 172800) timeStr = `${Math.ceil(secsLeft / 3600)} hour(s)`;
+    else                        timeStr = `${Math.ceil(secsLeft / 86400)} day(s)`;
+    return `Account locked. Try again in ${timeStr}.`;
   }
-  // Lockout expired — reset
+  // Lockout expired — clear it so the next attempt counts fresh
   if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
     LOGIN_ATTEMPTS.delete(username);
   }
@@ -714,11 +726,18 @@ function checkLoginLockout(username) {
 }
 
 function recordLoginFailure(username) {
-  const entry = LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null };
+  const entry = LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null, tier: 0 };
   entry.count += 1;
-  if (entry.count >= MAX_ATTEMPTS) {
-    entry.lockedUntil = Date.now() + LOCKOUT_MS;
-    console.warn(`[auth] Account "${username}" locked after ${MAX_ATTEMPTS} failed attempts`);
+  // Find the highest tier whose threshold has been reached
+  for (let i = LOCKOUT_TIERS.length - 1; i >= 0; i--) {
+    if (entry.count >= LOCKOUT_TIERS[i].afterAttempts && entry.tier <= i) {
+      entry.tier = i + 1; // mark tier consumed
+      entry.lockedUntil = Date.now() + LOCKOUT_TIERS[i].durationMs;
+      console.warn(
+        `[auth] Account "${username}" locked (tier ${i + 1}) after ${entry.count} failed attempts — ${LOCKOUT_TIERS[i].label}`
+      );
+      break;
+    }
   }
   LOGIN_ATTEMPTS.set(username, entry);
 }

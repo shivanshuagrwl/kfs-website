@@ -4291,7 +4291,7 @@ let allEvents = [];
 })();
 
 
-// ── HERO WORD GLOW ON SCROLL — locks once lit, never un-glows ──
+// ── HERO WORD GLOW ON SCROLL — locks once lit per visit, resets on re-navigation ──
 (function(){
   var ids=['glow-lights','glow-camera','glow-kfs'];
   var thresh=[0.06,0.18,0.32];
@@ -4307,10 +4307,18 @@ let allEvents = [];
     if(locked[0]&&locked[1]&&locked[2])window.removeEventListener('scroll',update);
   }
   window.addEventListener('scroll',update,{passive:true});
+  // Called by theme re-render and by navigation back to home
   window.glowUpdate=function(){
-    // reset locks when tagline is re-rendered by theme
     locked=[false,false,false];
-    update();
+    // Remove 'lit' from all glow words so animation re-fires
+    ids.forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.classList.remove('lit');
+    });
+    // Re-attach scroll listener (safe to add multiple times — deduplicated by identity)
+    window.removeEventListener('scroll',update);
+    window.addEventListener('scroll',update,{passive:true});
+    update(); // fire once in case already scrolled
   };
 })();
 
@@ -4401,7 +4409,7 @@ window.addEventListener('popstate', e => {
 // init from URL path - handled inside checkRoute below
 
 function loadPageData(page) {
-  if (page==='home') loadHomeData();
+  if (page==='home') { loadHomeData(); if(window.glowUpdate) window.glowUpdate(); }
   else if (page==='events') loadEvents();
   else if (page==='blog') loadBlog();
   else if (page==='members') loadMembers();
@@ -5262,7 +5270,13 @@ async function loadMovies() {
 
   // Build genre filter dropdown (matching blog filter style)
   window._activeGenreFilter = null;
-  const allGenres = [...new Set((movies||[]).flatMap(m => Array.isArray(m.genre) ? m.genre : []).filter(Boolean))].sort();
+  // Deduplicate genres case-insensitively, preserving the first-seen casing
+  const genreMap = new Map(); // lowercase key → original casing
+  (movies||[]).flatMap(m => Array.isArray(m.genre) ? m.genre : []).filter(Boolean).forEach(g => {
+    const key = g.toLowerCase().trim();
+    if (!genreMap.has(key)) genreMap.set(key, g.trim());
+  });
+  const allGenres = [...genreMap.values()].sort((a,b) => a.localeCompare(b));
   const filterBar = document.getElementById('movie-genre-filter-bar');
   const dd = document.getElementById('movie-genre-dropdown');
   if (allGenres.length > 1 && filterBar && dd) {
