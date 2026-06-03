@@ -8175,17 +8175,17 @@ async function saveNewAdmin() {
     // Use a direct fetch so we always get the response body even on 4xx
     const rawRes = await fetch('/api/master/admins', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ name, username, password, permissions })
     });
     const data = await rawRes.json().catch(() => ({}));
     if (rawRes.ok && data.id) {
       closeAddAdminModal();
       loadAdminData('admins');
-    } else if (rawRes.status === 403) {
-      // Token may be stale — refresh and retry once
+    } else if (rawRes.status === 401) {
+      // Access token expired — refresh and retry once
       const refreshRes = await fetch('/api/admin/refresh', {
-        method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken }
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': _csrfToken || '' }
       });
       const refreshData = await refreshRes.json().catch(() => ({}));
       if (refreshData.token && refreshData.role === 'master') {
@@ -8193,10 +8193,10 @@ async function saveNewAdmin() {
         currentAdminRole = 'master';
         localStorage.setItem('kfs_token', refreshData.token);
         localStorage.setItem('kfs_role', 'master');
-        // Retry
+        // Retry with fresh token
         const retry = await fetch('/api/master/admins', {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
           body: JSON.stringify({ name, username, password, permissions })
         });
         const retryData = await retry.json().catch(() => ({}));
@@ -8207,7 +8207,7 @@ async function saveNewAdmin() {
           errEl.textContent = retryData.error || 'Failed to create admin after token refresh.';
         }
       } else {
-        errEl.textContent = 'Access denied. Your account does not have master privileges.';
+        errEl.textContent = 'Session expired. Please log out and log back in.';
       }
     } else {
       errEl.textContent = data.error || 'Failed to create admin.';
