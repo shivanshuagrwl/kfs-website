@@ -20,16 +20,12 @@
         --border: #1e1e1e;
         --card: #111;
       }
-      *,
-      *::before,
-      *::after {
+      *, *::before, *::after {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
       }
-      html {
-        scroll-behavior: smooth;
-      }
+      html { scroll-behavior: smooth; }
       body {
         background: var(--black);
         color: var(--white);
@@ -43,11 +39,7 @@
         text-decoration: underline;
         text-underline-offset: 3px;
       }
-      a:hover {
-        color: var(--grey);
-      }
-
-      /* Nav */
+      a:hover { color: var(--grey); }
       .nav {
         padding: 20px 40px;
         border-bottom: 1px solid var(--border);
@@ -62,9 +54,7 @@
         opacity: 1;
         transition: opacity 0.2s;
       }
-      .nav-logo:hover {
-        opacity: 0.7;
-      }
+      .nav-logo:hover { opacity: 0.7; }
       .nav-back {
         font-size: 11px;
         letter-spacing: 0.1em;
@@ -76,26 +66,16 @@
         gap: 6px;
         transition: color 0.2s;
       }
-      .nav-back:hover {
-        color: var(--white);
-      }
-
-      /* Layout */
+      .nav-back:hover { color: var(--white); }
       .container {
         max-width: 680px;
         margin: 0 auto;
         padding: 72px 40px 100px;
       }
       @media (max-width: 600px) {
-        .nav {
-          padding: 16px 20px;
-        }
-        .container {
-          padding: 48px 24px 80px;
-        }
+        .nav { padding: 16px 20px; }
+        .container { padding: 48px 24px 80px; }
       }
-
-      /* Header */
       .doc-label {
         font-size: 11px;
         letter-spacing: 0.14em;
@@ -116,15 +96,11 @@
         margin-bottom: 56px;
         letter-spacing: 0.06em;
       }
-
-      /* Divider */
       hr {
         border: none;
         border-top: 1px solid var(--border);
         margin: 40px 0;
       }
-
-      /* Sections */
       .section-num {
         font-size: 11px;
         letter-spacing: 0.12em;
@@ -140,10 +116,7 @@
         margin-bottom: 16px;
         color: var(--white);
       }
-      p {
-        color: #aaa;
-        margin-bottom: 14px;
-      }
+      p { color: #aaa; margin-bottom: 14px; }
       ul {
         list-style: none;
         margin: 0 0 14px;
@@ -155,20 +128,14 @@
         position: relative;
         border-bottom: 1px solid var(--border);
       }
-      ul li:last-child {
-        border-bottom: none;
-      }
+      ul li:last-child { border-bottom: none; }
       ul li::before {
         content: "—";
         position: absolute;
         left: 0;
         color: var(--grey);
       }
-      .section {
-        margin-bottom: 48px;
-      }
-
-      /* Footer */
+      .section { margin-bottom: 48px; }
       .doc-footer {
         margin-top: 80px;
         padding-top: 32px;
@@ -191,9 +158,7 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-      .doc-footer a:hover {
-        color: var(--white);
-      }
+      .doc-footer a:hover { color: var(--white); }
     </style>
   </head>
   <body>
@@ -202,16 +167,7 @@
         <img src="/images/kfs-logo-transparent.png" alt="KFS" height="32" style="display:block;" />
       </a>
       <a href="/" class="nav-back">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6" />
         </svg>
         Back to site
@@ -222,7 +178,7 @@
       <p class="doc-label">Legal</p>
       <h1 class="doc-title">Privacy Policy</h1>
       <p class="doc-date">
-        Effective: June 2025 &nbsp;·&nbsp; KIIT Film Society, Bhubaneswar
+        Last Updated: 20 May 2026 &nbsp;·&nbsp; KIIT Film Society, Bhubaneswar
       </p>
 
       <hr />
@@ -231,66 +187,55 @@
         <p class="section-num">01</p>
         <h2>Who We Are</h2>
         <p>
-          KFS (KIIT Film Society) is a student-run creative collective at KIIT
-          University, Bhubaneswar. This website — kiitfilmsociety.in — is our
-          official home for films, events, screenings, and the community around
-          them.
+          KFS (KIIT Film Society) is a student-run creative collective operating under the KIIT Student Activity Centre (KSAC) at KIIT University, Bhubaneswar. This website — kiitfilmsociety.in — is our official platform for films, events, screenings, and the community around them.
         </p>
         <p>
-          We are not a commercial entity. We don't sell products, run ads, or
-          profit from your data in any way.
+          We are a non-commercial student organisation. We do not sell products, display advertising, or derive any financial benefit from the personal data of our users.
         </p>
       </div>
 
       <div class="section">
         <p class="section-num">02</p>
-        <h2>What We Collect</h2>
+        <h2>Information We Collect</h2>
         <p>
-          We only collect what's necessary to run our events and communicate
-          with you. When you register for an event, we ask for:
+          We collect only the information strictly necessary to facilitate event registrations and Society communications. This may include:
         </p>
         <ul>
-          <li>Your name</li>
+          <li>Your full name</li>
           <li>Your email address</li>
-          <li>
-            Any other details specific to the event (e.g. year, branch — if
-            asked)
-          </li>
+          <li>Additional event-specific details, where requested in a registration form (such as academic year or branch)</li>
         </ul>
         <p>
-          We do not collect payment information, government IDs, or any
-          sensitive personal data.
+          We do not collect payment information, government-issued identification, biometric data, or any other category of sensitive personal information.
         </p>
       </div>
 
       <div class="section">
         <p class="section-num">03</p>
-        <h2>How We Use It</h2>
-        <p>Your information is used only for the following:</p>
+        <h2>How We Use Your Information</h2>
+        <p>Information collected through this Website is used exclusively for the following purposes:</p>
         <ul>
-          <li>
-            Sending you a confirmation email when you register for an event
-          </li>
-          <li>
-            Occasional updates about KFS events and screenings (you can ask us
-            to stop anytime)
-          </li>
-          <li>Internal headcount and coordination for our events</li>
+          <li>Issuing registration confirmations and event-related communications</li>
+          <li>Sending periodic updates regarding KFS events and screenings, which you may opt out of at any time</li>
+          <li>Internal coordination, headcount management, and event logistics</li>
+          <li>Generating anonymised, aggregate usage insights to improve the Website — no individual profiling is conducted</li>
         </ul>
         <p>
-          We will never sell, share, or transfer your data to any third party
-          for marketing or commercial purposes.
+          Your personal information will not be sold, licensed, shared, or transferred to any third party for commercial, marketing, or unrelated purposes under any circumstances.
         </p>
       </div>
 
       <div class="section">
         <p class="section-num">04</p>
-        <h2>Where It's Stored</h2>
+        <h2>Data Storage &amp; Security</h2>
         <p>
-          Registration data is stored securely on Supabase (a cloud database
-          platform). Emails are sent via Brevo. Both services maintain their own
-          privacy and security standards. Your data is not stored on any local
-          or personal devices of KFS members.
+          All personal data collected through this Website is stored on secured, access-controlled infrastructure. We employ industry-standard security measures — including encryption in transit, access restrictions, and secure credential management — to protect your information against unauthorised access, disclosure, alteration, or destruction.
+        </p>
+        <p>
+          Access to stored data is limited strictly to authorised KFS personnel who require it for the purposes described in this Policy. Your data is not stored on any personal or unmanaged devices belonging to KFS members.
+        </p>
+        <p>
+          We retain personal data only for as long as is necessary to fulfil the purposes for which it was collected. You may request deletion of your data at any time (see Section 06).
         </p>
       </div>
 
@@ -298,59 +243,67 @@
         <p class="section-num">05</p>
         <h2>Third-Party Services</h2>
         <p>
-          This site uses the following external services, which may process
-          limited technical data (like your IP or browser type) as part of their
-          normal operation:
+          To operate this Website effectively, we engage reputable third-party service providers for functions including data hosting, email delivery, and media management. These providers operate under their own privacy and security standards and are engaged solely to support KFS's operational requirements.
         </p>
-        <ul>
-          <li>Google Fonts — for typography (no tracking)</li>
-          <li>Cloudinary — for image hosting</li>
-          <li>Supabase — for data storage</li>
-          <li>Brevo — for email delivery</li>
-        </ul>
         <p>
-          We do not use Google Analytics, Meta Pixel, or any advertising or
-          behavioural tracking tools.
+          We do not authorise any third-party provider to use your personal data for their own independent commercial or marketing purposes. We do not integrate any advertising networks, behavioural tracking platforms, or analytics tools that profile individual users.
         </p>
       </div>
 
       <div class="section">
         <p class="section-num">06</p>
         <h2>Your Rights</h2>
-        <p>You can reach out to us at any time to:</p>
+        <p>You are entitled to exercise the following rights with respect to your personal data at any time:</p>
         <ul>
-          <li>Ask what data we hold about you</li>
-          <li>Request correction or deletion of your data</li>
-          <li>Unsubscribe from any future emails</li>
+          <li>Request confirmation of whether we hold any data relating to you</li>
+          <li>Request correction of any inaccurate or incomplete information</li>
+          <li>Request deletion of your personal data from our records</li>
+          <li>Withdraw any consent previously provided</li>
+          <li>Opt out of all future email communications from KFS</li>
         </ul>
         <p>
-          Just email us at
-          <a href="mailto:filmsocietykiit@gmail.com"
-            >filmsocietykiit@gmail.com</a
-          >
-          and we'll sort it out promptly.
+          To exercise any of the above rights, please contact us at <a href="mailto:filmsocietykiit@gmail.com">filmsocietykiit@gmail.com</a>. We will respond to all legitimate requests within a reasonable timeframe.
         </p>
       </div>
 
       <div class="section">
         <p class="section-num">07</p>
-        <h2>Changes to This Policy</h2>
+        <h2>Limitation of Liability</h2>
         <p>
-          If we ever meaningfully change how we handle data, we'll update this
-          page and note the new effective date at the top. Since we're a student
-          society, changes are unlikely to be frequent or significant.
+          KFS implements security measures that reflect reasonable and current industry standards. However, no system of data transmission or storage can be guaranteed to be entirely secure. To the fullest extent permitted by applicable law, KFS, KSAC, KIIT, and their associated officers, members, volunteers, and representatives shall not be liable for any unauthorised access to, disclosure of, or loss of personal data arising from circumstances beyond our reasonable control, including but not limited to third-party security incidents, infrastructure failures, or force majeure events.
+        </p>
+        <p>
+          By using this Website and submitting personal information, you acknowledge and accept this inherent limitation.
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="section-num">08</p>
+        <h2>Automated Access &amp; AI</h2>
+        <p>
+          Personal data and content published on this Website may not be collected, scraped, harvested, or used for the purposes of artificial intelligence training, machine learning, dataset construction, or any form of automated extraction, without the prior written authorisation of KFS. For full details, refer to Section 12 of our <a href="/terms">Terms of Use</a>.
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="section-num">09</p>
+        <h2>Governing Law</h2>
+        <p>
+          This Privacy Policy is governed by and construed in accordance with the laws of India. Any disputes arising in connection with this Policy shall be subject to the exclusive jurisdiction of the competent courts located in Bhubaneswar, Odisha.
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="section-num">10</p>
+        <h2>Amendments</h2>
+        <p>
+          KFS reserves the right to revise this Privacy Policy at any time. Any material changes will be reflected on this page with an updated effective date. Continued use of the Website following the publication of a revised Policy constitutes acceptance of the updated terms. We encourage users to review this page periodically.
         </p>
       </div>
 
       <div class="doc-footer">
-        <p>
-          ©
-          <script>
-            document.write(new Date().getFullYear());
-          </script>
-          KFS — KIIT Film Society
-        </p>
-        <a href="/terms">Terms &amp; Conditions →</a>
+        <p>© <script>document.write(new Date().getFullYear());</script> KFS — KIIT Film Society</p>
+        <a href="/terms">Terms of Use →</a>
       </div>
     </div>
   </body>

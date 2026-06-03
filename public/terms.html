@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Terms &amp; Conditions — KFS | KIIT Film Society</title>
+    <title>Terms of Use — KFS | KIIT Film Society</title>
     <meta name="robots" content="noindex" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,16 +20,12 @@
         --border: #1e1e1e;
         --card: #111;
       }
-      *,
-      *::before,
-      *::after {
+      *, *::before, *::after {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
       }
-      html {
-        scroll-behavior: smooth;
-      }
+      html { scroll-behavior: smooth; }
       body {
         background: var(--black);
         color: var(--white);
@@ -43,9 +39,7 @@
         text-decoration: underline;
         text-underline-offset: 3px;
       }
-      a:hover {
-        color: var(--grey);
-      }
+      a:hover { color: var(--grey); }
 
       .nav {
         padding: 20px 40px;
@@ -61,9 +55,7 @@
         opacity: 1;
         transition: opacity 0.2s;
       }
-      .nav-logo:hover {
-        opacity: 0.7;
-      }
+      .nav-logo:hover { opacity: 0.7; }
       .nav-back {
         font-size: 11px;
         letter-spacing: 0.1em;
@@ -75,9 +67,7 @@
         gap: 6px;
         transition: color 0.2s;
       }
-      .nav-back:hover {
-        color: var(--white);
-      }
+      .nav-back:hover { color: var(--white); }
 
       .container {
         max-width: 680px;
@@ -85,12 +75,8 @@
         padding: 72px 40px 100px;
       }
       @media (max-width: 600px) {
-        .nav {
-          padding: 16px 20px;
-        }
-        .container {
-          padding: 48px 24px 80px;
-        }
+        .nav { padding: 16px 20px; }
+        .container { padding: 48px 24px 80px; }
       }
 
       .doc-label {
@@ -120,6 +106,56 @@
         margin: 40px 0;
       }
 
+      .toc {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 28px 32px;
+        margin-bottom: 56px;
+      }
+      .toc-label {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--grey);
+        margin-bottom: 16px;
+      }
+      .toc ol {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        columns: 2;
+        column-gap: 32px;
+      }
+      @media (max-width: 520px) {
+        .toc ol { columns: 1; }
+        .toc { padding: 20px; }
+      }
+      .toc ol li {
+        color: #aaa;
+        padding: 4px 0;
+        border-bottom: none;
+        font-size: 13px;
+        break-inside: avoid;
+      }
+      .toc ol li::before { content: none; }
+      .toc ol li a {
+        color: #777;
+        text-decoration: none;
+        transition: color 0.15s;
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .toc ol li a:hover { color: var(--white); }
+      .toc ol li a .toc-num {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: #444;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
       .section-num {
         font-size: 11px;
         letter-spacing: 0.12em;
@@ -134,23 +170,24 @@
         letter-spacing: -0.02em;
         margin-bottom: 16px;
         color: var(--white);
+        scroll-margin-top: 32px;
       }
       p {
         color: #aaa;
         margin-bottom: 14px;
       }
-      ul {
+      ul, ol.body-list {
         list-style: none;
         margin: 0 0 14px;
         padding: 0;
       }
-      ul li {
+      ul li, ol.body-list li {
         color: #aaa;
         padding: 6px 0 6px 20px;
         position: relative;
         border-bottom: 1px solid var(--border);
       }
-      ul li:last-child {
+      ul li:last-child, ol.body-list li:last-child {
         border-bottom: none;
       }
       ul li::before {
@@ -159,9 +196,16 @@
         left: 0;
         color: var(--grey);
       }
-      .section {
-        margin-bottom: 48px;
+      ol.body-list { counter-reset: list-counter; }
+      ol.body-list li::before {
+        counter-increment: list-counter;
+        content: counter(list-counter, lower-alpha) ".";
+        position: absolute;
+        left: 0;
+        color: var(--grey);
+        font-size: 12px;
       }
+      .section { margin-bottom: 48px; }
 
       .doc-footer {
         margin-top: 80px;
@@ -185,9 +229,7 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-      .doc-footer a:hover {
-        color: var(--white);
-      }
+      .doc-footer a:hover { color: var(--white); }
     </style>
   </head>
   <body>
@@ -196,16 +238,7 @@
         <img src="/images/kfs-logo-transparent.png" alt="KFS" height="32" style="display:block;" />
       </a>
       <a href="/" class="nav-back">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6" />
         </svg>
         Back to site
@@ -214,119 +247,360 @@
 
     <div class="container">
       <p class="doc-label">Legal</p>
-      <h1 class="doc-title">Terms &amp; Conditions</h1>
+      <h1 class="doc-title">Terms of Use</h1>
       <p class="doc-date">
-        Effective: June 2025 &nbsp;·&nbsp; KIIT Film Society, Bhubaneswar
+        Last Updated: 20 May 2026 &nbsp;·&nbsp; Issued by KIIT Film Society under KSAC, KIIT Bhubaneswar
       </p>
 
       <hr />
 
-      <div class="section">
-        <p class="section-num">01</p>
-        <h2>About This Site</h2>
-        <p>
-          This website is operated by KFS — KIIT Film Society, a student
-          organisation at KIIT University, Bhubaneswar. By visiting or using
-          this site, you agree to these terms. If you don't, that's okay — just
-          don't use the site.
-        </p>
-        <p>
-          We're a non-commercial student collective. None of this is meant to
-          read like a corporate contract — it's just here so everyone's on the
-          same page.
-        </p>
+      <div class="toc">
+        <p class="toc-label">Contents</p>
+        <ol>
+          <li><a href="#s1"><span class="toc-num">01</span> Introduction &amp; Definitions</a></li>
+          <li><a href="#s2"><span class="toc-num">02</span> Purpose of the Website</a></li>
+          <li><a href="#s3"><span class="toc-num">03</span> Eligibility &amp; Authorised Use</a></li>
+          <li><a href="#s4"><span class="toc-num">04</span> Ownership of the Website</a></li>
+          <li><a href="#s5"><span class="toc-num">05</span> Society Intellectual Property</a></li>
+          <li><a href="#s6"><span class="toc-num">06</span> Member Intellectual Property</a></li>
+          <li><a href="#s7"><span class="toc-num">07</span> Official Society Works</a></li>
+          <li><a href="#s8"><span class="toc-num">08</span> User Submissions</a></li>
+          <li><a href="#s9"><span class="toc-num">09</span> Blogs, Articles &amp; Published Content</a></li>
+          <li><a href="#s10"><span class="toc-num">10</span> Film &amp; Creative Content</a></li>
+          <li><a href="#s11"><span class="toc-num">11</span> Prohibited Conduct</a></li>
+          <li><a href="#s12"><span class="toc-num">12</span> AI &amp; Automated Access</a></li>
+          <li><a href="#s13"><span class="toc-num">13</span> Confidentiality</a></li>
+          <li><a href="#s14"><span class="toc-num">14</span> Copyright Complaints</a></li>
+          <li><a href="#s15"><span class="toc-num">15</span> Third-Party Services</a></li>
+          <li><a href="#s16"><span class="toc-num">16</span> Disclaimer of Warranties</a></li>
+          <li><a href="#s17"><span class="toc-num">17</span> Limitation of Liability</a></li>
+          <li><a href="#s18"><span class="toc-num">18</span> Indemnification</a></li>
+          <li><a href="#s19"><span class="toc-num">19</span> Enforcement &amp; Termination</a></li>
+          <li><a href="#s20"><span class="toc-num">20</span> Governing Law &amp; Jurisdiction</a></li>
+          <li><a href="#s21"><span class="toc-num">21</span> Amendments</a></li>
+          <li><a href="#s22"><span class="toc-num">22</span> Entire Agreement</a></li>
+          <li><a href="#s23"><span class="toc-num">23</span> Contact Information</a></li>
+        </ol>
       </div>
 
-      <div class="section">
-        <p class="section-num">02</p>
-        <h2>Use of the Site</h2>
-        <p>
-          You're welcome to browse, read, and engage with everything on this
-          site. We just ask that you don't:
-        </p>
+      <p style="color:#aaa; margin-bottom:40px;">
+        These Terms of Use ("Terms") govern access to and use of the official website ("Website") of KIIT Film Society ("KFS"), a student organisation operating under the KIIT Student Activity Centre ("KSAC"), KIIT Bhubaneswar. By accessing, browsing, registering for, contributing to, or otherwise using the Website, you acknowledge that you have read, understood, and agreed to be bound by these Terms. If you do not agree to these Terms, you must immediately discontinue use of the Website.
+      </p>
+
+      <div class="section" id="s1">
+        <p class="section-num">01</p>
+        <h2>Introduction &amp; Definitions</h2>
+        <p>For the purposes of these Terms:</p>
         <ul>
-          <li>Use the site for any unlawful purpose</li>
-          <li>
-            Attempt to access admin areas, other users' data, or any part of the
-            site you're not supposed to be in
-          </li>
-          <li>Scrape, copy, or republish our content without permission</li>
-          <li>Submit false information in event registrations</li>
+          <li><strong style="color:var(--white)">"KFS"</strong> means KIIT Film Society, its core committees, authorised representatives, volunteers, faculty advisors, and successors.</li>
+          <li><strong style="color:var(--white)">"Website"</strong> includes all webpages, subdomains, applications, databases, content repositories, communication systems, digital services, software, and associated online platforms operated by KFS.</li>
+          <li><strong style="color:var(--white)">"User"</strong> means any individual or entity accessing or using the Website.</li>
+          <li><strong style="color:var(--white)">"Member"</strong> means any person formally associated with KFS.</li>
+          <li><strong style="color:var(--white)">"Content"</strong> includes text, articles, blogs, reviews, editorials, graphics, photographs, audio recordings, films, videos, artwork, software, databases, event materials, documents, and all other information available through the Website.</li>
+          <li><strong style="color:var(--white)">"Society Intellectual Property"</strong> means all intellectual property owned, controlled, commissioned, licensed, funded, acquired, developed, maintained, or used by KFS in its official capacity.</li>
+          <li><strong style="color:var(--white)">"Member Intellectual Property"</strong> means original intellectual property created independently by a member or contributor.</li>
+          <li><strong style="color:var(--white)">"User Submission"</strong> means any content uploaded, submitted, transmitted, shared, or otherwise provided to KFS through the Website.</li>
+          <li><strong style="color:var(--white)">"AI Systems"</strong> includes artificial intelligence systems, machine learning models, large language models, generative AI systems, neural networks, automated content generation tools, and similar technologies.</li>
         </ul>
       </div>
 
-      <div class="section">
+      <div class="section" id="s2">
+        <p class="section-num">02</p>
+        <h2>Purpose of the Website</h2>
+        <p>
+          The Website exists to support the educational, cultural, artistic, archival, and administrative objectives of KFS. It may be used to publish content, promote events, facilitate participation, showcase creative works, preserve institutional records, communicate with members, and support the Society's activities.
+        </p>
+        <p>
+          Nothing on the Website constitutes legal, financial, professional, academic, or commercial advice.
+        </p>
+      </div>
+
+      <div class="section" id="s3">
         <p class="section-num">03</p>
-        <h2>Event Registrations</h2>
+        <h2>Eligibility &amp; Authorised Use</h2>
         <p>
-          When you register for a KFS event, you're confirming that the
-          information you've provided is accurate. Spots are limited and
-          registrations may be capped — filling out the form doesn't always
-          guarantee entry if the event is oversubscribed.
+          Users must comply with all applicable laws, university regulations, and these Terms. Access to the Website is granted solely for lawful, educational, informational, cultural, and non-commercial purposes unless expressly authorised otherwise.
         </p>
         <p>
-          KFS reserves the right to cancel, reschedule, or change the format of
-          any event. If that happens, we'll do our best to let registrants know
-          in advance.
+          KFS reserves the right to refuse, restrict, suspend, or terminate access at its discretion where necessary to protect its interests, operations, members, content, systems, or legal rights.
         </p>
       </div>
 
-      <div class="section">
+      <div class="section" id="s4">
         <p class="section-num">04</p>
-        <h2>Our Content</h2>
+        <h2>Ownership of the Website</h2>
         <p>
-          The films, articles, reviews, photos, and other content on this site
-          belong to KFS or the respective student creators. You're free to share
-          links to our content, but please don't reproduce or redistribute it
-          without crediting us or getting in touch first.
+          The Website consists of software components, content, branding, visual assets, and other intellectual property. Certain software components may be made available under open-source licences, which may be used, modified, and distributed in accordance with their applicable licence terms.
         </p>
+        <p>However, the availability of any source code under an open-source licence shall not be interpreted as granting ownership of, rights in, or permission to reproduce any of the following:</p>
+        <ul>
+          <li>The KFS name, logos, trademarks, insignia, slogans, event identities, and branding elements</li>
+          <li>The Website's distinctive visual identity, design language, artistic direction, presentation style, layout arrangements, graphics, illustrations, animations, audiovisual assets, or other protected creative expressions</li>
+          <li>The overall look and feel of the Website, including combinations of design elements that identify it as an official KFS platform</li>
+          <li>Articles, blogs, reviews, editorials, publications, photographs, films, videos, archives, databases, and other content appearing on the Website</li>
+          <li>Official Society records, member directories, event archives, publications, and institutional materials</li>
+          <li>Any representation that another project, website, or service is affiliated with, endorsed by, or connected to KFS</li>
+        </ul>
         <p>
-          If you'd like to feature our work somewhere, just reach out — we're
-          usually happy to collaborate.
+          Users may build independent projects using lawfully licensed open-source software components, provided such projects maintain their own independent identity and do not reproduce protected branding, content, or visual presentation in a manner likely to cause confusion.
         </p>
       </div>
 
-      <div class="section">
+      <div class="section" id="s5">
         <p class="section-num">05</p>
-        <h2>Feedback & Community Features</h2>
+        <h2>Society Intellectual Property</h2>
+        <p>All Society Intellectual Property shall remain the exclusive property of KFS and/or its lawful licensors. This includes, without limitation:</p>
+        <ul>
+          <li>Names, logos, trademarks, symbols, slogans, and branding</li>
+          <li>Official publications and communications</li>
+          <li>Event identities and promotional campaigns</li>
+          <li>Website content and databases</li>
+          <li>Official photographs, recordings, videos, and audiovisual works</li>
+          <li>Archives and historical records</li>
+          <li>Editorial publications, reviews, and articles</li>
+          <li>Social media content and communications</li>
+          <li>Educational resources and research materials</li>
+          <li>Design assets, templates, graphical materials, and visual branding resources</li>
+        </ul>
         <p>
-          If the site has any community features (like comments or film
-          feedback), you're responsible for what you post. We reserve the right
-          to remove anything that is offensive, spam, or otherwise
-          inappropriate.
+          Membership, volunteering, office-holding, content creation, or participation in Society activities shall not grant ownership rights in Society Intellectual Property unless expressly approved through a written agreement authorised by KFS. KFS reserves all rights not expressly granted.
         </p>
       </div>
 
-      <div class="section">
+      <div class="section" id="s6">
         <p class="section-num">06</p>
+        <h2>Member Intellectual Property</h2>
+        <p>
+          Members retain ownership of independently created works, including but not limited to films, scripts, screenplays, treatments, concepts, photographs, artwork, essays, reviews, music, sound recordings, animations, research materials, and other original creative works.
+        </p>
+        <p>
+          Participation in KFS activities shall not, by itself, transfer ownership of Member Intellectual Property to KFS. Where ownership arrangements differ, such arrangements must be documented through a separate written agreement.
+        </p>
+      </div>
+
+      <div class="section" id="s7">
+        <p class="section-num">07</p>
+        <h2>Official Society Works</h2>
+        <p>
+          Any work expressly commissioned, funded, produced, directed, managed, or designated by KFS as an official Society project may be governed by separate ownership, licensing, archival, publication, or distribution arrangements established in writing.
+        </p>
+        <p>
+          KFS reserves the right to maintain official archives of Society-related works, records, publications, photographs, videos, and historical materials for institutional, educational, promotional, and archival purposes.
+        </p>
+      </div>
+
+      <div class="section" id="s8">
+        <p class="section-num">08</p>
+        <h2>User Submissions</h2>
+        <p>Users submitting content represent and warrant that:</p>
+        <ul>
+          <li>They possess all necessary rights to submit the content</li>
+          <li>The content does not infringe any third-party rights</li>
+          <li>The content complies with applicable laws</li>
+          <li>The content is accurate to the best of their knowledge</li>
+        </ul>
+        <p>
+          By submitting content, users grant KFS a non-exclusive, royalty-free, worldwide licence to host, display, archive, reproduce, distribute, promote, and use such content solely for Society-related purposes and Website operations. Unless otherwise agreed in writing, ownership remains with the creator.
+        </p>
+      </div>
+
+      <div class="section" id="s9">
+        <p class="section-num">09</p>
+        <h2>Blogs, Articles &amp; Published Content</h2>
+        <p>
+          All blogs, reviews, articles, editorials, essays, reports, publications, graphics, photographs, audiovisual materials, and other published content appearing on the Website are protected by applicable intellectual property laws.
+        </p>
+        <p>Except where expressly permitted, users shall not:</p>
+        <ul>
+          <li>Copy, reproduce, republish, redistribute, archive, aggregate, or commercially exploit Website content</li>
+          <li>Translate, adapt, modify, summarise, annotate, or create derivative works for public distribution</li>
+          <li>Repost substantial portions of Website content on other platforms</li>
+          <li>Remove attribution, copyright notices, or ownership information</li>
+          <li>Compile Website content into databases, repositories, newsletters, publications, or commercial products</li>
+        </ul>
+        <p>
+          Limited quotations for criticism, commentary, academic discussion, or research may be permitted where required by applicable law and accompanied by proper attribution.
+        </p>
+      </div>
+
+      <div class="section" id="s10">
+        <p class="section-num">10</p>
+        <h2>Film &amp; Creative Content</h2>
+        <p>
+          Films, photographs, videos, scripts, screenplays, music, sound recordings, artwork, animations, and other creative works displayed, screened, archived, or otherwise made available through the Website remain the property of their respective owners unless expressly agreed otherwise in writing.
+        </p>
+        <p>No user shall:</p>
+        <ul>
+          <li>Download protected content except where expressly permitted</li>
+          <li>Reproduce or redistribute creative works</li>
+          <li>Publicly screen, perform, transmit, or broadcast such works without authorisation</li>
+          <li>Remove embedded credits, watermarks, metadata, or attribution information</li>
+          <li>Use creative works for commercial purposes without authorisation from the lawful rights holder</li>
+        </ul>
+        <p>
+          The presence of creative works on the Website shall not be interpreted as a transfer, assignment, waiver, or abandonment of intellectual property rights.
+        </p>
+      </div>
+
+      <div class="section" id="s11">
+        <p class="section-num">11</p>
+        <h2>Prohibited Conduct</h2>
+        <p>Users shall not:</p>
+        <ul>
+          <li>Violate applicable laws or regulations</li>
+          <li>Interfere with Website operations or introduce malicious software</li>
+          <li>Attempt unauthorised access to any part of the Website</li>
+          <li>Impersonate others or misrepresent affiliation with KFS</li>
+          <li>Submit false information in event registrations or any other form</li>
+          <li>Infringe intellectual property rights or circumvent security measures</li>
+          <li>Harvest user information, scrape Website content, or clone Website functionality</li>
+          <li>Use Website resources for any unlawful purpose</li>
+        </ul>
+      </div>
+
+      <div class="section" id="s12">
+        <p class="section-num">12</p>
+        <h2>Artificial Intelligence &amp; Automated Access</h2>
+        <p>
+          Without prior written authorisation from KFS and, where applicable, the relevant rights holder, no person may use any Website content, media, archives, databases, reviews, publications, metadata, audiovisual materials, photographs, films, scripts, articles, records, or other resources for:
+        </p>
+        <ul>
+          <li>AI or machine learning training, model development, fine-tuning, or testing</li>
+          <li>Embedding generation, dataset creation, or knowledge-base construction</li>
+          <li>Automated content generation or generative AI applications</li>
+          <li>Data mining, automated extraction, or large language model development</li>
+        </ul>
+        <p>
+          Automated scraping, crawling, harvesting, indexing, downloading, aggregation, mirroring, or systematic retrieval of Website resources is prohibited, except for ordinary indexing by recognised search engines in accordance with industry-standard protocols and Website permissions.
+        </p>
+        <p>
+          The use of bots, scripts, automated agents, crawlers, or similar technologies to collect Website content without authorisation is prohibited.
+        </p>
+      </div>
+
+      <div class="section" id="s13">
+        <p class="section-num">13</p>
+        <h2>Confidentiality</h2>
+        <p>
+          Scripts, treatments, concepts, production plans, unpublished creative works, pitches, rough cuts, internal documents, meeting records, submissions, and other confidential materials shared through KFS activities shall remain confidential unless expressly released by their owner or by KFS where authorised.
+        </p>
+        <p>
+          Unauthorised disclosure, copying, distribution, or exploitation of confidential materials is prohibited.
+        </p>
+      </div>
+
+      <div class="section" id="s14">
+        <p class="section-num">14</p>
+        <h2>Copyright Complaints</h2>
+        <p>
+          KFS respects intellectual property rights. Any person claiming infringement may submit a written complaint identifying the allegedly infringed work and the allegedly infringing material.
+        </p>
+        <p>
+          KFS reserves the right to investigate, remove content, request supporting documentation, suspend access, and take appropriate corrective measures.
+        </p>
+      </div>
+
+      <div class="section" id="s15">
+        <p class="section-num">15</p>
+        <h2>Third-Party Services &amp; Links</h2>
+        <p>
+          The Website may contain references or links to third-party websites, platforms, services, or resources. KFS does not control and is not responsible for third-party content, security, policies, practices, or availability. Access to third-party resources occurs at the user's own risk.
+        </p>
+      </div>
+
+      <div class="section" id="s16">
+        <p class="section-num">16</p>
+        <h2>Disclaimer of Warranties</h2>
+        <p>
+          The Website and all content are provided on an "as is" and "as available" basis. KFS makes no warranties regarding accuracy, completeness, availability, reliability, security, uninterrupted operation, fitness for a particular purpose, or freedom from errors. Users assume all risks associated with Website use.
+        </p>
+      </div>
+
+      <div class="section" id="s17">
+        <p class="section-num">17</p>
         <h2>Limitation of Liability</h2>
         <p>
-          We do our best to keep this site accurate and running smoothly, but
-          we're students — things break sometimes. KFS is not liable for any
-          loss or inconvenience resulting from use of this site, event changes,
-          or any errors in content.
+          To the fullest extent permitted by law, KFS, KSAC, KIIT, their officers, members, advisors, volunteers, representatives, affiliates, and licensors shall not be liable for any direct, indirect, incidental, consequential, special, punitive, or exemplary damages arising from:
+        </p>
+        <ul>
+          <li>Website use or inability to use the Website</li>
+          <li>User submissions or third-party actions</li>
+          <li>Content inaccuracies or technical failures</li>
+          <li>Security incidents, data loss, or service interruptions</li>
+        </ul>
+      </div>
+
+      <div class="section" id="s18">
+        <p class="section-num">18</p>
+        <h2>Indemnification</h2>
+        <p>
+          Users agree to defend, indemnify, and hold harmless KFS, KSAC, KIIT, and their associated persons from claims, damages, liabilities, losses, costs, expenses, and legal fees arising from:
+        </p>
+        <ul>
+          <li>Violations of these Terms or applicable law</li>
+          <li>Intellectual property disputes relating to User Submissions</li>
+          <li>Misconduct connected to Website use</li>
+        </ul>
+      </div>
+
+      <div class="section" id="s19">
+        <p class="section-num">19</p>
+        <h2>Enforcement &amp; Termination</h2>
+        <p>
+          KFS reserves the right, at its sole discretion, to investigate suspected violations and take any action deemed necessary to protect its rights, members, systems, content, operations, and legal interests. Such actions may include:
+        </p>
+        <ul>
+          <li>Removal of content or suspension of access</li>
+          <li>Termination of user privileges or preservation of evidence</li>
+          <li>Referral to university or law enforcement authorities</li>
+          <li>Initiation of legal proceedings, injunctive relief, or recovery of damages</li>
+        </ul>
+        <p>
+          Rights and obligations relating to intellectual property, confidentiality, indemnification, limitation of liability, enforcement, and content ownership shall survive termination of access, membership, or association with KFS.
         </p>
       </div>
 
-      <div class="section">
-        <p class="section-num">07</p>
-        <h2>Contact</h2>
+      <div class="section" id="s20">
+        <p class="section-num">20</p>
+        <h2>Governing Law &amp; Jurisdiction</h2>
         <p>
-          Questions, concerns, or just want to say hi? Reach us at
-          <a href="mailto:filmsocietykiit@gmail.com"
-            >filmsocietykiit@gmail.com</a
-          >.
+          These Terms shall be governed by the laws of India. Any dispute arising from or relating to the Website shall be subject to the exclusive jurisdiction of the courts located in Bhubaneswar, Odisha.
+        </p>
+      </div>
+
+      <div class="section" id="s21">
+        <p class="section-num">21</p>
+        <h2>Amendments</h2>
+        <p>
+          KFS reserves the right to modify these Terms at any time. Updated versions shall become effective upon publication on the Website. Continued use of the Website following publication constitutes acceptance of the revised Terms.
+        </p>
+      </div>
+
+      <div class="section" id="s22">
+        <p class="section-num">22</p>
+        <h2>Entire Agreement</h2>
+        <p>
+          These Terms constitute the entire agreement governing use of the Website and supersede all prior understandings relating to Website use. If any provision is found invalid or unenforceable, the remaining provisions shall continue in full force and effect.
+        </p>
+      </div>
+
+      <div class="section" id="s23">
+        <p class="section-num">23</p>
+        <h2>Contact Information</h2>
+        <p>
+          Questions regarding these Terms, intellectual property matters, copyright concerns, or Website administration may be directed to:
+        </p>
+        <ul>
+          <li>Email: <a href="mailto:filmsocietykiit@gmail.com">filmsocietykiit@gmail.com</a></li>
+          <li>Instagram: <a href="https://instagram.com/kiit.filmsoc.kfs" target="_blank" rel="noopener">@kiit.filmsoc.kfs</a></li>
+        </ul>
+        <p>
+          By continuing to access or use the Website, you acknowledge and agree to be bound by these Terms of Use.
         </p>
       </div>
 
       <div class="doc-footer">
-        <p>
-          ©
-          <script>
-            document.write(new Date().getFullYear());
-          </script>
-          KFS — KIIT Film Society
-        </p>
+        <p>© <script>document.write(new Date().getFullYear());</script> KFS — KIIT Film Society</p>
         <a href="/privacy">Privacy Policy →</a>
       </div>
     </div>
