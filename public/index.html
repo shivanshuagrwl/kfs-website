@@ -6155,7 +6155,7 @@ function showAdminPanel() {
   document.querySelectorAll('.admin-sidebar-item[data-section]').forEach(el => {
     const sec = el.dataset.section;
     const masterOnly = ['admins','activity'].includes(sec);
-    const alwaysVisible = ['change-password'].includes(sec);
+    const alwaysVisible = ['change-password','two-factor'].includes(sec);
     if (masterOnly) {
       el.style.display = currentAdminRole === 'master' ? 'flex' : 'none';
     } else if (alwaysVisible) {
