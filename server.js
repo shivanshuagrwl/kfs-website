@@ -5596,7 +5596,7 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
   appendDonorToSheet({
     name:                name || null,
     email:               email || null,
-    roll_no:             donor?.roll_no || null,
+    roll_no:             roll_no || null,
     amount_paise:        amountPaise,
     razorpay_payment_id,
     razorpay_order_id,
@@ -6086,7 +6086,7 @@ async function appendDonorToSheet(donor) {
   ];
   const appendRes = await fetch(
     "https://sheets.googleapis.com/v4/spreadsheets/" + sheetId +
-    "/values/Sheet1!A1:J1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+    "/values/Sheet1!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
     {
       method:  "POST",
       headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
