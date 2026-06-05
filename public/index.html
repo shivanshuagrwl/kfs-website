@@ -408,7 +408,7 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-field{margin-bottom:24px}
 .reg-field-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:.03em;margin-bottom:10px}
 .reg-field-label .req-dot{color:#ff453a;font-size:16px;line-height:1}
-.reg-input,.reg-textarea,.reg-select{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:13px 16px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
+.reg-input,.reg-textarea,.reg-select{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:13px 16px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
 .reg-input:focus,.reg-textarea:focus,.reg-select:focus{border-color:rgba(245,245,245,.35);box-shadow:0 0 0 3px rgba(245,245,245,.06)}
 .reg-textarea{resize:vertical;min-height:80px;line-height:1.6}
 .reg-radio-group,.reg-check-group{display:flex;flex-direction:column;gap:10px}
@@ -830,7 +830,7 @@ body.light-mode .hc-blog-card.hc-viewed .hc-read-badge{background:rgba(150,150,1
 .hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
 .hc-blog-title{font-size:18px;font-weight:600;line-height:1.3;margin-bottom:8px}
 .hc-blog-excerpt{font-size:13px;color:var(--grey);line-height:1.6;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden}
 /* Film carousel card */
 .hc-film-card{flex:0 0 48vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
@@ -1840,7 +1840,7 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-detail-year{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:32px}
 .movie-detail-crew{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
 @media(max-width:600px){.movie-detail-crew{grid-template-columns:1fr}}
-.movie-crew-item{}
+.movie-crew-item{display:flex;flex-direction:column}
 .movie-crew-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-bottom:4px}
 .movie-crew-value{font-size:14px;font-weight:500}
 .movie-detail-section{margin-bottom:28px}
@@ -1901,7 +1901,7 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-card.watched .movie-poster{filter:grayscale(100%)}
 /* Description snippet on card */
 .movie-desc-snip{font-size:12px;color:var(--grey);line-height:1.5;margin-top:6px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden}
 
 .loading{text-align:center;padding:60px;color:var(--grey);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
 .empty-state{text-align:center;padding:60px 24px;color:var(--grey)}
@@ -4573,7 +4573,7 @@ KFS — KIIT Film Society"></textarea>
     <input type="hidden" id="collab-token">
 
     <!-- ── STEP 1: KIIT email gate ── -->
-    <div id="collab-gate" style="">
+    <div id="collab-gate">
       <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin-bottom:18px">This board is exclusive to KFS members. Enter your KIIT email to continue.</p>
       <div class="form-group">
         <label>KIIT Email *</label>
@@ -6685,6 +6685,7 @@ function showAdminSection(name) {
   document.querySelectorAll('.admin-sidebar-item').forEach(i=>i.classList.remove('active'));
   document.querySelector(`[data-section="${name}"]`)?.classList.add('active');
   loadAdminData(name);
+  if (name === 'donations-admin') loadDonationsAdmin();
 }
 
 async function loadAdminData(name) {
@@ -13603,6 +13604,7 @@ function _syncAdminAmountVisibility() {
 async function loadDonationsPage() {
   _syncAdminAmountVisibility();
   resetDonForm();
+  animateDonProgressBars();
   await Promise.all([loadDonStats(), loadDonors()]);
 }
 
@@ -14153,25 +14155,9 @@ function animateDonProgressBars() {
   });
 }
 
-// Patch loadDonationsPage to also animate bars and wire admin load
-const _origLoadDonationsPage = typeof loadDonationsPage === 'function' ? loadDonationsPage : null;
-async function loadDonationsPage() {
-  _syncAdminAmountVisibility();
-  resetDonForm();
-  animateDonProgressBars();
-  await Promise.all([loadDonStats(), loadDonors()]);
-}
-
-// Hook into showAdminSection to load donations when tab is opened
-const _origShowAdminSection = showAdminSection;
-function showAdminSection(name) {
-  _origShowAdminSection(name);
-  if (name === 'donations-admin') loadDonationsAdmin();
-}
-
 // ── DEFERRED INIT — must be last ──────────────────────────────────────────────
 // checkRoute() needs loadDonationsPage, loadDonationsAdmin, and the
-// showAdminSection override above to all exist first.
+// donations-admin hook in showAdminSection above to all exist first.
 checkRoute();
 
 </body>
