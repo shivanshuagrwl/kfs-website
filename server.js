@@ -301,7 +301,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // allows onclick= and other inline event handlers
       imgSrc: [
         "'self'", "data:",
@@ -309,16 +309,21 @@ app.use(helmet({
         "https://*.supabase.co",
         "https://img.youtube.com",       // YouTube thumbnails
         "https://i.ytimg.com",           // YouTube thumbnails (alternate CDN)
+        "https://*.razorpay.com",        // Razorpay checkout images
       ],
       connectSrc: [
         "'self'",
         "https://api.brevo.com",
         "https://*.supabase.co",         // Supabase realtime + API calls
+        "https://api.razorpay.com",      // Razorpay order/payment API
+        "https://lumberjack.razorpay.com", // Razorpay analytics/logging
       ],
       frameSrc: [
         "https://www.youtube.com",       // YouTube embeds
         "https://open.spotify.com",      // Spotify embeds
         "https://embed.music.apple.com", // Apple Music embeds
+        "https://api.razorpay.com",      // Razorpay checkout iframe
+        "https://*.razorpay.com",        // Razorpay checkout modal
       ],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -5682,10 +5687,11 @@ app.get("/api/admin/donation/analytics", requireSection("settings"), async (req,
 
     // ── Top 10 donors (non-anonymous) ────────────────────────────────────────
     const topDonors = donors
-      .filter(d => !d.is_anonymous && d.amount_paise)
+      .filter(d => d.amount_paise)           // include anonymous too for admin
       .sort((a, b) => (b.amount_paise || 0) - (a.amount_paise || 0))
-      .slice(0, 10)
+      // No slice — admin sees all records so they can delete any
       .map(d => ({
+        id:            d.id,
         name:          d.name || "—",
         email:         d.email || "—",
         roll_no:       d.roll_no || "—",
@@ -5706,6 +5712,37 @@ app.get("/api/admin/donation/analytics", requireSection("settings"), async (req,
   } catch (e) {
     console.error("[admin/donation/analytics]", e.message);
     return res.status(500).json({ error: "Could not load payment analytics." });
+  }
+});
+
+
+// ── DELETE /api/admin/donation/donors/:id ──────────────────────────────────────
+// Admin only — permanently deletes a donor/payment record.
+app.delete("/api/admin/donation/donors/:id", requireSection("settings"), async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "Donor ID required." });
+
+  try {
+    const { error } = await supabase
+      .from("donors")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw new Error(error.message);
+
+    await logActivity(
+      req.admin?.id || "unknown",
+      req.admin?.name || "Admin",
+      "delete",
+      "donor",
+      `Donor ID: ${id}`
+    );
+
+    noStore(res);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/donation/donors/delete]", e.message);
+    return res.status(500).json({ error: "Could not delete donor record." });
   }
 });
 
