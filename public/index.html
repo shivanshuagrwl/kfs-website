@@ -126,38 +126,37 @@
 <!-- ── EVENT THEME LOADER — runs before styles render to prevent flash ── -->
 <script>
 (function() {
-  try {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/theme', false); // synchronous to block render
-    xhr.send();
-    if (xhr.status === 200) {
-      var theme = JSON.parse(xhr.responseText);
-      if (theme) {
-        var css = ':root{';
-        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
-        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
-        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
-        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
-        if (theme.border_color) css += '--border:' + theme.border_color + ';';
-        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
-        css += '}';
-        var styleEl = document.createElement('style');
-        styleEl.id = 'event-theme-vars';
-        styleEl.textContent = css;
-        document.head.appendChild(styleEl);
-        if (theme.font_family) {
-          var fontLink = document.createElement('link');
-          fontLink.rel = 'stylesheet';
-          fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
-          document.head.appendChild(fontLink);
-          var fontStyle = document.createElement('style');
-          fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
-          document.head.appendChild(fontStyle);
-        }
-        window.__kfsEventTheme = theme;
-      }
+  function _applyTheme(theme) {
+    if (!theme) return;
+    var css = ':root{';
+    if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
+    if (theme.text_color)   css += '--white:' + theme.text_color + ';';
+    if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
+    if (theme.card_color)   css += '--card:' + theme.card_color + ';';
+    if (theme.border_color) css += '--border:' + theme.border_color + ';';
+    if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
+    css += '}';
+    var styleEl = document.getElementById('event-theme-vars') || document.createElement('style');
+    styleEl.id = 'event-theme-vars';
+    styleEl.textContent = css;
+    if (!styleEl.parentNode) document.head.appendChild(styleEl);
+    if (theme.font_family) {
+      var fontLink = document.createElement('link');
+      fontLink.rel = 'stylesheet';
+      fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
+      document.head.appendChild(fontLink);
+      var fontStyle = document.createElement('style');
+      fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
+      document.head.appendChild(fontStyle);
     }
-  } catch(e) { /* silent fail — site loads with default theme */ }
+    window.__kfsEventTheme = theme;
+  }
+  // Async fetch — no longer blocks the main thread or page load
+  fetch('/api/theme').then(function(r) {
+    return r.ok ? r.json() : null;
+  }).then(function(theme) {
+    _applyTheme(theme);
+  }).catch(function() { /* silent fail — site loads with default theme */ });
 })();
 </script>
 <style>
@@ -8325,9 +8324,7 @@ const _wrappedNavReady = (async function initWrappedNav() {
 
 // The wrapped page is hidden via display:none in HTML and revealed by checkRoute after config loads.
 
-// checkRoute() is deferred to end-of-body so all script blocks
-// (donations, admin sections, showAdminSection override, etc.)
-// are fully parsed before routing fires. See bottom of file.
+// checkRoute() is deferred to end-of-body — see bottom of file.
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
 // ── EVENT COUNTDOWN POPUP ──
@@ -14173,9 +14170,8 @@ function showAdminSection(name) {
 }
 
 // ── DEFERRED INIT — must be last ──────────────────────────────────────────────
-// checkRoute() depends on loadDonationsPage, loadDonationsAdmin, and the
-// showAdminSection override above all being defined first. Calling it here
-// (bottom of <body>) guarantees every script block has been parsed.
+// checkRoute() needs loadDonationsPage, loadDonationsAdmin, and the
+// showAdminSection override above to all exist first.
 checkRoute();
 
 </body>
