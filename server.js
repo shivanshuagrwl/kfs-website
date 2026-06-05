@@ -5730,6 +5730,9 @@ app.delete("/api/admin/donation/donors/:id", requireSection("settings"), async (
 
     if (error) throw new Error(error.message);
 
+    // Invalidate all donor/stats caches so the public page reflects the deletion immediately
+    memInvalidate("donation:stats", "donation:donors:");
+
     await logActivity(
       req.admin?.id || "unknown",
       req.admin?.name || "Admin",

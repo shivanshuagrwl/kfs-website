@@ -1314,6 +1314,7 @@ body.light-mode .member-special-tag.tag-developer{
 .don-donor-meta{font-size:11px;color:var(--grey);margin-bottom:8px;letter-spacing:.04em}
 .don-donor-amt{font-size:20px;font-weight:700;letter-spacing:-.02em;display:none}
 body.kfs-admin-view .don-donor-amt{display:block}
+body.kfs-admin-view .don-donor-delete-btn{display:block!important}
 .don-donor-semester{font-size:10px;color:var(--grey);margin-top:2px;letter-spacing:.05em;text-transform:uppercase}
 .don-donors-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px;border:1px solid var(--border);border-radius:4px}
 .don-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:60px}
@@ -7687,7 +7688,7 @@ async function changePassword() {
   if (np !== cp) { if(msg) msg.textContent = '❌ Passwords do not match'; else alert('Passwords do not match'); return; }
   if (np.length < 8) { if(msg) msg.textContent = '❌ Password must be at least 8 characters'; else alert('Password must be at least 8 characters'); return; }
   const res = await fetch('/api/admin/change-password',{method:'POST',
-    headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','x-csrf-token': csrfToken},
+    headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','x-csrf-token': _csrfToken || ''},
     body:JSON.stringify({currentPassword:curr, newPassword:np})});
   if (res.ok) {
     document.getElementById('current-password').value='';
@@ -13756,6 +13757,18 @@ async function submitDonation() {
 
     const { order_id, key_id, amount_paise } = orderData;
 
+    // Show TEST MODE banner if using test keys
+    const existingBanner = document.getElementById('don-test-mode-banner');
+    if (existingBanner) existingBanner.remove();
+    if (key_id && key_id.startsWith('rzp_test_')) {
+      const banner = document.createElement('div');
+      banner.id = 'don-test-mode-banner';
+      banner.style.cssText = 'background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:12px;text-align:center;letter-spacing:.04em';
+      banner.textContent = '⚠️ TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
+      const submitBtn = document.getElementById('don-submit-btn');
+      if (submitBtn && submitBtn.parentNode) submitBtn.parentNode.insertBefore(banner, submitBtn);
+    }
+
     // Step 2 — Open Razorpay Checkout
     const rzp = new Razorpay({
       key:         key_id,
@@ -13835,6 +13848,26 @@ async function loadDonStats() {
   } catch(e) {}
 }
 
+// ── Admin: Delete donor from the public donor cards ──────────────────────────
+async function adminDeleteDonorCard(donorId, donorName, btn) {
+  if (!adminToken || !donorId) return;
+  if (!confirm(`Delete "${donorName}" from the donors list?\n\nThis permanently removes their record and cannot be undone.`)) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  try {
+    const res = await apiFetch(`/api/admin/donation/donors/${encodeURIComponent(donorId)}`, { method: 'DELETE' });
+    if (res && res.success) {
+      const card = document.querySelector(`.don-donor-card[data-donor-id="${donorId}"]`);
+      if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => card.remove(), 300); }
+    } else {
+      alert(res?.error || 'Failed to delete. Please try again.');
+      if (btn) { btn.disabled = false; btn.textContent = '✕ Delete'; }
+    }
+  } catch (e) {
+    alert('Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '✕ Delete'; }
+  }
+}
+
 // ── Load & render donors list ─────────────────────────────────────────────────
 async function loadDonors() {
   const container = document.getElementById('don-donors-container');
@@ -13886,13 +13919,26 @@ function renderDonorCard(d) {
     ? `<div class="don-donor-amt">₹${Math.round(d.amount_paise / 100).toLocaleString('en-IN')}</div>`
     : '';
 
-  return `<div class="don-donor-card">
+  // Admin-only delete button — visible only when body has .kfs-admin-view
+  const donorIdSafe = escHtml(String(d.id || ''));
+  const nameSafe    = escHtml((d.display_name || d.name || 'this donor').replace(/'/g, ''));
+  const deleteBtn   = donorIdSafe
+    ? `<button class="don-donor-delete-btn" onclick="adminDeleteDonorCard('${donorIdSafe}','${nameSafe}',this)"
+         title="Delete donor record"
+         style="position:absolute;top:8px;right:8px;display:none;background:rgba(231,76,60,.12);
+                border:1px solid rgba(231,76,60,.35);color:#e74c3c;border-radius:6px;
+                padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;letter-spacing:.04em">
+         ✕ Delete</button>`
+    : '';
+
+  return `<div class="don-donor-card" data-donor-id="${donorIdSafe}" style="position:relative">
     ${photoHtml}
     ${nameHtml}
     ${rollHtml}
     <div class="don-donor-meta">${semester}</div>
     ${bioHtml}
     ${amtHtml}
+    ${deleteBtn}
   </div>`;
 }
 </script>
