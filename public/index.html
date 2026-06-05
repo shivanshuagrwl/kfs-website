@@ -4081,11 +4081,19 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-payment-analytics">
       <div class="admin-header">
         <div><h2>Payment Analytics</h2><p>Donation revenue, trends, and donor breakdown</p></div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <a href="https://docs.google.com/spreadsheets/d/1acZIqBHXT5g05CPiTLtDHpPCgdFBAmwcP81jE6ijY_M/edit?usp=sharing" target="_blank" class="btn btn-secondary" style="border-radius:20px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:6px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             View Google Sheet
           </a>
+          <button class="btn btn-secondary" onclick="sheetBackfill(this)" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+            Sync Old Payments
+          </button>
+          <button class="btn btn-secondary" onclick="testDonationEmail(this)" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Test Email
+          </button>
           <button class="btn" onclick="loadPaymentAnalytics()" style="border-radius:20px;font-size:12px">↻ Refresh</button>
         </div>
       </div>
@@ -9951,9 +9959,7 @@ async function adminDeleteDonor(donorId, donorName, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
 
   try {
-    const res = await apiFetch(`/api/admin/donation/donors/${encodeURIComponent(donorId)}`, {
-      method: 'DELETE',
-    });
+    const res = await apiFetch(`/api/admin/donation/donors/${encodeURIComponent(donorId)}`, 'DELETE');
     if (res && res.success) {
       // Remove the row from the table
       const row = document.querySelector(`tr[data-donor-id="${donorId}"]`);
@@ -9967,6 +9973,43 @@ async function adminDeleteDonor(donorId, donorName, btn) {
   } catch (e) {
     alert('Network error. Please try again.');
     if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+  }
+}
+
+// ── Admin: Backfill all existing payments to Google Sheet ─────────────────────
+async function sheetBackfill(btn) {
+  if (!confirm('This will sync ALL existing payment records to Google Sheet.\n\nOnly run this once — it will add duplicate rows if run again.\n\nProceed?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+  try {
+    const res = await apiFetch('/api/admin/donation/sheet-backfill', 'POST');
+    if (res && res.success) {
+      alert(`✅ Sync complete!\n\nSynced: ${res.synced}\nFailed: ${res.failed}\nTotal: ${res.total}\n\nOpen Google Sheet to see all records.`);
+    } else {
+      alert('Sync failed: ' + (res?.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('Network error during sync. Check server logs.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync Old Payments'; }
+  }
+}
+
+// ── Admin: Send a test donation thank-you email ────────────────────────────────
+async function testDonationEmail(btn) {
+  const email = prompt('Enter email address to send the test to:');
+  if (!email || !email.includes('@')) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const res = await apiFetch('/api/admin/donation/test-email', 'POST', { email });
+    if (res && res.success) {
+      alert(`✅ Test email sent to ${email}!\nCheck your inbox (and spam folder).\nMessageId: ${res.messageId || '—'}`);
+    } else {
+      alert('Failed: ' + (res?.error || 'Unknown error — check server logs for [Brevo] lines'));
+    }
+  } catch (e) {
+    alert('Network error. Check server logs.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test Email'; }
   }
 }
 

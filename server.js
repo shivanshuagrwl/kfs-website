@@ -16,7 +16,6 @@ const helmet = require("helmet");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
 const cookieParser = require("cookie-parser");
-const { google }   = require("googleapis");
 
 const app = express();
 app.set('trust proxy', 1); // Render reverse-proxy ke peeche
@@ -58,51 +57,6 @@ async function sbQuery(fn, retries = 3) {
       if (isLast) throw e;
       await new Promise((r) => setTimeout(r, 300 * (i + 1)));
     }
-  }
-}
-
-// ── Google Sheets: append donor row ──────────────────────────────────────────
-async function appendDonorToSheet({ name, email, roll_no, amount_paise, semester_label, razorpay_payment_id, razorpay_order_id, is_anonymous, payment_verified_at, source }) {
-  try {
-    const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-    if (!SHEET_ID) return;
-
-    const auth = new google.auth.JWT({
-      email:  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key:    (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    const sheets       = google.sheets({ version: "v4", auth });
-    const amountRupees = amount_paise ? (amount_paise / 100).toFixed(2) : "—";
-    const dateIST      = payment_verified_at
-      ? new Date(payment_verified_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
-      : new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId:    SHEET_ID,
-      range:            "Sheet1!A:J",
-      valueInputOption: "USER_ENTERED",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: {
-        values: [[
-          dateIST,
-          name                || "—",
-          email               || "—",
-          roll_no             || "—",
-          `₹${amountRupees}`,
-          semester_label      || "—",
-          razorpay_payment_id || "—",
-          razorpay_order_id   || "—",
-          is_anonymous ? "Yes" : "No",
-          source              || "verify",
-        ]],
-      },
-    });
-
-    console.log(`[sheets] ✓ Row added — ${razorpay_payment_id}`);
-  } catch (e) {
-    console.error("[sheets] Failed to append row:", e.message);
   }
 }
 
@@ -5390,12 +5344,34 @@ function getFeaturedUntil(paymentDate) {
 
 // ── Helper: send Brevo thank-you email (non-blocking) ────────────────────────
 async function sendBrevoThankYou({ donorId, name, email, amountPaise, paymentId, isAnonymous }) {
-  const BREVO_API_KEY    = process.env.BREVO_API_KEY;
-  const BREVO_SENDER     = process.env.BREVO_SENDER_EMAIL || "noreply@kiitfilmsociety.in";
-  const BREVO_NAME       = process.env.BREVO_SENDER_NAME  || "KFS — KIIT Film Society";
-  const BREVO_TEMPLATE   = process.env.BREVO_TEMPLATE_ID  ? parseInt(process.env.BREVO_TEMPLATE_ID) : null;
+  // Read key from Supabase settings table first (same as broadcast + confirmation emails),
+  // fall back to env var so both config paths work.
+  let BREVO_API_KEY = process.env.BREVO_API_KEY || null;
+  let BREVO_NAME    = process.env.BREVO_SENDER_NAME  || "KFS — KIIT Film Society";
+  const BREVO_SENDER   = process.env.BREVO_SENDER_EMAIL || "noreply@kiitfilmsociety.in";
+  const BREVO_TEMPLATE = process.env.BREVO_TEMPLATE_ID  ? parseInt(process.env.BREVO_TEMPLATE_ID) : null;
 
-  if (!BREVO_API_KEY || !email) return { success: false, reason: "no_api_key_or_email" };
+  try {
+    const { data: rows } = await supabase
+      .from("settings")
+      .select("key,value")
+      .in("key", ["brevo_api_key", "smtp_from_name"]);
+    (rows || []).forEach(r => {
+      if (r.key === "brevo_api_key"  && r.value) BREVO_API_KEY = r.value;
+      if (r.key === "smtp_from_name" && r.value) BREVO_NAME    = r.value;
+    });
+  } catch (e) {
+    console.warn("[Brevo] Could not fetch settings from DB, using env vars:", e.message);
+  }
+
+  if (!BREVO_API_KEY) {
+    console.warn("[Brevo] No API key found in settings or env — skipping thank-you email");
+    return { success: false, reason: "no_api_key" };
+  }
+  if (!email) {
+    console.warn("[Brevo] No recipient email for donor", donorId, "— skipping");
+    return { success: false, reason: "no_email" };
+  }
 
   const displayName = isAnonymous ? "Valued Supporter" : (name || "Donor");
   const amountRs    = Math.round((amountPaise || 0) / 100);
@@ -5604,9 +5580,6 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
 
   // Invalidate donor/stats caches
   memInvalidate("donation:stats", "donation:donors:");
-
-  // ── Sync to Google Sheet (non-blocking) ──────────────────────────────────
-  appendDonorToSheet({ ...donorRow, razorpay_payment_id, source: "verify" });
 
   // ── Send Brevo thank-you email (non-blocking — email failure must not block response) ──
   const newDonorId = insertedRows?.[0]?.id || null;
@@ -5932,20 +5905,6 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
   memInvalidate("donation:stats", "donation:donors:");
   console.log(`[webhook] Donor recorded from webhook: order=${orderId}`);
 
-  // ── Sync to Google Sheet (non-blocking) ──────────────────────────────────
-  appendDonorToSheet({
-    name:                payment.contact        || null,
-    email:               payment.email          || null,
-    roll_no:             null,
-    amount_paise:        payment.amount         || null,
-    semester_label:      semesterLabel,
-    razorpay_payment_id: paymentId,
-    razorpay_order_id:   orderId,
-    is_anonymous:        false,
-    payment_verified_at: webhookNow.toISOString(),
-    source:              "webhook",
-  });
-
   // Send thank-you email from webhook path too (non-blocking)
   const webhookDonorId = webhookInserted?.[0]?.id || null;
   sendBrevoThankYou({
@@ -5958,6 +5917,76 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
   }).catch(err => console.error("[Brevo/webhook] Background email error:", err.message));
 
   return res.status(200).json({ status: "ok" });
+});
+
+// ── POST /api/admin/donation/test-email ──────────────────────────────────────
+// Admin only — sends a test thank-you email to the logged-in admin's address.
+app.post("/api/admin/donation/test-email", requireSection("settings"), async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "email required in body." });
+  try {
+    const result = await sendBrevoThankYou({
+      donorId:     null,
+      name:        "Test Donor",
+      email,
+      amountPaise: 10000, // ₹100 test amount
+      paymentId:   "test_pay_" + Date.now(),
+      isAnonymous: false,
+    });
+    if (result.success) {
+      return res.json({ success: true, messageId: result.messageId });
+    } else {
+      return res.status(500).json({ error: result.reason || result.error || "Email failed." });
+    }
+  } catch (e) {
+    console.error("[test-email]", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/admin/donation/sheet-backfill ────────────────────────────────────
+// Admin only — syncs ALL existing donor records to Google Sheet.
+// Run once after setting up Sheets integration to populate historical data.
+app.post("/api/admin/donation/sheet-backfill", requireSection("settings"), async (req, res) => {
+  try {
+    const { data: donors, error } = await supabase
+      .from("donors")
+      .select("*")
+      .order("payment_verified_at", { ascending: true });
+
+    if (error) throw new Error(error.message);
+    if (!donors || donors.length === 0) {
+      return res.json({ success: true, synced: 0, message: "No donor records found." });
+    }
+
+    let synced = 0, failed = 0;
+    for (const d of donors) {
+      try {
+        await appendDonorToSheet({
+          name:                d.name,
+          email:               d.email,
+          roll_no:             d.roll_no,
+          amount_paise:        d.amount_paise,
+          semester_label:      d.semester_label,
+          razorpay_payment_id: d.razorpay_payment_id,
+          razorpay_order_id:   d.razorpay_order_id,
+          is_anonymous:        d.is_anonymous,
+          payment_verified_at: d.payment_verified_at,
+          source:              "backfill",
+        });
+        synced++;
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) {
+        console.error(`[backfill] Failed for payment ${d.razorpay_payment_id}:`, e.message);
+        failed++;
+      }
+    }
+    console.log(`[backfill] Done — synced: ${synced}, failed: ${failed}`);
+    return res.json({ success: true, synced, failed, total: donors.length });
+  } catch (e) {
+    console.error("[sheet-backfill]", e.message);
+    return res.status(500).json({ error: "Backfill failed: " + e.message });
+  }
 });
 
 // ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────
