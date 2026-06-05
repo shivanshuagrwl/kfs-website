@@ -7606,7 +7606,7 @@ async function saveEmailSettings() {
     fd.append('smtp_from_name', document.getElementById('set-smtp-from-name').value.trim());
     fd.append('email_confirmation_body', document.getElementById('set-email-body').value);
     const res = await fetch('/api/admin/settings', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken }, body: fd
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken, 'x-csrf-token': _csrfToken || '' }, body: fd
     });
     if (res.ok) {
       if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Email settings saved!'; setTimeout(()=>{ msg.textContent=''; }, 4000); }
@@ -7632,7 +7632,7 @@ async function sendTestEmail() {
   try {
     const res = await fetch('/api/admin/email/test', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'x-csrf-token': _csrfToken || '' },
       body: JSON.stringify({ to })
     });
     const d = await res.json().catch(()=>({}));
