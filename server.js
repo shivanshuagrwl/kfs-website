@@ -16,6 +16,7 @@ const helmet = require("helmet");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
 const cookieParser = require("cookie-parser");
+const { google }   = require("googleapis");
 
 const app = express();
 app.set('trust proxy', 1); // Render reverse-proxy ke peeche
@@ -57,6 +58,51 @@ async function sbQuery(fn, retries = 3) {
       if (isLast) throw e;
       await new Promise((r) => setTimeout(r, 300 * (i + 1)));
     }
+  }
+}
+
+// ── Google Sheets: append donor row ──────────────────────────────────────────
+async function appendDonorToSheet({ name, email, roll_no, amount_paise, semester_label, razorpay_payment_id, razorpay_order_id, is_anonymous, payment_verified_at, source }) {
+  try {
+    const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+    if (!SHEET_ID) return;
+
+    const auth = new google.auth.JWT({
+      email:  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      key:    (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    const sheets       = google.sheets({ version: "v4", auth });
+    const amountRupees = amount_paise ? (amount_paise / 100).toFixed(2) : "—";
+    const dateIST      = payment_verified_at
+      ? new Date(payment_verified_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+      : new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId:    SHEET_ID,
+      range:            "Sheet1!A:J",
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [[
+          dateIST,
+          name                || "—",
+          email               || "—",
+          roll_no             || "—",
+          `₹${amountRupees}`,
+          semester_label      || "—",
+          razorpay_payment_id || "—",
+          razorpay_order_id   || "—",
+          is_anonymous ? "Yes" : "No",
+          source              || "verify",
+        ]],
+      },
+    });
+
+    console.log(`[sheets] ✓ Row added — ${razorpay_payment_id}`);
+  } catch (e) {
+    console.error("[sheets] Failed to append row:", e.message);
   }
 }
 
@@ -5559,6 +5605,9 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
   // Invalidate donor/stats caches
   memInvalidate("donation:stats", "donation:donors:");
 
+  // ── Sync to Google Sheet (non-blocking) ──────────────────────────────────
+  appendDonorToSheet({ ...donorRow, razorpay_payment_id, source: "verify" });
+
   // ── Send Brevo thank-you email (non-blocking — email failure must not block response) ──
   const newDonorId = insertedRows?.[0]?.id || null;
   sendBrevoThankYou({
@@ -5882,6 +5931,20 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
 
   memInvalidate("donation:stats", "donation:donors:");
   console.log(`[webhook] Donor recorded from webhook: order=${orderId}`);
+
+  // ── Sync to Google Sheet (non-blocking) ──────────────────────────────────
+  appendDonorToSheet({
+    name:                payment.contact        || null,
+    email:               payment.email          || null,
+    roll_no:             null,
+    amount_paise:        payment.amount         || null,
+    semester_label:      semesterLabel,
+    razorpay_payment_id: paymentId,
+    razorpay_order_id:   orderId,
+    is_anonymous:        false,
+    payment_verified_at: webhookNow.toISOString(),
+    source:              "webhook",
+  });
 
   // Send thank-you email from webhook path too (non-blocking)
   const webhookDonorId = webhookInserted?.[0]?.id || null;
