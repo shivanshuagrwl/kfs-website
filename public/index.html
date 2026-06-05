@@ -8325,7 +8325,9 @@ const _wrappedNavReady = (async function initWrappedNav() {
 
 // The wrapped page is hidden via display:none in HTML and revealed by checkRoute after config loads.
 
-checkRoute();
+// checkRoute() is deferred to end-of-body so all script blocks
+// (donations, admin sections, showAdminSection override, etc.)
+// are fully parsed before routing fires. See bottom of file.
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
 // ── EVENT COUNTDOWN POPUP ──
@@ -14169,6 +14171,12 @@ function showAdminSection(name) {
   _origShowAdminSection(name);
   if (name === 'donations-admin') loadDonationsAdmin();
 }
+
+// ── DEFERRED INIT — must be last ──────────────────────────────────────────────
+// checkRoute() depends on loadDonationsPage, loadDonationsAdmin, and the
+// showAdminSection override above all being defined first. Calling it here
+// (bottom of <body>) guarantees every script block has been parsed.
+checkRoute();
 
 </body>
 </html>
