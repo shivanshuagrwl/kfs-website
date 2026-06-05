@@ -5592,6 +5592,20 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
     isAnonymous: !!is_anonymous,
   }).catch(err => console.error("[Brevo] Background email error:", err.message));
 
+  // Append to Google Sheet (non-blocking)
+  appendDonorToSheet({
+    name:                name || null,
+    email:               email || null,
+    roll_no:             donor?.roll_no || null,
+    amount_paise:        amountPaise,
+    razorpay_payment_id,
+    razorpay_order_id,
+    semester_label:      currentSemesterLabel(),
+    is_anonymous:        !!is_anonymous,
+    payment_verified_at: new Date().toISOString(),
+    source:              "payment",
+  }).catch(err => console.error("[sheets] verify append error:", err.message));
+
   return res.json({ success: true });
 });
 
@@ -5916,6 +5930,20 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
     isAnonymous: false,
   }).catch(err => console.error("[Brevo/webhook] Background email error:", err.message));
 
+  // Append to Google Sheet from webhook path (non-blocking)
+  appendDonorToSheet({
+    name:                payment.contact || null,
+    email:               payment.email   || null,
+    roll_no:             null,
+    amount_paise:        payment.amount  || null,
+    razorpay_payment_id: paymentId,
+    razorpay_order_id:   orderId,
+    semester_label:      semesterLabel,
+    is_anonymous:        false,
+    payment_verified_at: webhookNow.toISOString(),
+    source:              "webhook",
+  }).catch(err => console.error("[sheets] webhook append error:", err.message));
+
   return res.status(200).json({ status: "ok" });
 });
 
@@ -5988,6 +6016,89 @@ app.post("/api/admin/donation/sheet-backfill", requireSection("settings"), async
     return res.status(500).json({ error: "Backfill failed: " + e.message });
   }
 });
+
+
+// ── GOOGLE SHEETS INTEGRATION ─────────────────────────────────────────────────
+// Appends one donor row to the Google Sheet via Sheets API v4 (JWT, no extra npm).
+// Env vars needed:
+//   GOOGLE_SHEET_ID        — spreadsheet ID from URL
+//   GOOGLE_SERVICE_ACCOUNT — full service-account JSON stringified
+// Share the sheet with the service-account email as Editor.
+// Column order: Date | Name | Email | Roll No | Amount (Rs) | Payment ID | Order ID | Semester | Anonymous | Source
+
+async function appendDonorToSheet(donor) {
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const saRaw   = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (!sheetId || !saRaw) {
+    console.warn("[sheets] GOOGLE_SHEET_ID or GOOGLE_SERVICE_ACCOUNT not set — skipping");
+    return;
+  }
+  let sa;
+  try { sa = JSON.parse(saRaw); } catch (e) {
+    console.error("[sheets] GOOGLE_SERVICE_ACCOUNT is not valid JSON:", e.message); return;
+  }
+  const now   = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss:   sa.client_email,
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+    aud:   "https://oauth2.googleapis.com/token",
+    exp:   now + 3600,
+    iat:   now,
+  };
+  function b64url(obj) {
+    return Buffer.from(JSON.stringify(obj)).toString("base64")
+      .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  }
+  const header   = b64url({ alg: "RS256", typ: "JWT" });
+  const payload  = b64url(claim);
+  const unsigned = header + "." + payload;
+  const { createSign } = require("crypto");
+  const signer   = createSign("RSA-SHA256");
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, "base64")
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const jwt = unsigned + "." + sig;
+  const tokenRes  = await fetch("https://oauth2.googleapis.com/token", {
+    method:  "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body:    "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + jwt,
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) {
+    throw new Error("[sheets] Token exchange failed: " + JSON.stringify(tokenData));
+  }
+  const accessToken = tokenData.access_token;
+  const date   = donor.payment_verified_at
+    ? new Date(donor.payment_verified_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+    : new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const amtRs  = donor.amount_paise ? Math.round(donor.amount_paise / 100) : "";
+  const row    = [
+    date,
+    donor.is_anonymous ? "Anonymous" : (donor.name    || ""),
+    donor.is_anonymous ? ""          : (donor.email   || ""),
+    donor.is_anonymous ? ""          : (donor.roll_no || ""),
+    amtRs,
+    donor.razorpay_payment_id || "",
+    donor.razorpay_order_id   || "",
+    donor.semester_label      || "",
+    donor.is_anonymous ? "Yes" : "No",
+    donor.source || "payment",
+  ];
+  const appendRes = await fetch(
+    "https://sheets.googleapis.com/v4/spreadsheets/" + sheetId +
+    "/values/Sheet1!A1:J1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+    {
+      method:  "POST",
+      headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+      body:    JSON.stringify({ values: [row] }),
+    }
+  );
+  if (!appendRes.ok) {
+    const err = await appendRes.text();
+    throw new Error("[sheets] Append failed: " + err);
+  }
+  console.log("[sheets] Row appended for payment " + donor.razorpay_payment_id);
+}
 
 // ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────
 // Usage: GET /api/admin/emergency-unlock?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
