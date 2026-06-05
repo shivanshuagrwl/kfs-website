@@ -166,6 +166,23 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/svg+xml",
 ]);
 
+// Magic-bytes validator — runs after multer buffers the file
+// SVG is XML/text so has no magic bytes; we fall back to MIME for it
+async function validateFileMagicBytes(file) {
+  if (file.mimetype === "image/svg+xml") {
+    // SVG is plain text — trust MIME here, sanitisation happens in compressImage()
+    return ALLOWED_MIME_TYPES.has(file.mimetype);
+  }
+  try {
+    const { fileTypeFromBuffer } = await import("file-type");
+    const detected = await fileTypeFromBuffer(file.buffer);
+    return !!(detected && ALLOWED_MIME_TYPES.has(detected.mime));
+  } catch (e) {
+    console.warn("[upload] file-type detection failed, falling back to MIME:", e.message);
+    return ALLOWED_MIME_TYPES.has(file.mimetype);
+  }
+}
+
 function imageFileFilter(req, file, cb) {
   if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
     cb(null, true);
@@ -262,6 +279,12 @@ async function compressImage(file) {
 
 async function uploadImage(file, folder = "general") {
   if (!file) return null;
+
+  // Magic-bytes validation — rejects spoofed MIME types
+  const magicOk = await validateFileMagicBytes(file);
+  if (!magicOk) {
+    throw Object.assign(new Error("Invalid file type (magic bytes mismatch)."), { code: "INVALID_FILE_TYPE" });
+  }
 
   // Compress before upload
   const processed = await compressImage(file);
@@ -5489,6 +5512,10 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
   const semesterLabel  = currentSemesterLabel();
   const featuredUntil  = getFeaturedUntil(now); // semester-based expiry
 
+  function stripTags(s) {
+    return (s || '').replace(/<[^>]*>/g, '').trim() || null;
+  }
+
   const donorRow = {
     email:                  email || null,
     is_anonymous:           !!is_anonymous,
@@ -5501,10 +5528,10 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
     semester_label:         semesterLabel,
     amount_paise:           amountPaise,
     email_sent:             false,
-    // Personal fields — always stored internally; masked on public API
-    name:                   name    || null,
-    roll_no:                roll_no || null,
-    bio:                    bio     || null,
+    // Personal fields — sanitised before storage; masked on public API
+    name:                   stripTags(name),
+    roll_no:                stripTags(roll_no),
+    bio:                    stripTags(bio),
   };
 
   const { data: insertedRows, error: insertErr } = await supabase.from("donors").insert([donorRow]).select("id");
@@ -5699,7 +5726,43 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
     return res.status(400).json({ error: "Invalid JSON body." });
   }
 
-  // Only handle payment.captured
+  // Replay attack prevention — reject if we've already processed this event ID
+  const eventId = req.headers["x-razorpay-event-id"];
+  if (eventId) {
+    const { data: seenEvent } = await supabase
+      .from("payment_failures")
+      .select("id")
+      .eq("failure_reason", "webhook_replay")
+      .eq("razorpay_order_id", eventId) // reuse order_id col as event_id storage
+      .maybeSingle();
+    if (seenEvent) {
+      console.warn("[webhook] Replay detected, event already processed:", eventId);
+      return res.status(200).json({ status: "replay_ignored" });
+    }
+    // Mark event as seen (best-effort — non-blocking)
+    supabase.from("payment_failures").insert([{
+      razorpay_order_id: eventId,
+      failure_reason:    "webhook_replay",
+      ip_address:        req.ip,
+    }]).catch(e => console.warn("[webhook] Could not store event ID:", e.message));
+  }
+
+  // Only handle payment.captured and payment.failed
+  if (event.event === "payment.failed") {
+    const payment = event.payload?.payment?.entity;
+    if (payment) {
+      supabase.from("payment_failures").insert([{
+        razorpay_order_id:  payment.order_id || null,
+        razorpay_payment_id: payment.id || null,
+        failure_reason:     payment.error_description || payment.error_code || "payment_failed",
+        ip_address:         req.ip,
+        user_agent:         req.headers["user-agent"] || null,
+      }]).catch(e => console.error("[webhook/payment.failed] Log error:", e.message));
+      console.warn("[webhook] payment.failed recorded for order:", payment.order_id);
+    }
+    return res.status(200).json({ status: "payment_failure_logged" });
+  }
+
   if (event.event !== "payment.captured") {
     return res.status(200).json({ status: "ignored" });
   }
@@ -5848,6 +5911,24 @@ setInterval(
   },
   1000 * 60 * 29,
 );
+
+// Flip is_active = false for donors whose featured_until has passed — run once per day
+setInterval(
+  async () => {
+    try {
+      const { error } = await supabase
+        .from("donors")
+        .update({ is_active: false })
+        .lt("featured_until", new Date().toISOString())
+        .eq("is_active", true);
+      if (error) throw new Error(error.message);
+      memInvalidate("donation:stats", "donation:donors:");
+    } catch (e) {
+      console.error("[donor-expiry cron]", e.message);
+    }
+  },
+  1000 * 60 * 60 * 24,
+); // every 24h
 
 // Trim old page_view rows older than 90 days — run once per day
 setInterval(

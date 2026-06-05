@@ -4857,7 +4857,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password','donations-admin','collaborate'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access
