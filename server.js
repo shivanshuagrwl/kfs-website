@@ -5625,6 +5625,43 @@ app.get("/api/admin/donation/donors", requireSection("settings"), async (req, re
   }
 });
 
+// ── POST /api/admin/donation/donors/:id/toggle ────────────────────────────────
+// Admin only — toggle is_active flag on a donor (activate / deactivate listing).
+app.post("/api/admin/donation/donors/:id/toggle", requireSection("settings"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+
+    if (typeof is_active !== "boolean") {
+      return res.status(400).json({ error: "is_active must be a boolean." });
+    }
+
+    const { data, error } = await supabase
+      .from("donors")
+      .update({ is_active })
+      .eq("id", id)
+      .select("id, name, is_active")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data)  return res.status(404).json({ error: "Donor not found." });
+
+    memInvalidate("donation:stats", "donation:donors:");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      is_active ? "activate" : "deactivate",
+      "donor",
+      data.name || data.id,
+    ).catch(e => console.error("[activity]", e.message));
+
+    return res.json({ success: true, is_active: data.is_active });
+  } catch (e) {
+    console.error("[admin/donation/toggle]", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // ── POST /api/donation/webhook ────────────────────────────────────────────────
 // Razorpay webhook — backup confirmation. Separate webhook secret.
 // Add this URL in Razorpay Dashboard → Webhooks → payment.captured
