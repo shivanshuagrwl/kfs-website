@@ -1262,12 +1262,38 @@ body.light-mode .member-special-tag.tag-developer{
 .don-toggle-info span{font-size:12px;color:var(--grey)}
 .don-toggle{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;transition:background .2s;flex-shrink:0;margin-left:16px}
 .don-toggle::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;background:var(--grey);border-radius:50%;transition:all .2s}
-.don-toggle.on{background:var(--white)}
-.don-toggle.on::after{left:19px;background:var(--black)}
+.don-toggle.active{background:var(--white)}
+.don-toggle.active::after{left:19px;background:var(--black)}
 .don-tandc{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-top:1px solid var(--border);margin-bottom:20px}
 .don-tandc input[type=checkbox]{width:16px;height:16px;flex-shrink:0;margin-top:2px;accent-color:var(--white);cursor:pointer}
 .don-tandc label{font-size:12px;color:var(--grey);line-height:1.6;cursor:pointer}
 .don-tandc label a{color:var(--white);text-decoration:underline;text-underline-offset:3px}
+/* T&C Modal */
+.don-tc-overlay{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px 16px;opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.4,0,.2,1)}
+.don-tc-overlay.open{opacity:1;pointer-events:auto}
+.don-tc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.don-tc-modal{position:relative;z-index:1;background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.6);transform:translateY(16px) scale(.98);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.don-tc-overlay.open .don-tc-modal{transform:translateY(0) scale(1)}
+.don-tc-modal-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.don-tc-modal-head h3{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--white)}
+.don-tc-modal-head span{font-size:11px;color:var(--grey);margin-left:10px;font-weight:400;text-transform:none;letter-spacing:0}
+.don-tc-x{background:rgba(255,255,255,.07);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;color:var(--grey);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-family:inherit}
+.don-tc-x:hover{background:rgba(255,255,255,.15);color:var(--white)}
+.don-tc-modal-body{overflow-y:auto;padding:24px;flex:1;font-size:12.5px;color:var(--grey);line-height:1.8;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.don-tc-modal-body::-webkit-scrollbar{width:4px}
+.don-tc-modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.don-tc-modal-body h4{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--white);font-weight:700;margin:22px 0 7px}
+.don-tc-modal-body h4:first-child{margin-top:0}
+.don-tc-modal-body p{margin-bottom:9px}
+.don-tc-modal-body ul{padding-left:18px;margin-bottom:9px}
+.don-tc-modal-body ul li{margin-bottom:4px}
+.don-tc-modal-body strong{color:rgba(245,245,245,.85)}
+.don-tc-modal-body table{width:100%;border-collapse:collapse;margin-bottom:10px}
+.don-tc-modal-body td{padding:8px 12px;border:1px solid var(--border);vertical-align:top}
+.don-tc-modal-body td:first-child{color:rgba(245,245,245,.65);width:40%;font-weight:600}
+.don-tc-modal-foot{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end}
+.don-tc-modal-foot button{background:var(--white);color:var(--black);border:none;padding:10px 24px;border-radius:6px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:opacity .15s}
+.don-tc-modal-foot button:hover{opacity:.85}
 .don-submit{width:100%;padding:16px;background:var(--white);color:var(--black);border:none;font-size:14px;font-weight:700;font-family:inherit;border-radius:4px;cursor:pointer;transition:opacity .2s;letter-spacing:.04em}
 .don-submit:hover:not(:disabled){opacity:.88}
 .don-submit:disabled{opacity:.3;cursor:not-allowed}
@@ -2655,10 +2681,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span> By using this site, you agree to our <a href="/terms" style="color:var(--grey);text-underline-offset:3px">Terms</a> &amp; <a href="/privacy" style="color:var(--grey);text-underline-offset:3px">Privacy Policy</a>.</p>
     </div>
     <div class="footer-links">
+      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
-      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
     </div>
   </footer>
 </div>
@@ -2914,8 +2940,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </div>
         <div class="don-field-row">
           <div class="don-field">
-            <label for="don-website">Website / Portfolio</label>
-            <input type="url" id="don-website" placeholder="https://yoursite.com" maxlength="300">
+            <label for="don-rollno">Roll No <span style="color:rgba(255,255,255,.35)">(KIIT students)</span></label>
+            <input type="text" id="don-rollno" placeholder="e.g. 22053XXX" maxlength="20" autocomplete="off">
           </div>
           <div class="don-field">
             <label for="don-bio">Short note <span style="color:rgba(255,255,255,.35)">(optional)</span></label>
@@ -2935,7 +2961,56 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <!-- T&C -->
         <div class="don-tandc">
           <input type="checkbox" id="don-tandc" onchange="updateDonSubmit()">
-          <label for="don-tandc">I have read and agree to the <a href="/donation-terms" target="_blank">Donation Terms &amp; Conditions</a>, including the no-refund policy. I understand payments are processed by Razorpay, a third-party gateway.</label>
+          <label for="don-tandc">I understand all donations are <strong style="color:var(--white)">final and non-refundable</strong>. Payments are processed securely by Razorpay, a third-party gateway. By donating I accept <button type="button" onclick="toggleDonTC(event)" style="background:none;border:none;padding:0;font:inherit;font-size:inherit;color:var(--white);text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline">these terms</button>.</label>
+        </div>
+
+        <!-- Inline T&C modal — shown on click, rendered as fixed overlay -->
+        <div class="don-tc-overlay" id="don-tc-overlay" onclick="handleDonTCOverlayClick(event)">
+          <div class="don-tc-backdrop"></div>
+          <div class="don-tc-modal" role="dialog" aria-modal="true" aria-label="Donation Terms & Conditions">
+            <div class="don-tc-modal-head">
+              <div><h3>Terms &amp; Conditions <span>— Donations</span></h3></div>
+              <button class="don-tc-x" onclick="toggleDonTC(event)" aria-label="Close">&#x2715;</button>
+            </div>
+            <div class="don-tc-modal-body">
+              <h4>1. Donations are voluntary &amp; non-refundable</h4>
+              <p>All donations are made on a voluntary basis. Once a payment is successfully processed it cannot be reversed, refunded, or transferred under any circumstances.</p>
+
+              <h4>2. No-refund policy</h4>
+              <p>This applies in all circumstances, including:</p>
+              <ul>
+                <li>Change of mind after completing the donation</li>
+                <li>Technical errors on the donor's device, browser, or internet connection</li>
+                <li>Accidental duplicate donations — contact support <em>before</em> making a second payment</li>
+                <li>Anonymous donations — the no-refund policy applies equally</li>
+                <li>Failure to receive a confirmation email (check spam first)</li>
+              </ul>
+              <p><strong>Limited exceptions:</strong> Refunds are only considered for duplicate charges caused by a verified server-side error, or if Razorpay confirms the order was never fulfilled. Even then, processing may take 7–21 business days and is entirely controlled by Razorpay.</p>
+
+              <h4>3. Payment gateway — Razorpay</h4>
+              <p>All payments are processed by Razorpay Payments Pvt. Ltd., an independent third party. We do not store your card number, CVV, or banking credentials. We are not liable for gateway failures, timeouts, or declines. Payment disputes should be directed to <strong>support@razorpay.com</strong>.</p>
+
+              <h4>4. Anonymous donations</h4>
+              <p>Toggling anonymous hides your name, roll number, and bio from the public donors list. Your email is retained internally for receipt generation only. The no-refund policy still applies.</p>
+
+              <h4>5. Donor recognition</h4>
+              <p>Non-anonymous donors are featured on the Donors tab for one semester (~6 months) from verified payment. We reserve the right to remove listings that violate community standards, without refund.</p>
+
+              <h4>6. Donation limits</h4>
+              <table>
+                <tr><td>Minimum</td><td>₹10 (enforced server-side)</td></tr>
+                <tr><td>Maximum</td><td>₹500 (enforced server-side)</td></tr>
+                <tr><td>Currency</td><td>Indian Rupees (INR) only</td></tr>
+                <tr><td>Format</td><td>Whole numbers only — no decimals</td></tr>
+              </table>
+
+              <h4>7. Data &amp; privacy</h4>
+              <p>Name, email, and roll number are used for donor recognition and communication only. Payment data is retained for financial reconciliation. We do not sell or share your data with any third party other than Razorpay for payment processing.</p>
+            </div>
+            <div class="don-tc-modal-foot">
+              <button type="button" onclick="toggleDonTC(event)">Got it</button>
+            </div>
+          </div>
         </div>
 
         <button class="don-submit" id="don-submit-btn" disabled onclick="submitDonation()">Donate with Razorpay</button>
@@ -13346,6 +13421,27 @@ function onDonCustomAmount(input) {
   updateDonSubmit();
 }
 
+// ── T&C modal toggle ─────────────────────────────────────────────────────────
+function toggleDonTC(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const overlay = document.getElementById('don-tc-overlay');
+  if (!overlay) return;
+  const opening = !overlay.classList.contains('open');
+  overlay.classList.toggle('open', opening);
+  document.body.style.overflow = opening ? 'hidden' : '';
+}
+function handleDonTCOverlayClick(e) {
+  // close on backdrop click (not on modal itself)
+  if (e.target === e.currentTarget || e.target.classList.contains('don-tc-backdrop')) toggleDonTC(e);
+}
+// Escape key closes modal
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('don-tc-overlay');
+    if (overlay && overlay.classList.contains('open')) toggleDonTC(null);
+  }
+});
+
 // ── Anonymous toggle ─────────────────────────────────────────────────────────
 function toggleDonAnon() {
   _donIsAnon = !_donIsAnon;
@@ -13381,10 +13477,12 @@ function resetDonForm() {
     b.classList.toggle('active', b.textContent.includes('250'));
   });
 
-  const ids = ['don-name', 'don-email', 'don-website', 'don-bio', 'don-custom-amount'];
+  const ids = ['don-name', 'don-email', 'don-rollno', 'don-bio', 'don-custom-amount'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const tandc = document.getElementById('don-tandc');
   if (tandc) tandc.checked = false;
+  const tcCard = document.getElementById('don-tc-overlay');
+  if (tcCard) { tcCard.classList.remove('open'); document.body.style.overflow = ''; }
 
   _donShowError('');
   const formBody = document.getElementById('don-form-body');
@@ -13430,7 +13528,7 @@ async function submitDonation() {
   }
 
   const name    = (document.getElementById('don-name')?.value    || '').trim();
-  const website = (document.getElementById('don-website')?.value || '').trim();
+  const rollNo  = (document.getElementById('don-rollno')?.value  || '').trim();
   const bio     = (document.getElementById('don-bio')?.value     || '').trim();
 
   const btn = document.getElementById('don-submit-btn');
@@ -13446,7 +13544,7 @@ async function submitDonation() {
         email,
         tandc_acknowledged: true,
         is_anonymous: _donIsAnon,
-        ...(_donIsAnon ? {} : { name, website_url: website, bio }),
+        ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
       }),
     });
 
@@ -13491,7 +13589,7 @@ async function submitDonation() {
                 email,
                 tandc_acknowledged: true,
                 is_anonymous: _donIsAnon,
-                ...(_donIsAnon ? {} : { name, website_url: website, bio }),
+                ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
               },
             }),
           });
@@ -13566,14 +13664,16 @@ async function loadDonors() {
 
 function renderDonorCard(d) {
   const name    = d.is_anonymous ? 'Anonymous Donor' : escHtml(d.display_name || d.name || 'Donor');
-  const website = d.is_anonymous ? null : (d.website_url || null);
+  const rollNo  = d.is_anonymous ? null : (d.roll_no || null);
   const photo   = d.is_anonymous ? null : (d.photo_path  || null);
   const bio     = d.is_anonymous ? null : (d.bio         || null);
   const semester = escHtml(d.semester_label || '');
 
-  const nameHtml = website
-    ? `<div class="don-donor-name"><a href="${escHtml(website)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)">${name}</a></div>`
-    : `<div class="don-donor-name">${name}</div>`;
+  const nameHtml = `<div class="don-donor-name">${name}</div>`;
+
+  const rollHtml = rollNo
+    ? `<div style="font-size:10px;color:var(--grey);letter-spacing:.06em;text-transform:uppercase;margin-top:2px">${escHtml(rollNo)}</div>`
+    : '';
 
   const photoHtml = photo
     ? `<img src="${escHtml(photo)}" alt="${name}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-bottom:8px;display:block">`
@@ -13589,6 +13689,7 @@ function renderDonorCard(d) {
   return `<div class="don-donor-card">
     ${photoHtml}
     ${nameHtml}
+    ${rollHtml}
     <div class="don-donor-meta">${semester}</div>
     ${bioHtml}
     ${amtHtml}

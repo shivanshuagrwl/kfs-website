@@ -658,7 +658,7 @@ async function initDB() {
         "    id                  BIGSERIAL PRIMARY KEY,\n" +
         "    name                TEXT,\n" +
         "    email               TEXT,\n" +
-        "    website_url         TEXT,\n" +
+        "    roll_no             TEXT,\n" +
         "    bio                 TEXT,\n" +
         "    photo_path          TEXT,\n" +
         "    is_anonymous        BOOLEAN NOT NULL DEFAULT FALSE,\n" +
@@ -5240,10 +5240,6 @@ app.get("/privacy", (req, res) => {
 app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"));
 });
-app.get("/donation-terms", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
 // ══════════════════════════════════════════════════════════════════════════════
 // DONATIONS — Razorpay Integration
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5365,7 +5361,7 @@ async function sendBrevoThankYou({ donorId, name, email, amountPaise, paymentId,
 // ── POST /api/donation/create-order ──────────────────────────────────────────
 // Public — CSRF-protected. Validates amount server-side, creates Razorpay order.
 app.post("/api/donation/create-order", donationLimit, csrfProtect, async (req, res) => {
-  const { amount, email, tandc_acknowledged, is_anonymous, name, website_url, bio } = req.body;
+  const { amount, email, tandc_acknowledged, is_anonymous, name, roll_no, bio } = req.body;
 
   // Guard: T&C
   if (!tandc_acknowledged) {
@@ -5415,7 +5411,7 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
     donor = {},
   } = req.body;
 
-  const { email, tandc_acknowledged, is_anonymous, name, website_url, bio } = donor;
+  const { email, tandc_acknowledged, is_anonymous, name, roll_no, bio } = donor;
 
   // Guard: T&C
   if (!tandc_acknowledged) {
@@ -5506,9 +5502,9 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
     amount_paise:           amountPaise,
     email_sent:             false,
     // Personal fields — always stored internally; masked on public API
-    name:                   name        || null,
-    website_url:            website_url || null,
-    bio:                    bio         || null,
+    name:                   name    || null,
+    roll_no:                roll_no || null,
+    bio:                    bio     || null,
   };
 
   const { data: insertedRows, error: insertErr } = await supabase.from("donors").insert([donorRow]).select("id");
@@ -5583,7 +5579,7 @@ app.get("/api/donation/donors", async (req, res) => {
     const data = await memCache("donation:donors:public", 60, async () => {
       const { data: rows, error } = await supabase
         .from("donors")
-        .select("id, is_anonymous, name, website_url, bio, photo_path, semester_label, payment_verified_at")
+        .select("id, is_anonymous, name, roll_no, bio, photo_path, semester_label, payment_verified_at")
         .eq("is_active", true)
         .gt("featured_until", new Date().toISOString())
         .order("payment_verified_at", { ascending: false });
@@ -5594,7 +5590,7 @@ app.get("/api/donation/donors", async (req, res) => {
         id:           d.id,
         is_anonymous: d.is_anonymous,
         display_name: d.is_anonymous ? null : d.name,
-        website_url:  d.is_anonymous ? null : d.website_url,
+        roll_no:      d.is_anonymous ? null : d.roll_no,
         bio:          d.is_anonymous ? null : d.bio,
         photo_path:   d.is_anonymous ? null : d.photo_path,
         semester_label: d.semester_label,
@@ -5616,7 +5612,7 @@ app.get("/api/admin/donation/donors", requireSection("settings"), async (req, re
   try {
     const { data: rows, error } = await supabase
       .from("donors")
-      .select("id, is_anonymous, name, email, website_url, bio, photo_path, semester_label, amount_paise, payment_verified_at, razorpay_order_id, razorpay_payment_id, is_active, featured_until")
+      .select("id, is_anonymous, name, email, roll_no, bio, photo_path, semester_label, amount_paise, payment_verified_at, razorpay_order_id, razorpay_payment_id, is_active, featured_until")
       .order("payment_verified_at", { ascending: false });
 
     if (error) throw new Error(error.message);
