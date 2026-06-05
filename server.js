@@ -324,7 +324,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // allows onclick= and other inline event handlers
       imgSrc: [
         "'self'", "data:",
@@ -332,16 +332,22 @@ app.use(helmet({
         "https://*.supabase.co",
         "https://img.youtube.com",       // YouTube thumbnails
         "https://i.ytimg.com",           // YouTube thumbnails (alternate CDN)
+        "https://checkout.razorpay.com", // Razorpay checkout images
       ],
       connectSrc: [
         "'self'",
         "https://api.brevo.com",
         "https://*.supabase.co",         // Supabase realtime + API calls
+        "https://checkout.razorpay.com", // Razorpay checkout API
+        "https://api.razorpay.com",      // Razorpay payment API
+        "https://fonts.googleapis.com",  // Google Fonts stylesheet requests
       ],
       frameSrc: [
         "https://www.youtube.com",       // YouTube embeds
         "https://open.spotify.com",      // Spotify embeds
         "https://embed.music.apple.com", // Apple Music embeds
+        "https://checkout.razorpay.com", // Razorpay payment iframe
+        "https://api.razorpay.com",      // Razorpay fallback iframe
       ],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
