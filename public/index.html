@@ -1262,38 +1262,12 @@ body.light-mode .member-special-tag.tag-developer{
 .don-toggle-info span{font-size:12px;color:var(--grey)}
 .don-toggle{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;transition:background .2s;flex-shrink:0;margin-left:16px}
 .don-toggle::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;background:var(--grey);border-radius:50%;transition:all .2s}
-.don-toggle.active{background:var(--white)}
-.don-toggle.active::after{left:19px;background:var(--black)}
+.don-toggle.on{background:var(--white)}
+.don-toggle.on::after{left:19px;background:var(--black)}
 .don-tandc{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-top:1px solid var(--border);margin-bottom:20px}
 .don-tandc input[type=checkbox]{width:16px;height:16px;flex-shrink:0;margin-top:2px;accent-color:var(--white);cursor:pointer}
 .don-tandc label{font-size:12px;color:var(--grey);line-height:1.6;cursor:pointer}
 .don-tandc label a{color:var(--white);text-decoration:underline;text-underline-offset:3px}
-/* T&C Modal */
-.don-tc-overlay{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px 16px;opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.4,0,.2,1)}
-.don-tc-overlay.open{opacity:1;pointer-events:auto}
-.don-tc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.don-tc-modal{position:relative;z-index:1;background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.6);transform:translateY(16px) scale(.98);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
-.don-tc-overlay.open .don-tc-modal{transform:translateY(0) scale(1)}
-.don-tc-modal-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
-.don-tc-modal-head h3{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--white)}
-.don-tc-modal-head span{font-size:11px;color:var(--grey);margin-left:10px;font-weight:400;text-transform:none;letter-spacing:0}
-.don-tc-x{background:rgba(255,255,255,.07);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;color:var(--grey);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-family:inherit}
-.don-tc-x:hover{background:rgba(255,255,255,.15);color:var(--white)}
-.don-tc-modal-body{overflow-y:auto;padding:24px;flex:1;font-size:12.5px;color:var(--grey);line-height:1.8;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.don-tc-modal-body::-webkit-scrollbar{width:4px}
-.don-tc-modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-.don-tc-modal-body h4{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--white);font-weight:700;margin:22px 0 7px}
-.don-tc-modal-body h4:first-child{margin-top:0}
-.don-tc-modal-body p{margin-bottom:9px}
-.don-tc-modal-body ul{padding-left:18px;margin-bottom:9px}
-.don-tc-modal-body ul li{margin-bottom:4px}
-.don-tc-modal-body strong{color:rgba(245,245,245,.85)}
-.don-tc-modal-body table{width:100%;border-collapse:collapse;margin-bottom:10px}
-.don-tc-modal-body td{padding:8px 12px;border:1px solid var(--border);vertical-align:top}
-.don-tc-modal-body td:first-child{color:rgba(245,245,245,.65);width:40%;font-weight:600}
-.don-tc-modal-foot{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end}
-.don-tc-modal-foot button{background:var(--white);color:var(--black);border:none;padding:10px 24px;border-radius:6px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:opacity .15s}
-.don-tc-modal-foot button:hover{opacity:.85}
 .don-submit{width:100%;padding:16px;background:var(--white);color:var(--black);border:none;font-size:14px;font-weight:700;font-family:inherit;border-radius:4px;cursor:pointer;transition:opacity .2s;letter-spacing:.04em}
 .don-submit:hover:not(:disabled){opacity:.88}
 .don-submit:disabled{opacity:.3;cursor:not-allowed}
@@ -1323,118 +1297,6 @@ body.kfs-admin-view .don-donor-amt{display:block}
 .don-why-card h3{font-size:14px;font-weight:700;letter-spacing:-.01em;margin-bottom:8px}
 .don-why-card p{font-size:13px;color:var(--grey);line-height:1.6}
 .don-limit-note{font-size:12px;color:var(--grey);text-align:center;margin-top:10px}
-
-/* ── ADMIN DONATION TRACKING ──────────────────────────────────────────── */
-.don-admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:28px}
-@media(max-width:900px){.don-admin-stats{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:500px){.don-admin-stats{grid-template-columns:1fr}}
-.don-admin-stat{background:var(--black);padding:20px 22px}
-.don-admin-stat-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px}
-.don-admin-stat-val{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--white)}
-.don-admin-stat-sub{font-size:11px;color:var(--grey);margin-top:3px}
-.don-admin-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.don-admin-filter-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:7px 14px;border-radius:20px;font:inherit;font-size:12px;letter-spacing:.04em;cursor:pointer;transition:all .15s}
-.don-admin-filter-btn:hover{border-color:rgba(255,255,255,.3);color:var(--white)}
-.don-admin-filter-btn.active{border-color:var(--white);color:var(--white);background:rgba(255,255,255,.06)}
-.don-admin-search{flex:1;min-width:180px;background:none;border:1px solid var(--border);color:var(--white);padding:8px 14px;font:inherit;font-size:13px;border-radius:4px;transition:border-color .2s}
-.don-admin-search:focus{outline:none;border-color:rgba(255,255,255,.4)}
-.don-admin-search::placeholder{color:var(--grey)}
-.don-admin-csv-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:8px 16px;border-radius:4px;font:inherit;font-size:12px;letter-spacing:.06em;cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
-.don-admin-csv-btn:hover{border-color:rgba(255,255,255,.3);color:var(--white)}
-.don-admin-table-wrap{border:1px solid var(--border);border-radius:4px;overflow:hidden;overflow-x:auto}
-.don-admin-table{width:100%;border-collapse:collapse;min-width:680px}
-.don-admin-table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
-.don-admin-table th:hover{color:var(--white)}
-.don-admin-table td{padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
-.don-admin-table tr:last-child td{border-bottom:none}
-.don-admin-table tr:hover td{background:rgba(255,255,255,.02)}
-.don-admin-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;padding:3px 9px;border-radius:20px}
-.don-admin-badge.active{background:rgba(80,200,120,.12);color:#5dbb7e;border:1px solid rgba(80,200,120,.2)}
-.don-admin-badge.inactive{background:rgba(255,80,80,.08);color:#e06060;border:1px solid rgba(255,80,80,.18)}
-.don-admin-badge.anon{background:rgba(180,180,180,.1);color:var(--grey);border:1px solid var(--border)}
-.don-admin-toggle-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:5px 10px;border-radius:3px;font:inherit;font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.04em}
-.don-admin-toggle-btn:hover{border-color:rgba(255,255,255,.3);color:var(--white)}
-.don-admin-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px}
-.don-admin-chart-wrap{border:1px solid var(--border);border-radius:4px;padding:20px 24px;margin-bottom:28px}
-.don-admin-chart-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:16px}
-.don-admin-chart-bars{display:flex;align-items:flex-end;gap:6px;height:80px}
-.don-admin-bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
-.don-admin-bar{width:100%;background:rgba(255,255,255,.12);border-radius:2px;transition:background .2s;position:relative;min-height:2px}
-.don-admin-bar:hover{background:rgba(255,255,255,.22)}
-.don-admin-bar-label{font-size:9px;color:var(--grey);letter-spacing:.04em;white-space:nowrap}
-.don-admin-pagination{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:12px;font-size:12px;color:var(--grey)}
-.don-admin-page-btn{background:none;border:1px solid var(--border);color:var(--grey);width:28px;height:28px;border-radius:3px;font:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
-.don-admin-page-btn:hover:not(:disabled){border-color:rgba(255,255,255,.3);color:var(--white)}
-.don-admin-page-btn:disabled{opacity:.3;cursor:not-allowed}
-
-/* ── DONATION PAGE — REVAMPED ─────────────────────────────────────────── */
-.don-page-cinematic{position:relative;overflow:hidden}
-.don-hero-v2{position:relative;padding:120px 40px 80px;text-align:center;overflow:hidden}
-.don-hero-v2::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 800px 500px at 50% 0%,rgba(255,255,255,.04) 0%,transparent 70%);pointer-events:none}
-.don-hero-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:28px;padding:6px 16px;border:1px solid var(--border);border-radius:20px}
-.don-hero-eyebrow::before{content:'';width:5px;height:5px;background:#c8a96e;border-radius:50%;animation:pulse-dot 2s ease-in-out infinite}
-@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
-.don-hero-v2 h1{font-size:clamp(42px,7vw,88px);font-weight:700;letter-spacing:-.05em;line-height:.95;margin-bottom:28px;max-width:700px;margin-left:auto;margin-right:auto}
-.don-hero-v2 h1 em{font-style:italic;color:rgba(255,255,255,.45)}
-.don-hero-v2 .don-hero-sub{font-size:16px;color:var(--grey);line-height:1.75;max-width:480px;margin:0 auto 44px}
-.don-hero-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.don-cta-primary{background:var(--white);color:var(--black);border:none;padding:14px 32px;border-radius:4px;font:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:opacity .2s}
-.don-cta-primary:hover{opacity:.88}
-.don-cta-secondary{background:none;color:var(--grey);border:1px solid var(--border);padding:14px 28px;border-radius:4px;font:inherit;font-size:13px;letter-spacing:.04em;cursor:pointer;transition:all .2s}
-.don-cta-secondary:hover{border-color:rgba(255,255,255,.3);color:var(--white)}
-
-/* Running ticker */
-.don-ticker-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:hidden;padding:10px 0;margin-bottom:64px;position:relative}
-.don-ticker-wrap::before,.don-ticker-wrap::after{content:'';position:absolute;top:0;bottom:0;width:80px;z-index:2;pointer-events:none}
-.don-ticker-wrap::before{left:0;background:linear-gradient(to right,var(--black),transparent)}
-.don-ticker-wrap::after{right:0;background:linear-gradient(to left,var(--black),transparent)}
-.don-ticker{display:flex;gap:0;animation:ticker-scroll 20s linear infinite;width:max-content}
-.don-ticker-item{white-space:nowrap;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--grey);padding:0 28px;display:flex;align-items:center;gap:28px}
-.don-ticker-item::after{content:'◆';font-size:6px;color:rgba(200,169,110,.5)}
-@keyframes ticker-scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.don-ticker-wrap:hover .don-ticker{animation-play-state:paused}
-
-/* Cost breakdown */
-.don-costs-section{max-width:860px;margin:0 auto;padding:0 40px 72px}
-@media(max-width:768px){.don-costs-section{padding:0 24px 60px}}
-.don-costs-label{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--grey);margin-bottom:32px}
-.don-costs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:60px}
-@media(max-width:640px){.don-costs-grid{grid-template-columns:1fr}}
-.don-cost-item{background:var(--black);padding:28px 24px;transition:background .15s}
-.don-cost-item:hover{background:var(--card)}
-.don-cost-amount{font-size:28px;font-weight:700;letter-spacing:-.04em;margin-bottom:6px;color:var(--white)}
-.don-cost-amount span{font-size:13px;font-weight:400;color:var(--grey);margin-left:4px;letter-spacing:0}
-.don-cost-name{font-size:13px;font-weight:600;margin-bottom:4px}
-.don-cost-desc{font-size:12px;color:var(--grey);line-height:1.5}
-.don-cost-progress{height:2px;background:var(--border);border-radius:1px;margin-top:14px;overflow:hidden}
-.don-cost-progress-bar{height:100%;background:rgba(255,255,255,.35);border-radius:1px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
-
-/* Form — revamped */
-.don-form-v2-wrap{max-width:860px;margin:0 auto;padding:0 40px 80px}
-@media(max-width:768px){.don-form-v2-wrap{padding:0 24px 60px}}
-.don-form-v2{border:1px solid var(--border);border-radius:4px;overflow:hidden}
-.don-form-v2-header{padding:32px 36px;border-bottom:1px solid var(--border)}
-.don-form-v2-header h2{font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}
-.don-form-v2-header p{font-size:13px;color:var(--grey)}
-.don-form-v2-body{padding:32px 36px}
-@media(max-width:640px){.don-form-v2-header,.don-form-v2-body{padding:22px 20px}}
-.don-amounts-v2{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
-@media(max-width:480px){.don-amounts-v2{grid-template-columns:repeat(2,1fr)}}
-.don-amount-btn-v2{background:none;border:1px solid var(--border);color:var(--grey);padding:18px 8px;border-radius:4px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .2s;letter-spacing:-.02em;position:relative;overflow:hidden}
-.don-amount-btn-v2::after{content:attr(data-label);display:block;font-size:9px;font-weight:400;letter-spacing:.1em;color:var(--grey);margin-top:3px;text-transform:uppercase}
-.don-amount-btn-v2:hover{border-color:rgba(255,255,255,.3);color:var(--white)}
-.don-amount-btn-v2.active{border-color:rgba(200,169,110,.6);color:#c8a96e;background:rgba(200,169,110,.06)}
-
-/* Separator */
-.don-separator{display:flex;align-items:center;gap:16px;margin:4px 0 16px;color:var(--grey);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
-.don-separator::before,.don-separator::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* Donors section v2 */
-.don-donors-v2{border:1px solid var(--border);border-radius:4px;overflow:hidden}
-.don-donors-v2-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.don-donors-v2-header h2{font-size:14px;font-weight:700;letter-spacing:-.01em;margin:0}
-.don-donors-v2-header p{font-size:12px;color:var(--grey);margin:0}
-
 /* ── FOOTER ──────────────────────────────────────────────────────────── */
 footer{border-top:1px solid var(--border);padding:60px 40px;
   display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px}
@@ -2793,10 +2655,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span> By using this site, you agree to our <a href="/terms" style="color:var(--grey);text-underline-offset:3px">Terms</a> &amp; <a href="/privacy" style="color:var(--grey);text-underline-offset:3px">Privacy Policy</a>.</p>
     </div>
     <div class="footer-links">
-      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
+      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
     </div>
   </footer>
 </div>
@@ -2967,61 +2829,19 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
 <!-- ── DONATIONS PAGE ── -->
 <div class="page" id="page-donations">
-  <!-- Hero V2 -->
-  <div class="don-hero-v2">
-    <div class="don-hero-eyebrow">Support KFS</div>
-    <h1>Every frame<br><em>costs something.</em></h1>
-    <p class="don-hero-sub">KFS runs entirely on passion and community. Your contribution keeps cameras rolling, screenings alive, and the next generation of filmmakers moving forward.</p>
-    <div class="don-hero-cta-row">
-      <button class="don-cta-primary" onclick="document.getElementById('don-form-wrap').scrollIntoView({behavior:'smooth',block:'center'})">Support KFS</button>
-      <button class="don-cta-secondary" onclick="document.getElementById('don-donors-section').scrollIntoView({behavior:'smooth',block:'start'})">See who's supporting</button>
+  <div class="donations-hero">
+    <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:20px">Support KFS</p>
+    <h1>Every frame<br>costs something.</h1>
+    <p>KFS runs entirely on passion and community support. Your donation keeps our cameras rolling, our screenings alive, and the next generation of filmmakers moving forward.</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="document.getElementById('don-form-wrap').scrollIntoView({behavior:'smooth',block:'center'})">Donate Now</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('don-donors-section').scrollIntoView({behavior:'smooth',block:'start'})">See Donors</button>
     </div>
   </div>
 
-  <!-- Live ticker -->
-  <div class="don-ticker-wrap">
-    <div class="don-ticker">
-      <span class="don-ticker-item">Server &amp; Domain — ₹2,400/yr</span>
-      <span class="don-ticker-item">Camera Rental — ₹3,000/shoot</span>
-      <span class="don-ticker-item">Screening Venue — ₹1,500/event</span>
-      <span class="don-ticker-item">Sound Equipment — ₹2,000/shoot</span>
-      <span class="don-ticker-item">Editing Software — ₹1,200/yr</span>
-      <span class="don-ticker-item">Film Festival Entry — ₹500/film</span>
-      <!-- duplicate for seamless loop -->
-      <span class="don-ticker-item">Server &amp; Domain — ₹2,400/yr</span>
-      <span class="don-ticker-item">Camera Rental — ₹3,000/shoot</span>
-      <span class="don-ticker-item">Screening Venue — ₹1,500/event</span>
-      <span class="don-ticker-item">Sound Equipment — ₹2,000/shoot</span>
-      <span class="don-ticker-item">Editing Software — ₹1,200/yr</span>
-      <span class="don-ticker-item">Film Festival Entry — ₹500/film</span>
-    </div>
-  </div>
+  <div class="donations-body">
 
-  <!-- Where your money goes -->
-  <div class="don-costs-section">
-    <div class="don-costs-label">Where your money goes</div>
-    <div class="don-costs-grid">
-      <div class="don-cost-item">
-        <div class="don-cost-amount">₹2,400<span>/year</span></div>
-        <div class="don-cost-name">Servers &amp; Domain</div>
-        <div class="don-cost-desc">Keeping kiitfilmsociety.in online, fast, and secure — 24 hours a day.</div>
-        <div class="don-cost-progress"><div class="don-cost-progress-bar" style="width:0%" data-target="68"></div></div>
-      </div>
-      <div class="don-cost-item">
-        <div class="don-cost-amount">₹3,000<span>/shoot</span></div>
-        <div class="don-cost-name">Camera &amp; Gear</div>
-        <div class="don-cost-desc">Rentals, lenses, lighting, and the equipment that turns ideas into images.</div>
-        <div class="don-cost-progress"><div class="don-cost-progress-bar" style="width:0%" data-target="45"></div></div>
-      </div>
-      <div class="don-cost-item">
-        <div class="don-cost-amount">₹1,500<span>/event</span></div>
-        <div class="don-cost-name">Screenings &amp; Events</div>
-        <div class="don-cost-desc">Chitra Vichitra, film nights, and campus workshops — the heart of KFS.</div>
-        <div class="don-cost-progress"><div class="don-cost-progress-bar" style="width:0%" data-target="82"></div></div>
-      </div>
-    </div>
-
-    <!-- Impact numbers — inline, compact -->
+    <!-- Impact numbers -->
     <div class="don-impact-grid">
       <div class="don-impact-cell">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -3035,33 +2855,51 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
     </div>
 
-    <!-- Donation form — V2 -->
-    <div class="don-form-v2-wrap" style="padding:0;margin-bottom:60px">
-    <div class="don-form-v2 don-form-wrap" id="don-form-wrap">
-      <div class="don-form-v2-header don-form-header">
-        <h2>Back a film you haven't seen yet.</h2>
-        <p>Processed securely by Razorpay. Indian Rupees only. Min ₹10 · Max ₹500.</p>
+    <!-- Why give -->
+    <div class="don-why-grid">
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <h3>Equipment & Production</h3>
+        <p>Camera rentals, lenses, lighting rigs, and sound gear — the tools that turn ideas into films.</p>
       </div>
-      <div class="don-form-v2-body don-form-body" id="don-form-body">
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+        <h3>Screenings & Events</h3>
+        <p>Chitra Vichitra, film nights, and workshops that bring the campus community together around cinema.</p>
+      </div>
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <h3>Craft & Training</h3>
+        <p>Workshops, masterclasses, and learning materials that help members grow into real filmmakers.</p>
+      </div>
+    </div>
+
+    <!-- Donation form -->
+    <div class="don-form-wrap" id="don-form-wrap">
+      <div class="don-form-header">
+        <h2>Make a donation</h2>
+        <p>Processed securely by Razorpay. Indian Rupees only.</p>
+      </div>
+      <div class="don-form-body" id="don-form-body">
         <div class="don-error" id="don-error"></div>
 
-        <!-- Amount selector V2 -->
+        <!-- Amount selector -->
         <div style="margin-bottom:8px">
-          <label style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey)">Choose an amount</label>
+          <label style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)">Choose an amount</label>
         </div>
-        <div class="don-amounts-v2 don-amounts" id="don-amounts">
-          <button class="don-amount-btn-v2 don-amount-btn" data-label="A coffee" onclick="selectDonAmount(50,this)">₹50</button>
-          <button class="don-amount-btn-v2 don-amount-btn" data-label="A film reel" onclick="selectDonAmount(100,this)">₹100</button>
-          <button class="don-amount-btn-v2 don-amount-btn active" data-label="Most popular" onclick="selectDonAmount(250,this)">₹250</button>
-          <button class="don-amount-btn-v2 don-amount-btn" data-label="A full shoot day" onclick="selectDonAmount(500,this)">₹500</button>
+        <div class="don-amounts" id="don-amounts">
+          <button class="don-amount-btn" onclick="selectDonAmount(50,this)">&#8377;50</button>
+          <button class="don-amount-btn" onclick="selectDonAmount(100,this)">&#8377;100</button>
+          <button class="don-amount-btn active" onclick="selectDonAmount(250,this)">&#8377;250</button>
+          <button class="don-amount-btn" onclick="selectDonAmount(500,this)">&#8377;500</button>
         </div>
-        <div class="don-separator">or</div>
-        <div class="don-custom-wrap" style="margin-bottom:0">
-          <span class="don-currency-sym">₹</span>
-          <input class="don-custom-input" type="number" id="don-custom-amount" min="10" max="500" step="1" placeholder="Enter a custom amount (10–500)" oninput="onDonCustomAmount(this)">
+        <div class="don-custom-wrap">
+          <span class="don-currency-sym">&#8377;</span>
+          <input class="don-custom-input" type="number" id="don-custom-amount" min="10" max="500" step="1" placeholder="Or enter amount (10–500)" oninput="onDonCustomAmount(this)">
         </div>
+        <p class="don-limit-note">Min &#8377;10 &nbsp;&middot;&nbsp; Max &#8377;500 &nbsp;&middot;&nbsp; Whole numbers only</p>
 
-        <div style="height:28px"></div>
+        <div style="height:24px"></div>
 
         <!-- Fields -->
         <div class="don-field-row">
@@ -3070,18 +2908,18 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
             <input type="text" id="don-name" placeholder="Your name" maxlength="100" autocomplete="name">
           </div>
           <div class="don-field">
-            <label for="don-email">Email <span style="color:rgba(255,255,255,.35)">(required for receipt)</span></label>
-            <input type="email" id="don-email" placeholder="you@example.com" maxlength="200" autocomplete="email">
+            <label for="don-email">Email <span style="color:rgba(255,255,255,.35)">(required)</span></label>
+            <input type="email" id="don-email" placeholder="For receipt & confirmation" maxlength="200" autocomplete="email">
           </div>
         </div>
         <div class="don-field-row">
           <div class="don-field">
-            <label for="don-rollno">Roll No <span style="color:rgba(255,255,255,.35)">(KIIT students)</span></label>
-            <input type="text" id="don-rollno" placeholder="e.g. 22053XXX" maxlength="20" autocomplete="off">
+            <label for="don-website">Website / Portfolio</label>
+            <input type="url" id="don-website" placeholder="https://yoursite.com" maxlength="300">
           </div>
           <div class="don-field">
-            <label for="don-bio">Leave a message <span style="color:rgba(255,255,255,.35)">(optional)</span></label>
-            <textarea id="don-bio" placeholder="A note for KFS…" rows="1" maxlength="280" style="height:44px"></textarea>
+            <label for="don-bio">Short note <span style="color:rgba(255,255,255,.35)">(optional)</span></label>
+            <textarea id="don-bio" placeholder="A message for KFS..." rows="1" maxlength="280" style="height:44px"></textarea>
           </div>
         </div>
 
@@ -3097,50 +2935,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <!-- T&C -->
         <div class="don-tandc">
           <input type="checkbox" id="don-tandc" onchange="updateDonSubmit()">
-          <label for="don-tandc">I understand all donations are <strong style="color:var(--white)">final and non-refundable</strong>. Payments are processed securely by Razorpay, a third-party gateway. By donating I accept <button type="button" onclick="toggleDonTC(event)" style="background:none;border:none;padding:0;font:inherit;font-size:inherit;color:var(--white);text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline">these terms</button>.</label>
-        </div>
-
-        <!-- T&C modal (unchanged) -->
-        <div class="don-tc-overlay" id="don-tc-overlay" onclick="handleDonTCOverlayClick(event)">
-          <div class="don-tc-backdrop"></div>
-          <div class="don-tc-modal" role="dialog" aria-modal="true" aria-label="Donation Terms & Conditions">
-            <div class="don-tc-modal-head">
-              <div><h3>Terms &amp; Conditions <span>— Donations</span></h3></div>
-              <button class="don-tc-x" onclick="toggleDonTC(event)" aria-label="Close">&#x2715;</button>
-            </div>
-            <div class="don-tc-modal-body">
-              <h4>1. Donations are voluntary &amp; non-refundable</h4>
-              <p>All donations are made on a voluntary basis. Once a payment is successfully processed it cannot be reversed, refunded, or transferred under any circumstances.</p>
-              <h4>2. No-refund policy</h4>
-              <p>This applies in all circumstances, including:</p>
-              <ul>
-                <li>Change of mind after completing the donation</li>
-                <li>Technical errors on the donor's device, browser, or internet connection</li>
-                <li>Accidental duplicate donations — contact support <em>before</em> making a second payment</li>
-                <li>Anonymous donations — the no-refund policy applies equally</li>
-                <li>Failure to receive a confirmation email (check spam first)</li>
-              </ul>
-              <p><strong>Limited exceptions:</strong> Refunds are only considered for duplicate charges caused by a verified server-side error, or if Razorpay confirms the order was never fulfilled. Even then, processing may take 7–21 business days and is entirely controlled by Razorpay.</p>
-              <h4>3. Payment gateway — Razorpay</h4>
-              <p>All payments are processed by Razorpay Payments Pvt. Ltd., an independent third party. We do not store your card number, CVV, or banking credentials. We are not liable for gateway failures, timeouts, or declines. Payment disputes should be directed to <strong>support@razorpay.com</strong>.</p>
-              <h4>4. Anonymous donations</h4>
-              <p>Toggling anonymous hides your name, roll number, and bio from the public donors list. Your email is retained internally for receipt generation only. The no-refund policy still applies.</p>
-              <h4>5. Donor recognition</h4>
-              <p>Non-anonymous donors are featured on the Donors tab for one semester (~6 months) from verified payment. We reserve the right to remove listings that violate community standards, without refund.</p>
-              <h4>6. Donation limits</h4>
-              <table>
-                <tr><td>Minimum</td><td>₹10 (enforced server-side)</td></tr>
-                <tr><td>Maximum</td><td>₹500 (enforced server-side)</td></tr>
-                <tr><td>Currency</td><td>Indian Rupees (INR) only</td></tr>
-                <tr><td>Format</td><td>Whole numbers only — no decimals</td></tr>
-              </table>
-              <h4>7. Data &amp; privacy</h4>
-              <p>Name, email, and roll number are used for donor recognition and communication only. Payment data is retained for financial reconciliation. We do not sell or share your data with any third party other than Razorpay for payment processing.</p>
-            </div>
-            <div class="don-tc-modal-foot">
-              <button type="button" onclick="toggleDonTC(event)">Got it</button>
-            </div>
-          </div>
+          <label for="don-tandc">I have read and agree to the <a href="/donation-terms" target="_blank">Donation Terms &amp; Conditions</a>, including the no-refund policy. I understand payments are processed by Razorpay, a third-party gateway.</label>
         </div>
 
         <button class="don-submit" id="don-submit-btn" disabled onclick="submitDonation()">Donate with Razorpay</button>
@@ -3160,17 +2955,15 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <button class="btn btn-secondary" style="margin-top:24px" onclick="resetDonForm()">Donate again</button>
       </div>
     </div>
-    </div>
 
     <!-- Donors list -->
-    <div class="don-costs-section" style="padding-top:0">
     <div class="don-donors-section" id="don-donors-section">
       <h2>This semester's supporters</h2>
       <p>Thank you to everyone who keeps KFS moving.</p>
       <div id="don-donors-container"><div class="don-donors-empty">Loading...</div></div>
     </div>
-    </div>
 
+  </div>
 </div>
 
 <!-- ── 404 PAGE ── -->
@@ -3479,7 +3272,6 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-sidebar-item" onclick="showAdminSection('wrapped')" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('collaborate')" data-section="collaborate"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collaborate</div>
     <div class="admin-sidebar-group">Analytics</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('donations-admin')" data-section="donations-admin"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg></span> Donations</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('reg-analytics')" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
@@ -4118,83 +3910,6 @@ KFS — KIIT Film Society"></textarea>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- DONATIONS ADMIN -->
-    <div class="admin-section" id="section-donations-admin">
-      <div class="admin-header">
-        <div><h2>Donation Tracking</h2><p>All donors, payments &amp; revenue overview</p></div>
-        <button class="don-admin-csv-btn" onclick="exportDonationsCSV()" title="Export to CSV">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export CSV
-        </button>
-      </div>
-
-      <!-- Summary Stats -->
-      <div class="don-admin-stats" id="don-admin-stats-grid">
-        <div class="don-admin-stat">
-          <div class="don-admin-stat-label">Total Raised</div>
-          <div class="don-admin-stat-val" id="das-total">—</div>
-          <div class="don-admin-stat-sub">all time</div>
-        </div>
-        <div class="don-admin-stat">
-          <div class="don-admin-stat-label">Active Donors</div>
-          <div class="don-admin-stat-val" id="das-active">—</div>
-          <div class="don-admin-stat-sub">this semester</div>
-        </div>
-        <div class="don-admin-stat">
-          <div class="don-admin-stat-label">Avg. Donation</div>
-          <div class="don-admin-stat-val" id="das-avg">—</div>
-          <div class="don-admin-stat-sub">per donor</div>
-        </div>
-        <div class="don-admin-stat">
-          <div class="don-admin-stat-label">Anonymous</div>
-          <div class="don-admin-stat-val" id="das-anon">—</div>
-          <div class="don-admin-stat-sub">of total donors</div>
-        </div>
-      </div>
-
-      <!-- Mini bar chart — donations by day (last 14 days) -->
-      <div class="don-admin-chart-wrap" id="don-admin-chart-wrap">
-        <div class="don-admin-chart-title">Donations — last 14 days</div>
-        <div class="don-admin-chart-bars" id="don-admin-chart-bars">
-          <div class="don-admin-empty" style="padding:0;width:100%;color:var(--grey);font-size:12px">Loading…</div>
-        </div>
-      </div>
-
-      <!-- Filters -->
-      <div class="don-admin-filters">
-        <input class="don-admin-search" type="text" placeholder="Search name, email, roll no…" id="don-admin-search" oninput="filterDonorsAdmin()">
-        <button class="don-admin-filter-btn active" onclick="setDonFilter('all',this)" data-filter="all">All</button>
-        <button class="don-admin-filter-btn" onclick="setDonFilter('active',this)" data-filter="active">Active</button>
-        <button class="don-admin-filter-btn" onclick="setDonFilter('anonymous',this)" data-filter="anonymous">Anonymous</button>
-        <button class="don-admin-filter-btn" onclick="setDonFilter('named',this)" data-filter="named">Named</button>
-      </div>
-
-      <!-- Table -->
-      <div class="don-admin-table-wrap">
-        <table class="don-admin-table">
-          <thead>
-            <tr>
-              <th onclick="sortDonors('name')">Donor ↕</th>
-              <th onclick="sortDonors('email')">Email ↕</th>
-              <th onclick="sortDonors('amount_paise')" style="text-align:right">Amount ↕</th>
-              <th onclick="sortDonors('payment_verified_at')">Date ↕</th>
-              <th>Semester</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="don-admin-tbody">
-            <tr><td colspan="7" class="don-admin-empty">Loading donors…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="don-admin-pagination">
-        <span id="don-admin-pag-info"></span>
-        <button class="don-admin-page-btn" id="don-admin-prev" onclick="donAdminChangePage(-1)" disabled>‹</button>
-        <button class="don-admin-page-btn" id="don-admin-next" onclick="donAdminChangePage(1)">›</button>
       </div>
     </div>
 
@@ -13631,27 +13346,6 @@ function onDonCustomAmount(input) {
   updateDonSubmit();
 }
 
-// ── T&C modal toggle ─────────────────────────────────────────────────────────
-function toggleDonTC(e) {
-  if (e) { e.preventDefault(); e.stopPropagation(); }
-  const overlay = document.getElementById('don-tc-overlay');
-  if (!overlay) return;
-  const opening = !overlay.classList.contains('open');
-  overlay.classList.toggle('open', opening);
-  document.body.style.overflow = opening ? 'hidden' : '';
-}
-function handleDonTCOverlayClick(e) {
-  // close on backdrop click (not on modal itself)
-  if (e.target === e.currentTarget || e.target.classList.contains('don-tc-backdrop')) toggleDonTC(e);
-}
-// Escape key closes modal
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    const overlay = document.getElementById('don-tc-overlay');
-    if (overlay && overlay.classList.contains('open')) toggleDonTC(null);
-  }
-});
-
 // ── Anonymous toggle ─────────────────────────────────────────────────────────
 function toggleDonAnon() {
   _donIsAnon = !_donIsAnon;
@@ -13687,12 +13381,10 @@ function resetDonForm() {
     b.classList.toggle('active', b.textContent.includes('250'));
   });
 
-  const ids = ['don-name', 'don-email', 'don-rollno', 'don-bio', 'don-custom-amount'];
+  const ids = ['don-name', 'don-email', 'don-website', 'don-bio', 'don-custom-amount'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const tandc = document.getElementById('don-tandc');
   if (tandc) tandc.checked = false;
-  const tcCard = document.getElementById('don-tc-overlay');
-  if (tcCard) { tcCard.classList.remove('open'); document.body.style.overflow = ''; }
 
   _donShowError('');
   const formBody = document.getElementById('don-form-body');
@@ -13738,7 +13430,7 @@ async function submitDonation() {
   }
 
   const name    = (document.getElementById('don-name')?.value    || '').trim();
-  const rollNo  = (document.getElementById('don-rollno')?.value  || '').trim();
+  const website = (document.getElementById('don-website')?.value || '').trim();
   const bio     = (document.getElementById('don-bio')?.value     || '').trim();
 
   const btn = document.getElementById('don-submit-btn');
@@ -13754,7 +13446,7 @@ async function submitDonation() {
         email,
         tandc_acknowledged: true,
         is_anonymous: _donIsAnon,
-        ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
+        ...(_donIsAnon ? {} : { name, website_url: website, bio }),
       }),
     });
 
@@ -13799,7 +13491,7 @@ async function submitDonation() {
                 email,
                 tandc_acknowledged: true,
                 is_anonymous: _donIsAnon,
-                ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
+                ...(_donIsAnon ? {} : { name, website_url: website, bio }),
               },
             }),
           });
@@ -13874,16 +13566,14 @@ async function loadDonors() {
 
 function renderDonorCard(d) {
   const name    = d.is_anonymous ? 'Anonymous Donor' : escHtml(d.display_name || d.name || 'Donor');
-  const rollNo  = d.is_anonymous ? null : (d.roll_no || null);
+  const website = d.is_anonymous ? null : (d.website_url || null);
   const photo   = d.is_anonymous ? null : (d.photo_path  || null);
   const bio     = d.is_anonymous ? null : (d.bio         || null);
   const semester = escHtml(d.semester_label || '');
 
-  const nameHtml = `<div class="don-donor-name">${name}</div>`;
-
-  const rollHtml = rollNo
-    ? `<div style="font-size:10px;color:var(--grey);letter-spacing:.06em;text-transform:uppercase;margin-top:2px">${escHtml(rollNo)}</div>`
-    : '';
+  const nameHtml = website
+    ? `<div class="don-donor-name"><a href="${escHtml(website)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)">${name}</a></div>`
+    : `<div class="don-donor-name">${name}</div>`;
 
   const photoHtml = photo
     ? `<img src="${escHtml(photo)}" alt="${name}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-bottom:8px;display:block">`
@@ -13899,276 +13589,11 @@ function renderDonorCard(d) {
   return `<div class="don-donor-card">
     ${photoHtml}
     ${nameHtml}
-    ${rollHtml}
     <div class="don-donor-meta">${semester}</div>
     ${bioHtml}
     ${amtHtml}
   </div>`;
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ADMIN DONATION TRACKING
-// ══════════════════════════════════════════════════════════════════════════════
-
-let _donAdminAll = [];       // raw data from API
-let _donAdminFiltered = [];  // after search + filter
-let _donAdminFilter = 'all';
-let _donAdminSort = { col: 'payment_verified_at', dir: -1 };
-let _donAdminPage = 0;
-const DON_ADMIN_PER_PAGE = 20;
-
-async function loadDonationsAdmin() {
-  if (!adminToken) return;
-  try {
-    const rows = await fetch('/api/admin/donation/donors', {
-      headers: { Authorization: 'Bearer ' + adminToken }
-    }).then(r => r.ok ? r.json() : []);
-
-    _donAdminAll = rows || [];
-    _donAdminPage = 0;
-    computeDonAdminStats();
-    buildDonAdminChart();
-    filterDonorsAdmin();
-  } catch(e) {
-    console.error('[donations-admin]', e.message);
-  }
-}
-
-function computeDonAdminStats() {
-  const rows = _donAdminAll;
-  const totalPaise = rows.reduce((s, r) => s + (r.amount_paise || 0), 0);
-  const activeDonors = rows.filter(r => r.is_active).length;
-  const avgPaise = rows.length ? Math.round(totalPaise / rows.length) : 0;
-  const anonCount = rows.filter(r => r.is_anonymous).length;
-
-  const fmt = v => '₹' + Math.round(v / 100).toLocaleString('en-IN');
-  document.getElementById('das-total').textContent  = fmt(totalPaise);
-  document.getElementById('das-active').textContent = activeDonors;
-  document.getElementById('das-avg').textContent    = rows.length ? fmt(avgPaise) : '—';
-  document.getElementById('das-anon').textContent   = rows.length
-    ? anonCount + ' / ' + rows.length
-    : '—';
-}
-
-function buildDonAdminChart() {
-  const barsEl = document.getElementById('don-admin-chart-bars');
-  if (!barsEl) return;
-
-  // Build last 14 days
-  const days = {};
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    days[key] = 0;
-  }
-  _donAdminAll.forEach(r => {
-    if (!r.payment_verified_at) return;
-    const key = r.payment_verified_at.slice(0, 10);
-    if (key in days) days[key] += (r.amount_paise || 0);
-  });
-
-  const vals = Object.values(days);
-  const maxVal = Math.max(...vals, 1);
-  const keys = Object.keys(days);
-
-  barsEl.innerHTML = keys.map((k, i) => {
-    const pct = Math.round((vals[i] / maxVal) * 100);
-    const label = k.slice(5); // MM-DD
-    const amtRs = Math.round(vals[i] / 100);
-    return `<div class="don-admin-bar-col" title="${k}: ₹${amtRs}">
-      <div class="don-admin-bar" style="height:${Math.max(pct,2)}%"></div>
-      <div class="don-admin-bar-label">${i % 3 === 0 ? label : ''}</div>
-    </div>`;
-  }).join('');
-}
-
-function setDonFilter(filter, btn) {
-  _donAdminFilter = filter;
-  _donAdminPage = 0;
-  document.querySelectorAll('.don-admin-filter-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  filterDonorsAdmin();
-}
-
-function filterDonorsAdmin() {
-  const q = (document.getElementById('don-admin-search')?.value || '').toLowerCase().trim();
-  let rows = _donAdminAll;
-
-  // Filter
-  if (_donAdminFilter === 'active')    rows = rows.filter(r => r.is_active);
-  if (_donAdminFilter === 'anonymous') rows = rows.filter(r => r.is_anonymous);
-  if (_donAdminFilter === 'named')     rows = rows.filter(r => !r.is_anonymous);
-
-  // Search
-  if (q) {
-    rows = rows.filter(r =>
-      (r.name  || '').toLowerCase().includes(q) ||
-      (r.email || '').toLowerCase().includes(q) ||
-      (r.roll_no || '').toLowerCase().includes(q)
-    );
-  }
-
-  // Sort
-  rows = [...rows].sort((a, b) => {
-    const col = _donAdminSort.col;
-    let va = a[col] ?? '';
-    let vb = b[col] ?? '';
-    if (typeof va === 'string') va = va.toLowerCase();
-    if (typeof vb === 'string') vb = vb.toLowerCase();
-    if (va < vb) return -_donAdminSort.dir;
-    if (va > vb) return  _donAdminSort.dir;
-    return 0;
-  });
-
-  _donAdminFiltered = rows;
-  renderDonAdminTable();
-}
-
-function sortDonors(col) {
-  if (_donAdminSort.col === col) {
-    _donAdminSort.dir *= -1;
-  } else {
-    _donAdminSort.col = col;
-    _donAdminSort.dir = -1;
-  }
-  _donAdminPage = 0;
-  filterDonorsAdmin();
-}
-
-function renderDonAdminTable() {
-  const tbody = document.getElementById('don-admin-tbody');
-  if (!tbody) return;
-
-  const total = _donAdminFiltered.length;
-  const start = _donAdminPage * DON_ADMIN_PER_PAGE;
-  const end   = Math.min(start + DON_ADMIN_PER_PAGE, total);
-  const page  = _donAdminFiltered.slice(start, end);
-
-  if (!page.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="don-admin-empty">No donors found.</td></tr>`;
-    document.getElementById('don-admin-pag-info').textContent = '';
-    document.getElementById('don-admin-prev').disabled = true;
-    document.getElementById('don-admin-next').disabled = true;
-    return;
-  }
-
-  tbody.innerHTML = page.map(d => {
-    const name  = d.is_anonymous ? '<span style="color:var(--grey);font-style:italic">Anonymous</span>' : escHtml(d.name || '—');
-    const email = d.is_anonymous ? '<span style="color:var(--grey)">hidden</span>' : escHtml(d.email || '—');
-    const amt   = d.amount_paise != null ? '₹' + Math.round(d.amount_paise / 100).toLocaleString('en-IN') : '—';
-    const date  = d.payment_verified_at
-      ? new Date(d.payment_verified_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'2-digit' })
-      : '—';
-    const anonBadge   = d.is_anonymous ? '<span class="don-admin-badge anon">anon</span>' : '';
-    const statusBadge = d.is_active
-      ? '<span class="don-admin-badge active">Active</span>'
-      : '<span class="don-admin-badge inactive">Inactive</span>';
-    const toggleLabel = d.is_active ? 'Deactivate' : 'Activate';
-    const rollHtml = d.roll_no ? `<div style="font-size:11px;color:var(--grey)">${escHtml(d.roll_no)}</div>` : '';
-
-    return `<tr>
-      <td>${name}${rollHtml}${anonBadge}</td>
-      <td style="font-size:12px">${email}</td>
-      <td style="text-align:right;font-weight:700;letter-spacing:-.02em">${amt}</td>
-      <td style="font-size:12px;color:var(--grey)">${date}</td>
-      <td style="font-size:11px;color:var(--grey)">${escHtml(d.semester_label || '—')}</td>
-      <td>${statusBadge}</td>
-      <td><button class="don-admin-toggle-btn" onclick="toggleDonorActive('${d.id}',${!d.is_active})">${toggleLabel}</button></td>
-    </tr>`;
-  }).join('');
-
-  // Pagination info
-  document.getElementById('don-admin-pag-info').textContent =
-    `${start + 1}–${end} of ${total}`;
-  document.getElementById('don-admin-prev').disabled = _donAdminPage === 0;
-  document.getElementById('don-admin-next').disabled = end >= total;
-}
-
-function donAdminChangePage(delta) {
-  _donAdminPage = Math.max(0, _donAdminPage + delta);
-  renderDonAdminTable();
-  document.getElementById('section-donations-admin')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-async function toggleDonorActive(id, newActive) {
-  if (!adminToken) return;
-  try {
-    const res = await fetch(`/api/admin/donation/donors/${id}/toggle`, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_active: newActive }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.error || 'Failed to update donor status.');
-      return;
-    }
-    // Update local state
-    const donor = _donAdminAll.find(d => d.id === id);
-    if (donor) donor.is_active = newActive;
-    computeDonAdminStats();
-    filterDonorsAdmin();
-  } catch(e) {
-    alert('Network error. Please try again.');
-  }
-}
-
-function exportDonationsCSV() {
-  if (!_donAdminAll.length) { alert('No donation data to export.'); return; }
-  const headers = ['ID','Name','Email','Roll No','Amount (₹)','Anonymous','Active','Semester','Payment ID','Order ID','Date'];
-  const rows = _donAdminAll.map(d => [
-    d.id,
-    d.is_anonymous ? 'Anonymous' : (d.name || ''),
-    d.is_anonymous ? '' : (d.email || ''),
-    d.is_anonymous ? '' : (d.roll_no || ''),
-    d.amount_paise != null ? Math.round(d.amount_paise / 100) : '',
-    d.is_anonymous ? 'Yes' : 'No',
-    d.is_active ? 'Yes' : 'No',
-    d.semester_label || '',
-    d.razorpay_payment_id || '',
-    d.razorpay_order_id || '',
-    d.payment_verified_at ? new Date(d.payment_verified_at).toLocaleString('en-IN') : '',
-  ]);
-
-  const csv = [headers, ...rows]
-    .map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','))
-    .join('\n');
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `kfs-donations-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ── Animate progress bars when donation page loads ────────────────────────────
-function animateDonProgressBars() {
-  document.querySelectorAll('.don-cost-progress-bar[data-target]').forEach(bar => {
-    const target = parseInt(bar.dataset.target, 10);
-    // Use requestAnimationFrame to allow CSS transition to fire
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { bar.style.width = target + '%'; });
-    });
-  });
-}
-
-// Patch loadDonationsPage to also animate bars and wire admin load
-const _origLoadDonationsPage = typeof loadDonationsPage === 'function' ? loadDonationsPage : null;
-async function loadDonationsPage() {
-  _syncAdminAmountVisibility();
-  resetDonForm();
-  animateDonProgressBars();
-  await Promise.all([loadDonStats(), loadDonors()]);
-}
-
-// Hook into showAdminSection to load donations when tab is opened
-const _origShowAdminSection = showAdminSection;
-function showAdminSection(name) {
-  _origShowAdminSection(name);
-  if (name === 'donations-admin') loadDonationsAdmin();
-}
-
+</script>
 </body>
 </html>
