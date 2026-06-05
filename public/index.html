@@ -1314,7 +1314,6 @@ body.light-mode .member-special-tag.tag-developer{
 .don-donor-meta{font-size:11px;color:var(--grey);margin-bottom:8px;letter-spacing:.04em}
 .don-donor-amt{font-size:20px;font-weight:700;letter-spacing:-.02em;display:none}
 body.kfs-admin-view .don-donor-amt{display:block}
-body.kfs-admin-view .don-donor-delete-btn{display:block!important}
 .don-donor-semester{font-size:10px;color:var(--grey);margin-top:2px;letter-spacing:.05em;text-transform:uppercase}
 .don-donors-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px;border:1px solid var(--border);border-radius:4px}
 .don-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:60px}
@@ -9910,19 +9909,29 @@ async function loadPaymentAnalytics() {
     if (!topDonors || !topDonors.length) {
       tbodyEl.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--grey);padding:40px">No donation data yet.</td></tr>';
     } else {
-      tbodyEl.innerHTML = topDonors.map((d, i) => `<tr data-donor-id="${escHtml(d.id)}">
-        <td style="color:var(--grey);font-weight:600">${i + 1}<\/td>
-        <td style="font-weight:500">${escHtml(d.name)}<\/td>
-        <td style="color:var(--grey);font-size:12px">${escHtml(d.email)}<\/td>
-        <td style="color:var(--grey);font-size:12px">${escHtml(d.roll_no)}<\/td>
-        <td style="font-weight:700;font-size:15px;color:var(--accent)">${fmt(d.amount_paise)}<\/td>
-        <td style="font-size:12px;color:var(--grey)">${escHtml(d.semester)}<\/td>
-        <td style="font-size:12px;color:var(--grey)">${escHtml(d.date)}<\/td>
-        <td style="font-size:11px;color:var(--grey);font-family:monospace">${escHtml(d.payment_id)}<\/td>
-        <td><div class="action-btns"><button class="admin-action-btn admin-action-btn--danger" title="Delete this record" onclick="adminDeleteDonor('${escHtml(d.id)}','${escHtml(d.name)}',this)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/><\/svg>
-          Delete<\/button><\/div><\/td>
-      <\/tr>`).join('');
+      tbodyEl.innerHTML = topDonors.map((d, i) => {
+        const safeName   = escHtml(d.name   || '—');
+        const safeEmail  = escHtml(d.email  || '—');
+        const safeRoll   = escHtml(d.roll_no|| '—');
+        const safeSem    = escHtml(d.semester|| '—');
+        const safeDate   = escHtml(d.date   || '—');
+        const safePid    = escHtml(d.payment_id || '—');
+        const safeId     = escHtml(String(d.id || ''));
+        const nameForBtn = escHtml((d.name || 'this donor').replace(/'/g, ''));
+        return `<tr data-donor-id="${safeId}">
+          <td style="color:var(--grey);font-weight:600">${i + 1}<\/td>
+          <td style="font-weight:500">${safeName}<\/td>
+          <td style="color:var(--grey);font-size:12px">${safeEmail}<\/td>
+          <td style="color:var(--grey);font-size:12px">${safeRoll}<\/td>
+          <td style="font-weight:700;font-size:15px;color:var(--accent)">${fmt(d.amount_paise)}<\/td>
+          <td style="font-size:12px;color:var(--grey)">${safeSem}<\/td>
+          <td style="font-size:12px;color:var(--grey)">${safeDate}<\/td>
+          <td style="font-size:11px;color:var(--grey);font-family:monospace">${safePid}<\/td>
+          <td><div class="action-btns">${safeId ? `<button class="admin-action-btn admin-action-btn--danger" title="Delete this record" onclick="adminDeleteDonor('${safeId}','${nameForBtn}',this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/><\/svg>
+            Delete<\/button>` : '<span style="color:var(--grey);font-size:11px">—<\/span>'}<\/div><\/td>
+        <\/tr>`;
+      }).join('');
     }
   }
 }
@@ -13848,26 +13857,6 @@ async function loadDonStats() {
   } catch(e) {}
 }
 
-// ── Admin: Delete donor from the public donor cards ──────────────────────────
-async function adminDeleteDonorCard(donorId, donorName, btn) {
-  if (!adminToken || !donorId) return;
-  if (!confirm(`Delete "${donorName}" from the donors list?\n\nThis permanently removes their record and cannot be undone.`)) return;
-  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
-  try {
-    const res = await apiFetch(`/api/admin/donation/donors/${encodeURIComponent(donorId)}`, { method: 'DELETE' });
-    if (res && res.success) {
-      const card = document.querySelector(`.don-donor-card[data-donor-id="${donorId}"]`);
-      if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => card.remove(), 300); }
-    } else {
-      alert(res?.error || 'Failed to delete. Please try again.');
-      if (btn) { btn.disabled = false; btn.textContent = '✕ Delete'; }
-    }
-  } catch (e) {
-    alert('Network error. Please try again.');
-    if (btn) { btn.disabled = false; btn.textContent = '✕ Delete'; }
-  }
-}
-
 // ── Load & render donors list ─────────────────────────────────────────────────
 async function loadDonors() {
   const container = document.getElementById('don-donors-container');
@@ -13919,17 +13908,7 @@ function renderDonorCard(d) {
     ? `<div class="don-donor-amt">₹${Math.round(d.amount_paise / 100).toLocaleString('en-IN')}</div>`
     : '';
 
-  // Admin-only delete button — visible only when body has .kfs-admin-view
   const donorIdSafe = escHtml(String(d.id || ''));
-  const nameSafe    = escHtml((d.display_name || d.name || 'this donor').replace(/'/g, ''));
-  const deleteBtn   = donorIdSafe
-    ? `<button class="don-donor-delete-btn" onclick="adminDeleteDonorCard('${donorIdSafe}','${nameSafe}',this)"
-         title="Delete donor record"
-         style="position:absolute;top:8px;right:8px;display:none;background:rgba(231,76,60,.12);
-                border:1px solid rgba(231,76,60,.35);color:#e74c3c;border-radius:6px;
-                padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;letter-spacing:.04em">
-         ✕ Delete</button>`
-    : '';
 
   return `<div class="don-donor-card" data-donor-id="${donorIdSafe}" style="position:relative">
     ${photoHtml}
@@ -13938,7 +13917,6 @@ function renderDonorCard(d) {
     <div class="don-donor-meta">${semester}</div>
     ${bioHtml}
     ${amtHtml}
-    ${deleteBtn}
   </div>`;
 }
 </script>
