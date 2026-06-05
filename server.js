@@ -592,17 +592,18 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
   try {
-    // Use maybeSingle() — returns null (not an error) when no row exists
-    const { data: master, error: masterErr } = await supabase
+    const defaultPw = process.env.MASTER_DEFAULT_PW;
+
+    // ── Seed kfsmaster ────────────────────────────────────────────────────────
+    const { data: master1, error: masterErr } = await supabase
       .from("admins")
       .select("id")
-      .eq("role", "master")
+      .eq("username", "kfsmaster")
       .maybeSingle();
     if (masterErr)
       throw new Error("admins table query failed: " + masterErr.message);
 
-    if (!master) {
-      const defaultPw = process.env.MASTER_DEFAULT_PW;
+    if (!master1) {
       if (!defaultPw) {
         console.error(
           "[initDB] FATAL: MASTER_DEFAULT_PW env var is not set. " +
@@ -625,6 +626,40 @@ async function initDB() {
       console.log(
         "Master admin created: username=kfsmaster (password from MASTER_DEFAULT_PW env var)",
       );
+    }
+
+    // ── Seed kfsmaster2 ───────────────────────────────────────────────────────
+    const { data: master2, error: master2Err } = await supabase
+      .from("admins")
+      .select("id")
+      .eq("username", "kfsmaster2")
+      .maybeSingle();
+    if (master2Err)
+      throw new Error("admins table query failed (master2): " + master2Err.message);
+
+    if (!master2) {
+      const master2Pw = process.env.MASTER2_DEFAULT_PW || defaultPw;
+      if (!master2Pw) {
+        console.error(
+          "[initDB] FATAL: MASTER2_DEFAULT_PW (or MASTER_DEFAULT_PW) env var is not set. " +
+          "Cannot create kfsmaster2 account safely.",
+        );
+      } else {
+        const hash2 = await bcrypt.hash(master2Pw, 10);
+        const { error: insert2Err } = await supabase.from("admins").insert([
+          {
+            name: "KFS Master 2",
+            username: "kfsmaster2",
+            password_hash: hash2,
+            role: "master",
+          },
+        ]);
+        if (insert2Err)
+          throw new Error("Master admin 2 insert failed: " + insert2Err.message);
+        console.log(
+          "Master admin created: username=kfsmaster2 (password from MASTER2_DEFAULT_PW env var)",
+        );
+      }
     }
 
     // Check if settings are seeded (use maybeSingle to avoid crash on missing row)
@@ -5864,6 +5899,7 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
 
 // ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────
 // Usage: GET /api/admin/emergency-unlock?username=kfsmaster&secret=YOUR_UNLOCK_SECRET
+//        GET /api/admin/emergency-unlock?username=kfsmaster2&secret=YOUR_UNLOCK_SECRET
 // Set UNLOCK_SECRET env var in Render dashboard — keep it private
 app.get("/api/admin/emergency-unlock", async (req, res) => {
   const { username, secret } = req.query;
