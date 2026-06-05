@@ -126,37 +126,38 @@
 <!-- ── EVENT THEME LOADER — runs before styles render to prevent flash ── -->
 <script>
 (function() {
-  function _applyTheme(theme) {
-    if (!theme) return;
-    var css = ':root{';
-    if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
-    if (theme.text_color)   css += '--white:' + theme.text_color + ';';
-    if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
-    if (theme.card_color)   css += '--card:' + theme.card_color + ';';
-    if (theme.border_color) css += '--border:' + theme.border_color + ';';
-    if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
-    css += '}';
-    var styleEl = document.getElementById('event-theme-vars') || document.createElement('style');
-    styleEl.id = 'event-theme-vars';
-    styleEl.textContent = css;
-    if (!styleEl.parentNode) document.head.appendChild(styleEl);
-    if (theme.font_family) {
-      var fontLink = document.createElement('link');
-      fontLink.rel = 'stylesheet';
-      fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
-      document.head.appendChild(fontLink);
-      var fontStyle = document.createElement('style');
-      fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
-      document.head.appendChild(fontStyle);
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/theme', false); // synchronous to block render
+    xhr.send();
+    if (xhr.status === 200) {
+      var theme = JSON.parse(xhr.responseText);
+      if (theme) {
+        var css = ':root{';
+        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
+        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
+        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
+        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
+        if (theme.border_color) css += '--border:' + theme.border_color + ';';
+        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
+        css += '}';
+        var styleEl = document.createElement('style');
+        styleEl.id = 'event-theme-vars';
+        styleEl.textContent = css;
+        document.head.appendChild(styleEl);
+        if (theme.font_family) {
+          var fontLink = document.createElement('link');
+          fontLink.rel = 'stylesheet';
+          fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
+          document.head.appendChild(fontLink);
+          var fontStyle = document.createElement('style');
+          fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
+          document.head.appendChild(fontStyle);
+        }
+        window.__kfsEventTheme = theme;
+      }
     }
-    window.__kfsEventTheme = theme;
-  }
-  // Async fetch — no longer blocks the main thread or page load
-  fetch('/api/theme').then(function(r) {
-    return r.ok ? r.json() : null;
-  }).then(function(theme) {
-    _applyTheme(theme);
-  }).catch(function() { /* silent fail — site loads with default theme */ });
+  } catch(e) { /* silent fail — site loads with default theme */ }
 })();
 </script>
 <style>
@@ -408,7 +409,7 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-field{margin-bottom:24px}
 .reg-field-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:.03em;margin-bottom:10px}
 .reg-field-label .req-dot{color:#ff453a;font-size:16px;line-height:1}
-.reg-input,.reg-textarea,.reg-select{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:13px 16px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
+.reg-input,.reg-textarea,.reg-select{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:13px 16px;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
 .reg-input:focus,.reg-textarea:focus,.reg-select:focus{border-color:rgba(245,245,245,.35);box-shadow:0 0 0 3px rgba(245,245,245,.06)}
 .reg-textarea{resize:vertical;min-height:80px;line-height:1.6}
 .reg-radio-group,.reg-check-group{display:flex;flex-direction:column;gap:10px}
@@ -830,7 +831,7 @@ body.light-mode .hc-blog-card.hc-viewed .hc-read-badge{background:rgba(150,150,1
 .hc-blog-date{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
 .hc-blog-title{font-size:18px;font-weight:600;line-height:1.3;margin-bottom:8px}
 .hc-blog-excerpt{font-size:13px;color:var(--grey);line-height:1.6;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* Film carousel card */
 .hc-film-card{flex:0 0 48vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
   background:var(--card);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
@@ -1840,7 +1841,7 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-detail-year{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:32px}
 .movie-detail-crew{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
 @media(max-width:600px){.movie-detail-crew{grid-template-columns:1fr}}
-.movie-crew-item{display:flex;flex-direction:column}
+.movie-crew-item{}
 .movie-crew-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--grey);margin-bottom:4px}
 .movie-crew-value{font-size:14px;font-weight:500}
 .movie-detail-section{margin-bottom:28px}
@@ -1901,7 +1902,7 @@ body.light-mode .movie-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1p
 .movie-card.watched .movie-poster{filter:grayscale(100%)}
 /* Description snippet on card */
 .movie-desc-snip{font-size:12px;color:var(--grey);line-height:1.5;margin-top:6px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 .loading{text-align:center;padding:60px;color:var(--grey);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
 .empty-state{text-align:center;padding:60px 24px;color:var(--grey)}
@@ -4573,7 +4574,7 @@ KFS — KIIT Film Society"></textarea>
     <input type="hidden" id="collab-token">
 
     <!-- ── STEP 1: KIIT email gate ── -->
-    <div id="collab-gate">
+    <div id="collab-gate" style="">
       <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin-bottom:18px">This board is exclusive to KFS members. Enter your KIIT email to continue.</p>
       <div class="form-group">
         <label>KIIT Email *</label>
@@ -4856,7 +4857,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password','donations-admin','collaborate'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access
@@ -6685,7 +6686,6 @@ function showAdminSection(name) {
   document.querySelectorAll('.admin-sidebar-item').forEach(i=>i.classList.remove('active'));
   document.querySelector(`[data-section="${name}"]`)?.classList.add('active');
   loadAdminData(name);
-  if (name === 'donations-admin') loadDonationsAdmin();
 }
 
 async function loadAdminData(name) {
@@ -8119,9 +8119,7 @@ async function deleteCustomEgg(idx) {
 
 
 async function apiFetch(url, method='GET', body=null) {
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 15000); // 15s hard timeout
-  const opts = { method, headers:{}, credentials: 'include', signal: controller.signal };
+  const opts = { method, headers:{}, credentials: 'include' };
   if (adminToken) opts.headers['Authorization'] = 'Bearer '+adminToken;
   // Include CSRF token on all write requests
   if (_csrfToken && !['GET','HEAD'].includes(method)) {
@@ -8140,7 +8138,6 @@ async function apiFetch(url, method='GET', body=null) {
   }
   try {
     const res = await fetch(url, opts);
-    clearTimeout(tid);
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) {
       const msg = 'Server returned non-JSON for ' + url + ' (status ' + res.status + '). Redeploy may be needed.';
@@ -8157,11 +8154,6 @@ async function apiFetch(url, method='GET', body=null) {
     }
     return data;
   } catch(e) {
-    clearTimeout(tid);
-    if (e.name === 'AbortError') {
-      console.warn('apiFetch timeout:', url);
-      return null;
-    }
     console.error('apiFetch network error:', url, e);
     showAdminError('Network error: could not reach ' + url);
     return null;
@@ -8322,12 +8314,7 @@ document.addEventListener('click', function(e) {
 // Store the promise so checkRoute can await it before deciding whether to show wrapped.
 const _wrappedNavReady = (async function initWrappedNav() {
   try {
-    // Race against a 5-second timeout — a cold-start server must never block navigation
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 5000));
-    const config = await Promise.race([
-      apiFetch('/api/wrapped/config').catch(() => null),
-      timeoutPromise
-    ]);
+    const config = await apiFetch('/api/wrapped/config').catch(() => null);
     if (config) _wrappedConfig = config;
     const wrappedNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
     if (wrappedNavLink) {
@@ -8338,7 +8325,7 @@ const _wrappedNavReady = (async function initWrappedNav() {
 
 // The wrapped page is hidden via display:none in HTML and revealed by checkRoute after config loads.
 
-// checkRoute() is deferred to end-of-body — see bottom of file.
+checkRoute();
 setTimeout(() => document.body.classList.add('loaded'), 600);
 
 // ── EVENT COUNTDOWN POPUP ──
@@ -13617,7 +13604,6 @@ function _syncAdminAmountVisibility() {
 async function loadDonationsPage() {
   _syncAdminAmountVisibility();
   resetDonForm();
-  animateDonProgressBars();
   await Promise.all([loadDonStats(), loadDonors()]);
 }
 
@@ -14168,10 +14154,21 @@ function animateDonProgressBars() {
   });
 }
 
-// ── DEFERRED INIT — must be last ──────────────────────────────────────────────
-// checkRoute() needs loadDonationsPage, loadDonationsAdmin, and the
-// donations-admin hook in showAdminSection above to all exist first.
-checkRoute();
+// Patch loadDonationsPage to also animate bars and wire admin load
+const _origLoadDonationsPage = typeof loadDonationsPage === 'function' ? loadDonationsPage : null;
+async function loadDonationsPage() {
+  _syncAdminAmountVisibility();
+  resetDonForm();
+  animateDonProgressBars();
+  await Promise.all([loadDonStats(), loadDonors()]);
+}
+
+// Hook into showAdminSection to load donations when tab is opened
+const _origShowAdminSection = showAdminSection;
+function showAdminSection(name) {
+  _origShowAdminSection(name);
+  if (name === 'donations-admin') loadDonationsAdmin();
+}
 
 </body>
 </html>
