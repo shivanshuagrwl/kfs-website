@@ -5625,6 +5625,90 @@ app.get("/api/admin/donation/donors", requireSection("settings"), async (req, re
   }
 });
 
+// ── GET /api/admin/donation/analytics ─────────────────────────────────────────
+// Admin only — full payment analytics: totals, per-semester, daily trend, top donors.
+app.get("/api/admin/donation/analytics", requireSection("settings"), async (req, res) => {
+  try {
+    const { data: rows, error } = await supabase
+      .from("donors")
+      .select("id, is_anonymous, name, email, roll_no, amount_paise, payment_verified_at, semester_label, is_active, razorpay_payment_id")
+      .order("payment_verified_at", { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    const donors = rows || [];
+
+    // ── Totals ────────────────────────────────────────────────────────────────
+    const totalCollected = donors.reduce((s, d) => s + (d.amount_paise || 0), 0);
+    const totalDonors    = donors.length;
+    const activeDonors   = donors.filter(d => d.is_active).length;
+    const avgDonation    = totalDonors ? Math.round(totalCollected / totalDonors) : 0;
+    const maxDonor       = donors.reduce((best, d) => (!best || (d.amount_paise||0) > (best.amount_paise||0)) ? d : best, null);
+
+    // ── Per-semester breakdown ────────────────────────────────────────────────
+    const semesterMap = {};
+    donors.forEach(d => {
+      const sem = d.semester_label || "Unknown";
+      if (!semesterMap[sem]) semesterMap[sem] = { label: sem, count: 0, total_paise: 0 };
+      semesterMap[sem].count++;
+      semesterMap[sem].total_paise += d.amount_paise || 0;
+    });
+    const bySemester = Object.values(semesterMap).sort((a, b) => a.label.localeCompare(b.label));
+
+    // ── Daily trend (last 60 days) ────────────────────────────────────────────
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 60);
+    const dailyMap = {};
+    donors.forEach(d => {
+      if (!d.payment_verified_at) return;
+      const day = d.payment_verified_at.slice(0, 10);
+      if (new Date(day) < cutoff) return;
+      if (!dailyMap[day]) dailyMap[day] = { date: day, count: 0, total_paise: 0 };
+      dailyMap[day].count++;
+      dailyMap[day].total_paise += d.amount_paise || 0;
+    });
+    const dailyTrend = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    // ── Donation amount buckets ───────────────────────────────────────────────
+    const buckets = { "< ₹100": 0, "₹100-499": 0, "₹500-999": 0, "₹1000-1999": 0, "₹2000+": 0 };
+    donors.forEach(d => {
+      const amt = (d.amount_paise || 0) / 100;
+      if (amt < 100)        buckets["< ₹100"]++;
+      else if (amt < 500)   buckets["₹100-499"]++;
+      else if (amt < 1000)  buckets["₹500-999"]++;
+      else if (amt < 2000)  buckets["₹1000-1999"]++;
+      else                  buckets["₹2000+"]++;
+    });
+
+    // ── Top 10 donors (non-anonymous) ────────────────────────────────────────
+    const topDonors = donors
+      .filter(d => !d.is_anonymous && d.amount_paise)
+      .sort((a, b) => (b.amount_paise || 0) - (a.amount_paise || 0))
+      .slice(0, 10)
+      .map(d => ({
+        name:          d.name || "—",
+        email:         d.email || "—",
+        roll_no:       d.roll_no || "—",
+        amount_paise:  d.amount_paise,
+        semester:      d.semester_label || "—",
+        date:          d.payment_verified_at ? d.payment_verified_at.slice(0, 10) : "—",
+        payment_id:    d.razorpay_payment_id || "—",
+      }));
+
+    noStore(res);
+    return res.json({
+      totals: { totalCollected, totalDonors, activeDonors, avgDonation, maxDonor: maxDonor ? { name: maxDonor.name, amount_paise: maxDonor.amount_paise } : null },
+      bySemester,
+      dailyTrend,
+      buckets,
+      topDonors,
+    });
+  } catch (e) {
+    console.error("[admin/donation/analytics]", e.message);
+    return res.status(500).json({ error: "Could not load payment analytics." });
+  }
+});
+
 // ── POST /api/donation/webhook ────────────────────────────────────────────────
 // Razorpay webhook — backup confirmation. Separate webhook secret.
 // Add this URL in Razorpay Dashboard → Webhooks → payment.captured

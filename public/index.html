@@ -3350,6 +3350,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('reg-analytics')" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
+    <div class="admin-sidebar-item" onclick="showAdminSection('payment-analytics')" data-section="payment-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Payments</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('comments')" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('broadcast')" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
     <div class="admin-sidebar-item" onclick="showAdminSection('themes')" data-section="themes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span> Event Themes</div>
@@ -4076,6 +4077,66 @@ KFS — KIIT Film Society"></textarea>
       </div>
     </div>
 
+    <!-- PAYMENT ANALYTICS -->
+    <div class="admin-section" id="section-payment-analytics">
+      <div class="admin-header">
+        <div><h2>Payment Analytics</h2><p>Donation revenue, trends, and donor breakdown</p></div>
+        <button class="btn" onclick="loadPaymentAnalytics()" style="border-radius:20px;font-size:12px">↻ Refresh</button>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-total-collected">—</div>
+          <div class="analytics-card-label">Total Collected</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-total-donors">—</div>
+          <div class="analytics-card-label">Total Donors</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-avg-donation">—</div>
+          <div class="analytics-card-label">Avg Donation</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-top-donor">—</div>
+          <div class="analytics-card-label">Top Donor</div>
+          <div class="analytics-card-sub" id="pa-top-donor-sub"></div>
+        </div>
+      </div>
+
+      <!-- Daily trend chart -->
+      <div class="chart-wrap" style="margin-top:24px">
+        <h3>Daily Collections (Last 60 Days)</h3>
+        <svg class="line-chart-svg" id="pa-daily-chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px" id="pa-daily-labels"></div>
+      </div>
+
+      <!-- Row: per-semester + amount buckets -->
+      <div class="analytics-row" style="margin-top:0">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Revenue by Semester</h3>
+          <div class="bar-chart" id="pa-semester-chart" style="height:120px"></div>
+          <div id="pa-semester-labels" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Donation Size Breakdown</h3>
+          <div id="pa-bucket-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- Top donors table -->
+      <div class="chart-wrap" style="margin-top:24px">
+        <h3>Top Donors</h3>
+        <div class="admin-card" style="margin-top:12px">
+          <table class="admin-table">
+            <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Roll No</th><th>Amount</th><th>Semester</th><th>Date</th><th>Payment ID</th></tr></thead>
+            <tbody id="pa-top-donors-tbody"><tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- COMMENTS MODERATION -->
     <div class="admin-section" id="section-comments">
       <div class="admin-header">
@@ -4647,7 +4708,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','wrapped','comments','broadcast','themes','change-password'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // Empty array = no permissions set yet (legacy admin) = full access
@@ -6612,6 +6673,9 @@ async function loadAdminData(name) {
   }
   else if (name==='reg-analytics') {
     loadRegAnalytics();
+  }
+  else if (name==='payment-analytics') {
+    loadPaymentAnalytics();
   }
   else if (name==='notifications') {
     renderNotifTable();
@@ -9752,6 +9816,111 @@ async function loadRegAnalytics() {
     <td><span class="tag ${r.formOpen ? 'upcoming' : ''}">${r.formOpen ? 'Open' : 'Closed'}</span></td>
     <td style="font-weight:700;font-size:16px">${r.count}</td>
   </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// ANALYTICS — PAYMENTS / DONATIONS
+// ══════════════════════════════════════════════════════════
+async function loadPaymentAnalytics() {
+  // Reset to loading state
+  ['pa-total-collected','pa-total-donors','pa-avg-donation','pa-top-donor'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = '…';
+  });
+  const tbodyEl = document.getElementById('pa-top-donors-tbody');
+  if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>';
+
+  const data = await apiFetch('/api/admin/donation/analytics');
+  if (!data) {
+    if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">Could not load analytics.</td></tr>';
+    return;
+  }
+
+  const { totals, bySemester, dailyTrend, buckets, topDonors } = data;
+
+  // ── KPI Cards ──────────────────────────────────────────────────────────────
+  const fmt = paise => '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+  document.getElementById('pa-total-collected').textContent = fmt(totals.totalCollected || 0);
+  document.getElementById('pa-total-donors').textContent   = totals.totalDonors || 0;
+  document.getElementById('pa-avg-donation').textContent   = fmt(totals.avgDonation || 0);
+  document.getElementById('pa-top-donor').textContent      = totals.maxDonor?.name || '—';
+  const subEl = document.getElementById('pa-top-donor-sub');
+  if (subEl) subEl.textContent = totals.maxDonor ? fmt(totals.maxDonor.amount_paise) : '';
+
+  // ── Daily Trend Line Chart ─────────────────────────────────────────────────
+  const chartSvg  = document.getElementById('pa-daily-chart');
+  const labelsDiv = document.getElementById('pa-daily-labels');
+  if (chartSvg && dailyTrend && dailyTrend.length) {
+    const W = 600, H = 160, pad = 20;
+    const maxAmt = Math.max(...dailyTrend.map(d => d.total_paise), 1);
+    const xs = dailyTrend.map((d, i) => pad + i * (W - 2 * pad) / Math.max(dailyTrend.length - 1, 1));
+    const ys = dailyTrend.map(d => H - pad - (d.total_paise / maxAmt) * (H - 2 * pad));
+    const pts = xs.map((x, i) => `${x},${ys[i]}`);
+    const pathD = pts.reduce((acc, p, i) => acc + (i === 0 ? `M${p}` : ` L${p}`), '');
+    chartSvg.innerHTML = `<defs>
+      <linearGradient id="paFade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--white)" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="var(--white)" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="${pathD}" fill="none" stroke="var(--white)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="${pts.join(' ')} ${W-pad},${H} ${pad},${H}" fill="url(#paFade)"/>`;
+    const show = [0, Math.floor(dailyTrend.length / 2), dailyTrend.length - 1].filter((v, i, a) => a.indexOf(v) === i);
+    labelsDiv.innerHTML = dailyTrend.map((d, i) => show.includes(i)
+      ? `<span style="font-size:10px;color:var(--grey)">${new Date(d.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}<\/span>`
+      : `<span><\/span>`).join('');
+  } else if (chartSvg) {
+    chartSvg.innerHTML = `<text x="300" y="90" text-anchor="middle" fill="var(--grey)" font-size="13">No data in last 60 days</text>`;
+    if (labelsDiv) labelsDiv.innerHTML = '';
+  }
+
+  // ── Revenue by Semester Bar Chart ─────────────────────────────────────────
+  const semChartEl  = document.getElementById('pa-semester-chart');
+  const semLabelsEl = document.getElementById('pa-semester-labels');
+  if (semChartEl && bySemester && bySemester.length) {
+    const maxSem = Math.max(...bySemester.map(s => s.total_paise), 1);
+    semChartEl.innerHTML = bySemester.map(s => {
+      const pct = s.total_paise / maxSem;
+      const h   = Math.max(Math.round(pct * 90), 4);
+      return `<div style="flex:1;min-width:40px;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:10px;font-weight:700;color:var(--white)">${fmt(s.total_paise)}<\/span>
+        <div style="width:100%;height:${h}px;background:var(--white);border-radius:3px 3px 0 0;opacity:${0.35 + pct * 0.65}"><\/div>
+      <\/div>`;
+    }).join('');
+    semLabelsEl.innerHTML = bySemester.map(s =>
+      `<span style="flex:1;min-width:40px;font-size:9px;color:var(--grey);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.label}">${s.label} (${s.count})<\/span>`
+    ).join('');
+  }
+
+  // ── Donation Size Breakdown ────────────────────────────────────────────────
+  const bucketEl = document.getElementById('pa-bucket-breakdown');
+  if (bucketEl && buckets) {
+    const total = Object.values(buckets).reduce((a, b) => a + b, 0) || 1;
+    bucketEl.innerHTML = Object.entries(buckets).map(([label, count]) => {
+      const pct = count / total;
+      return `<div class="leaderboard-row">
+        <span style="font-size:12px;flex:1;color:var(--grey)">${label}<\/span>
+        <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${Math.round(pct*100)}%"><\/div><\/div>
+        <span class="leaderboard-score">${count}<\/span>
+      <\/div>`;
+    }).join('');
+  }
+
+  // ── Top Donors Table ───────────────────────────────────────────────────────
+  if (tbodyEl) {
+    if (!topDonors || !topDonors.length) {
+      tbodyEl.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">No donation data yet.</td></tr>';
+    } else {
+      tbodyEl.innerHTML = topDonors.map((d, i) => `<tr>
+        <td style="color:var(--grey);font-weight:600">${i + 1}<\/td>
+        <td style="font-weight:500">${escHtml(d.name)}<\/td>
+        <td style="color:var(--grey);font-size:12px">${escHtml(d.email)}<\/td>
+        <td style="color:var(--grey);font-size:12px">${escHtml(d.roll_no)}<\/td>
+        <td style="font-weight:700;font-size:15px;color:var(--accent)">${fmt(d.amount_paise)}<\/td>
+        <td style="font-size:12px;color:var(--grey)">${escHtml(d.semester)}<\/td>
+        <td style="font-size:12px;color:var(--grey)">${escHtml(d.date)}<\/td>
+        <td style="font-size:11px;color:var(--grey);font-family:monospace">${escHtml(d.payment_id)}<\/td>
+      <\/tr>`).join('');
+    }
+  }
 }
 
 // ── WATCH STATUS (localStorage) ──────────────────────────────────────
