@@ -645,6 +645,53 @@ async function initDB() {
         .then(() => {})
         .catch(() => {});
     }
+
+    // Probe donors table — log a clear message if it doesn't exist yet
+    const { error: donorsErr } = await supabase
+      .from("donors")
+      .select("id", { count: "exact", head: true })
+      .limit(1);
+    if (donorsErr) {
+      console.warn(
+        "[initDB] donors table not found — run the SQL migration in Supabase:\n" +
+        "  CREATE TABLE IF NOT EXISTS donors (\n" +
+        "    id                  BIGSERIAL PRIMARY KEY,\n" +
+        "    name                TEXT,\n" +
+        "    email               TEXT,\n" +
+        "    website_url         TEXT,\n" +
+        "    bio                 TEXT,\n" +
+        "    photo_path          TEXT,\n" +
+        "    is_anonymous        BOOLEAN NOT NULL DEFAULT FALSE,\n" +
+        "    tandc_acknowledged  BOOLEAN NOT NULL DEFAULT FALSE,\n" +
+        "    amount_paise        INTEGER,\n" +
+        "    razorpay_order_id   TEXT UNIQUE,\n" +
+        "    razorpay_payment_id TEXT,\n" +
+        "    payment_verified_at TIMESTAMPTZ,\n" +
+        "    featured_until      TIMESTAMPTZ,\n" +
+        "    is_active           BOOLEAN NOT NULL DEFAULT TRUE,\n" +
+        "    semester_label      TEXT,\n" +
+        "    email_sent          BOOLEAN NOT NULL DEFAULT FALSE,\n" +
+        "    email_sent_at       TIMESTAMPTZ,\n" +
+        "    brevo_message_id    TEXT,\n" +
+        "    created_at          TIMESTAMPTZ DEFAULT NOW()\n" +
+        "  );\n" +
+        "\n" +
+        "  -- Payment failures table (fraud monitoring):\n" +
+        "  CREATE TABLE IF NOT EXISTS payment_failures (\n" +
+        "    id                  BIGSERIAL PRIMARY KEY,\n" +
+        "    razorpay_order_id   TEXT,\n" +
+        "    razorpay_payment_id TEXT,\n" +
+        "    failure_reason      TEXT,\n" +
+        "    ip_address          TEXT,\n" +
+        "    user_agent          TEXT,\n" +
+        "    created_at          TIMESTAMPTZ DEFAULT NOW()\n" +
+        "  );\n" +
+        "  CREATE INDEX IF NOT EXISTS idx_pf_order ON payment_failures(razorpay_order_id);\n" +
+        "  CREATE INDEX IF NOT EXISTS idx_pf_ip    ON payment_failures(ip_address);"
+      );
+    } else {
+      console.log("[initDB] donors table OK");
+    }
   } catch (e) {
     console.error("initDB error:", e.message);
     // Don't crash the server — Supabase may be temporarily unreachable
@@ -5192,6 +5239,507 @@ app.get("/privacy", (req, res) => {
 });
 app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"));
+});
+app.get("/donation-terms", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DONATIONS — Razorpay Integration
+// ══════════════════════════════════════════════════════════════════════════════
+
+const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID;
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+
+// Donation-specific rate limiter — 10 attempts per IP per 15 min
+const donationLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many donation attempts. Please wait 15 minutes." },
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+});
+
+// ── Helper: create Razorpay order via REST API ────────────────────────────────
+async function createRazorpayOrder(amountPaise, receiptId) {
+  const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64");
+  const response = await fetch("https://api.razorpay.com/v1/orders", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Basic ${auth}`,
+    },
+    body: JSON.stringify({
+      amount:   amountPaise,      // in paise
+      currency: "INR",
+      receipt:  receiptId,
+      payment_capture: 1,         // auto-capture
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.description || "Razorpay order creation failed");
+  }
+  return data;
+}
+
+// ── Helper: compute current semester label ────────────────────────────────────
+function currentSemesterLabel() {
+  const now   = new Date();
+  const month = now.getMonth(); // 0-based
+  const year  = now.getFullYear();
+  return month < 6
+    ? `Jan–Jun ${year}`
+    : `Jul–Dec ${year}`;
+}
+
+// ── Helper: semester-based featured_until (guide Section 8.3) ────────────────
+// Jan–Jun payments expire June 30; Jul–Dec payments expire Dec 31
+function getFeaturedUntil(paymentDate) {
+  const d     = new Date(paymentDate);
+  const month = d.getMonth(); // 0-indexed
+  if (month < 6) {
+    return new Date(d.getFullYear(), 5, 30, 23, 59, 59); // June 30
+  } else {
+    return new Date(d.getFullYear(), 11, 31, 23, 59, 59); // Dec 31
+  }
+}
+
+// ── Helper: send Brevo thank-you email (non-blocking) ────────────────────────
+async function sendBrevoThankYou({ donorId, name, email, amountPaise, paymentId, isAnonymous }) {
+  const BREVO_API_KEY    = process.env.BREVO_API_KEY;
+  const BREVO_SENDER     = process.env.BREVO_SENDER_EMAIL || "noreply@kiitfilmsociety.in";
+  const BREVO_NAME       = process.env.BREVO_SENDER_NAME  || "KFS — KIIT Film Society";
+  const BREVO_TEMPLATE   = process.env.BREVO_TEMPLATE_ID  ? parseInt(process.env.BREVO_TEMPLATE_ID) : null;
+
+  if (!BREVO_API_KEY || !email) return { success: false, reason: "no_api_key_or_email" };
+
+  const displayName = isAnonymous ? "Valued Supporter" : (name || "Donor");
+  const amountRs    = Math.round((amountPaise || 0) / 100);
+
+  const payload = BREVO_TEMPLATE
+    ? {
+        templateId: BREVO_TEMPLATE,
+        to: [{ email, name: displayName }],
+        sender: { name: BREVO_NAME, email: BREVO_SENDER },
+        params: { donorName: displayName, amount: amountRs, paymentId },
+      }
+    : {
+        subject: `Thank you for supporting KFS, ${displayName}!`,
+        to: [{ email, name: displayName }],
+        sender: { name: BREVO_NAME, email: BREVO_SENDER },
+        htmlContent: `<p>Hi ${displayName},</p><p>Thank you for your generous donation of ₹${amountRs} to KIIT Film Society!</p><p>Payment reference: <strong>${paymentId}</strong></p><p>You will be featured on our donors page for this semester.</p><p>With gratitude,<br>KFS — KIIT Film Society</p>`,
+      };
+
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method:  "POST",
+      headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[Brevo] Email failed:", data.message || JSON.stringify(data));
+      return { success: false, error: data.message };
+    }
+    const messageId = data.messageId || null;
+    console.log("[Brevo] Email sent. MessageId:", messageId);
+    // Update email_sent in DB (best-effort, non-blocking)
+    if (donorId) {
+      supabase.from("donors").update({
+        email_sent:      true,
+        email_sent_at:   new Date().toISOString(),
+        brevo_message_id: messageId,
+      }).eq("id", donorId).then(({ error }) => {
+        if (error) console.warn("[Brevo] Could not update email_sent flag:", error.message);
+      });
+    }
+    return { success: true, messageId };
+  } catch (err) {
+    console.error("[Brevo] Email exception:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// ── POST /api/donation/create-order ──────────────────────────────────────────
+// Public — CSRF-protected. Validates amount server-side, creates Razorpay order.
+app.post("/api/donation/create-order", donationLimit, csrfProtect, async (req, res) => {
+  const { amount, email, tandc_acknowledged, is_anonymous, name, website_url, bio } = req.body;
+
+  // Guard: T&C
+  if (!tandc_acknowledged) {
+    return res.status(403).json({ error: "T&C must be acknowledged before donating." });
+  }
+
+  // Guard: email
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "A valid email address is required." });
+  }
+
+  // Guard: amount — enforce server-side regardless of what client says
+  const amt = parseInt(amount, 10);
+  if (isNaN(amt) || amt < 10 || amt > 500) {
+    return res.status(400).json({ error: "Donation amount must be between ₹10 and ₹500." });
+  }
+
+  if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    console.error("[donation] Razorpay env vars not configured.");
+    return res.status(503).json({ error: "Payment gateway not configured. Contact support." });
+  }
+
+  try {
+    const amountPaise = amt * 100;
+    const receiptId   = `kfs_don_${Date.now()}`;
+
+    const order = await createRazorpayOrder(amountPaise, receiptId);
+
+    return res.json({
+      order_id:     order.id,
+      key_id:       RAZORPAY_KEY_ID,
+      amount_paise: amountPaise,
+    });
+  } catch (e) {
+    console.error("[donation/create-order]", e.message);
+    return res.status(502).json({ error: "Could not initiate payment. Please try again." });
+  }
+});
+
+// ── POST /api/donation/verify ─────────────────────────────────────────────────
+// Public — CSRF-protected. Verifies HMAC signature, then records donor in DB.
+app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) => {
+  const {
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature,
+    donor = {},
+  } = req.body;
+
+  const { email, tandc_acknowledged, is_anonymous, name, website_url, bio } = donor;
+
+  // Guard: T&C
+  if (!tandc_acknowledged) {
+    return res.status(403).json({ error: "T&C acknowledgement missing." });
+  }
+
+  // Guard: required payment IDs
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ error: "Missing payment verification fields." });
+  }
+
+  if (!RAZORPAY_KEY_SECRET) {
+    return res.status(503).json({ error: "Payment gateway not configured." });
+  }
+
+  // ── HMAC-SHA256 signature verification (core security step) ──────────────
+  const body         = `${razorpay_order_id}|${razorpay_payment_id}`;
+  const expectedSig  = crypto
+    .createHmac("sha256", RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  let sigValid = false;
+  try {
+    sigValid = crypto.timingSafeEqual(
+      Buffer.from(expectedSig),
+      Buffer.from(razorpay_signature),
+    );
+  } catch {
+    sigValid = false;
+  }
+
+  if (!sigValid) {
+    console.warn("[donation/verify] Signature mismatch for order:", razorpay_order_id);
+    // Log to payment_failures table for fraud monitoring (best-effort)
+    supabase.from("payment_failures").insert([{
+      razorpay_order_id,
+      razorpay_payment_id,
+      failure_reason: "invalid_signature",
+      ip_address:     req.ip,
+      user_agent:     req.headers["user-agent"] || null,
+    }]).then(({ error }) => {
+      if (error) console.warn("[donation/verify] Could not log failure:", error.message);
+    });
+    return res.status(400).json({ error: "Payment verification failed. Signature mismatch." });
+  }
+
+  // ── Fetch payment amount from Razorpay (never trust client amount) ────────
+  let amountPaise = null;
+  try {
+    const auth    = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64");
+    const payRes  = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    const payData = await payRes.json();
+    if (payRes.ok && payData.amount) amountPaise = payData.amount;
+  } catch (e) {
+    console.warn("[donation/verify] Could not fetch payment amount from Razorpay:", e.message);
+  }
+
+  // ── Idempotency: prevent duplicate records for same order ─────────────────
+  const { data: existing } = await supabase
+    .from("donors")
+    .select("id")
+    .eq("razorpay_order_id", razorpay_order_id)
+    .maybeSingle();
+
+  if (existing) {
+    // Already recorded — not an error, just acknowledge
+    return res.json({ success: true, duplicate: true });
+  }
+
+  // ── Record donor ──────────────────────────────────────────────────────────
+  const now            = new Date();
+  const semesterLabel  = currentSemesterLabel();
+  const featuredUntil  = getFeaturedUntil(now); // semester-based expiry
+
+  const donorRow = {
+    email:                  email || null,
+    is_anonymous:           !!is_anonymous,
+    tandc_acknowledged:     true,
+    razorpay_order_id,
+    razorpay_payment_id,
+    payment_verified_at:    now.toISOString(),
+    featured_until:         featuredUntil.toISOString(),
+    is_active:              true,
+    semester_label:         semesterLabel,
+    amount_paise:           amountPaise,
+    email_sent:             false,
+    // Personal fields — always stored internally; masked on public API
+    name:                   name        || null,
+    website_url:            website_url || null,
+    bio:                    bio         || null,
+  };
+
+  const { data: insertedRows, error: insertErr } = await supabase.from("donors").insert([donorRow]).select("id");
+  if (insertErr) {
+    console.error("[donation/verify] DB insert error:", insertErr.message);
+    // Payment succeeded but record failed — log for manual reconciliation
+    return res.status(500).json({
+      error: "Payment received but record failed. Please contact support with your payment ID: " + razorpay_payment_id,
+    });
+  }
+
+  // Invalidate donor/stats caches
+  memInvalidate("donation:stats", "donation:donors:");
+
+  // ── Send Brevo thank-you email (non-blocking — email failure must not block response) ──
+  const newDonorId = insertedRows?.[0]?.id || null;
+  sendBrevoThankYou({
+    donorId:     newDonorId,
+    name:        name || null,
+    email:       email || null,
+    amountPaise,
+    paymentId:   razorpay_payment_id,
+    isAnonymous: !!is_anonymous,
+  }).catch(err => console.error("[Brevo] Background email error:", err.message));
+
+  return res.json({ success: true });
+});
+
+// ── GET /api/donation/stats ───────────────────────────────────────────────────
+// Public — returns donor count and films supported. Amount only for admins.
+app.get("/api/donation/stats", async (req, res) => {
+  try {
+    const data = await memCache("donation:stats", 120, async () => {
+      const { data: rows, error } = await supabase
+        .from("donors")
+        .select("amount_paise, is_active")
+        .eq("is_active", true);
+
+      if (error) throw new Error(error.message);
+
+      const totalPaise  = (rows || []).reduce((s, r) => s + (r.amount_paise || 0), 0);
+      const totalDonors = (rows || []).length;
+
+      // Films supported: static or from a settings key — keeping it simple for now
+      const { data: setting } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "films_supported_count")
+        .maybeSingle();
+
+      return {
+        // total_amount_paise intentionally excluded from public response —
+        // amount data is admin-only (see GET /api/admin/donation/donors)
+        total_donors:    totalDonors,
+        active_donors:   totalDonors,
+        films_supported: setting?.value ? parseInt(setting.value) : null,
+      };
+    });
+
+    noStore(res);
+    return res.json(data);
+  } catch (e) {
+    console.error("[donation/stats]", e.message);
+    return res.status(500).json({ error: "Could not load stats." });
+  }
+});
+
+// ── GET /api/donation/donors ──────────────────────────────────────────────────
+// Public — omits amount, email, and personal fields for anonymous donors.
+app.get("/api/donation/donors", async (req, res) => {
+  try {
+    const data = await memCache("donation:donors:public", 60, async () => {
+      const { data: rows, error } = await supabase
+        .from("donors")
+        .select("id, is_anonymous, name, website_url, bio, photo_path, semester_label, payment_verified_at")
+        .eq("is_active", true)
+        .gt("featured_until", new Date().toISOString())
+        .order("payment_verified_at", { ascending: false });
+
+      if (error) throw new Error(error.message);
+
+      return (rows || []).map(d => ({
+        id:           d.id,
+        is_anonymous: d.is_anonymous,
+        display_name: d.is_anonymous ? null : d.name,
+        website_url:  d.is_anonymous ? null : d.website_url,
+        bio:          d.is_anonymous ? null : d.bio,
+        photo_path:   d.is_anonymous ? null : d.photo_path,
+        semester_label: d.semester_label,
+        // amount_paise intentionally omitted from public endpoint
+      }));
+    });
+
+    noStore(res);
+    return res.json(data);
+  } catch (e) {
+    console.error("[donation/donors public]", e.message);
+    return res.status(500).json({ error: "Could not load donors." });
+  }
+});
+
+// ── GET /api/admin/donation/donors ────────────────────────────────────────────
+// Admin only — includes amount_paise and email for reconciliation.
+app.get("/api/admin/donation/donors", requireSection("settings"), async (req, res) => {
+  try {
+    const { data: rows, error } = await supabase
+      .from("donors")
+      .select("id, is_anonymous, name, email, website_url, bio, photo_path, semester_label, amount_paise, payment_verified_at, razorpay_order_id, razorpay_payment_id, is_active, featured_until")
+      .order("payment_verified_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    noStore(res);
+    return res.json(rows || []);
+  } catch (e) {
+    console.error("[admin/donation/donors]", e.message);
+    return res.status(500).json({ error: "Could not load donors." });
+  }
+});
+
+// ── POST /api/donation/webhook ────────────────────────────────────────────────
+// Razorpay webhook — backup confirmation. Separate webhook secret.
+// Add this URL in Razorpay Dashboard → Webhooks → payment.captured
+app.post("/api/donation/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!WEBHOOK_SECRET) {
+    return res.status(503).json({ error: "Webhook not configured." });
+  }
+
+  const receivedSig  = req.headers["x-razorpay-signature"];
+  const expectedSig  = crypto
+    .createHmac("sha256", WEBHOOK_SECRET)
+    .update(req.body)               // raw body, before JSON parse
+    .digest("hex");
+
+  let webhookSigValid = false;
+  try {
+    if (receivedSig) {
+      webhookSigValid = crypto.timingSafeEqual(
+        Buffer.from(expectedSig),
+        Buffer.from(receivedSig),
+      );
+    }
+  } catch { webhookSigValid = false; }
+
+  if (!webhookSigValid) {
+    console.warn("[webhook] Invalid Razorpay signature");
+    return res.status(400).json({ error: "Invalid signature." });
+  }
+
+  let event;
+  try {
+    event = JSON.parse(req.body.toString());
+  } catch {
+    return res.status(400).json({ error: "Invalid JSON body." });
+  }
+
+  // Only handle payment.captured
+  if (event.event !== "payment.captured") {
+    return res.status(200).json({ status: "ignored" });
+  }
+
+  const payment = event.payload?.payment?.entity;
+  if (!payment) return res.status(200).json({ status: "no payment entity" });
+
+  const orderId   = payment.order_id;
+  const paymentId = payment.id;
+
+  // Idempotency: if already recorded by /verify, skip
+  const { data: existing } = await supabase
+    .from("donors")
+    .select("id")
+    .eq("razorpay_order_id", orderId)
+    .maybeSingle();
+
+  if (existing) {
+    // Already recorded by /verify — but check if email was sent; if not, send now
+    if (existing.email_sent === false && existing.email) {
+      sendBrevoThankYou({
+        donorId:     existing.id,
+        name:        existing.name,
+        email:       existing.email,
+        amountPaise: existing.amount_paise,
+        paymentId,
+        isAnonymous: existing.is_anonymous,
+      }).catch(err => console.error("[Brevo/webhook-backup] Email error:", err.message));
+    }
+    return res.status(200).json({ status: "already_recorded" });
+  }
+
+  // Record with what we know from webhook (no donor personal data available here)
+  const webhookNow     = new Date();
+  const semesterLabel  = currentSemesterLabel();
+  const featuredUntil  = getFeaturedUntil(webhookNow); // semester-based expiry
+
+  const { data: webhookInserted, error: insertErr } = await supabase.from("donors").insert([{
+    email:               payment.email || null,
+    is_anonymous:        false,
+    tandc_acknowledged:  true,
+    razorpay_order_id:   orderId,
+    razorpay_payment_id: paymentId,
+    payment_verified_at: webhookNow.toISOString(),
+    featured_until:      featuredUntil.toISOString(),
+    is_active:           true,
+    semester_label:      semesterLabel,
+    amount_paise:        payment.amount || null,
+    name:                payment.contact || null,
+    email_sent:          false,
+  }]).select("id");
+
+  if (insertErr) {
+    console.error("[webhook] DB insert error:", insertErr.message);
+    // Still return 200 so Razorpay doesn't retry forever
+    return res.status(200).json({ status: "db_error" });
+  }
+
+  memInvalidate("donation:stats", "donation:donors:");
+  console.log(`[webhook] Donor recorded from webhook: order=${orderId}`);
+
+  // Send thank-you email from webhook path too (non-blocking)
+  const webhookDonorId = webhookInserted?.[0]?.id || null;
+  sendBrevoThankYou({
+    donorId:     webhookDonorId,
+    name:        payment.contact || null,
+    email:       payment.email   || null,
+    amountPaise: payment.amount  || null,
+    paymentId,
+    isAnonymous: false,
+  }).catch(err => console.error("[Brevo/webhook] Background email error:", err.message));
+
+  return res.status(200).json({ status: "ok" });
 });
 
 // ── EMERGENCY UNLOCK (secret-key protected, no auth token needed) ─────────────

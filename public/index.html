@@ -640,7 +640,6 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
   .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
   .nav-links.open li:nth-child(6){opacity:1;transform:none;transition-delay:.31s}
   .nav-links.open li:nth-child(7){opacity:1;transform:none;transition-delay:.36s}
-
   .nav-links a{
     display:flex;align-items:center;padding:18px 28px;
     font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
@@ -1221,6 +1220,83 @@ body.light-mode .member-special-tag.tag-developer{
 .testimonial-name{font-size:13px;font-weight:600}
 .testimonial-role{font-size:11px;color:var(--grey);letter-spacing:.06em}
 
+/* ── DONATIONS PAGE ─────────────────────────────────────────────────────── */
+.donations-hero{padding:100px 40px 60px;max-width:860px;margin:0 auto;text-align:center}
+.donations-hero h1{font-size:clamp(36px,6vw,72px);font-weight:700;letter-spacing:-.04em;line-height:1.05;margin-bottom:20px}
+.donations-hero p{font-size:17px;color:var(--grey);line-height:1.7;max-width:520px;margin:0 auto 40px}
+.donations-body{max-width:860px;margin:0 auto;padding:0 40px 80px}
+@media(max-width:768px){.donations-hero{padding:80px 24px 40px}.donations-body{padding:0 24px 60px}}
+.don-impact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:60px}
+@media(max-width:640px){.don-impact-grid{grid-template-columns:1fr}}
+.don-impact-cell{background:var(--black);padding:28px 24px}
+.don-impact-cell svg{color:var(--grey);margin-bottom:12px}
+.don-impact-num{font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.don-impact-label{font-size:12px;color:var(--grey);letter-spacing:.06em;text-transform:uppercase}
+.don-form-wrap{border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:60px}
+.don-form-header{padding:28px 32px 0;border-bottom:1px solid var(--border)}
+.don-form-header h2{font-size:18px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.don-form-header p{font-size:13px;color:var(--grey);margin-bottom:20px}
+.don-form-body{padding:28px 32px 32px}
+@media(max-width:640px){.don-form-header,.don-form-body{padding:20px}}
+.don-amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px}
+@media(max-width:500px){.don-amounts{grid-template-columns:repeat(2,1fr)}}
+.don-amount-btn{background:none;border:1px solid var(--border);color:var(--grey);padding:14px 8px;border-radius:4px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;text-align:center}
+.don-amount-btn:hover{border-color:var(--white);color:var(--white)}
+.don-amount-btn.active{border-color:var(--white);color:var(--white);background:rgba(255,255,255,.06)}
+.don-custom-wrap{position:relative;margin-bottom:20px}
+.don-currency-sym{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--grey);font-size:15px;pointer-events:none}
+.don-custom-input{width:100%;box-sizing:border-box;background:none;border:1px solid var(--border);color:var(--white);padding:13px 14px 13px 28px;font-size:15px;font-family:inherit;border-radius:4px;transition:border-color .2s}
+.don-custom-input:focus{outline:none;border-color:var(--white)}
+.don-custom-input::placeholder{color:var(--grey)}
+.don-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:540px){.don-field-row{grid-template-columns:1fr}}
+.don-field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.don-field label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
+.don-field input,.don-field textarea{background:none;border:1px solid var(--border);color:var(--white);padding:12px 14px;font-size:14px;font-family:inherit;border-radius:4px;transition:border-color .2s;resize:none}
+.don-field input:focus,.don-field textarea:focus{outline:none;border-color:var(--white)}
+.don-field input::placeholder,.don-field textarea::placeholder{color:var(--grey)}
+.don-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:16px;border:1px solid var(--border);border-radius:4px;margin-bottom:16px;cursor:pointer;transition:border-color .2s}
+.don-toggle-row:hover{border-color:rgba(255,255,255,.2)}
+.don-toggle-info{flex:1}
+.don-toggle-info strong{font-size:13px;font-weight:600;display:block;margin-bottom:2px}
+.don-toggle-info span{font-size:12px;color:var(--grey)}
+.don-toggle{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;transition:background .2s;flex-shrink:0;margin-left:16px}
+.don-toggle::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;background:var(--grey);border-radius:50%;transition:all .2s}
+.don-toggle.on{background:var(--white)}
+.don-toggle.on::after{left:19px;background:var(--black)}
+.don-tandc{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-top:1px solid var(--border);margin-bottom:20px}
+.don-tandc input[type=checkbox]{width:16px;height:16px;flex-shrink:0;margin-top:2px;accent-color:var(--white);cursor:pointer}
+.don-tandc label{font-size:12px;color:var(--grey);line-height:1.6;cursor:pointer}
+.don-tandc label a{color:var(--white);text-decoration:underline;text-underline-offset:3px}
+.don-submit{width:100%;padding:16px;background:var(--white);color:var(--black);border:none;font-size:14px;font-weight:700;font-family:inherit;border-radius:4px;cursor:pointer;transition:opacity .2s;letter-spacing:.04em}
+.don-submit:hover:not(:disabled){opacity:.88}
+.don-submit:disabled{opacity:.3;cursor:not-allowed}
+.don-error{background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:#ff8080;font-size:13px;padding:12px 16px;border-radius:4px;margin-bottom:16px;display:none}
+.don-error.show{display:block}
+.don-success{text-align:center;padding:48px 32px;display:none}
+.don-success.show{display:block}
+.don-success-icon{width:56px;height:56px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.don-success h3{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
+.don-success p{font-size:14px;color:var(--grey);line-height:1.6}
+.don-donors-section{margin-top:20px}
+.don-donors-section h2{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+.don-donors-section p{font-size:13px;color:var(--grey);margin-bottom:28px}
+.don-donors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.don-donor-card{background:var(--black);padding:20px;transition:background .2s}
+.don-donor-card:hover{background:var(--card)}
+.don-donor-name{font-size:13px;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.don-donor-meta{font-size:11px;color:var(--grey);margin-bottom:8px;letter-spacing:.04em}
+.don-donor-amt{font-size:20px;font-weight:700;letter-spacing:-.02em;display:none}
+body.kfs-admin-view .don-donor-amt{display:block}
+.don-donor-semester{font-size:10px;color:var(--grey);margin-top:2px;letter-spacing:.05em;text-transform:uppercase}
+.don-donors-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px;border:1px solid var(--border);border-radius:4px}
+.don-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:60px}
+@media(max-width:640px){.don-why-grid{grid-template-columns:1fr}}
+.don-why-card{padding:24px;border:1px solid var(--border);border-radius:4px}
+.don-why-card svg{color:var(--grey);margin-bottom:14px}
+.don-why-card h3{font-size:14px;font-weight:700;letter-spacing:-.01em;margin-bottom:8px}
+.don-why-card p{font-size:13px;color:var(--grey);line-height:1.6}
+.don-limit-note{font-size:12px;color:var(--grey);text-align:center;margin-top:10px}
 /* ── FOOTER ──────────────────────────────────────────────────────────── */
 footer{border-top:1px solid var(--border);padding:60px 40px;
   display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px}
@@ -2582,6 +2658,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
+      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
     </div>
   </footer>
 </div>
@@ -2748,6 +2825,145 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
     </div>
   </section>
+</div>
+
+<!-- ── DONATIONS PAGE ── -->
+<div class="page" id="page-donations">
+  <div class="donations-hero">
+    <p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:20px">Support KFS</p>
+    <h1>Every frame<br>costs something.</h1>
+    <p>KFS runs entirely on passion and community support. Your donation keeps our cameras rolling, our screenings alive, and the next generation of filmmakers moving forward.</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="document.getElementById('don-form-wrap').scrollIntoView({behavior:'smooth',block:'center'})">Donate Now</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('don-donors-section').scrollIntoView({behavior:'smooth',block:'start'})">See Donors</button>
+    </div>
+  </div>
+
+  <div class="donations-body">
+
+    <!-- Impact numbers -->
+    <div class="don-impact-grid">
+      <div class="don-impact-cell">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div class="don-impact-num" id="don-stat-donors">—</div>
+        <div class="don-impact-label">Active Donors</div>
+      </div>
+      <div class="don-impact-cell">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <div class="don-impact-num" id="don-stat-films">—</div>
+        <div class="don-impact-label">Films Supported</div>
+      </div>
+    </div>
+
+    <!-- Why give -->
+    <div class="don-why-grid">
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <h3>Equipment & Production</h3>
+        <p>Camera rentals, lenses, lighting rigs, and sound gear — the tools that turn ideas into films.</p>
+      </div>
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+        <h3>Screenings & Events</h3>
+        <p>Chitra Vichitra, film nights, and workshops that bring the campus community together around cinema.</p>
+      </div>
+      <div class="don-why-card">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        <h3>Craft & Training</h3>
+        <p>Workshops, masterclasses, and learning materials that help members grow into real filmmakers.</p>
+      </div>
+    </div>
+
+    <!-- Donation form -->
+    <div class="don-form-wrap" id="don-form-wrap">
+      <div class="don-form-header">
+        <h2>Make a donation</h2>
+        <p>Processed securely by Razorpay. Indian Rupees only.</p>
+      </div>
+      <div class="don-form-body" id="don-form-body">
+        <div class="don-error" id="don-error"></div>
+
+        <!-- Amount selector -->
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)">Choose an amount</label>
+        </div>
+        <div class="don-amounts" id="don-amounts">
+          <button class="don-amount-btn" onclick="selectDonAmount(50,this)">&#8377;50</button>
+          <button class="don-amount-btn" onclick="selectDonAmount(100,this)">&#8377;100</button>
+          <button class="don-amount-btn active" onclick="selectDonAmount(250,this)">&#8377;250</button>
+          <button class="don-amount-btn" onclick="selectDonAmount(500,this)">&#8377;500</button>
+        </div>
+        <div class="don-custom-wrap">
+          <span class="don-currency-sym">&#8377;</span>
+          <input class="don-custom-input" type="number" id="don-custom-amount" min="10" max="500" step="1" placeholder="Or enter amount (10–500)" oninput="onDonCustomAmount(this)">
+        </div>
+        <p class="don-limit-note">Min &#8377;10 &nbsp;&middot;&nbsp; Max &#8377;500 &nbsp;&middot;&nbsp; Whole numbers only</p>
+
+        <div style="height:24px"></div>
+
+        <!-- Fields -->
+        <div class="don-field-row">
+          <div class="don-field">
+            <label for="don-name">Full Name</label>
+            <input type="text" id="don-name" placeholder="Your name" maxlength="100" autocomplete="name">
+          </div>
+          <div class="don-field">
+            <label for="don-email">Email <span style="color:rgba(255,255,255,.35)">(required)</span></label>
+            <input type="email" id="don-email" placeholder="For receipt & confirmation" maxlength="200" autocomplete="email">
+          </div>
+        </div>
+        <div class="don-field-row">
+          <div class="don-field">
+            <label for="don-website">Website / Portfolio</label>
+            <input type="url" id="don-website" placeholder="https://yoursite.com" maxlength="300">
+          </div>
+          <div class="don-field">
+            <label for="don-bio">Short note <span style="color:rgba(255,255,255,.35)">(optional)</span></label>
+            <textarea id="don-bio" placeholder="A message for KFS..." rows="1" maxlength="280" style="height:44px"></textarea>
+          </div>
+        </div>
+
+        <!-- Anonymous toggle -->
+        <div class="don-toggle-row" onclick="toggleDonAnon()">
+          <div class="don-toggle-info">
+            <strong>Donate anonymously</strong>
+            <span>Your name won't appear on the public donors list</span>
+          </div>
+          <div class="don-toggle" id="don-anon-toggle"></div>
+        </div>
+
+        <!-- T&C -->
+        <div class="don-tandc">
+          <input type="checkbox" id="don-tandc" onchange="updateDonSubmit()">
+          <label for="don-tandc">I have read and agree to the <a href="/donation-terms" target="_blank">Donation Terms &amp; Conditions</a>, including the no-refund policy. I understand payments are processed by Razorpay, a third-party gateway.</label>
+        </div>
+
+        <button class="don-submit" id="don-submit-btn" disabled onclick="submitDonation()">Donate with Razorpay</button>
+        <p style="font-size:11px;color:var(--grey);text-align:center;margin-top:12px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          PCI-DSS Level 1 secured by Razorpay
+        </p>
+      </div>
+
+      <!-- Success state -->
+      <div class="don-success" id="don-success">
+        <div class="don-success-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h3>Thank you.</h3>
+        <p id="don-success-msg">Your donation has been received and verified.<br>Check your email for a confirmation receipt.</p>
+        <button class="btn btn-secondary" style="margin-top:24px" onclick="resetDonForm()">Donate again</button>
+      </div>
+    </div>
+
+    <!-- Donors list -->
+    <div class="don-donors-section" id="don-donors-section">
+      <h2>This semester's supporters</h2>
+      <p>Thank you to everyone who keeps KFS moving.</p>
+      <div id="don-donors-container"><div class="don-donors-empty">Loading...</div></div>
+    </div>
+
+  </div>
 </div>
 
 <!-- ── 404 PAGE ── -->
@@ -4537,6 +4753,7 @@ function loadPageData(page) {
   else if (page==='movies') loadMovies();
   else if (page==='wrapped') loadWrapped();
   else if (page==='collaborate') loadCollaborate();
+  else if (page==='donations') loadDonationsPage();
 }
 
 function toggleMenu() {
@@ -6134,6 +6351,7 @@ function adminLogout() {
   localStorage.removeItem('kfs_role');
   localStorage.removeItem('kfs_admin_name');
   localStorage.removeItem('kfs_permissions');
+  document.body.classList.remove('kfs-admin-view');
   navigate('home');
 }
 
@@ -6141,6 +6359,7 @@ function showAdminPanel() {
   currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
   currentAdminName = localStorage.getItem('kfs_admin_name') || '';
   try { currentAdminPermissions = JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { currentAdminPermissions = []; }
+  document.body.classList.add('kfs-admin-view');
 
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('admin-login').classList.remove('active');
@@ -13076,5 +13295,305 @@ async function loadBroadcastHistory() {
     </div>
   </div>
 </div>
+
+<!-- Razorpay SDK loaded lazily in submitDonation() — see guide Section 5.1 -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// DONATIONS PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _donSelectedAmount = 250; // default preset
+let _donIsAnon = false;
+
+// ── Mark body as admin-view so amount is visible in donor cards ──────────────
+function _syncAdminAmountVisibility() {
+  if (adminToken) {
+    document.body.classList.add('kfs-admin-view');
+  } else {
+    document.body.classList.remove('kfs-admin-view');
+  }
+}
+
+// ── Called by loadPageData when navigating to donations ─────────────────────
+async function loadDonationsPage() {
+  _syncAdminAmountVisibility();
+  resetDonForm();
+  await Promise.all([loadDonStats(), loadDonors()]);
+}
+
+// ── Amount preset buttons ────────────────────────────────────────────────────
+function selectDonAmount(amount, btn) {
+  _donSelectedAmount = amount;
+  document.querySelectorAll('.don-amount-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Clear custom input
+  const custom = document.getElementById('don-custom-amount');
+  if (custom) custom.value = '';
+  updateDonSubmit();
+}
+
+// ── Custom amount input ──────────────────────────────────────────────────────
+function onDonCustomAmount(input) {
+  const val = parseInt(input.value, 10);
+  // Deselect presets
+  document.querySelectorAll('.don-amount-btn').forEach(b => b.classList.remove('active'));
+  if (!isNaN(val) && val >= 10 && val <= 500) {
+    _donSelectedAmount = val;
+  } else {
+    _donSelectedAmount = null;
+  }
+  updateDonSubmit();
+}
+
+// ── Anonymous toggle ─────────────────────────────────────────────────────────
+function toggleDonAnon() {
+  _donIsAnon = !_donIsAnon;
+  const toggle = document.getElementById('don-anon-toggle');
+  if (toggle) toggle.classList.toggle('active', _donIsAnon);
+}
+
+// ── Enable/disable submit button based on T&C + amount validity ──────────────
+function updateDonSubmit() {
+  const tandcChecked = document.getElementById('don-tandc')?.checked;
+  const amountOk = _donSelectedAmount && _donSelectedAmount >= 10 && _donSelectedAmount <= 500;
+  const btn = document.getElementById('don-submit-btn');
+  if (btn) btn.disabled = !(tandcChecked && amountOk);
+}
+
+// ── Show/hide error ──────────────────────────────────────────────────────────
+function _donShowError(msg) {
+  const el = document.getElementById('don-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('show', !!msg);
+}
+
+// ── Reset form to initial state ──────────────────────────────────────────────
+function resetDonForm() {
+  _donIsAnon = false;
+  _donSelectedAmount = 250;
+  const toggle = document.getElementById('don-anon-toggle');
+  if (toggle) toggle.classList.remove('active');
+
+  // Reset preset buttons — highlight ₹250
+  document.querySelectorAll('.don-amount-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes('250'));
+  });
+
+  const ids = ['don-name', 'don-email', 'don-website', 'don-bio', 'don-custom-amount'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const tandc = document.getElementById('don-tandc');
+  if (tandc) tandc.checked = false;
+
+  _donShowError('');
+  const formBody = document.getElementById('don-form-body');
+  const success  = document.getElementById('don-success');
+  if (formBody) formBody.style.display = '';
+  if (success)  success.classList.remove('show');
+
+  updateDonSubmit();
+}
+
+// ── Main donation flow ───────────────────────────────────────────────────────
+async function submitDonation() {
+  _donShowError('');
+
+  // Guard: T&C
+  if (!document.getElementById('don-tandc')?.checked) {
+    _donShowError('Please agree to the Terms & Conditions before donating.');
+    return;
+  }
+
+  // Guard: amount — must be whole integer between 10 and 500 (guide Section 3.2)
+  if (!_donSelectedAmount || !Number.isInteger(_donSelectedAmount) || _donSelectedAmount < 10 || _donSelectedAmount > 500) {
+    _donShowError('Please choose a valid whole-number amount between ₹10 and ₹500.');
+    return;
+  }
+
+  // Lazy-load Razorpay SDK only when needed (guide Section 5.1)
+  if (typeof window.Razorpay === 'undefined') {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Could not load payment SDK. Check your internet connection.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  // Guard: email required
+  const email = (document.getElementById('don-email')?.value || '').trim();
+  if (!email || !email.includes('@')) {
+    _donShowError('A valid email is required for your receipt.');
+    return;
+  }
+
+  const name    = (document.getElementById('don-name')?.value    || '').trim();
+  const website = (document.getElementById('don-website')?.value || '').trim();
+  const bio     = (document.getElementById('don-bio')?.value     || '').trim();
+
+  const btn = document.getElementById('don-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening payment…'; }
+
+  try {
+    // Step 1 — Create order on our backend (amount enforced server-side)
+    const orderRes = await fetch('/api/donation/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({
+        amount: _donSelectedAmount,
+        email,
+        tandc_acknowledged: true,
+        is_anonymous: _donIsAnon,
+        ...(_donIsAnon ? {} : { name, website_url: website, bio }),
+      }),
+    });
+
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) {
+      _donShowError(orderData.error || 'Could not initiate payment. Please try again.');
+      return;
+    }
+
+    const { order_id, key_id, amount_paise } = orderData;
+
+    // Step 2 — Open Razorpay Checkout
+    const rzp = new Razorpay({
+      key:         key_id,
+      amount:      amount_paise,
+      currency:    'INR',
+      name:        'KFS — KIIT Film Society',
+      description: 'Donation to KFS',
+      order_id:    order_id,
+      prefill: {
+        name:  _donIsAnon ? '' : name,
+        email: email,
+      },
+      theme: { color: '#f5f5f5' },
+      modal: {
+        ondismiss: () => {
+          if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+        },
+      },
+      handler: async (response) => {
+        // Step 3 — Verify payment signature on backend
+        if (btn) btn.textContent = 'Verifying…';
+        try {
+          const verifyRes = await fetch('/api/donation/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+            body: JSON.stringify({
+              razorpay_order_id:   response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature:  response.razorpay_signature,
+              donor: {
+                email,
+                tandc_acknowledged: true,
+                is_anonymous: _donIsAnon,
+                ...(_donIsAnon ? {} : { name, website_url: website, bio }),
+              },
+            }),
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok) {
+            _donShowError(verifyData.error || 'Payment verification failed. Contact support if amount was deducted.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+            return;
+          }
+          // Success
+          const formBody = document.getElementById('don-form-body');
+          const success  = document.getElementById('don-success');
+          if (formBody) formBody.style.display = 'none';
+          if (success)  success.classList.add('show');
+          // Refresh donors list
+          loadDonors();
+          loadDonStats();
+        } catch(e) {
+          _donShowError('Network error during verification. Contact us if your amount was deducted.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+        }
+      },
+    });
+
+    rzp.open();
+
+  } catch(e) {
+    _donShowError('Something went wrong. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+  }
+}
+
+// ── Load impact stats ─────────────────────────────────────────────────────────
+async function loadDonStats() {
+  try {
+    const data = await fetch('/api/donation/stats').then(r => r.ok ? r.json() : null);
+    if (!data) return;
+
+    const donorsEl = document.getElementById('don-stat-donors');
+    const filmsEl  = document.getElementById('don-stat-films');
+    if (donorsEl) donorsEl.textContent = data.active_donors ?? '—';
+    if (filmsEl)  filmsEl.textContent  = data.films_supported ?? '—';
+  } catch(e) {}
+}
+
+// ── Load & render donors list ─────────────────────────────────────────────────
+async function loadDonors() {
+  const container = document.getElementById('don-donors-container');
+  if (!container) return;
+  container.innerHTML = '<div class="don-donors-empty">Loading…</div>';
+
+  try {
+    // Use admin endpoint (includes amount) if logged in, else public endpoint
+    const endpoint = adminToken ? '/api/admin/donation/donors' : '/api/donation/donors';
+    const donors = await fetch(endpoint, {
+      headers: adminToken ? { Authorization: 'Bearer ' + adminToken } : {},
+    }).then(r => r.ok ? r.json() : []);
+
+    if (!donors || !donors.length) {
+      container.innerHTML = '<div class="don-donors-empty">No donors yet this semester. Be the first!</div>';
+      return;
+    }
+
+    container.innerHTML = '<div class="don-donors-grid">' +
+      donors.map(d => renderDonorCard(d)).join('') +
+    '</div>';
+
+  } catch(e) {
+    container.innerHTML = '<div class="don-donors-empty">Could not load donors.</div>';
+  }
+}
+
+function renderDonorCard(d) {
+  const name    = d.is_anonymous ? 'Anonymous Donor' : escHtml(d.display_name || d.name || 'Donor');
+  const website = d.is_anonymous ? null : (d.website_url || null);
+  const photo   = d.is_anonymous ? null : (d.photo_path  || null);
+  const bio     = d.is_anonymous ? null : (d.bio         || null);
+  const semester = escHtml(d.semester_label || '');
+
+  const nameHtml = website
+    ? `<div class="don-donor-name"><a href="${escHtml(website)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)">${name}</a></div>`
+    : `<div class="don-donor-name">${name}</div>`;
+
+  const photoHtml = photo
+    ? `<img src="${escHtml(photo)}" alt="${name}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-bottom:8px;display:block">`
+    : '';
+
+  const bioHtml = bio ? `<div style="font-size:11px;color:var(--grey);margin-top:4px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(bio)}</div>` : '';
+
+  // Amount — only rendered if server sent it (admin endpoint) and kfs-admin-view is active
+  const amtHtml = d.amount_paise != null
+    ? `<div class="don-donor-amt">₹${Math.round(d.amount_paise / 100).toLocaleString('en-IN')}</div>`
+    : '';
+
+  return `<div class="don-donor-card">
+    ${photoHtml}
+    ${nameHtml}
+    <div class="don-donor-meta">${semester}</div>
+    ${bioHtml}
+    ${amtHtml}
+  </div>`;
+}
+</script>
 </body>
 </html>
