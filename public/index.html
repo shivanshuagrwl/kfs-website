@@ -8119,7 +8119,9 @@ async function deleteCustomEgg(idx) {
 
 
 async function apiFetch(url, method='GET', body=null) {
-  const opts = { method, headers:{}, credentials: 'include' };
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 15000); // 15s hard timeout
+  const opts = { method, headers:{}, credentials: 'include', signal: controller.signal };
   if (adminToken) opts.headers['Authorization'] = 'Bearer '+adminToken;
   // Include CSRF token on all write requests
   if (_csrfToken && !['GET','HEAD'].includes(method)) {
@@ -8138,6 +8140,7 @@ async function apiFetch(url, method='GET', body=null) {
   }
   try {
     const res = await fetch(url, opts);
+    clearTimeout(tid);
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) {
       const msg = 'Server returned non-JSON for ' + url + ' (status ' + res.status + '). Redeploy may be needed.';
@@ -8154,6 +8157,11 @@ async function apiFetch(url, method='GET', body=null) {
     }
     return data;
   } catch(e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') {
+      console.warn('apiFetch timeout:', url);
+      return null;
+    }
     console.error('apiFetch network error:', url, e);
     showAdminError('Network error: could not reach ' + url);
     return null;
@@ -8314,7 +8322,12 @@ document.addEventListener('click', function(e) {
 // Store the promise so checkRoute can await it before deciding whether to show wrapped.
 const _wrappedNavReady = (async function initWrappedNav() {
   try {
-    const config = await apiFetch('/api/wrapped/config').catch(() => null);
+    // Race against a 5-second timeout — a cold-start server must never block navigation
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 5000));
+    const config = await Promise.race([
+      apiFetch('/api/wrapped/config').catch(() => null),
+      timeoutPromise
+    ]);
     if (config) _wrappedConfig = config;
     const wrappedNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
     if (wrappedNavLink) {
