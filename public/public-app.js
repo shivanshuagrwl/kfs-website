@@ -1887,3 +1887,787 @@ document.addEventListener('DOMContentLoaded', function () {
   document.body.classList.add('loaded');
   checkRoute();
 });
+// ── PUBLIC FUNCTIONS (extracted from admin.js — belong to public site) ─────────
+
+function updateScrollProgress() {
+  const el = document.getElementById('scroll-progress');
+  const blogDetail = document.getElementById('blog-detail');
+  if (!blogDetail.classList.contains('active')) { hideScrollProgress(); return; }
+  const scrollTop = window.scrollY;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+  el.style.width = pct + '%';
+  el.classList.add('visible');
+}
+
+function hideScrollProgress() {
+  const el = document.getElementById('scroll-progress');
+  el.classList.remove('visible');
+  el.style.width = '0%';
+}
+window.addEventListener('scroll', updateScrollProgress, { passive: true });
+
+// ── SHARE BUTTON ─────────────────────────────────────────────────────
+// ── DYNAMIC META TAGS (SEO + share) ─────────────────────────────────────────
+// Call whenever the URL changes so og: / twitter: tags reflect the current page.
+// ── Dynamic JSON-LD schema injection ─────────────────────────────────────────
+// Injects/replaces a page-level schema block so Google sees the right structured
+// data for each film, blog post, or section — not just the static Organization schema.
+
+function injectPageSchema(schemaObj) {
+  const SCHEMA_ID = 'kfs-page-schema';
+  let el = document.getElementById(SCHEMA_ID);
+  if (!el) {
+    el = document.createElement('script');
+    el.type = 'application/ld+json';
+    el.id = SCHEMA_ID;
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(schemaObj);
+}
+
+function removePageSchema() {
+  const el = document.getElementById('kfs-page-schema');
+  if (el) el.remove();
+}
+
+function updateMetaTags({ title, description, image, url }) {
+  const BASE = 'https://kiitfilmsociety.in';
+  const fullUrl = url.startsWith('http') ? url : BASE + url;
+  const fullImg = image ? (image.startsWith('http') ? image : BASE + image) : BASE + '/images/og-banner.png';
+
+  // <title>
+  document.title = title + ' — KFS | KIIT Film Society';
+
+  // canonical
+  let canon = document.querySelector('link[rel="canonical"]');
+  if (!canon) { canon = document.createElement('link'); canon.rel = 'canonical'; document.head.appendChild(canon); }
+  canon.href = fullUrl;
+
+  // og tags — also update og:type (article for blogs/films, website for sections)
+  const ogType = (url.includes('/blog/') || url.includes('/films/')) ? 'article' : 'website';
+  const ogMeta = {
+    'og:title': title,
+    'og:description': description,
+    'og:image': fullImg,
+    'og:image:width': '1200',
+    'og:image:height': '630',
+    'og:url': fullUrl,
+    'og:type': ogType,
+  };
+  for (const [prop, content] of Object.entries(ogMeta)) {
+    let el = document.querySelector(`meta[property="${prop}"]`);
+    if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+    el.setAttribute('content', content);
+  }
+
+  // twitter tags
+  const twMeta = { 'twitter:title': title, 'twitter:description': description, 'twitter:image': fullImg, 'twitter:url': fullUrl };
+  for (const [name, content] of Object.entries(twMeta)) {
+    let el = document.querySelector(`meta[name="${name}"]`);
+    if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+    el.setAttribute('content', content);
+  }
+
+  // description
+  let desc = document.querySelector('meta[name="description"]');
+  if (!desc) { desc = document.createElement('meta'); desc.setAttribute('name', 'description'); document.head.appendChild(desc); }
+  desc.setAttribute('content', description);
+}
+
+function launchKonfetti() {
+  const colors = ['#ffffff','#cccccc','#888888','#f5f5f5','#444444','#aaaaaa'];
+  const count = 80;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'konfetti-particle';
+    const size = 6 + Math.random() * 8;
+    el.style.cssText = [
+      'left:' + (Math.random() * 100) + 'vw',
+      'top:-20px',
+      'width:' + size + 'px',
+      'height:' + (size * (Math.random() < 0.5 ? 1 : 2.5)) + 'px',
+      'background:' + colors[Math.floor(Math.random() * colors.length)],
+      'border-radius:' + (Math.random() < 0.4 ? '50%' : '1px'),
+      'animation-duration:' + (1.2 + Math.random() * 1.8) + 's',
+      'animation-delay:' + (Math.random() * 0.5) + 's',
+    ].join(';');
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+}
+
+// ── TRAILER FUNCTIONS ────────────────────────────────────────────────
+
+function openTrailer() {
+  const url = window._currentTrailerUrl;
+  if (!url) return;
+  let embedUrl = url;
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) embedUrl = 'https://www.youtube.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0';
+  document.getElementById('trailer-iframe').src = embedUrl;
+  document.getElementById('trailer-modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTrailer() {
+  document.getElementById('trailer-modal-overlay').classList.remove('open');
+  document.getElementById('trailer-iframe').src = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('trailer-modal-overlay').classList.contains('open')) closeTrailer();
+});
+
+// ── ADMIN MEMBER SEARCH ──────────────────────────────────────────────
+
+function openSearch() {
+  document.getElementById('search-overlay').classList.add('open');
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '';
+  document.getElementById('search-input').focus();
+  loadSearchData();
+}
+
+function closeSearch() {
+  document.getElementById('search-overlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════
+// CREW NAME HELPERS — parse "Name||memberId" format
+// ══════════════════════════════════════════════════════════
+
+function doSearch(q) {
+  q = q.trim().toLowerCase();
+  const out = document.getElementById('search-results');
+  if (!q) { out.innerHTML = ''; return; }
+
+  // ── CUSTOM EASTER EGGS (admin-configurable) ───────────────────────────
+  const customEggs = window._customSearchEggs || [];
+  const matched = customEggs.find(e => e.keyword && e.keyword.toLowerCase() === q);
+  if (matched) {
+    if (matched.image_url) {
+      out.innerHTML = `${matched.heading||matched.subtext ? `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>` : ''}<div style="padding:12px"><img class="search-egg-img" src="${matched.image_url}" alt="${matched.heading||''}"></div>`;
+    } else {
+      out.innerHTML = `<div class="search-egg-noshorts"><strong>${matched.heading||''}</strong>${matched.subtext||''}</div>`;
+    }
+    return;
+  }
+
+  // ── EASTER EGG: "shorts" → "No Shorts." ──────────────────────────────
+  if (q === 'shorts') {
+    const h = window._eggShortsHeading || 'No Shorts.';
+    const s = window._eggShortsSub || 'we only make films that last';
+    out.innerHTML = `<div class="search-egg-noshorts"><strong>${h}</strong>${s}</div>`;
+    return;
+  }
+
+  // ── EASTER EGG: "no shorts" → reveal the image ───────────────────────
+  if (q === 'no shorts') {
+    const imgUrl = window._easterEggImg || '';
+    const fallback = window._eggNoShortsFallback || "that's the spirit 🎬";
+    const h = window._eggShortsHeading || 'No Shorts.';
+    const s = window._eggShortsSub || 'we only make films that last';
+    out.innerHTML = imgUrl
+      ? `<div style="padding:12px"><img class="search-egg-img" src="${imgUrl}" alt="No Shorts"></div>`
+      : `<div class="search-egg-noshorts"><strong>${h}</strong>${fallback}</div>`;
+    return;
+  }
+
+  const results = [];
+  const crewFields = ['director','producer','dop','screenwriter','video_editor','sound_design','management','graphic_design','actors','support_crew'];
+
+  searchData.movies.filter(m => {
+    if (m.title?.toLowerCase().includes(q)) return true;
+    // Genre tag search
+    const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
+    if (genres.some(g => g.toLowerCase().includes(q))) return true;
+    return crewFields.some(f => {
+      const val = m[f]||'';
+      return splitCrew(val).some(p=>p.split('||')[0].trim().toLowerCase().includes(q));
+    });
+  }).forEach(m => {
+    const matchedCrew = [];
+    const genres = Array.isArray(m.genre) ? m.genre : (m.genre ? [m.genre] : []);
+    const matchedGenres = genres.filter(g => g.toLowerCase().includes(q));
+    crewFields.forEach(f=>{
+      splitCrew(m[f]||'').forEach(p=>{
+        const name = p.split('||')[0].trim();
+        if (name.toLowerCase().includes(q) && !m.title?.toLowerCase().includes(q)) matchedCrew.push(name);
+      });
+    });
+    const sub = matchedGenres.length && !m.title?.toLowerCase().includes(q)
+      ? 'Genre: '+matchedGenres.join(', ')+(m.director ? ' · Dir. '+m.director.split('||')[0].trim() : '')
+      : matchedCrew.length ? 'Crew: '+matchedCrew.slice(0,3).join(', ') : (m.director ? 'Dir. '+m.director.split('||')[0].trim() : m.release_year||'');
+    results.push({ type:'film', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg>`, title: m.title, sub, action: ()=>{ closeSearch(); openMovie(m.id); } });
+  });
+  searchData.blogs.filter(b => {
+    if (b.title?.toLowerCase().includes(q) || b.excerpt?.toLowerCase().includes(q)) return true;
+    let secs = [];
+    try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
+    return secs.some(s => s.label.toLowerCase().includes(q));
+  }).forEach(b => {
+    let secs = [];
+    try { secs = b.sections ? JSON.parse(b.sections) : []; } catch(e){}
+    const matchedSecs = secs.filter(s => s.label.toLowerCase().includes(q));
+    let sub = '';
+    if (matchedSecs.length) {
+      // Tag match — show tags prominently then excerpt
+      sub = matchedSecs.map(s=>s.label).join(' · ') + (b.excerpt ? '  —  ' + b.excerpt : '');
+    } else {
+      // Title/excerpt match — show all tags as context
+      const allTags = secs.map(s=>s.label).join(' · ');
+      sub = (allTags ? allTags + '  —  ' : '') + (b.excerpt || '');
+    }
+    results.push({ type:'blog', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg>`, title: b.title, sub, action: ()=>{ closeSearch(); openBlog(b.id); } });
+  });
+  searchData.events.filter(e => e.title?.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q)).forEach(e =>
+    results.push({ type:'event', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><\/svg>`, title: e.title, sub: e.event_date ? new Date(e.event_date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '', action: ()=>{ closeSearch(); navigate('events'); } })
+  );
+  searchData.members.filter(m => m.name?.toLowerCase().includes(q) || m.role?.toLowerCase().includes(q) || m.domain?.toLowerCase().includes(q)).forEach(m => {
+    const allMovies = window._allMoviesCache || [];
+    const filmCount = allMovies.filter(mv=>crewFields.some(f=>splitCrew(mv[f]||'').some(p=>{ const [nm,id]=p.split('||'); return (id&&id.trim()==String(m.id))||nm.trim().toLowerCase()===m.name.toLowerCase(); }))).length;
+    const sub = [m.role, m.domain, filmCount ? filmCount+' film'+(filmCount>1?'s':'') : ''].filter(Boolean).join(' · ');
+    results.push({ type:'member', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg>`, title: m.name, sub, action: ()=>{ closeSearch(); navigate('members'); setTimeout(()=>openMemberProfile(m),300); } });
+  });
+
+  if (!results.length) { out.innerHTML = '<div class="search-empty">No results for "'+q+'"<\/div>'; return; }
+
+  const groups = ['film','blog','event','member'];
+  const labels = { film:'Films', blog:'Blog', event:'Events', member:'Members' };
+  let html = '';
+  groups.forEach(g => {
+    const items = results.filter(r=>r.type===g);
+    if (!items.length) return;
+    html += `<div class="search-result-group">${labels[g]}<\/div>`;
+    items.slice(0,5).forEach(item => {
+      html += `<div class="search-result-item" data-idx="${results.indexOf(item)}">
+        <span class="search-result-icon">${item.icon}<\/span>
+        <div><div class="search-result-title">${item.title}<\/div>${item.sub?`<div class="search-result-sub">${item.sub}<\/div>`:''}<\/div>
+      <\/div>`;
+    });
+  });
+  out.innerHTML = html;
+  out.querySelectorAll('.search-result-item').forEach(el => {
+    const idx = parseInt(el.dataset.idx);
+    el.addEventListener('click', () => results[idx].action());
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// CHITRA VICHITRA — PUBLIC
+// ══════════════════════════════════════════════════════════
+let _cvData = [];
+
+function splitCrew(val) {
+  // Support both new separator (;;) and legacy comma-separated data
+  if (!val) return [];
+  return val.includes(';;') ? val.split(';;').map(s=>s.trim()).filter(Boolean)
+                             : val.split(',').map(s=>s.trim()).filter(Boolean);
+}
+
+function renderCrewNames(val) {
+  if (!val) return '';
+  return splitCrew(val).map(p => {
+    const [name, id] = p.trim().split('||');
+    const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
+    if (member) {
+      const idx = _memberIdx(member);
+      return `<span data-member-idx="${idx}" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#555">${name.trim()}<\/span>`;
+    }
+    return name.trim();
+  }).join(', ');
+}
+
+function crewNameTag(part) {
+  const [name, id] = part.split('||');
+  const member = id && allMembers ? allMembers.find(m=>String(m.id)===id.trim()) : null;
+  if (member) {
+    const idx = _memberIdx(member);
+    return `<span class="movie-cast-tag" data-member-idx="${idx}" style="cursor:pointer">${name.trim()}<\/span>`;
+  }
+  return `<span class="movie-cast-tag">${name.trim()}<\/span>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// MEMBER PICKER
+// ══════════════════════════════════════════════════════════
+class MemberPicker {
+  constructor(containerId, multi=false) {
+    this.container = document.getElementById(containerId);
+    this.multi = multi;
+    this.selected = []; // [{id, name, photo, role}]  id=null for free text
+    this.render();
+  }
+  render() {
+    this.container.innerHTML = `
+      <input class="mpicker-input" placeholder="Type a name or search members…" autocomplete="off">
+      <div class="mpicker-dropdown" style="display:none"><\/div>
+      <div class="mpicker-tags"><\/div>`;
+    this.input = this.container.querySelector('.mpicker-input');
+    this.dropdown = this.container.querySelector('.mpicker-dropdown');
+    this.tagsEl = this.container.querySelector('.mpicker-tags');
+    this.input.addEventListener('input', ()=>this._onInput());
+    this.input.addEventListener('keydown', e=>{
+      if (e.key==='Enter'){ e.preventDefault(); this._addFreeText(); }
+      if (e.key==='Escape') this._hideDropdown();
+    });
+    this.input.addEventListener('blur', ()=>setTimeout(()=>this._hideDropdown(),150));
+    this._renderTags();
+  }
+  _onInput() {
+    const q = this.input.value.trim().toLowerCase();
+    if (!q) { this._hideDropdown(); return; }
+    const members = allMembers || [];
+    const matches = members.filter(m=>m.name.toLowerCase().includes(q)).slice(0,8);
+    if (!matches.length) { this._hideDropdown(); return; }
+    this.dropdown.innerHTML = matches.map(m=>`
+      <div class="mpicker-opt" data-id="${m.id}">
+        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>'}
+        <span class="mpicker-opt-name">${m.name}<\/span>
+        <span class="mpicker-opt-role">${m.role||''}<\/span>
+      <\/div>`).join('');
+    this.dropdown.querySelectorAll('.mpicker-opt').forEach(el=>{
+      el.addEventListener('mousedown', e=>{ e.preventDefault(); const m=members.find(x=>x.id==el.dataset.id); if(m) this._select({id:m.id,name:m.name,photo:m.photo,role:m.role}); });
+    });
+    this.dropdown.style.display='block';
+  }
+  _addFreeText() {
+    const v = this.input.value.trim();
+    if (!v) return;
+    this._select({id:null,name:v,photo:null,role:''});
+  }
+  _select(item) {
+    if (!this.multi) this.selected = [];
+    if (!this.selected.find(s=>s.name===item.name)) this.selected.push(item);
+    this.input.value='';
+    this._hideDropdown();
+    this._renderTags();
+  }
+  _remove(name) {
+    this.selected = this.selected.filter(s=>s.name!==name);
+    this._renderTags();
+  }
+  _renderTags() {
+    this.tagsEl.innerHTML = this.selected.map(s=>`
+      <span class="mpicker-tag">
+        ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/span>'}
+        <span class="mpicker-tag-name">${s.name}<\/span>
+        <span class="mpicker-tag-remove" data-name="${s.name}">×<\/span>
+      <\/span>`).join('');
+    this.tagsEl.querySelectorAll('.mpicker-tag-remove').forEach(el=>{
+      el.addEventListener('click',()=>this._remove(el.dataset.name));
+    });
+  }
+  _hideDropdown() { this.dropdown.style.display='none'; }
+  getValue() {
+    // returns comma-separated names (with id suffix for linked members)
+    return this.selected.map(s=>s.id ? `${s.name}||${s.id}` : s.name).join(';;');
+  }
+  setValue(str) {
+    this.selected = [];
+    if (!str) return;
+    splitCrew(str).forEach(part=>{
+      const [name, id] = part.split('||');
+      const member = id && allMembers ? allMembers.find(m=>m.id==id) : null;
+      this.selected.push(member ? {id:member.id,name:member.name,photo:member.photo,role:member.role} : {id:null,name:name.trim(),photo:null,role:''});
+    });
+    this._renderTags();
+  }
+}
+
+// ── Collab Member Picker — members-only, no free text ─────────────────────────
+class CollabMemberPicker {
+  constructor(containerId) {
+    this.container = document.getElementById(containerId);
+    this.selected = null; // { id, name, photo, role }
+    this._render();
+  }
+  _render() {
+    this.container.innerHTML = `
+      <div style="position:relative">
+        <input class="mpicker-input" placeholder="Search KFS members…" autocomplete="off"
+          style="width:100%;box-sizing:border-box">
+        <div class="mpicker-dropdown" style="display:none"></div>
+      </div>
+      <div class="mpicker-tags" style="margin-top:6px"></div>`;
+    this._input = this.container.querySelector('.mpicker-input');
+    this._dd    = this.container.querySelector('.mpicker-dropdown');
+    this._tags  = this.container.querySelector('.mpicker-tags');
+    this._input.addEventListener('input', () => this._onInput());
+    this._input.addEventListener('keydown', e => { if (e.key === 'Escape') this._hideDd(); });
+    this._input.addEventListener('blur', () => setTimeout(() => this._hideDd(), 150));
+    this._renderTag();
+  }
+  reset() { this.selected = null; this._render(); }
+  _onInput() {
+    const q = this._input.value.trim().toLowerCase();
+    if (!q) { this._hideDd(); return; }
+    const members = (allMembers || []).filter(m => !m.is_past);
+    const matches = members.filter(m => m.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!matches.length) { this._hideDd(); return; }
+    this._dd.innerHTML = matches.map(m => `
+      <div class="mpicker-opt" data-id="${m.id}">
+        ${m.photo ? `<img src="${m.photo}" alt="">` : '<div class="mpicker-opt-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>'}
+        <span class="mpicker-opt-name">${m.name}</span>
+        <span class="mpicker-opt-role">${m.role || ''}</span>
+      </div>`).join('');
+    this._dd.querySelectorAll('.mpicker-opt').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const m = members.find(x => x.id == el.dataset.id);
+        if (m) { this.selected = { id: m.id, name: m.name, photo: m.photo, role: m.role }; this._input.value = ''; this._hideDd(); this._renderTag(); }
+      });
+    });
+    this._dd.style.display = 'block';
+  }
+  _hideDd() { this._dd.style.display = 'none'; }
+  _renderTag() {
+    if (!this.selected) { this._tags.innerHTML = ''; return; }
+    const s = this.selected;
+    this._tags.innerHTML = `<span class="mpicker-tag">
+      ${s.photo ? `<img src="${s.photo}" alt="">` : '<span class="mpicker-tag-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>'}
+      <span class="mpicker-tag-name">${s.name}</span>
+      <span class="mpicker-tag-remove" style="cursor:pointer">×</span>
+    </span>`;
+    this._tags.querySelector('.mpicker-tag-remove').addEventListener('click', () => {
+      this.selected = null; this._renderTag();
+    });
+    // Show domain auto-fill hint
+    if (s.role) {
+      const domainSel = document.getElementById('collab-domain');
+      if (domainSel && !domainSel.value && s.domain) domainSel.value = s.domain;
+    }
+  }
+  getValue() {
+    if (!this.selected) return '';
+    return this.selected.id ? `${this.selected.name}||${this.selected.id}` : this.selected.name;
+  }
+  isValid() { return !!this.selected; }
+}
+
+let _moviePickers = {};
+
+async function openMemberProfile(member) {
+  window._currentProfileMember = member;  // store for passport download
+  const modal = document.getElementById('member-profile-modal');
+  document.getElementById('mprofile-name').textContent = member.name;
+  document.getElementById('mprofile-role').textContent = [member.role, member.domain].filter(Boolean).join(' · ');
+  document.getElementById('mprofile-batch').textContent = member.batch ? 'Batch of '+member.batch : '';
+  document.getElementById('mprofile-bio').textContent = member.bio || '';
+  const photoWrap = document.getElementById('mprofile-photo-wrap');
+  photoWrap.innerHTML = member.photo
+    ? `<img class="member-profile-photo" src="${member.photo}" alt="${member.name}">`
+    : `<div class="member-profile-photo-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`;
+
+  // find films this member is linked to — fetch if cache empty (e.g. direct /members visit)
+  if (!window._allMoviesCache || !window._allMoviesCache.length) {
+    const [mv, allReviews] = await Promise.all([
+      apiFetch('/api/movies'),
+      fetch('/api/reviews/all').then(r=>r.ok?r.json():[]).catch(()=>[])
+    ]);
+    window._allMoviesCache = mv || [];
+    window._movieRatings = window._movieRatings || {};
+  }
+  const allMovies = window._allMoviesCache || [];
+  const crewFields = ['director','producer','dop','screenwriter','video_editor','sound_design','management','graphic_design','actors','support_crew'];
+  const memberFilms = [];
+  allMovies.forEach(m=>{
+    let roleLabel = '';
+    crewFields.forEach(f=>{
+      const val = m[f]||'';
+      const parts = splitCrew(val);
+      parts.forEach(p=>{
+        const [name, id] = p.split('||');
+        if ((id && id.trim()==String(member.id)) || name.trim().toLowerCase()===member.name.toLowerCase()) {
+          const labels = {director:'Director',producer:'Producer',dop:'DOP',screenwriter:'Script Writer',video_editor:'Editor',sound_design:'Sound',management:'Management',graphic_design:'Graphic Design',actors:'Actor',support_crew:'Crew'};
+          if (!roleLabel) roleLabel = labels[f]||f;
+        }
+      });
+    });
+    if (roleLabel) memberFilms.push({movie:m, role:roleLabel});
+  });
+  // Sort by release year (newest first); films with no year go to the end
+  memberFilms.sort((a,b) => {
+    const ya = parseInt(a.movie.release_year)||0;
+    const yb = parseInt(b.movie.release_year)||0;
+    return yb - ya;
+  });
+
+  const filmsWrap = document.getElementById('mprofile-films-wrap');
+  const filmsGrid = document.getElementById('mprofile-films-grid');
+  if (memberFilms.length) {
+    filmsWrap.style.display='block';
+    filmsGrid.innerHTML = memberFilms.map(({movie:mv, role})=>`
+      <div class="member-film-card" data-open-movie="${mv.id}" style="cursor:pointer">
+        ${mv.poster_image ? `<img class="member-film-poster" src="${mv.poster_image}" alt="${mv.title}">` : `<div class="member-film-poster-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
+        <div class="member-film-info">
+          <div class="member-film-title">${mv.title}<\/div>
+          <div class="member-film-role-label">${role}${mv.release_year ? ' · '+mv.release_year : ''}<\/div>
+        <\/div>
+      <\/div>`).join('');
+  } else {
+    filmsWrap.style.display='none';
+  }
+
+  // ── Blogs authored by this member ──────────────────────────────────────────
+  const blogsWrap = document.getElementById('mprofile-blogs-wrap');
+  const blogsList = document.getElementById('mprofile-blogs-list');
+  // Use cached blogs if available; fetch otherwise
+  const getBlogs = async () => {
+    if (window._allBlogsCache) return window._allBlogsCache;
+    const data = await apiFetch('/api/blogs').catch(()=>[]);
+    window._allBlogsCache = data || [];
+    return window._allBlogsCache;
+  };
+  getBlogs().then(allBlogs => {
+    const memberId = String(member.id);
+    const memberName = member.name.trim().toLowerCase();
+    const authored = allBlogs.filter(b => {
+      if (!b.author) return false;
+      // Support multiple authors separated by ;;
+      return b.author.split(';;').some(part => {
+        const raw = part.trim();
+        const pipeIdx = raw.indexOf('||');
+        if (pipeIdx !== -1) {
+          const id = raw.slice(pipeIdx + 2).trim();
+          const name = raw.slice(0, pipeIdx).trim().toLowerCase();
+          return id === memberId || name === memberName;
+        }
+        return raw.toLowerCase() === memberName;
+      });
+    });
+    if (authored.length) {
+      blogsWrap.style.display = 'block';
+      blogsList.innerHTML = authored.map(b => `
+        <div class="mprofile-blog-item" onclick="closeMemberProfile();openBlog(${b.id})">
+          ${b.cover_image
+            ? `<img class="mprofile-blog-thumb" src="${b.cover_image}" alt="">`
+            : `<div class="mprofile-blog-thumb-ph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><\/svg><\/div>`}
+          <span class="mprofile-blog-title">${b.title}<\/span>
+        <\/div>`).join('');
+    } else {
+      blogsWrap.style.display = 'none';
+    }
+  });
+
+  modal.classList.add('open');
+}
+
+function openMemberProfileById(uuid) {
+  const allMembers = window._memberRegistry || [];
+  const member = allMembers.find(m => String(m.id) === String(uuid));
+  if (member) openMemberProfile(member);
+}
+
+async function loadCVCards() {
+  _cvData = await apiFetch('/api/chitra-vichitra') || [];
+  const row = document.getElementById('cv-cards-row');
+  if (!row) return;
+  if (!_cvData.length) {
+    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.<\/div>`;
+    return;
+  }
+  row.innerHTML = _cvData.map(cv => {
+    const movieCount = cv.movie_count || 0;
+    return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
+      ${cv.cover_image
+        ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
+        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
+      <div class="cv-year-card-overlay"><\/div>
+      <div class="cv-year-card-info">
+        <div class="cv-year-badge">Chitra Vichitra<\/div>
+        <div class="cv-year-num">${cv.year}<\/div>
+        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened<\/div>
+        <div class="cv-year-arrow">View Films →<\/div>
+      <\/div>
+    <\/div>`;
+  }).join('');
+}
+
+function getWatchedMovies() {
+  try { return JSON.parse(localStorage.getItem('kfs_watched_movies') || '{}'); } catch { return {}; }
+}
+
+function isMovieWatched(id) { return !!getWatchedMovies()[id]; }
+
+function updateDetailWatchBtn(id) {
+  const btn = document.getElementById('movie-watch-status-btn');
+  if (!btn) return;
+  const watched = isMovieWatched(id);
+  btn.innerHTML = watched
+    ? '<span>✓<\/span> Watched'
+    : '<span>☐<\/span> Mark as Watched';
+  btn.classList.toggle('is-watched', watched);
+  btn.style.cssText = ''; // clear any previously set inline styles
+}
+
+function toggleWatchStatusCard(id, cardEl) {
+  const nowWatched = !isMovieWatched(id);
+  setMovieWatched(id, nowWatched);
+  const badge = cardEl.querySelector('.movie-watch-badge');
+  if (badge) {
+    badge.textContent = nowWatched ? '✓ Watched' : '+ Watchlist';
+    badge.classList.toggle('movie-watch-badge--done', nowWatched);
+  }
+  cardEl.classList.toggle('watched', nowWatched);
+  // Sync detail btn if same film is open
+  if (window._currentMovieId === id) updateDetailWatchBtn(id);
+}
+
+// Analytics auto-load is handled inside loadAdminData()
+
+// ── Hero Camera Parallax — removed for performance ──
+
+// ── Member Excel Import ──────────────────────────────────────
+let _memberImportNames = [];
+
+function openEventFormById(eventId) {
+  const e = (window._eventRegistry || {})[eventId];
+  if (!e) return;
+  openEventForm(e.id, e.title, e.event_date || '', e.event_time || '', e.location || '');
+}
+
+function shareEventById(eventId) {
+  const e = (window._eventRegistry || {})[eventId];
+  if (!e) return;
+  const dateStr = e.event_date
+    ? new Date(e.event_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  shareEventCard(e.id, e.title, dateStr, e.venue || e.location || '');
+}
+
+async function loadWrapped() {
+  // Avoid double-loading
+  if (_wrappedStats !== null) return;
+  try {
+    const [stats, config] = await Promise.all([
+      apiFetch('/api/wrapped/stats').catch(() => null),
+      apiFetch('/api/wrapped/config').catch(() => null),
+    ]);
+    _wrappedStats  = stats  || {};
+    _wrappedConfig = config || {};
+
+    // Show/hide wrapped nav link based on enabled flag (default true)
+    const wrappedNavLink = document.querySelector('[data-page="wrapped"]')?.parentElement;
+    if (wrappedNavLink) {
+      wrappedNavLink.style.display = (_wrappedConfig.enabled === false) ? 'none' : '';
+    }
+
+    const yearEl = document.getElementById('wrapped-year-label');
+    const subEl  = document.getElementById('wrapped-hero-sub');
+    const statsEl = document.getElementById('wrapped-hero-stats');
+    if (yearEl && _wrappedConfig.year) yearEl.textContent = `KFS · ${_wrappedConfig.year}`;
+    if (subEl  && _wrappedConfig.sub)  subEl.textContent  = _wrappedConfig.sub;
+
+    // Populate hero stats from localStorage counts
+    const watchedCount = Object.keys(getWatchedMovies()).length;
+    const readCount    = Object.keys(getBlogReadState()).length;
+    const eventCount   = Object.keys(getRegisteredEvents()).length;
+    if (statsEl && (watchedCount + readCount + eventCount) > 0) {
+      document.getElementById('whero-films').textContent  = watchedCount;
+      document.getElementById('whero-events').textContent = eventCount;
+      document.getElementById('whero-blogs').textContent  = readCount;
+      statsEl.style.display = 'flex';
+    }
+  } catch(e) {
+    _wrappedStats = {}; _wrappedConfig = {};
+  }
+}
+
+async function loadCollaborate() {
+  const list = document.getElementById('collab-list');
+  if (!list) return;
+  list.innerHTML = '<div class="loading">Loading open calls…</div>';
+
+  let posts;
+  try {
+    const res = await fetch('/api/collaborate');
+    posts = await res.json();
+  } catch(e) {
+    list.innerHTML = '<div class="admin-empty"><p>Could not load listings.</p></div>';
+    return;
+  }
+
+  window._allCollabPosts = posts || [];
+
+  // Build domain filter
+  const filterWrap = document.getElementById('collab-filter-wrap');
+  const domains = [...new Set((posts || []).map(p => p.domain).filter(Boolean))].sort();
+  if (domains.length && filterWrap) {
+    filterWrap.style.display = 'inline-block';
+    _buildCollabFilterDropdown(domains);
+    const btn = document.getElementById('collab-filter-btn');
+    if (btn) {
+      const textNode = Array.from(btn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+      if (textNode) textNode.textContent = ' Filter ';
+    }
+  } else if (filterWrap) {
+    filterWrap.style.display = 'none';
+  }
+
+  _renderCollabPosts(posts || [], null);
+}
+
+async function loadFilmComments(movieId) {
+  _fcMovieId = movieId;
+  _fcAllComments = [];
+  _fcShowing = FC_PAGE;
+  document.getElementById('fc-list').innerHTML = '<div class="fc-empty">Loading…</div>';
+  document.getElementById('fc-form-msg').textContent = '';
+  try {
+    const data = await fetch('/api/films/' + movieId + '/comments').then(r => r.json());
+    _fcAllComments = Array.isArray(data) ? data : [];
+    renderFilmComments();
+  } catch(e) {
+    document.getElementById('fc-list').innerHTML = '<div class="fc-empty">Could not load comments.</div>';
+  }
+}
+
+async function loadDonationsPage() {
+  _syncAdminAmountVisibility();
+  resetDonForm();
+  await Promise.all([loadDonStats(), loadDonors()]);
+}
+
+// ── Amount preset buttons ────────────────────────────────────────────────────
+
+
+// ── filterMoviesByGenre — called from genre tags on movie detail page ─────────
+function filterMoviesByGenre(genre) {
+  window._activeGenreFilter = genre;
+  // update the genre filter UI if visible
+  document.querySelectorAll('.blog-filter-item[id^="mgfi-"]').forEach(b => {
+    b.classList.toggle('active', b.id === 'mgfi-' + (genre ? genre.replace(/\s+/g, '-') : 'all'));
+  });
+  if (typeof renderMoviesGrid === 'function' && window._allMovies) {
+    renderMoviesGrid(window._allMovies);
+  }
+}
+
+// ── ROUTE CHECK — reads URL on first load and navigates to the right page ─────
+function checkRoute() {
+  const raw = window.location.pathname.replace(/^\//, '') || 'home';
+
+  // Films deep link: /films/some-title-123
+  const filmMatch = raw.match(/^films\/[^/]+-(\d+)$/);
+  if (filmMatch) { openMovie(filmMatch[1]); return; }
+
+  // Blog deep link: /blog/some-title-123
+  const blogMatch = raw.match(/^blog\/[^/]+-(\d+)$/);
+  if (blogMatch) { openBlog(blogMatch[1]); return; }
+
+  // Named pages
+  const knownPages = [
+    'home','events','blog','movies','members',
+    'wrapped','collaborate','donations','about','team'
+  ];
+  const page = knownPages.includes(raw) ? raw : 'home';
+  _doNavigate(page, false);
+}
+
+// ── APP BOOTSTRAP ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+  document.body.classList.add('loaded');
+  checkRoute();
+});
