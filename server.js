@@ -310,7 +310,7 @@ app.use(helmet({
       // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
-      scriptSrc: ["'self'", "'sha256-wkKq5DwYGPrJW0MS9OL6lsL2ra+BEBjv/+6hpFwAdog='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
+      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:",
@@ -401,26 +401,6 @@ const strictWriteLimit = rateLimit({
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
-// ── Admin route — serves the admin shell HTML to any browser request ──────────
-// Authentication is handled entirely client-side by admin.js:
-//   1. On load it calls POST /api/admin/refresh (httpOnly cookie) to re-hydrate
-//      adminToken in memory. If the cookie is missing/expired it shows the login
-//      form instead of the panel.
-//   2. Every admin API call sends Authorization: Bearer <adminToken> — the real
-//      security gate is on those API routes (authMiddleware / requireSection).
-// Gating the HTML itself with authMiddleware breaks browser navigation because
-// a bare GET /admin cannot send an Authorization header.
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "admin-panel", "index.html"));
-});
-// Serve admin-panel static assets (admin.js, admin CSS) — no auth gate needed;
-// the JS itself contains no secrets and is useless without valid API tokens.
-app.use(
-  "/admin-assets",
-  express.static(path.join(__dirname, "admin-panel"), { index: false }),
-);
-
-// ── Public static files (public site only — no admin files here) ──────────────
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Response cache helper ──────────────────────────────────────────────────────
@@ -1351,15 +1331,6 @@ app.post("/api/admin/logout-all", authMiddleware, async (req, res) => {
     clearRefreshCookie(res);
   }
   res.json({ success: true, message: "All sessions revoked" });
-});
-
-// ── Google Sheet link (auth-gated — ID never exposed in public HTML) ──────────
-// The Sheet ID lives in GOOGLE_SHEET_ID env var. This endpoint returns the full
-// URL only to authenticated admins; unauthenticated visitors never receive it.
-app.get("/api/admin/sheet-link", authMiddleware, (req, res) => {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-  if (!sheetId) return res.json({ url: null });
-  res.json({ url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing` });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6271,12 +6242,7 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
-// /admin is handled above (serves admin-panel/index.html).
-// Any unmatched /admin/* sub-path falls through here and returns the public site.
 app.get("*", (req, res) => {
-  if (req.path.startsWith("/admin")) {
-    return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
-  }
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
