@@ -401,16 +401,22 @@ const strictWriteLimit = rateLimit({
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
-// ── P1: Protected /admin route — serves admin shell only to authenticated admins ──
-// The admin HTML/JS/CSS lives in /admin-panel/ (never under /public/).
-// Unauthenticated requests are redirected to / (no login hint in error).
-app.get("/admin", authMiddleware, (req, res) => {
+// ── Admin route — serves the admin shell HTML to any browser request ──────────
+// Authentication is handled entirely client-side by admin.js:
+//   1. On load it calls POST /api/admin/refresh (httpOnly cookie) to re-hydrate
+//      adminToken in memory. If the cookie is missing/expired it shows the login
+//      form instead of the panel.
+//   2. Every admin API call sends Authorization: Bearer <adminToken> — the real
+//      security gate is on those API routes (authMiddleware / requireSection).
+// Gating the HTML itself with authMiddleware breaks browser navigation because
+// a bare GET /admin cannot send an Authorization header.
+app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "admin-panel", "index.html"));
 });
-// Serve admin-panel static assets (admin.js, admin CSS) — also auth-gated
+// Serve admin-panel static assets (admin.js, admin CSS) — no auth gate needed;
+// the JS itself contains no secrets and is useless without valid API tokens.
 app.use(
   "/admin-assets",
-  authMiddleware,
   express.static(path.join(__dirname, "admin-panel"), { index: false }),
 );
 
@@ -6265,8 +6271,8 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
-// NOTE: /admin is handled above by the auth-gated route.
-// Any unmatched /admin/* sub-path returns 404 (no admin shell leak).
+// /admin is handled above (serves admin-panel/index.html).
+// Any unmatched /admin/* sub-path falls through here and returns the public site.
 app.get("*", (req, res) => {
   if (req.path.startsWith("/admin")) {
     return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));

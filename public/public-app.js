@@ -1,6 +1,27 @@
 // app.js — KFS Frontend (extracted from inline scripts)
 // Blocks: theme-applier, main-app, search, member-import, form-builder, collab, donations
 
+// ── CSRF token (fetched once on load) ─────────────────────────────────────────
+let _csrfToken = '';
+(async function fetchCsrf() {
+  try {
+    const r = await fetch('/api/csrf-token');
+    if (r.ok) { const d = await r.json(); _csrfToken = d.csrf_token || d.token || ''; }
+  } catch(e) {}
+})();
+
+// ── apiFetch — central fetch wrapper used by all public data loaders ──────────
+async function apiFetch(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) {
+    console.error('[apiFetch] Error fetching', url, e);
+    return null;
+  }
+}
+
 // Apply banner + hero overrides from theme loaded in <head>
 (function() {
   var t = window.__kfsEventTheme;
@@ -1839,3 +1860,30 @@ function _evalDataHandler(el, expr, eventObj) {
     }
   }
 }
+
+// ── ROUTE CHECK — reads URL on first load and navigates to the right page ─────
+function checkRoute() {
+  const raw = window.location.pathname.replace(/^\//, '') || 'home';
+
+  // Films deep link: /films/some-title-123
+  const filmMatch = raw.match(/^films\/[^/]+-(\d+)$/);
+  if (filmMatch) { openMovie(filmMatch[1]); return; }
+
+  // Blog deep link: /blog/some-title-123
+  const blogMatch = raw.match(/^blog\/[^/]+-(\d+)$/);
+  if (blogMatch) { openBlog(blogMatch[1]); return; }
+
+  // Named pages
+  const knownPages = [
+    'home','events','blog','movies','members',
+    'wrapped','collaborate','donations','about','team'
+  ];
+  const page = knownPages.includes(raw) ? raw : 'home';
+  _doNavigate(page, false);
+}
+
+// ── APP BOOTSTRAP ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+  document.body.classList.add('loaded');
+  checkRoute();
+});
