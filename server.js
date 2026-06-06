@@ -561,8 +561,9 @@ function requireSection(section) {
       req.admin = decoded;
       if (decoded.role === "master") return next(); // master always passes
       const perms = decoded.permissions || [];
-      // Empty array = legacy admin with no permissions set yet = full access
-      if (perms.length === 0 || perms.includes(section)) return next();
+      // NOTE: empty permissions array means NO access (not legacy full-access).
+      // Ensure all admin accounts have their permissions[] set before deploying.
+      if (perms.includes(section)) return next();
       return res
         .status(403)
         .json({ error: `No permission for section: ${section}` });
@@ -638,11 +639,12 @@ async function initDB() {
       throw new Error("admins table query failed (master2): " + master2Err.message);
 
     if (!master2) {
-      const master2Pw = process.env.MASTER2_DEFAULT_PW || defaultPw;
+      const master2Pw = process.env.MASTER2_DEFAULT_PW; // intentionally NOT falling back to MASTER_DEFAULT_PW
       if (!master2Pw) {
         console.error(
-          "[initDB] FATAL: MASTER2_DEFAULT_PW (or MASTER_DEFAULT_PW) env var is not set. " +
-          "Cannot create kfsmaster2 account safely.",
+          "[initDB] FATAL: MASTER2_DEFAULT_PW env var is not set. " +
+          "Cannot create kfsmaster2 account safely. " +
+          "Set a SEPARATE password from MASTER_DEFAULT_PW in your Render dashboard.",
         );
       } else {
         const hash2 = await bcrypt.hash(master2Pw, 10);
@@ -1270,7 +1272,7 @@ app.post("/api/admin/logout-all", authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Step 1 — Generate secret and QR code
-app.get("/api/admin/2fa/setup", authMiddleware, async (req, res) => {
+app.get("/api/admin/2fa/setup", authMiddleware, rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Too many 2FA setup attempts. Try again later." } }), async (req, res) => {
   const secret = speakeasy.generateSecret({
     name:   `KFS Admin (${req.admin.username})`,
     issuer: "KFS — KIIT Film Society",
@@ -4579,7 +4581,7 @@ app.get("/api/collaborate/edit/:token", async (req, res) => {
   res.json(data);
 });
 
-app.put("/api/collaborate/:token", async (req, res) => {
+app.put("/api/collaborate/:token", csrfProtect, async (req, res) => {
   const payload = cleanCollabPayload(req.body);
 
   if (
@@ -4610,7 +4612,7 @@ app.put("/api/collaborate/:token", async (req, res) => {
   res.json({ success: true });
 });
 
-app.delete("/api/collaborate/:token", async (req, res) => {
+app.delete("/api/collaborate/:token", csrfProtect, async (req, res) => {
   // First confirm the post exists — prevents silent success on bad/guessed tokens
   const { data: existing } = await supabasePublic
     .from("collaborate_posts")
@@ -4773,6 +4775,9 @@ app.get("/api/track-open/:broadcastId/:recipientHash", async (req, res) => {
 
   // Record open async (fire-and-forget, deduplicated by unique constraint)
   const { broadcastId, recipientHash } = req.params;
+  const UUID_RE  = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const HEX64_RE = /^[0-9a-f]{64}$/i;
+  if (!UUID_RE.test(broadcastId) || !HEX64_RE.test(recipientHash)) return; // silently drop malformed params
   supabasePublic
     .from("broadcast_opens")
     .insert([{ broadcast_id: broadcastId, recipient_hash: recipientHash }])
@@ -5871,7 +5876,7 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
   // Idempotency: if already recorded by /verify, skip
   const { data: existing } = await supabase
     .from("donors")
-    .select("id")
+    .select("id, email_sent, email, name, amount_paise, is_anonymous")
     .eq("razorpay_order_id", orderId)
     .maybeSingle();
 
@@ -6110,7 +6115,19 @@ app.get("/api/admin/emergency-unlock", async (req, res) => {
   if (!UNLOCK_SECRET) {
     return res.status(503).json({ error: "UNLOCK_SECRET env var not configured on server." });
   }
-  if (!secret || secret !== UNLOCK_SECRET) {
+  // Use timingSafeEqual to prevent timing-based brute-force of the secret
+  let secretValid = false;
+  try {
+    if (secret) {
+      const a = Buffer.alloc(64);
+      const b = Buffer.alloc(64);
+      a.write(secret, 0, "utf8");
+      b.write(UNLOCK_SECRET, 0, "utf8");
+      secretValid = crypto.timingSafeEqual(a, b) &&
+                    secret.length === UNLOCK_SECRET.length;
+    }
+  } catch { secretValid = false; }
+  if (!secretValid) {
     return res.status(403).json({ error: "Invalid secret." });
   }
   if (!username) {
@@ -6143,7 +6160,7 @@ app.get("/api/admin/lockout-status", async (req, res) => {
   const entry = LOGIN_ATTEMPTS.get(normalised);
   const { data: dbAdmin } = await supabase
     .from("admins")
-    .select("username, login_failures, locked_until, password_hash")
+    .select("username, login_failures, locked_until")
     .eq("username", normalised)
     .maybeSingle();
   res.json({
@@ -6151,7 +6168,7 @@ app.get("/api/admin/lockout-status", async (req, res) => {
     found_in_db: !!dbAdmin,
     in_memory_lockout: entry ? { count: entry.count, lockedUntil: entry.lockedUntil ? new Date(entry.lockedUntil).toISOString() : null } : null,
     db_lockout: dbAdmin ? { login_failures: dbAdmin.login_failures, locked_until: dbAdmin.locked_until } : null,
-    has_password_hash: !!(dbAdmin?.password_hash),
+    has_password_hash: !!dbAdmin, // always true if admin row exists
   });
 });
 

@@ -2365,6 +2365,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
 </head>
 <body>
 
@@ -4692,7 +4694,12 @@ KFS — KIIT Film Society"></textarea>
 
 <script>
 let currentPage = 'home';
-let adminToken = localStorage.getItem('kfs_token');
+// ── SECURITY: adminToken lives in memory only — never written to localStorage.
+// XSS cannot steal it. Session persistence is handled by the httpOnly refresh
+// cookie (kfs_refresh) which the server issues on login and rotates on every
+// /api/admin/refresh call. On a hard reload the token is re-hydrated from the
+// cookie via the immediate refresh call in autoRefreshToken() below.
+let adminToken = null;
 let _csrfToken = null;
 
 // Fetch CSRF token once on page load
@@ -4704,48 +4711,36 @@ let _csrfToken = null;
   } catch(e) {}
 })();
 
-// Decode JWT payload to get the real role baked in at login time
-(function syncRoleFromToken() {
-  if (!adminToken) return;
-  try {
-    const payload = JSON.parse(atob(adminToken.split('.')[1]));
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      adminToken = null;
-      ['kfs_token','kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
-      return;
-    }
-    if (payload.role) localStorage.setItem('kfs_role', payload.role);
-    if (payload.name) localStorage.setItem('kfs_admin_name', payload.name);
-  } catch(e) {}
-})();
-
+// role/name/permissions: safe to keep in localStorage — not secrets, not tokens
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
 const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
-  // Empty array = no permissions set yet (legacy admin) = full access
-  if (!currentAdminPermissions || currentAdminPermissions.length === 0) return true;
+  // change-password and two-factor are always accessible (not section-gated)
+  if (['change-password','two-factor'].includes(section)) return true;
+  // Empty permissions = no access (mirrors server-side requireSection fix)
+  if (!currentAdminPermissions || currentAdminPermissions.length === 0) return false;
   return currentAdminPermissions.includes(section);
 }
 let allEvents = [];
 
 // ── AUTO-REFRESH TOKEN — every 12 min (token is 15-min short-lived) ──────────
+// On every page load this fires immediately to re-hydrate adminToken from the
+// httpOnly refresh cookie — no localStorage read needed.
 (function autoRefreshToken() {
-  if (!adminToken) return;
-  // Immediate refresh on page load to get a fresh token + httpOnly cookie
+  // Immediate refresh on page load — always attempt, cookie presence determines success
   fetch('/api/admin/refresh', {
     method: 'POST',
     credentials: 'include' // send httpOnly refresh cookie
   }).then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       if (!data || !data.token) return;
-      adminToken = data.token;
+      adminToken = data.token; // memory only — never localStorage
       currentAdminRole = data.role || 'admin';
       currentAdminName = data.name || '';
       currentAdminPermissions = data.permissions || [];
-      localStorage.setItem('kfs_token', data.token);
       localStorage.setItem('kfs_role', data.role);
       localStorage.setItem('kfs_admin_name', data.name || '');
       localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
@@ -4759,18 +4754,17 @@ let allEvents = [];
       const r = await fetch('/api/admin/refresh', { method: 'POST', credentials: 'include' });
       if (r.ok) {
         const d = await r.json();
-        adminToken = d.token;
+        adminToken = d.token; // memory only — never localStorage
         currentAdminRole = d.role || 'admin';
         currentAdminName = d.name || '';
         currentAdminPermissions = d.permissions || [];
-        localStorage.setItem('kfs_token', d.token);
         localStorage.setItem('kfs_role', d.role);
         localStorage.setItem('kfs_admin_name', d.name || '');
         localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
       } else {
         // Refresh failed — force re-login
         adminToken = null;
-        ['kfs_token','kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
+        ['kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
         navigate('admin');
       }
     } catch(e) {}
@@ -5519,15 +5513,16 @@ async function openBlog(id) {
   }
   if (current) paragraphs.push(current); // flush remainder
   content = paragraphs.map(p => `<p>${p}</p>`).join('');
-  document.getElementById('blog-detail-body').innerHTML = content;
+  document.getElementById('blog-detail-body').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(content) : content;
   // Show section tags as pills below the title (tags only, no content switching)
   const navWrap = document.getElementById('blog-section-nav-wrap');
   let parsedSections = [];
   try { parsedSections = blog.sections ? JSON.parse(blog.sections) : []; } catch(e){}
   if (parsedSections && parsedSections.length) {
+    const sanitize = (s) => (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(s, { ALLOWED_TAGS: [] }) : s.replace(/[<>"'&]/g, '');
     navWrap.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:28px">`
       + parsedSections.map(s=>`<span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-          padding:4px 12px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${s.label}</span>`).join('')
+          padding:4px 12px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${sanitize(s.label)}</span>`).join('')
       + `</div>`;
   } else {
     navWrap.innerHTML = '';
@@ -6463,11 +6458,11 @@ async function adminLogin() {
     return;
   }
   if (data.token) {
-    adminToken = data.token;
+    adminToken = data.token; // memory only — never localStorage, not XSS-stealable
     currentAdminRole = data.role || 'admin';
     currentAdminName = data.name || username;
-    currentAdminPermissions = data.permissions || ALL_SECTIONS;
-    localStorage.setItem('kfs_token', adminToken);
+    currentAdminPermissions = data.permissions || [];
+    // role/name/permissions are non-sensitive — safe in localStorage for UI state
     localStorage.setItem('kfs_role', currentAdminRole);
     localStorage.setItem('kfs_admin_name', currentAdminName);
     localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
@@ -6497,10 +6492,8 @@ function adminLogout() {
   currentAdminRole = 'admin';
   currentAdminName = '';
   currentAdminPermissions = [];
-  localStorage.removeItem('kfs_token');
-  localStorage.removeItem('kfs_role');
-  localStorage.removeItem('kfs_admin_name');
-  localStorage.removeItem('kfs_permissions');
+  // kfs_token was never in localStorage — only clear UI state keys
+  ['kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
   document.body.classList.remove('kfs-admin-view');
   navigate('home');
 }
@@ -8561,9 +8554,8 @@ async function saveNewAdmin() {
       });
       const refreshData = await refreshRes.json().catch(() => ({}));
       if (refreshData.token && refreshData.role === 'master') {
-        adminToken = refreshData.token;
+        adminToken = refreshData.token; // memory only
         currentAdminRole = 'master';
-        localStorage.setItem('kfs_token', refreshData.token);
         localStorage.setItem('kfs_role', 'master');
         // Retry with fresh token
         const retry = await fetch('/api/master/admins', {
@@ -10155,7 +10147,7 @@ async function runMemberImport() {
   // Fetch all existing member names upfront to detect duplicates before sending
   let existingNames = new Set();
   try {
-    const chkRes = await fetch('/api/members', { headers: { Authorization: 'Bearer ' + localStorage.getItem('kfs_token') } });
+    const chkRes = await fetch('/api/members', { headers: { Authorization: 'Bearer ' + adminToken } });
     const existing = await chkRes.json();
     existingNames = new Set((existing || []).map(m => m.name.trim().toLowerCase()));
   } catch { /* if fetch fails, fall through — server-side guard still protects */ }
@@ -10184,7 +10176,7 @@ async function runMemberImport() {
       fd.append('is_past', 'false');
       const res = await fetch('/api/admin/members', {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + localStorage.getItem('kfs_token') },
+        headers: { Authorization: 'Bearer ' + adminToken },
         body: fd
       });
       if (res.ok) {
@@ -10460,7 +10452,7 @@ async function saveFormBuilder() {
   const btn = document.getElementById('fb-save-btn');
   btn.textContent = 'Saving…'; btn.disabled = true;
   try {
-    const token = adminToken || localStorage.getItem('kfs_token');
+    const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -10487,7 +10479,7 @@ async function clearFormResponses() {
   const origHtml = btn.innerHTML;
   btn.textContent = 'Clearing…'; btn.disabled = true;
   try {
-    const token = adminToken || localStorage.getItem('kfs_token');
+    const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -10515,7 +10507,7 @@ async function deleteEntireForm() {
   const origHtml = btn.innerHTML;
   btn.textContent = 'Deleting…'; btn.disabled = true;
   try {
-    const token = adminToken || localStorage.getItem('kfs_token');
+    const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -10553,7 +10545,7 @@ async function openResponseViewer() {
   countEl.textContent = '';
 
   try {
-    const token = adminToken || localStorage.getItem('kfs_token');
+    const token = adminToken;
     const [formRes, respRes] = await Promise.all([
       fetch('/api/events/' + _fbEventId + '/form'),
       fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
@@ -12108,7 +12100,7 @@ async function saveWrappedConfig() {
     fun_cards:        _wrappedAdminFunCards.filter(fc => fc.text),
     blog_highlights:  _wrappedAdminBlogHighlights.filter(bh => bh.headline),
   };
-  const token = adminToken || localStorage.getItem('kfs_token');
+  const token = adminToken;
   try {
     const res = await fetch('/api/admin/wrapped/config', {
       method: 'POST',
@@ -13010,7 +13002,7 @@ async function saveCollabPost() {
   try {
     res = await fetch(token ? '/api/collaborate/' + token : '/api/collaborate', {
       method: token ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify(collabPayload()),
     });
     data = await res.json();
@@ -13062,7 +13054,7 @@ async function deleteOwnCollabPost() {
   const token = document.getElementById('collab-token').value;
   if (!token || !confirm('Delete this listing? This cannot be undone.')) return;
   try {
-    await fetch('/api/collaborate/' + token, { method: 'DELETE' });
+    await fetch('/api/collaborate/' + token, { method: 'DELETE', headers: { 'X-CSRF-Token': _csrfToken || '' } });
   } catch(e) {}
   closeCollabForm();
   loadCollaborate();
@@ -13073,7 +13065,7 @@ async function deleteOwnCollabPost() {
 async function loadAdminCollaborate() {
   let posts;
   try {
-    const res = await fetch('/api/collaborate', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('kfs_token') || '') } });
+    const res = await fetch('/api/collaborate', { headers: { 'Authorization': 'Bearer ' + (adminToken || '') } });
     posts = await res.json();
   } catch(e) { posts = []; }
 
@@ -13630,7 +13622,7 @@ async function loadBroadcastHistory() {
   </div>
 </div>
 
-<!-- Razorpay SDK loaded lazily in submitDonation() — see guide Section 5.1 -->
+<!-- Razorpay SDK loaded statically in <head> for SRI eligibility -->
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
@@ -13768,16 +13760,7 @@ async function submitDonation() {
     return;
   }
 
-  // Lazy-load Razorpay SDK only when needed (guide Section 5.1)
-  if (typeof window.Razorpay === 'undefined') {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Could not load payment SDK. Check your internet connection.'));
-      document.head.appendChild(s);
-    });
-  }
+  // Razorpay SDK loaded statically in <head> — no lazy load needed
 
   // Guard: email required
   const email = (document.getElementById('don-email')?.value || '').trim();
