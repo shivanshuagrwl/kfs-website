@@ -1696,7 +1696,7 @@ async function submitReview() {
   try {
     const res = await fetch('/api/reviews', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'application/json','X-CSRF-Token':_csrfToken||''},
       body: JSON.stringify(body)
     });
     if (res.ok) {
@@ -2269,7 +2269,7 @@ function _defaultTags() {
 async function saveCustomTagsToServer() {
   await fetch('/api/admin/settings', {
     method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+(adminToken||'')},
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+(adminToken||''),'X-CSRF-Token':_csrfToken||''},
     body: JSON.stringify({ blog_tags: JSON.stringify(window._customBlogTags||[]) })
   }).catch(()=>{});
 }
@@ -2343,7 +2343,7 @@ async function saveBlog() {
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { alert('Error saving post'); return; }
     const saved = await res.json();
     window._allBlogsCache = null;
@@ -2421,7 +2421,7 @@ async function saveEvent() {
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving event'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeEventModal();
@@ -2507,7 +2507,7 @@ async function saveMember() {
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving member'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeMemberModal();
@@ -2706,7 +2706,7 @@ async function saveMovie() {
   if (poster) fd.append('poster', poster);
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving film'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeMovieModal();
@@ -2777,7 +2777,7 @@ async function saveTestimonial() {
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/testimonials/'+id : '/api/admin/testimonials';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { alert('Error saving testimonial'); return; }
     const saved = await res.json();
     closeTestimonialModal();
@@ -2840,7 +2840,7 @@ async function saveAchievement() {
   const url = id ? '/api/admin/achievements/'+id : '/api/admin/achievements';
   try {
     const res = await fetch(url,{method:id?'PUT':'POST',
-      headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json'},
+      headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','X-CSRF-Token':_csrfToken||''},
       body:JSON.stringify(body)});
     if (!res.ok) { alert('Error saving achievement'); return; }
     const saved = await res.json();
@@ -2901,7 +2901,7 @@ async function saveSettings() {
     if (photoFile) fd.append('team_photo', photoFile);
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
       body: fd
     });
     if (res.ok) {
@@ -2996,7 +2996,7 @@ async function saveNoShortsEgg() {
     fd.append('easter_egg_noshorts_fallback', document.getElementById('set-egg-noshorts-fallback').value);
     const res = await fetch('/api/admin/settings', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + adminToken },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
       body: fd
     });
     if (res.ok) {
@@ -3642,7 +3642,7 @@ async function deleteNotif(idx) {
 async function saveNotifToServer() {
   await fetch('/api/admin/settings', {
     method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer ' + (adminToken||'')},
+    headers:{'Content-Type':'application/json','Authorization':'Bearer ' + (adminToken||''),'X-CSRF-Token':_csrfToken||''},
     body: JSON.stringify({ notifications: JSON.stringify(allNotifications) })
   });
 }
@@ -3957,7 +3957,7 @@ async function savePermissions() {
   try {
     const res = await fetch('/api/master/admins/' + id + '/permissions', {
       method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ permissions })
     });
     const data = await res.json().catch(() => ({}));
@@ -4817,7 +4817,7 @@ async function saveCV() {
 
   const method = _cvEditId ? 'PUT' : 'POST';
   const url = _cvEditId ? `/api/admin/chitra-vichitra/${_cvEditId}` : '/api/admin/chitra-vichitra';
-  const res = await fetch(url, { method, headers:{'Authorization':'Bearer '+adminToken}, body:fd });
+  const res = await fetch(url, { method, headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
   if (!res.ok) { const e=await res.json(); alert(e.error||'Error'); return; }
   closeCVModal();
   loadAdminCV();
@@ -5447,7 +5447,7 @@ async function runMemberImport() {
       fd.append('is_past', 'false');
       const res = await fetch('/api/admin/members', {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + adminToken },
+        headers: { Authorization: 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
         body: fd
       });
       if (res.ok) {
@@ -5637,7 +5637,7 @@ async function saveFormBuilder() {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
     });
     if (res.ok) {
@@ -5664,7 +5664,7 @@ async function clearFormResponses() {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
       method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
     if (res.ok) {
       _fbResponseCount = 0;
@@ -5692,7 +5692,7 @@ async function deleteEntireForm() {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
     if (res.ok) {
       btn.textContent = '✓ Deleted';
@@ -7286,7 +7286,7 @@ async function saveWrappedConfig() {
   try {
     const res = await fetch('/api/admin/wrapped/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify(config),
     });
     if (!res.ok) {
@@ -9050,4 +9050,150 @@ function renderDonorCard(d) {
     ${bioHtml}
     ${amtHtml}
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVENT DELEGATION — replaces all inline onclick=/onchange=/oninput=/onkeydown=
+// One listener per event type on document handles every data-action element.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Helper stubs for elements that used complex inline expressions ────────────
+function scrollTo_don_form_wrap()      { document.getElementById('don-form-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }
+function scrollTo_don_donors_section() { document.getElementById('don-donors-section')?.scrollIntoView({behavior:'smooth',block:'start'}); }
+function triggerClick_member_xlsx_input()  { document.getElementById('member-xlsx-input')?.click(); }
+function triggerClick_set_team_photo_file(){ document.getElementById('set-team-photo-file')?.click(); }
+function triggerClick_set_egg_img_file()   { document.getElementById('set-egg-img-file')?.click(); }
+function triggerClick_cegg_img_file()      { document.getElementById('cegg-img-file')?.click(); }
+function focusEl_movie_genre_input()       { document.getElementById('movie-genre-input')?.focus(); }
+function togglePasswordVisibility() {
+  const i = document.getElementById('admin-password');
+  if (!i) return;
+  const open = i.type === 'password';
+  i.type = open ? 'text' : 'password';
+  const eo = document.getElementById('eye-open');
+  const ec = document.getElementById('eye-closed');
+  if (eo) eo.style.display = open ? 'none' : 'block';
+  if (ec) ec.style.display = open ? 'block' : 'none';
+}
+
+// ── Core dispatcher ───────────────────────────────────────────────────────────
+function _dispatch(el, eventObj) {
+  const action = el.dataset.action;
+  if (!action) return;
+  const fn = window[action];
+  if (typeof fn !== 'function') {
+    console.warn('[dispatch] Unknown action:', action);
+    return;
+  }
+  let args = [];
+  if (el.dataset.args) {
+    try {
+      args = JSON.parse(el.dataset.args).map(a =>
+        a === '__this__' ? el : a === '__event__' ? eventObj : a
+      );
+    } catch(e) { console.warn('[dispatch] Bad data-args on', action, e); }
+  }
+  fn(...args);
+}
+
+// ── Click delegation ──────────────────────────────────────────────────────────
+document.addEventListener('click', function(e) {
+  // data-action (regular buttons/links)
+  const actionEl = e.target.closest('[data-action]');
+  if (actionEl) {
+    // Backdrop: only fire if click landed directly on this element
+    if (actionEl.dataset.backdrop === 'true' && e.target !== actionEl) return;
+    e.preventDefault();
+    _dispatch(actionEl, e);
+    return;
+  }
+
+  // data-nav-page (nav links + any element navigating to a page)
+  const navEl = e.target.closest('[data-nav-page]');
+  if (navEl) {
+    e.preventDefault();
+    const page = navEl.dataset.navPage;
+    if (typeof navigate === 'function') navigate(page);
+    if (typeof closeMenu === 'function') closeMenu();
+    return;
+  }
+}, { capture: false });
+
+// ── Change delegation (onchange) ──────────────────────────────────────────────
+document.addEventListener('change', function(e) {
+  const el = e.target.closest('[data-onchange]');
+  if (!el) return;
+  const expr = el.dataset.onchange;
+  // Map known expressions to function calls
+  _evalDataHandler(el, expr, e);
+});
+
+// ── Input delegation (oninput) ────────────────────────────────────────────────
+document.addEventListener('input', function(e) {
+  const el = e.target.closest('[data-oninput]');
+  if (!el) return;
+  _evalDataHandler(el, el.dataset.oninput, e);
+});
+
+// ── Keydown delegation (onkeydown) ────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  const el = e.target.closest('[data-onkeydown]');
+  if (!el) return;
+  _evalDataHandler(el, el.dataset.onkeydown, e);
+});
+
+// ── Handler expression evaluator ─────────────────────────────────────────────
+// Handles the small set of expression patterns found in the codebase.
+// This is NOT eval() — it's a whitelist matcher.
+const _HANDLER_RE = /^(?:if\(event\.key===(['"])([^'"]+)\1\))?([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\(([^)]*)\))?(?:;([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\(([^)]*)\))?)?$/;
+
+function _evalDataHandler(el, expr, eventObj) {
+  if (!expr) return;
+
+  // Handle paired expressions like "autoMemberSort();toggleDomainField()"
+  const parts = expr.split(';').map(s => s.trim()).filter(Boolean);
+  for (const part of parts) {
+    // "if(event.key==='X')fn()" pattern
+    const keyMatch = part.match(/^if\s*\(event\.key===(['"])([^'"]+)\1\)\s*(?:\{event\.preventDefault\(\);\s*\})?([a-zA-Z_$][a-zA-Z0-9_$]*)\(([^)]*)\)$/);
+    if (keyMatch) {
+      if (eventObj.key === keyMatch[2]) {
+        if (part.includes('event.preventDefault()')) eventObj.preventDefault();
+        const fn = window[keyMatch[3]];
+        if (typeof fn === 'function') fn();
+      }
+      continue;
+    }
+
+    // Simple "fn()" or "fn(this)" or "fn(this.value)"
+    const simpleMatch = part.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\(([^)]*)\)$/);
+    if (simpleMatch) {
+      const fn = window[simpleMatch[1]];
+      if (typeof fn !== 'function') { console.warn('[handler] Unknown fn:', simpleMatch[1]); continue; }
+      const argStr = simpleMatch[2].trim();
+      if (!argStr)              { fn(); continue; }
+      if (argStr === 'this')    { fn(el); continue; }
+      if (argStr === 'this.value') { fn(el.value); continue; }
+      if (argStr === 'this.checked') { fn(el.checked); continue; }
+      if (argStr === 'this.files[0]?.name||\'No file\'') {
+        // onchange="document.getElementById('cegg-img-name').textContent=this.files[0]?.name||'No file'"
+        // handled below
+        continue;
+      }
+      // Try JSON parse for literal args
+      try {
+        const safe = argStr.replace(/'/g, '"');
+        const args = JSON.parse('[' + safe + ']');
+        fn(...args);
+      } catch { fn(); }
+      continue;
+    }
+
+    // Special: update a textContent from file input
+    const fileNameMatch = part.match(/^document\.getElementById\('([^']+)'\)\.textContent=this\.files\[0\]\?\.name\|\|'([^']+)'$/);
+    if (fileNameMatch) {
+      const target = document.getElementById(fileNameMatch[1]);
+      if (target) target.textContent = el.files?.[0]?.name || fileNameMatch[2];
+      continue;
+    }
+  }
 }

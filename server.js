@@ -303,11 +303,13 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-
-      // 'unsafe-inline' removed — all JS is now in /public/app.js (external, covered by 'self')
-      // The one remaining inline script is the synchronous theme-loader in <head>; its hash is pinned below.
+      // v1.17.9: 'unsafe-inline' removed from scriptSrc (blocks injected <script> XSS — the real attack vector)
+      // which is already prevented by output encoding and Supabase RLS. Full migration is tracked separately.
+      // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
+      // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
+      // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
       scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
-      scriptSrcAttr: ["'unsafe-inline'"], // retained — 206 static onclick= handlers pending migration
+      // scriptSrcAttr: removed — all inline event handlers migrated to data-action delegation
       imgSrc: [
         "'self'", "data:",
         "https://res.cloudinary.com",
@@ -1481,7 +1483,7 @@ app.put(
       .from("admins")
       .update({ permissions: JSON.stringify(permissions) })
       .eq("id", req.params.id);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     logActivity(
       req.admin.id,
       req.admin.name,
@@ -1534,7 +1536,7 @@ app.post(
           });
         if (err.code === "INVALID_FILE_TYPE")
           return res.status(400).json({ error: err.message });
-        return res.status(400).json({ error: "Upload error: " + err.message });
+        return res.status(400).json({ error: "Upload failed. Please check the file and try again." });
       }
       next();
     });
@@ -1606,7 +1608,7 @@ app.post(
       res.json({ success: true });
     } catch (e) {
       console.error("[settings] error:", e);
-      res.status(500).json({ error: e.message || "Internal server error" });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -1645,7 +1647,7 @@ app.post(
           .json({ error: "Image upload to storage failed" });
       res.json({ url });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -1740,7 +1742,7 @@ app.get(
         .select("id, title, author, published, view_count, created_at")
         .order("view_count", { ascending: false });
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
 
       const blogs = data || [];
       const total_views = blogs.reduce(
@@ -1753,7 +1755,7 @@ app.get(
 
       res.json({ total_views, published_count, draft_count, top_post, blogs });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -1780,7 +1782,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("blogs:list");
     logActivity(req.admin.id, req.admin.name, "create", "blog", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -1808,7 +1810,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
     logActivity(req.admin.id, req.admin.name, "update", "blog", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -1879,7 +1881,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("events:list");
     logActivity(req.admin.id, req.admin.name, "create", "event", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -1914,7 +1916,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("events:list");
     logActivity(req.admin.id, req.admin.name, "update", "event", title).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -1997,7 +1999,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("members:list");
     logActivity(req.admin.id, req.admin.name, "create", "member", name).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -2030,7 +2032,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("members:list");
     logActivity(req.admin.id, req.admin.name, "update", "member", name).catch(e => console.error("[activity]", e.message));
     res.json(data);
@@ -2084,7 +2086,7 @@ app.post(
       .insert([{ name, role, batch, quote, photo: photoUrl }])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     logActivity(
       req.admin.id,
       req.admin.name,
@@ -2111,7 +2113,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("testimonials:list");
     logActivity(
       req.admin.id,
@@ -2179,7 +2181,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("achievements:list");
     logActivity(
       req.admin.id,
@@ -2211,7 +2213,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("achievements:list");
     logActivity(
       req.admin.id,
@@ -2373,7 +2375,7 @@ app.get("/api/yt-duration", async (req, res) => {
     }
     return res.json({ error: "Duration not found" });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -2491,7 +2493,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("movies:list", "movies:genre:");
     logActivity(req.admin.id, req.admin.name, "create", "movie", title).catch(e => console.error("[activity]", e.message));
     res.json({ ...data, genre: parseGenre(data.genre) });
@@ -2570,7 +2572,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
     logActivity(req.admin.id, req.admin.name, "update", "movie", title).catch(e => console.error("[activity]", e.message));
     res.json({ ...data, genre: parseGenre(data.genre) });
@@ -2637,7 +2639,7 @@ app.get("/api/chitra-vichitra/:id/movies", async (req, res) => {
     `,
     )
     .eq("cv_id", req.params.id);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: "Internal server error" });
 
   // Flatten: attach cv_movie_id for removal from admin
   const movies = (data || []).map((row) => ({
@@ -2705,7 +2707,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("cv:list");
     logActivity(
       req.admin.id,
@@ -2766,7 +2768,7 @@ app.post(
       .insert([{ cv_id: req.params.id, movie_id }])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("cv:list");
     res.json(data);
   },
@@ -2832,7 +2834,7 @@ app.post(
       ])
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("notifications:active");
     res.json(data);
   },
@@ -2856,7 +2858,7 @@ app.put(
       .eq("id", req.params.id)
       .select()
       .single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("notifications:active");
     res.json(data);
   },
@@ -3092,7 +3094,7 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
     ])
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: "Internal server error" });
   memInvalidate(`reviews:${movie_id}`);
   res.json(data);
 });
@@ -3116,7 +3118,7 @@ app.get("/api/events/:id/form", async (req, res) => {
       return res.status(404).json({ error: "No form found for this event" });
     res.json(data);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -3177,7 +3179,7 @@ app.post(
         .single());
     }
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
 
     const { data: ev } = await supabase
       .from("events")
@@ -3205,7 +3207,7 @@ app.get(
       .select("*")
       .eq("event_id", req.params.id)
       .order("submitted_at", { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   },
 );
@@ -3219,7 +3221,7 @@ app.delete(
       .from("form_responses")
       .delete()
       .eq("event_id", req.params.id);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     const { data: ev } = await supabase
       .from("events")
       .select("title")
@@ -3383,7 +3385,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
     .select()
     .single();
 
-  if (insertErr) return res.status(500).json({ error: insertErr.message });
+  if (insertErr) return res.status(500).json({ error: "Internal server error" });
 
   // 7. Send confirmation email (non-blocking — never fail the response)
   try {
@@ -3479,7 +3481,7 @@ app.post("/api/admin/email/test", authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error("[email] test send failed:", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4126,7 +4128,7 @@ app.post(
       if (!url) return res.status(500).json({ error: "Image upload failed" });
       res.json({ url });
     } catch (e) {
-      res.status(500).json({ error: e.message || "Upload failed" });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4230,7 +4232,7 @@ app.get("/api/wrapped/stats", async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error("[wrapped/stats]", e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4296,7 +4298,7 @@ app.get("/api/recommendations/:movieId", async (req, res) => {
 
     res.json(scored.map(({ _score, ...m }) => m));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4331,10 +4333,10 @@ app.get("/api/films/:movieId/comments", async (req, res) => {
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: true });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4378,10 +4380,10 @@ app.post("/api/films/:movieId/comments", strictWriteLimit, async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.status(201).json(data);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4396,10 +4398,10 @@ app.get("/api/admin/comments", requireSection("movies"), async (req, res) => {
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4415,10 +4417,10 @@ app.get(
         .eq("movie_id", req.params.movieId)
         .order("created_at", { ascending: false });
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       res.json(data || []);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4437,11 +4439,11 @@ app.patch(
         .select()
         .single();
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       if (!data) return res.status(404).json({ error: "Comment not found." });
       res.json(data);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4463,7 +4465,7 @@ app.delete(
         .delete()
         .eq("id", req.params.id);
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       logActivity(
         req.admin.id,
         req.admin.name,
@@ -4473,7 +4475,7 @@ app.delete(
       ).catch(e => console.error("[activity]", e.message));
       res.json({ success: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4503,7 +4505,7 @@ app.post(
         .select()
         .single();
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       logActivity(
         req.admin.id,
         req.admin.name,
@@ -4513,7 +4515,7 @@ app.post(
       ).catch(e => console.error("[activity]", e.message));
       res.status(201).json(data);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4563,10 +4565,10 @@ app.get("/api/collaborate", async (req, res) => {
       .gte("fulfillment_date", today)
       .order("created_at", { ascending: false });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4620,7 +4622,7 @@ app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
       .select("id,edit_token")
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
 
     res.json({
       success: true,
@@ -4629,7 +4631,7 @@ app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
       edit_url: `/collaborate/edit/${edit_token}`,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -4640,7 +4642,7 @@ app.get("/api/collaborate/edit/:token", async (req, res) => {
     .eq("edit_token", req.params.token)
     .maybeSingle();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: "Internal server error" });
   if (!data) return res.status(404).json({ error: "Listing not found." });
   res.json(data);
 });
@@ -4671,7 +4673,7 @@ app.put("/api/collaborate/:token", csrfProtect, async (req, res) => {
     .select("id")
     .maybeSingle();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: "Internal server error" });
   if (!data) return res.status(404).json({ error: "Invalid edit link." });
   res.json({ success: true });
 });
@@ -4691,7 +4693,7 @@ app.delete("/api/collaborate/:token", csrfProtect, async (req, res) => {
     .delete()
     .eq("edit_token", req.params.token);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return res.status(500).json({ error: "Internal server error" });
   res.json({ success: true });
 });
 
@@ -4710,7 +4712,7 @@ app.delete(
       .delete()
       .eq("id", req.params.id);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
 
     logActivity(
       req.admin.id,
@@ -4862,7 +4864,7 @@ app.post(
       const emails = await collectRecipients(audience_type, event_id || null);
       res.json({ count: emails.length });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4892,7 +4894,7 @@ app.get(
 
       res.json(events || []);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -4957,7 +4959,7 @@ app.post(
         .single();
 
       if (broadcastErr)
-        return res.status(500).json({ error: broadcastErr.message });
+        return res.status(500).json({ error: "Internal server error" });
 
       const broadcastId = broadcast.id;
       const BASE_URL = process.env.BASE_URL || "https://kiitfilmsociety.in";
@@ -5044,7 +5046,7 @@ app.post(
       });
     } catch (e) {
       console.error("[broadcast] error:", e);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -5063,10 +5065,10 @@ app.get(
         .order("sent_at", { ascending: false })
         .limit(100);
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       res.json(data || []);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -5101,7 +5103,7 @@ app.get(
         open_rate,
       });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -5125,7 +5127,7 @@ app.get("/api/theme", async (req, res) => {
     });
     res.json(theme);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -5136,10 +5138,10 @@ app.get("/api/admin/themes", requireSection("settings"), async (req, res) => {
       .from("event_themes")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -5203,7 +5205,7 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("theme:active");
     logActivity(
       req.admin.id,
@@ -5214,7 +5216,7 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
     ).catch(e => console.error("[activity]", e.message));
     res.json(data);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -5285,7 +5287,7 @@ app.put(
         .select()
         .single();
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
       memInvalidate("theme:active");
       logActivity(
         req.admin.id,
@@ -5296,7 +5298,7 @@ app.put(
       ).catch(e => console.error("[activity]", e.message));
       res.json(data);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -5325,7 +5327,7 @@ app.delete(
         .from("event_themes")
         .delete()
         .eq("id", id);
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ error: "Internal server error" });
 
       memInvalidate("theme:active");
       logActivity(
@@ -5337,7 +5339,7 @@ app.delete(
       ).catch(e => console.error("[activity]", e.message));
       res.json({ success: true });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 );
@@ -6037,7 +6039,7 @@ app.post("/api/admin/donation/test-email", requireSection("settings"), async (re
     }
   } catch (e) {
     console.error("[test-email]", e.message);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -6082,7 +6084,8 @@ app.post("/api/admin/donation/sheet-backfill", requireSection("settings"), async
     return res.json({ success: true, synced, failed, total: donors.length });
   } catch (e) {
     console.error("[sheet-backfill]", e.message);
-    return res.status(500).json({ error: "Backfill failed: " + e.message });
+    console.error("[sheet-backfill]", e.message);
+    return res.status(500).json({ error: "Backfill failed. Check server logs." });
   }
 });
 
@@ -6272,6 +6275,29 @@ setInterval(
   },
   1000 * 60 * 60 * 24,
 ); // every 24h
+
+// ── GLOBAL ERROR HANDLER ──────────────────────────────────────────────────────
+// Catches any error passed via next(err) or thrown inside async route handlers
+// that weren't caught locally. Logs the real error server-side, sends a safe
+// generic message to the client — never leaks stack traces or internals.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[unhandled] ${req.method} ${req.path}`, err);
+  if (res.headersSent) return next(err);
+  const status = typeof err.status === 'number' ? err.status : 500;
+  res.status(status).json({ error: status < 500 ? (err.message || 'Bad request') : 'Internal server error' });
+});
+
+// Catch unhandled promise rejections — log them, don't crash
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
+// Catch uncaught exceptions — log and exit gracefully (process manager will restart)
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  process.exit(1);
+});
 
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {

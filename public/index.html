@@ -2377,7 +2377,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
   <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
-    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button class="modal-close" onclick="closeAddAdminModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button data-action="closeAddAdminModal" class="modal-close" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FULL NAME</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma" style="border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">USERNAME</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase;border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PASSWORD</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters" style="border-radius:12px"></div>
@@ -2405,14 +2405,14 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
-    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeAddAdminModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" onclick="saveNewAdmin()">Create Admin</button></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeAddAdminModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="saveNewAdmin" class="btn btn-primary" style="border-radius:12px">Create Admin</button></div>
   </div>
 </div>
 
 <!-- EDIT PERMISSIONS MODAL -->
 <div class="modal-overlay" id="edit-perms-modal">
   <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
-    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button class="modal-close" onclick="closeEditPermsModal()" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button data-action="closeEditPermsModal" class="modal-close" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
     <input type="hidden" id="edit-perms-admin-id">
     <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Admin: <strong id="edit-perms-admin-name" style="color:var(--white)"></strong></p>
     <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
@@ -2433,14 +2433,14 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="themes"> Event Themes</label>
     </div>
     <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
-    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button class="btn btn-secondary" style="border-radius:12px" onclick="closeEditPermsModal()">Cancel</button><button class="btn btn-primary" style="border-radius:12px" id="save-perms-btn" onclick="savePermissions()">Save Permissions</button></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeEditPermsModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="savePermissions" class="btn btn-primary" style="border-radius:12px" id="save-perms-btn">Save Permissions</button></div>
   </div>
 </div>
 
 <!-- TRAILER MODAL -->
-<div id="trailer-modal-overlay" onclick="if(event.target===this)closeTrailer()">
+<div id="trailer-modal-overlay" data-action="closeTrailer" data-backdrop="true">
   <div id="trailer-modal-inner">
-    <button id="trailer-close" onclick="closeTrailer()">✕</button>
+    <button data-action="closeTrailer" id="trailer-close">✕</button>
     <iframe id="trailer-iframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
   </div>
 </div>
@@ -2451,24 +2451,24 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
 <!-- NAV -->
 <nav id="main-nav">
-  <a class="nav-logo" onclick="navigate('home')" style="gap:10px">
+  <a data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
     <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
   </a>
   <ul class="nav-links" id="nav-links">
-    <li><a onclick="navigate('home');closeMenu()" class="active" data-page="home">Home</a></li>
-    <li><a onclick="navigate('events');closeMenu()" data-page="events">Events</a></li>
-    <li><a onclick="navigate('blog');closeMenu()" data-page="blog">Blog</a></li>
-    <li><a onclick="navigate('movies');closeMenu()" data-page="movies">Films</a></li>
-    <li><a onclick="navigate('members');closeMenu()" data-page="members">Members</a></li>
-    <li><a onclick="navigate('wrapped');closeMenu()" data-page="wrapped">Wrapped</a></li>
-    <li><a onclick="navigate('collaborate');closeMenu()" data-page="collaborate">Collaborate</a></li>
+    <li><a data-nav-page="home" class="active" data-page="home">Home</a></li>
+    <li><a data-nav-page="events" data-page="events">Events</a></li>
+    <li><a data-nav-page="blog" data-page="blog">Blog</a></li>
+    <li><a data-nav-page="movies" data-page="movies">Films</a></li>
+    <li><a data-nav-page="members" data-page="members">Members</a></li>
+    <li><a data-nav-page="wrapped" data-page="wrapped">Wrapped</a></li>
+    <li><a data-nav-page="collaborate" data-page="collaborate">Collaborate</a></li>
   </ul>
   <div class="nav-right">
-    <button onclick="openSearch()" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
+    <button data-action="openSearch" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span style="font-size:11px;opacity:.5;display:none" id="search-kbd">⌘K</span>
     </button>
-    <button onclick="toggleTheme()" id="nav-theme-btn" title="Toggle light / dark"
+    <button data-action="toggleTheme" id="nav-theme-btn" title="Toggle light / dark"
       style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;color:var(--grey);flex-shrink:0">
       <svg id="nav-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -2481,12 +2481,12 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
       </svg>
     </button>
-    <div class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
+    <div data-action="toggleMenu" class="nav-hamburger" id="hamburger">
       <span></span><span></span><span></span>
     </div>
   </div>
 </nav>
-<div class="nav-backdrop" id="nav-backdrop" onclick="closeMenu()"></div>
+<div data-action="closeMenu" class="nav-backdrop" id="nav-backdrop"></div>
 
 <!-- ── HOME PAGE ── -->
 <div class="page active" id="page-home">
@@ -2500,8 +2500,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </h1>
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
-      <a class="btn btn-primary" onclick="navigate('events')">Upcoming Events</a>
-      <a class="btn btn-secondary" onclick="navigate('blog')">Read Our Blog</a>
+      <a class="btn btn-primary" data-nav-page="events">Upcoming Events</a>
+      <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
     </div>
     <div class="hero-scroll">
       <span>Scroll</span>
@@ -2557,7 +2557,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <div class="loading" style="padding:40px 0">Loading posts...</div>
       </div>
       <div class="section-cta">
-        <a class="btn btn-secondary" onclick="navigate('blog')">All Posts →</a>
+        <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">All Posts →</a>
       </div>
     </div>
   </section>
@@ -2578,15 +2578,15 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <span>Scroll to explore</span>
       </div>
       <div class="film-sort-bar">
-        <button class="film-sort-pill active" onclick="sortHomeFilms('latest',this)">Latest</button>
-        <button class="film-sort-pill" onclick="sortHomeFilms('top',this)">Top Rated</button>
-        <button class="film-sort-pill" onclick="sortHomeFilms('loved',this)">Most Loved</button>
+        <button data-action="sortHomeFilms" data-args='["latest", "__this__"]' class="film-sort-pill active">Latest</button>
+        <button data-action="sortHomeFilms" data-args='["top", "__this__"]' class="film-sort-pill">Top Rated</button>
+        <button data-action="sortHomeFilms" data-args='["loved", "__this__"]' class="film-sort-pill">Most Loved</button>
       </div>
       <div class="home-carousel" id="home-movies-grid">
         <div class="loading" style="padding:40px 0">Loading films...</div>
       </div>
       <div class="section-cta">
-        <a class="btn btn-secondary" onclick="navigate('movies')">All Films →</a>
+        <a data-action="navigate" data-args='["movies"]' class="btn btn-secondary">All Films →</a>
       </div>
     </div>
   </section>
@@ -2601,7 +2601,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <div class="loading">Loading events...</div>
       </div>
       <div style="margin-top:40px">
-        <a class="btn btn-secondary" onclick="navigate('events')">All Events →</a>
+        <a class="btn btn-secondary" data-nav-page="events">All Events →</a>
       </div>
     </div>
   </section>
@@ -2649,10 +2649,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <div class="footer-logo">
         <span>KIIT Film Society</span>
       </div>
-      <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span onclick="navigate('admin')" style="cursor:pointer">All rights reserved.</span> By using this site, you agree to our <a href="/terms" style="color:var(--grey);text-underline-offset:3px">Terms</a> &amp; <a href="/privacy" style="color:var(--grey);text-underline-offset:3px">Privacy Policy</a>.</p>
+      <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. <span data-action="navigate" data-args='["admin"]' style="cursor:pointer">All rights reserved.</span> By using this site, you agree to our <a href="/terms" style="color:var(--grey);text-underline-offset:3px">Terms</a> &amp; <a href="/privacy" style="color:var(--grey);text-underline-offset:3px">Privacy Policy</a>.</p>
     </div>
     <div class="footer-links">
-      <a onclick="navigate('donations')" style="cursor:pointer">Donate</a>
+      <a data-action="navigate" data-args='["donations"]' style="cursor:pointer">Donate</a>
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
@@ -2666,8 +2666,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="section-inner" id="events-main-view">
       <h2 class="section-title">Events</h2>
       <div class="events-tabs">
-        <div class="events-tab active" onclick="filterEvents('upcoming',this)">Upcoming</div>
-        <div class="events-tab" onclick="filterEvents('past',this)">Past</div>
+        <div data-action="filterEvents" data-args='["upcoming", "__this__"]' class="events-tab active">Upcoming</div>
+        <div data-action="filterEvents" data-args='["past", "__this__"]' class="events-tab">Past</div>
       </div>
       <!-- CV section — shown only in past tab -->
       <div id="cv-section-wrap" style="display:none">
@@ -2690,7 +2690,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
     <!-- CV Detail view -->
     <div class="section-inner" id="cv-detail-view" style="display:none">
-      <a class="cv-detail-back" onclick="closeCVDetail()">← Back to Events</a>
+      <a data-action="closeCVDetail" class="cv-detail-back">← Back to Events</a>
       <div class="cv-detail-header">
         <p class="cv-detail-label">Chitra Vichitra</p>
         <h2 class="cv-detail-title" id="cv-detail-year-title">CV 2026</h2>
@@ -2709,7 +2709,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <h2 style="font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1">The Blog</h2>
       <div class="blog-filter-wrap" id="blog-filter-wrap" style="display:none;margin-bottom:4px">
-        <button class="blog-filter-btn" id="blog-filter-btn" onclick="toggleBlogFilter(this)">
+        <button data-action="toggleBlogFilter" data-args='["__this__"]' class="blog-filter-btn" id="blog-filter-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
           Filter
           <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2730,8 +2730,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   <img class="blog-detail-hero" id="blog-detail-img" src="" alt="" style="display:none">
   <div class="blog-detail-content">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:40px">
-      <a class="blog-detail-back" onclick="navigate('blog')" style="margin-bottom:0">← Back to Blog</a>
-      <button class="share-btn" onclick="shareContent('blog')">
+      <a data-action="navigate" data-args='["blog"]' class="blog-detail-back" style="margin-bottom:0">← Back to Blog</a>
+      <button data-action="shareContent" data-args='["blog"]' class="share-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         Share
       </button>
@@ -2752,8 +2752,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <p class="section-label">The Crew</p>
       <h2 class="section-title">Our Members</h2>
       <div class="events-tabs" style="margin-top:40px">
-        <div class="events-tab active" onclick="filterMembers('current',this)">Current</div>
-        <div class="events-tab" onclick="filterMembers('past',this)">Alumni</div>
+        <div data-action="filterMembers" data-args='["current", "__this__"]' class="events-tab active">Current</div>
+        <div data-action="filterMembers" data-args='["past", "__this__"]' class="events-tab">Alumni</div>
       </div>
       <div id="members-content" style="margin-top:48px"></div>
     </div>
@@ -2767,7 +2767,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <h2 style="font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1">Films</h2>
       <div class="blog-filter-wrap" id="movie-genre-filter-bar" style="display:none;margin-bottom:4px">
-        <button class="blog-filter-btn" id="movie-filter-btn" onclick="toggleMovieGenreFilter(this)">
+        <button data-action="toggleMovieGenreFilter" data-args='["__this__"]' class="blog-filter-btn" id="movie-filter-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
           <span id="movie-filter-btn-label">Genre</span>
           <span id="movie-filter-badge" style="display:none;background:var(--white);color:var(--black);border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:2px"></span>
@@ -2794,15 +2794,15 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <h2 class="section-title">Collaborate</h2>
           <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">A creative marketplace for KFS members. Post a role, find a collaborator.</p>
           <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:24px;align-items:center">
-            <button class="btn btn-primary" onclick="openCollabForm()" style="border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
-            <button class="btn btn-secondary" onclick="openCollabMailModal()" style="border-radius:10px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px">
+            <button data-action="openCollabForm" class="btn btn-primary" style="border-radius:10px;white-space:nowrap">+ Post an Open Call</button>
+            <button data-action="openCollabMailModal" class="btn btn-secondary" style="border-radius:10px;white-space:nowrap;display:inline-flex;align-items:center;gap:8px">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
               Not a KFS Member? Mail Us
             </button>
           </div>
         </div>
         <div class="blog-filter-wrap" id="collab-filter-wrap" style="display:none;margin-bottom:4px">
-          <button class="blog-filter-btn" id="collab-filter-btn" onclick="toggleCollabFilter(this)">
+          <button data-action="toggleCollabFilter" data-args='["__this__"]' class="blog-filter-btn" id="collab-filter-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Filter
             <svg class="filter-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2831,8 +2831,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <h1>Every frame<br>costs something.</h1>
     <p>KFS runs entirely on passion and community support. Your donation keeps our cameras rolling, our screenings alive, and the next generation of filmmakers moving forward.</p>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="document.getElementById('don-form-wrap').scrollIntoView({behavior:'smooth',block:'center'})">Donate Now</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('don-donors-section').scrollIntoView({behavior:'smooth',block:'start'})">See Donors</button>
+      <button data-action="scrollTo_don_form_wrap" class="btn btn-primary">Donate Now</button>
+      <button data-action="scrollTo_don_donors_section" class="btn btn-secondary">See Donors</button>
     </div>
   </div>
 
@@ -2885,14 +2885,14 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <label style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)">Choose an amount</label>
         </div>
         <div class="don-amounts" id="don-amounts">
-          <button class="don-amount-btn" onclick="selectDonAmount(50,this)">&#8377;50</button>
-          <button class="don-amount-btn" onclick="selectDonAmount(100,this)">&#8377;100</button>
-          <button class="don-amount-btn active" onclick="selectDonAmount(250,this)">&#8377;250</button>
-          <button class="don-amount-btn" onclick="selectDonAmount(500,this)">&#8377;500</button>
+          <button data-action="selectDonAmount" data-args='[50, "__this__"]' class="don-amount-btn">&#8377;50</button>
+          <button data-action="selectDonAmount" data-args='[100, "__this__"]' class="don-amount-btn">&#8377;100</button>
+          <button data-action="selectDonAmount" data-args='[250, "__this__"]' class="don-amount-btn active">&#8377;250</button>
+          <button data-action="selectDonAmount" data-args='[500, "__this__"]' class="don-amount-btn">&#8377;500</button>
         </div>
         <div class="don-custom-wrap">
           <span class="don-currency-sym">&#8377;</span>
-          <input class="don-custom-input" type="number" id="don-custom-amount" min="10" max="500" step="1" placeholder="Or enter amount (10–500)" oninput="onDonCustomAmount(this)">
+          <input class="don-custom-input" type="number" id="don-custom-amount" min="10" max="500" step="1" placeholder="Or enter amount (10–500)" data-oninput="onDonCustomAmount(this)">
         </div>
         <p class="don-limit-note">Min &#8377;10 &nbsp;&middot;&nbsp; Max &#8377;500 &nbsp;&middot;&nbsp; Whole numbers only</p>
 
@@ -2921,7 +2921,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </div>
 
         <!-- Anonymous toggle -->
-        <div class="don-toggle-row" onclick="toggleDonAnon()">
+        <div data-action="toggleDonAnon" class="don-toggle-row">
           <div class="don-toggle-info">
             <strong>Donate anonymously</strong>
             <span>Your name won't appear on the public donors list</span>
@@ -2931,17 +2931,17 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
         <!-- T&C -->
         <div class="don-tandc">
-          <input type="checkbox" id="don-tandc" onchange="updateDonSubmit()">
-          <label for="don-tandc">I understand all donations are <strong style="color:var(--white)">final and non-refundable</strong>. Payments are processed securely by Razorpay, a third-party gateway. By donating I accept <button type="button" onclick="toggleDonTC(event)" style="background:none;border:none;padding:0;font:inherit;font-size:inherit;color:var(--white);text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline">these terms</button>.</label>
+          <input type="checkbox" id="don-tandc" data-onchange="updateDonSubmit()">
+          <label for="don-tandc">I understand all donations are <strong style="color:var(--white)">final and non-refundable</strong>. Payments are processed securely by Razorpay, a third-party gateway. By donating I accept <button data-action="toggleDonTC" data-args='["__event__"]' type="button" style="background:none;border:none;padding:0;font:inherit;font-size:inherit;color:var(--white);text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline">these terms</button>.</label>
         </div>
 
         <!-- Inline T&C modal — shown on click, rendered as fixed overlay -->
-        <div class="don-tc-overlay" id="don-tc-overlay" onclick="handleDonTCOverlayClick(event)">
+        <div data-action="handleDonTCOverlayClick" data-args='["__event__"]' class="don-tc-overlay" id="don-tc-overlay">
           <div class="don-tc-backdrop"></div>
           <div class="don-tc-modal" role="dialog" aria-modal="true" aria-label="Donation Terms & Conditions">
             <div class="don-tc-modal-head">
               <div><h3>Terms &amp; Conditions <span>— Donations</span></h3></div>
-              <button class="don-tc-x" onclick="toggleDonTC(event)" aria-label="Close">&#x2715;</button>
+              <button data-action="toggleDonTC" data-args='["__event__"]' class="don-tc-x" aria-label="Close">&#x2715;</button>
             </div>
             <div class="don-tc-modal-body">
               <h4>1. Donations are voluntary &amp; non-refundable</h4>
@@ -2979,12 +2979,12 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
               <p>Name, email, and roll number are used for donor recognition and communication only. Payment data is retained for financial reconciliation. We do not sell or share your data with any third party other than Razorpay for payment processing.</p>
             </div>
             <div class="don-tc-modal-foot">
-              <button type="button" onclick="toggleDonTC(event)">Got it</button>
+              <button data-action="toggleDonTC" data-args='["__event__"]' type="button">Got it</button>
             </div>
           </div>
         </div>
 
-        <button class="don-submit" id="don-submit-btn" disabled onclick="submitDonation()">Donate with Razorpay</button>
+        <button data-action="submitDonation" class="don-submit" id="don-submit-btn" disabled>Donate with Razorpay</button>
         <p style="font-size:11px;color:var(--grey);text-align:center;margin-top:12px">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           PCI-DSS Level 1 secured by Razorpay
@@ -2998,7 +2998,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </div>
         <h3>Thank you.</h3>
         <p id="don-success-msg">Your donation has been received and verified.<br>Check your email for a confirmation receipt.</p>
-        <button class="btn btn-secondary" style="margin-top:24px" onclick="resetDonForm()">Donate again</button>
+        <button data-action="resetDonForm" class="btn btn-secondary" style="margin-top:24px">Donate again</button>
       </div>
     </div>
 
@@ -3025,7 +3025,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   <p class="not-found-eyebrow">Error 404 — Scene Not Found</p>
   <h1 class="not-found-quote">"Not all those who wander are lost — but this page definitely is."</h1>
   <p class="not-found-quote-source">— Inspired by J.R.R. Tolkien &amp; a very confused browser</p>
-  <button class="not-found-btn" onclick="navigate('home')">
+  <button data-action="navigate" data-args='["home"]' class="not-found-btn">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     Back to Home
   </button>
@@ -3056,7 +3056,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <div class="wrapped-hero-stat-label">Reads</div>
       </div>
     </div>
-    <button class="wrapped-start-btn" id="wrapped-start-btn" onclick="startWrapped()">
+    <button data-action="startWrapped" class="wrapped-start-btn" id="wrapped-start-btn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
       See Your Wrapped
     </button>
@@ -3066,12 +3066,12 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   <!-- Card Deck (shown after start) -->
   <div class="wrapped-deck-wrap" id="wrapped-deck-wrap" style="display:none">
     <div class="wrapped-stage">
-      <button class="wrapped-arrow-btn wrapped-arrow-prev" onclick="wrappedPrev()" aria-label="Previous card">&#8249;</button>
+      <button data-action="wrappedPrev" class="wrapped-arrow-btn wrapped-arrow-prev" aria-label="Previous card">&#8249;</button>
       <div class="wrapped-deck" id="wrapped-deck"></div>
-      <button class="wrapped-arrow-btn wrapped-arrow-next" onclick="wrappedNext()" aria-label="Next card">&#8250;</button>
+      <button data-action="wrappedNext" class="wrapped-arrow-btn wrapped-arrow-next" aria-label="Next card">&#8250;</button>
     </div>
     <div class="wrapped-nav">
-      <button class="wrapped-share-btn" id="wrapped-share-btn" onclick="shareWrappedCard()">
+      <button data-action="shareWrappedCard" class="wrapped-share-btn" id="wrapped-share-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         Share this card
       </button>
@@ -3083,7 +3083,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 </div>
 
 <!-- ── GLOBAL SCREENSAVER OVERLAY ── -->
-<div id="kfs-screensaver" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity 1.2s ease" onclick="exitKFSScreensaver()" aria-hidden="true">
+<div data-action="exitKFSScreensaver" id="kfs-screensaver" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity 1.2s ease" aria-hidden="true">
   <div style="position:absolute;inset:0;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%22.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22200%22 height=%22200%22 filter=%22url(%23n)%22 opacity=%22.05%22/%3E%3C/svg%3E');opacity:.35;pointer-events:none"></div>
   <div style="position:relative;z-index:2;text-align:center;padding:0 48px;max-width:800px">
     <div id="kfs-ss-title" style="font-family:'DM Serif Display',Georgia,serif;font-size:clamp(48px,8vw,96px);color:#e8e8e2;line-height:1.05;transition:opacity 1s ease"></div>
@@ -3100,7 +3100,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <div style="position:relative">
         <img id="movie-detail-poster-img" class="movie-detail-poster" src="" alt="" style="display:none">
         <div id="movie-detail-poster-placeholder" class="movie-detail-poster-placeholder" style="display:none"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>
-        <div id="poster-play-overlay" class="movie-play-overlay" style="display:none" onclick="openTrailer()">
+        <div data-action="openTrailer" id="poster-play-overlay" class="movie-play-overlay" style="display:none">
           <div class="movie-play-circle">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
           </div>
@@ -3109,9 +3109,9 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </div>
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:32px">
-        <a class="movie-detail-back" onclick="navigate('movies')" style="margin-bottom:0">← Back to Films</a>
+        <a data-action="navigate" data-args='["movies"]' class="movie-detail-back" style="margin-bottom:0">← Back to Films</a>
         <div style="display:flex;align-items:center;gap:8px">
-          <button class="share-btn" onclick="shareContent('movie')">
+          <button data-action="shareContent" data-args='["movie"]' class="share-btn">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             Share
           </button>
@@ -3128,7 +3128,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
       <!-- Watch status -->
       <div id="movie-watch-status-wrap" style="margin-bottom:24px">
-        <button id="movie-watch-status-btn" onclick="toggleWatchStatus()">
+        <button data-action="toggleWatchStatus" id="movie-watch-status-btn">
           <span id="movie-watch-status-icon">☐</span> Mark as Watched
         </button>
       </div>
@@ -3157,11 +3157,11 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           </div>
           <!-- Platform toggle — icon-only pills, shown only when both URLs exist -->
           <div id="soundtrack-toggle" style="display:none;align-items:center;gap:2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:2px">
-            <button id="toggle-spotify" onclick="setSoundtrackPlatform('spotify')" title="Spotify"
+            <button data-action="setSoundtrackPlatform" data-args='["spotify"]' id="toggle-spotify" title="Spotify"
               style="display:flex;align-items:center;justify-content:center;width:28px;height:24px;border-radius:14px;border:none;cursor:pointer;transition:all .22s cubic-bezier(.4,0,.2,1);background:transparent;color:rgba(245,245,245,.45);flex-shrink:0;-webkit-tap-highlight-color:transparent">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
             </button>
-            <button id="toggle-apple" onclick="setSoundtrackPlatform('apple')" title="Apple Music"
+            <button data-action="setSoundtrackPlatform" data-args='["apple"]' id="toggle-apple" title="Apple Music"
               style="display:flex;align-items:center;justify-content:center;width:28px;height:24px;border-radius:14px;border:none;cursor:pointer;transition:all .22s cubic-bezier(.4,0,.2,1);background:transparent;color:rgba(245,245,245,.45);flex-shrink:0;-webkit-tap-highlight-color:transparent">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.064-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026C4.786.07 4.043.15 3.34.428 2.004.958 1.04 1.88.475 3.208A6.152 6.152 0 00.17 4.814c-.015.24-.023.48-.029.72v13.93c.006.23.013.46.026.69.072 1.3.45 2.47 1.27 3.46.73.88 1.65 1.44 2.75 1.72.45.11.91.17 1.37.19.28.01.56.02.84.02h12.02c.31 0 .62-.01.93-.03.67-.05 1.32-.18 1.93-.46 1.34-.6 2.25-1.58 2.72-2.99.2-.6.29-1.22.31-1.85.01-.26.02-.52.02-.78V7c0-.29-.005-.58-.02-.876zm-7.292 3.378h-1.168v6.114c0 .52-.087.99-.26 1.41-.174.42-.42.783-.74 1.09-.32.307-.696.543-1.128.708a3.967 3.967 0 01-1.46.248c-.5 0-.975-.087-1.425-.26a3.693 3.693 0 01-1.164-.728 3.437 3.437 0 01-.784-1.1 3.293 3.293 0 01-.284-1.364c0-.5.094-.973.284-1.42.19-.447.45-.836.784-1.168a3.61 3.61 0 011.164-.784c.45-.19.925-.284 1.425-.284.37 0 .724.05 1.062.15.337.1.645.244.922.433V6.124h4.17v3.378h-1.4z"/></svg>
             </button>
@@ -3196,7 +3196,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
             <div class="star-field"><label>Cinematography</label><div class="star-picker" id="star-cinematography" data-cat="cinematography"></div></div>
             <div class="star-field"><label>Script</label><div class="star-picker" id="star-script" data-cat="script"></div></div>
           </div>
-          <button onclick="submitReview()" class="btn btn-primary" style="margin-top:4px">Submit Review</button>
+          <button data-action="submitReview" class="btn btn-primary" style="margin-top:4px">Submit Review</button>
           <p id="review-submit-msg" style="font-size:12px;margin-top:10px;color:var(--grey)"></p>
         </div>
         <!-- Reviews List -->
@@ -3225,7 +3225,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               Contains spoiler
             </label>
-            <button class="fc-submit-btn" id="fc-submit-btn" onclick="submitFilmComment()">
+            <button data-action="submitFilmComment" class="fc-submit-btn" id="fc-submit-btn">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               Post
             </button>
@@ -3237,7 +3237,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <div class="fc-list" id="fc-list">
           <div class="fc-empty">Be the first to share your thoughts.</div>
         </div>
-        <button class="fc-load-more" id="fc-load-more" style="display:none" onclick="loadMoreComments()">Load more</button>
+        <button data-action="loadMoreComments" class="fc-load-more" id="fc-load-more" style="display:none">Load more</button>
       </div>
 
       <!-- Smart Recommendations -->
@@ -3259,8 +3259,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   <div style="width:100%;max-width:640px;margin:0 20px">
     <div id="search-box">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="search-input" placeholder="Search films, events, blog, members…" oninput="doSearch(this.value)" autocomplete="off">
-      <button id="search-close" onclick="closeSearch()">✕</button>
+      <input id="search-input" placeholder="Search films, events, blog, members…" data-oninput="doSearch(this.value)" autocomplete="off">
+      <button data-action="closeSearch" id="search-close">✕</button>
     </div>
     <div id="search-results"></div>
   </div>
@@ -3273,13 +3273,13 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <p>KFS Content Management</p>
     <div class="form-group">
       <label>Username</label>
-      <input type="text" id="admin-username" placeholder="Enter username" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box" autocomplete="username">
+      <input type="text" id="admin-username" placeholder="Enter username" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box" autocomplete="username">
     </div>
     <div class="form-group">
       <label>Password</label>
       <div style="position:relative;display:block">
-        <input type="password" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;padding-right:44px" autocomplete="current-password">
-        <button type="button" id="pw-eye" onclick="(function(){var i=document.getElementById('admin-password');var open=i.type==='password';i.type=open?'text':'password';document.getElementById('eye-open').style.display=open?'none':'block';document.getElementById('eye-closed').style.display=open?'block':'none';})()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px">
+        <input type="password" id="admin-password" placeholder="Enter password" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;padding-right:44px" autocomplete="current-password">
+        <button data-action="togglePasswordVisibility" type="button" id="pw-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px">
           <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         </button>
@@ -3289,11 +3289,11 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div id="totp-step" style="display:none;margin-top:16px">
       <div class="form-group">
         <label>2FA Code</label>
-        <input type="text" id="admin-totp" placeholder="6-digit code from authenticator" inputmode="numeric" maxlength="6" onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;letter-spacing:.2em;text-align:center" autocomplete="one-time-code">
+        <input type="text" id="admin-totp" placeholder="6-digit code from authenticator" inputmode="numeric" maxlength="6" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;letter-spacing:.2em;text-align:center" autocomplete="one-time-code">
       </div>
       <p style="font-size:12px;color:var(--grey);margin-top:6px">Enter the code from Google Authenticator or Authy.</p>
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px" onclick="adminLogin()">Sign In</button>
+    <button data-action="adminLogin" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px">Sign In</button>
     <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
   </div>
 </div>
@@ -3307,37 +3307,37 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <span id="sidebar-admin-role" style="margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555"></span>
     </div>
     <div class="admin-sidebar-group">Content</div>
-    <div class="admin-sidebar-item active" onclick="showAdminSection('blogs')" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('events')" data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('members')" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('movies')" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('chitra-vichitra')" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
+    <div data-action="showAdminSection" data-args='["blogs"]' class="admin-sidebar-item active" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
+    <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["events"]' data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
+    <div data-action="showAdminSection" data-args='["members"]' class="admin-sidebar-item" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
+    <div data-action="showAdminSection" data-args='["movies"]' class="admin-sidebar-item" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
+    <div data-action="showAdminSection" data-args='["chitra-vichitra"]' class="admin-sidebar-item" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
     <div class="admin-sidebar-group">Extras</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('testimonials')" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('achievements')" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('wrapped')" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('collaborate')" data-section="collaborate"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collaborate</div>
+    <div data-action="showAdminSection" data-args='["testimonials"]' class="admin-sidebar-item" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
+    <div data-action="showAdminSection" data-args='["achievements"]' class="admin-sidebar-item" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
+    <div data-action="showAdminSection" data-args='["wrapped"]' class="admin-sidebar-item" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
+    <div data-action="showAdminSection" data-args='["collaborate"]' class="admin-sidebar-item" data-section="collaborate"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collaborate</div>
     <div class="admin-sidebar-group">Analytics</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('analytics')" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('review-analytics')" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('reg-analytics')" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('payment-analytics')" data-section="payment-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Payments</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('comments')" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('broadcast')" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('themes')" data-section="themes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span> Event Themes</div>
+    <div data-action="showAdminSection" data-args='["analytics"]' class="admin-sidebar-item" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
+    <div data-action="showAdminSection" data-args='["review-analytics"]' class="admin-sidebar-item" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
+    <div data-action="showAdminSection" data-args='["reg-analytics"]' class="admin-sidebar-item" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
+    <div data-action="showAdminSection" data-args='["payment-analytics"]' class="admin-sidebar-item" data-section="payment-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Payments</div>
+    <div data-action="showAdminSection" data-args='["comments"]' class="admin-sidebar-item" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
+    <div data-action="showAdminSection" data-args='["broadcast"]' class="admin-sidebar-item" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
+    <div data-action="showAdminSection" data-args='["themes"]' class="admin-sidebar-item" data-section="themes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span> Event Themes</div>
     <div class="admin-sidebar-group">System</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('notifications')" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('settings')" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('change-password')" data-section="change-password" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Change Password</div>
-    <div class="admin-sidebar-item" onclick="showAdminSection('two-factor')" data-section="two-factor" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> Two-Factor Auth</div>
-    <div id="sidebar-admins-link" class="admin-sidebar-item" onclick="showAdminSection('admins')" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
-    <div id="sidebar-activity-link" class="admin-sidebar-item" onclick="showAdminSection('activity')" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
+    <div data-action="showAdminSection" data-args='["notifications"]' class="admin-sidebar-item" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
+    <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
+    <div data-action="showAdminSection" data-args='["change-password"]' class="admin-sidebar-item" data-section="change-password" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Change Password</div>
+    <div data-action="showAdminSection" data-args='["two-factor"]' class="admin-sidebar-item" data-section="two-factor" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> Two-Factor Auth</div>
+    <div data-action="showAdminSection" data-args='["admins"]' id="sidebar-admins-link" class="admin-sidebar-item" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
+    <div data-action="showAdminSection" data-args='["activity"]' id="sidebar-activity-link" class="admin-sidebar-item" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
     <div class="admin-sidebar-bottom">
-      <div class="admin-sidebar-item" onclick="toggleTheme()" style="justify-content:space-between">
+      <div data-action="toggleTheme" class="admin-sidebar-item" style="justify-content:space-between">
         <span>Light Mode</span>
         <span id="admin-theme-label" style="font-size:11px;opacity:.45;letter-spacing:.04em">OFF</span>
       </div>
-      <div class="admin-sidebar-item" onclick="adminLogout()"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Log Out</div>
+      <div data-action="adminLogout" class="admin-sidebar-item"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Log Out</div>
     </div>
   </div>
   <div class="admin-main">
@@ -3346,7 +3346,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section active" id="section-blogs">
       <div class="admin-header">
         <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
-        <button class="btn btn-primary" onclick="openBlogModal()">+ New Post</button>
+        <button data-action="openBlogModal" class="btn btn-primary">+ New Post</button>
       </div>
 
       <!-- ── Blog Analytics Strip ── -->
@@ -3372,12 +3372,12 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
       <div id="bulk-bar-blogs" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-blogs" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('blogs')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
-        <button class="btn-sm" onclick="clearBulkSelect('blogs')" style="margin-left:auto">Cancel</button>
+        <button data-action="bulkDelete" data-args='["blogs"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["blogs"]' class="btn-sm" style="margin-left:auto">Cancel</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>👁 Views</th><th>Date</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" data-onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>👁 Views</th><th>Date</th><th>Actions</th></tr></thead>
           <tbody id="admin-blogs-tbody"></tbody>
         </table>
       </div>
@@ -3387,7 +3387,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section" id="section-events">
       <div class="admin-header">
         <div><h2>Events</h2><p>Manage upcoming and past events</p></div>
-        <button class="btn btn-primary" onclick="openEventModal()">+ New Event</button>
+        <button data-action="openEventModal" class="btn btn-primary">+ New Event</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
@@ -3402,27 +3402,27 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <div class="admin-header">
         <div><h2>Members</h2><p>Add and manage society members</p></div>
         <div style="display:flex;gap:10px;align-items:center">
-          <button class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:8px 16px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="document.getElementById('member-xlsx-input').click()">
+          <button data-action="triggerClick_member_xlsx_input" class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:8px 16px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import Excel
           </button>
-          <input type="file" id="member-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="previewMemberImport(this)">
-          <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
+          <input type="file" id="member-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none" data-onchange="previewMemberImport(this)">
+          <button data-action="openMemberModal" class="btn btn-primary">+ Add Member</button>
         </div>
       </div>
       <div id="bulk-bar-members" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-members" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('members')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
-        <button class="btn-sm" onclick="clearBulkSelect('members')" style="margin-left:auto">Cancel</button>
+        <button data-action="bulkDelete" data-args='["members"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["members"]' class="btn-sm" style="margin-left:auto">Cancel</button>
       </div>
       <div class="member-search-wrap">
         <svg class="member-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input class="member-search-input" id="member-admin-search" placeholder="Search by name, role, domain, batch…" oninput="filterAdminMembers(this.value)">
-        <button class="member-search-clear" id="member-search-clear-btn" onclick="clearMemberSearch()">✕</button>
+        <input class="member-search-input" id="member-admin-search" placeholder="Search by name, role, domain, batch…" data-oninput="filterAdminMembers(this.value)">
+        <button data-action="clearMemberSearch" class="member-search-clear" id="member-search-clear-btn">✕</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="bulk-select-all-members" onchange="selectAllBulk('members',this.checked)"></th><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-members" data-onchange="selectAllBulk('members',this.checked)"></th><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="admin-members-tbody"></tbody>
         </table>
       </div>
@@ -3432,16 +3432,16 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section" id="section-movies">
       <div class="admin-header">
         <div><h2>Films</h2><p>Manage KFS film productions</p></div>
-        <button class="btn btn-primary" onclick="openMovieModal()">+ Add Film</button>
+        <button data-action="openMovieModal" class="btn btn-primary">+ Add Film</button>
       </div>
       <div id="bulk-bar-movies" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
         <span id="bulk-count-movies" style="font-size:13px;color:var(--grey)">0 selected</span>
-        <button class="btn-sm danger" onclick="bulkDelete('movies')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
-        <button class="btn-sm" onclick="clearBulkSelect('movies')" style="margin-left:auto">Cancel</button>
+        <button data-action="bulkDelete" data-args='["movies"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["movies"]' class="btn-sm" style="margin-left:auto">Cancel</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th><input type="checkbox" id="bulk-select-all-movies" onchange="selectAllBulk('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-movies" data-onchange="selectAllBulk('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
           <tbody id="admin-movies-tbody"></tbody>
         </table>
       </div>
@@ -3451,7 +3451,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section" id="section-chitra-vichitra">
       <div class="admin-header">
         <div><h2>Chitra Vichitra</h2><p>Manage flagship event editions and screened films</p></div>
-        <button class="btn btn-primary" onclick="openCVModal()">+ Add Edition</button>
+        <button data-action="openCVModal" class="btn btn-primary">+ Add Edition</button>
       </div>
       <div id="cv-admin-list">
         <div class="loading" style="padding:40px;text-align:center">Loading...</div>
@@ -3462,7 +3462,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section" id="section-testimonials">
       <div class="admin-header">
         <div><h2>Testimonials</h2><p>Member quotes shown on homepage</p></div>
-        <button class="btn btn-primary" onclick="openTestimonialModal()">+ Add Testimonial</button>
+        <button data-action="openTestimonialModal" class="btn btn-primary">+ Add Testimonial</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
@@ -3476,7 +3476,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-section" id="section-achievements">
       <div class="admin-header">
         <div><h2>Achievements</h2><p>Milestones and awards</p></div>
-        <button class="btn btn-primary" onclick="openAchievementModal()">+ Add Achievement</button>
+        <button data-action="openAchievementModal" class="btn btn-primary">+ Add Achievement</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
@@ -3503,11 +3503,11 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <div id="team-photo-preview" style="margin-bottom:10px;display:none">
             <img id="team-photo-img" src="" alt="Team photo" style="width:100%;max-width:320px;border-radius:6px;border:1px solid var(--border);object-fit:cover;aspect-ratio:4/3">
           </div>
-          <input type="file" id="set-team-photo-file" accept="image/*" style="display:none" onchange="previewTeamPhoto(this)">
+          <input type="file" id="set-team-photo-file" accept="image/*" style="display:none" data-onchange="previewTeamPhoto(this)">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('set-team-photo-file').click()">Choose Photo</button>
+            <button data-action="triggerClick_set_team_photo_file" type="button" class="btn btn-secondary">Choose Photo</button>
             <span id="team-photo-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
-            <button type="button" class="btn btn-secondary" id="team-photo-clear-btn" onclick="clearTeamPhoto()" style="display:none">Remove</button>
+            <button data-action="clearTeamPhoto" type="button" class="btn btn-secondary" id="team-photo-clear-btn" style="display:none">Remove</button>
           </div>
           <input type="hidden" id="set-team-photo-url" value="">
         </div>
@@ -3568,16 +3568,16 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <div id="egg-img-preview" style="margin-bottom:12px;display:none">
             <img id="egg-img-thumb" src="" alt="Easter egg" style="max-width:280px;max-height:180px;object-fit:contain;border-radius:10px;border:1px solid var(--border)">
           </div>
-          <input type="file" id="set-egg-img-file" accept="image/*" style="display:none" onchange="previewEggImg(this)">
+          <input type="file" id="set-egg-img-file" accept="image/*" style="display:none" data-onchange="previewEggImg(this)">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button type="button" class="btn btn-secondary" style="border-radius:10px" onclick="document.getElementById('set-egg-img-file').click()">Choose Image</button>
+            <button data-action="triggerClick_set_egg_img_file" type="button" class="btn btn-secondary" style="border-radius:10px">Choose Image</button>
             <span id="egg-img-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
-            <button type="button" class="btn btn-secondary" id="egg-img-clear-btn" onclick="clearEggImg()" style="display:none;border-radius:10px">Remove</button>
+            <button data-action="clearEggImg" type="button" class="btn btn-secondary" id="egg-img-clear-btn" style="display:none;border-radius:10px">Remove</button>
           </div>
           <input type="hidden" id="set-egg-img-url" value="">
         </div>
         <div style="margin-top:8px;padding:12px 0 4px">
-          <button class="btn btn-primary" onclick="saveNoShortsEgg()">Save No Shorts Easter Egg</button>
+          <button data-action="saveNoShortsEgg" class="btn btn-primary">Save No Shorts Easter Egg</button>
           <p id="noshorts-egg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
         </div>
 
@@ -3593,13 +3593,13 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
           <div class="form-group" style="margin:0">
             <label>Image (optional)</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button type="button" class="btn btn-secondary" style="border-radius:10px;font-size:12px;padding:8px 14px" onclick="document.getElementById('cegg-img-file').click()">Choose Image</button>
+              <button data-action="triggerClick_cegg_img_file" type="button" class="btn btn-secondary" style="border-radius:10px;font-size:12px;padding:8px 14px">Choose Image</button>
               <span id="cegg-img-name" style="font-size:12px;color:var(--grey)">No file</span>
             </div>
-            <input type="file" id="cegg-img-file" accept="image/*" style="display:none" onchange="document.getElementById('cegg-img-name').textContent=this.files[0]?.name||'No file'">
+            <input type="file" id="cegg-img-file" accept="image/*" style="display:none" data-onchange="document.getElementById('cegg-img-name').textContent=this.files[0]?.name||'No file'">
           </div>
         </div>
-        <button class="btn btn-primary" style="border-radius:10px" onclick="addCustomEgg()">+ Add Easter Egg</button>
+        <button data-action="addCustomEgg" class="btn btn-primary" style="border-radius:10px">+ Add Easter Egg</button>
         <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
 
         <!-- ── SECTION 7: Blog Tag Management ── -->
@@ -3608,8 +3608,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
         <div style="display:flex;gap:8px;margin-bottom:16px;max-width:480px">
           <input type="text" id="new-tag-input" placeholder="e.g. Into the Stars Life" style="flex:1;border-radius:10px"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewTag()}">
-          <button class="btn btn-primary" style="border-radius:10px;white-space:nowrap;padding:10px 20px;font-size:12px" onclick="saveNewTag()">+ Add Tag</button>
+            data-onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewTag()}">
+          <button data-action="saveNewTag" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;padding:10px 20px;font-size:12px">+ Add Tag</button>
         </div>
         <div id="tags-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
           <span style="font-size:12px;color:var(--grey);padding:4px 0">Loading tags...</span>
@@ -3649,15 +3649,15 @@ KFS — KIIT Film Society"></textarea>
         </div>
 
         <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
-          <button class="btn btn-primary" style="border-radius:10px" onclick="saveEmailSettings()">Save Email Settings</button>
-          <button class="btn btn-secondary" style="border-radius:10px;font-size:12px" onclick="sendTestEmail()">Send Test Email</button>
+          <button data-action="saveEmailSettings" class="btn btn-primary" style="border-radius:10px">Save Email Settings</button>
+          <button data-action="sendTestEmail" class="btn btn-secondary" style="border-radius:10px;font-size:12px">Send Test Email</button>
           <p id="email-settings-msg" style="font-size:12px;color:var(--grey);margin:0"></p>
         </div>
 
         <!-- ── SAVE ALL SETTINGS ── -->
         <div class="settings-divider"></div>
         <div style="padding:8px 0 20px">
-          <button class="btn btn-primary" onclick="saveSettings()" id="save-settings-btn">Save Settings</button>
+          <button data-action="saveSettings" class="btn btn-primary" id="save-settings-btn">Save Settings</button>
           <p style="font-size:12px;color:var(--grey);margin-top:8px">Saves: Hero &amp; About, Stats, Member Spotlight, and Social Links.</p>
         </div>
 
@@ -3677,7 +3677,7 @@ KFS — KIIT Film Society"></textarea>
           <div class="form-group"><label>New Password</label><input type="password" id="new-password" placeholder="Min. 8 characters"></div>
           <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirm-password" placeholder="Re-enter new password"></div>
         </div>
-        <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
+        <button data-action="changePassword" class="btn btn-primary">Update Password</button>
         <p id="change-pw-msg" style="font-size:12px;color:var(--grey);margin-top:10px"></p>
       </div>
     </div>
@@ -3707,7 +3707,7 @@ KFS — KIIT Film Society"></textarea>
         <div id="tfa-setup-block">
           <p class="settings-section-title">Set up authenticator</p>
           <p class="settings-section-desc">Use Google Authenticator, Authy, or any TOTP app. Once enabled, you'll be asked for a 6-digit code every time you log in.</p>
-          <button class="btn btn-primary" id="tfa-start-btn" onclick="tfa_startSetup()" style="border-radius:12px;margin-top:4px">
+          <button data-action="tfa_startSetup" class="btn btn-primary" id="tfa-start-btn" style="border-radius:12px;margin-top:4px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Enable Two-Factor Auth
           </button>
@@ -3730,12 +3730,12 @@ KFS — KIIT Film Society"></textarea>
                 <label style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:var(--grey)">Verification code</label>
                 <input type="text" id="tfa-verify-input" placeholder="000 000" maxlength="7" inputmode="numeric" autocomplete="one-time-code"
                   style="letter-spacing:.22em;font-size:18px;text-align:center;max-width:180px;border-radius:10px;margin-top:6px"
-                  oninput="this.value=this.value.replace(/[^0-9 ]/g,'')"
-                  onkeydown="if(event.key==='Enter')tfa_verifyCode()">
+                  data-oninput="this.value=this.value.replace(/[^0-9 ]/g,'')"
+                  data-onkeydown="if(event.key==='Enter')tfa_verifyCode()">
               </div>
               <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-                <button class="btn btn-primary" onclick="tfa_verifyCode()" id="tfa-verify-btn" style="border-radius:12px">Verify &amp; Activate</button>
-                <button class="btn btn-secondary" onclick="tfa_cancelSetup()" style="border-radius:12px">Cancel</button>
+                <button data-action="tfa_verifyCode" class="btn btn-primary" id="tfa-verify-btn" style="border-radius:12px">Verify &amp; Activate</button>
+                <button data-action="tfa_cancelSetup" class="btn btn-secondary" style="border-radius:12px">Cancel</button>
               </div>
               <p id="tfa-verify-msg" style="font-size:12px;margin-top:10px;min-height:18px;color:var(--grey)"></p>
             </div>
@@ -3749,7 +3749,7 @@ KFS — KIIT Film Society"></textarea>
           <div style="padding:16px 18px;background:rgba(245,245,245,.03);border:1px solid var(--border);border-radius:14px;max-width:440px;margin-top:16px">
             <div style="font-size:12px;color:var(--grey);line-height:1.6">If you lose access to your authenticator app, contact your master admin to disable 2FA for your account.</div>
           </div>
-          <button class="btn btn-secondary" onclick="tfa_disableSelf()" style="border-radius:12px;margin-top:20px;border-color:rgba(255,80,80,.3);color:#ff6060">
+          <button data-action="tfa_disableSelf" class="btn btn-secondary" style="border-radius:12px;margin-top:20px;border-color:rgba(255,80,80,.3);color:#ff6060">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><path d="M18 6L6 18M6 6l12 12"/></svg>
             Disable Two-Factor Auth
           </button>
@@ -3763,7 +3763,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-admins">
       <div class="admin-header">
         <div><h2>Manage Admins</h2><p>Add or remove admin accounts</p></div>
-        <button class="btn btn-primary" onclick="openAddAdminModal()">+ Add Admin</button>
+        <button data-action="openAddAdminModal" class="btn btn-primary">+ Add Admin</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
@@ -3777,7 +3777,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-activity">
       <div class="admin-header">
         <div><h2>Activity Log</h2><p>All changes made by all admins</p></div>
-        <button class="btn btn-secondary" onclick="loadAdminData('activity')">Refresh</button>
+        <button data-action="loadAdminData" data-args='["activity"]' class="btn btn-secondary">Refresh</button>
       </div>
       <div class="admin-card">
         <table class="admin-table">
@@ -3790,7 +3790,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-notifications">
       <div class="admin-header">
         <div><h2>Notifications</h2><p>Popups shown to site visitors</p></div>
-        <button class="btn btn-primary" onclick="openNotifModal()">+ New Notification</button>
+        <button data-action="openNotifModal" class="btn btn-primary">+ New Notification</button>
       </div>
       <table class="admin-table">
         <thead><tr><th>Title</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th></tr></thead>
@@ -3804,7 +3804,7 @@ KFS — KIIT Film Society"></textarea>
       <div id="themes-list-view">
         <div class="admin-header">
           <div><h2>Event Themes</h2><p>Temporarily retheme the site for events. Zero layout changes.</p></div>
-          <button class="btn btn-primary" onclick="openThemeEditor(null)">+ New Theme</button>
+          <button data-action="openThemeEditor" data-args='[null]' class="btn btn-primary">+ New Theme</button>
         </div>
         <div id="themes-list-grid" style="display:grid;gap:16px"></div>
       </div>
@@ -3815,7 +3815,7 @@ KFS — KIIT Film Society"></textarea>
             <h2 id="theme-editor-title">New Theme</h2>
             <p>Changes apply within 60 seconds of saving</p>
           </div>
-          <button class="btn btn-secondary" onclick="closeThemeEditor()">← Back to list</button>
+          <button data-action="closeThemeEditor" class="btn btn-secondary">← Back to list</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 320px;gap:28px;align-items:start">
           <!-- Form -->
@@ -3829,43 +3829,43 @@ KFS — KIIT Film Society"></textarea>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BACKGROUND</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-bg" value="#0a0a0a" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-bg-hex" placeholder="#0a0a0a" oninput="syncColorFromHex('te-bg','te-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-bg" value="#0a0a0a" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-bg-hex" placeholder="#0a0a0a" data-oninput="syncColorFromHex('te-bg','te-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">TEXT</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-text" value="#f5f5f5" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-text-hex" placeholder="#f5f5f5" oninput="syncColorFromHex('te-text','te-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-text" value="#f5f5f5" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-text-hex" placeholder="#f5f5f5" data-oninput="syncColorFromHex('te-text','te-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">ACCENT</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-accent" value="#f5f5f5" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-accent-hex" placeholder="#f5f5f5" oninput="syncColorFromHex('te-accent','te-accent-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-accent" value="#f5f5f5" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-accent-hex" placeholder="#f5f5f5" data-oninput="syncColorFromHex('te-accent','te-accent-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">CARD</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-card" value="#111111" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-card-hex" placeholder="#111111" oninput="syncColorFromHex('te-card','te-card-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-card" value="#111111" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-card-hex" placeholder="#111111" data-oninput="syncColorFromHex('te-card','te-card-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BORDER</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-border" value="#1e1e1e" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-border-hex" placeholder="#1e1e1e" oninput="syncColorFromHex('te-border','te-border-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-border" value="#1e1e1e" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-border-hex" placeholder="#1e1e1e" data-oninput="syncColorFromHex('te-border','te-border-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
               <div class="form-group" style="margin:0">
                 <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">GREY / MUTED</label>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <input type="color" id="te-grey" value="#888888" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                  <input type="text" id="te-grey-hex" placeholder="#888888" oninput="syncColorFromHex('te-grey','te-grey-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  <input type="color" id="te-grey" value="#888888" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-grey-hex" placeholder="#888888" data-oninput="syncColorFromHex('te-grey','te-grey-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                 </div>
               </div>
             </div>
@@ -3893,15 +3893,15 @@ KFS — KIIT Film Society"></textarea>
                 <div>
                   <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER BG</label>
                   <div style="display:flex;align-items:center;gap:8px">
-                    <input type="color" id="te-banner-bg" value="#e63946" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                    <input type="text" id="te-banner-bg-hex" placeholder="#e63946" oninput="syncColorFromHex('te-banner-bg','te-banner-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                    <input type="color" id="te-banner-bg" value="#e63946" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-bg-hex" placeholder="#e63946" data-oninput="syncColorFromHex('te-banner-bg','te-banner-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                   </div>
                 </div>
                 <div>
                   <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER TEXT</label>
                   <div style="display:flex;align-items:center;gap:8px">
-                    <input type="color" id="te-banner-text" value="#ffffff" oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
-                    <input type="text" id="te-banner-text-hex" placeholder="#ffffff" oninput="syncColorFromHex('te-banner-text','te-banner-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                    <input type="color" id="te-banner-text" value="#ffffff" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-text-hex" placeholder="#ffffff" data-oninput="syncColorFromHex('te-banner-text','te-banner-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
                   </div>
                 </div>
               </div>
@@ -3927,8 +3927,8 @@ KFS — KIIT Film Society"></textarea>
             </label>
             <p id="te-error" style="color:#e74c3c;font-size:13px;display:none"></p>
             <div style="display:flex;gap:12px;margin-top:4px">
-              <button class="btn btn-secondary" style="border-radius:12px" onclick="saveTheme(false)">Save as Draft</button>
-              <button class="btn btn-primary" style="border-radius:12px" onclick="saveTheme(true)">Save &amp; Activate</button>
+              <button data-action="saveTheme" data-args='[false]' class="btn btn-secondary" style="border-radius:12px">Save as Draft</button>
+              <button data-action="saveTheme" data-args='[true]' class="btn btn-primary" style="border-radius:12px">Save &amp; Activate</button>
             </div>
           </div>
           <!-- Live Preview -->
@@ -3964,9 +3964,9 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-analytics">
       <div class="admin-header"><div><h2>Traffic Analytics</h2><p>Visitor activity across all pages</p></div></div>
       <div class="analytics-tabs">
-        <div class="analytics-tab active" onclick="switchAnalyticsTab('traffic','7d',this)">7 Days</div>
-        <div class="analytics-tab" onclick="switchAnalyticsTab('traffic','30d',this)">30 Days</div>
-        <div class="analytics-tab" onclick="switchAnalyticsTab('traffic','all',this)">All Time</div>
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "7d", "__this__"]' class="analytics-tab active">7 Days</div>
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "30d", "__this__"]' class="analytics-tab">30 Days</div>
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "all", "__this__"]' class="analytics-tab">All Time</div>
       </div>
       <div class="analytics-grid">
         <div class="analytics-card"><div class="analytics-card-num" id="stat-traffic-total-views">—</div><div class="analytics-card-label">Total Views</div></div>
@@ -4057,15 +4057,15 @@ KFS — KIIT Film Society"></textarea>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             View Google Sheet
           </a>
-          <button class="btn btn-secondary" onclick="sheetBackfill(this)" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+          <button data-action="sheetBackfill" data-args='["__this__"]' class="btn btn-secondary" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
             Sync Old Payments
           </button>
-          <button class="btn btn-secondary" onclick="testDonationEmail(this)" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+          <button data-action="testDonationEmail" data-args='["__this__"]' class="btn btn-secondary" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             Test Email
           </button>
-          <button class="btn" onclick="loadPaymentAnalytics()" style="border-radius:20px;font-size:12px">↻ Refresh</button>
+          <button data-action="loadPaymentAnalytics" class="btn" style="border-radius:20px;font-size:12px">↻ Refresh</button>
         </div>
       </div>
 
@@ -4126,16 +4126,16 @@ KFS — KIIT Film Society"></textarea>
     <div class="admin-section" id="section-comments">
       <div class="admin-header">
         <div><h2>Film Comments</h2><p>Moderate discussions across all films</p></div>
-        <button class="btn btn-primary" onclick="openKfsReplyModal()">
+        <button data-action="openKfsReplyModal" class="btn btn-primary">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           KFS Team Reply
         </button>
       </div>
       <div class="admin-comments-filters">
-        <button class="admin-comment-filter-btn active" onclick="filterAdminComments('all',this)">All</button>
-        <button class="admin-comment-filter-btn" onclick="filterAdminComments('pinned',this)">Pinned</button>
-        <button class="admin-comment-filter-btn" onclick="filterAdminComments('spoiler',this)">Spoilers</button>
-        <button class="admin-comment-filter-btn" onclick="filterAdminComments('kfs',this)">KFS Replies</button>
+        <button data-action="filterAdminComments" data-args='["all", "__this__"]' class="admin-comment-filter-btn active">All</button>
+        <button data-action="filterAdminComments" data-args='["pinned", "__this__"]' class="admin-comment-filter-btn">Pinned</button>
+        <button data-action="filterAdminComments" data-args='["spoiler", "__this__"]' class="admin-comment-filter-btn">Spoilers</button>
+        <button data-action="filterAdminComments" data-args='["kfs", "__this__"]' class="admin-comment-filter-btn">KFS Replies</button>
       </div>
       <div class="admin-card" style="padding:4px 20px" id="admin-comments-list">
         <div class="bc-loading">Loading comments…</div>
@@ -4155,14 +4155,14 @@ KFS — KIIT Film Society"></textarea>
         <div class="bc-field">
           <label class="bc-label">Audience</label>
           <div class="bc-audience-row">
-            <div class="bc-audience-card selected" id="bc-aud-all" onclick="selectBcAudience('all_registrants')">
+            <div data-action="selectBcAudience" data-args='["all_registrants"]' class="bc-audience-card selected" id="bc-aud-all">
               <div class="bc-audience-radio"></div>
               <div class="bc-audience-info">
                 <div class="bc-audience-name">All Registrants</div>
                 <div class="bc-audience-desc">Everyone who has ever registered for any event</div>
               </div>
             </div>
-            <div class="bc-audience-card" id="bc-aud-event" onclick="selectBcAudience('event')">
+            <div class="bc-audience-card" id="bc-aud-event" data-action="selectBcAudience" data-args='["event"]'>
               <div class="bc-audience-radio"></div>
               <div class="bc-audience-info">
                 <div class="bc-audience-name">Specific Event</div>
@@ -4194,14 +4194,14 @@ KFS — KIIT Film Society"></textarea>
             <div class="bc-preview-count" id="bc-recipient-count">—</div>
             <div class="bc-preview-label">estimated recipients</div>
           </div>
-          <button class="bc-preview-btn" onclick="previewBroadcastRecipients()">
+          <button data-action="previewBroadcastRecipients" class="bc-preview-btn">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Check count
           </button>
         </div>
 
         <div class="bc-send-row">
-          <button class="bc-send-btn" id="bc-send-btn" onclick="sendBroadcast()">
+          <button data-action="sendBroadcast" class="bc-send-btn" id="bc-send-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             Send Broadcast
           </button>
@@ -4239,14 +4239,14 @@ KFS — KIIT Film Society"></textarea>
           <div style="display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--card);border:1px solid var(--border);border-radius:20px">
             <span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey)">Wrapped</span>
             <label class="wrapped-toggle-switch" title="Show or hide the Wrapped page for all users">
-              <input type="checkbox" id="wrapped-enabled-toggle" onchange="updateWrappedToggleLabel(this)">
+              <input type="checkbox" id="wrapped-enabled-toggle" data-onchange="updateWrappedToggleLabel(this)">
               <span class="wrapped-toggle-track">
                 <span class="wrapped-toggle-thumb"></span>
               </span>
             </label>
             <span id="wrapped-toggle-label" style="font-size:12px;font-weight:600;color:var(--grey);min-width:30px">Off</span>
           </div>
-          <button class="btn btn-primary" onclick="saveWrappedConfig()">Save Config</button>
+          <button data-action="saveWrappedConfig" class="btn btn-primary">Save Config</button>
         </div>
       </div>
 
@@ -4269,7 +4269,7 @@ KFS — KIIT Film Society"></textarea>
         <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Override the auto-computed top-rated film — shown on a special card with poster art</p>
         <div class="form-group">
           <label>Select Movie</label>
-          <select id="wrapped-cfg-featured-movie" style="max-width:360px" onchange="wrappedFeaturedMoviePreview()">
+          <select id="wrapped-cfg-featured-movie" style="max-width:360px" data-onchange="wrappedFeaturedMoviePreview()">
             <option value="">— Auto (highest-rated by community) —</option>
           </select>
         </div>
@@ -4300,13 +4300,13 @@ KFS — KIIT Film Society"></textarea>
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Year Highlight Cards</h3>
         <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Showcase memorable moments of the year — each card shows an image + headline + description. Perfect for "what we did this year" storytelling. These appear after the stats cards.</p>
         <div id="wrapped-blog-highlights-list"></div>
-        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedBlogHighlight()">+ Add Highlight Card</button>
+        <button data-action="addWrappedBlogHighlight" class="btn-sm" style="margin-top:12px;border-radius:10px">+ Add Highlight Card</button>
       </div>
       <div class="admin-card">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Fun Fact Cards</h3>
         <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Extra slides shown between stat cards — choose an icon and write the text</p>
         <div id="wrapped-fun-cards-list"></div>
-        <button class="btn-sm" style="margin-top:12px;border-radius:10px" onclick="addWrappedFunCard()">+ Add Card</button>
+        <button data-action="addWrappedFunCard" class="btn-sm" style="margin-top:12px;border-radius:10px">+ Add Card</button>
       </div>
       </div><!-- end wrapped-config-body -->
     </div>
@@ -4341,14 +4341,14 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group">
       <label>Content</label>
       <div class="editor-toolbar">
-        <button class="editor-btn" onclick="execCmd('bold')"><b>B</b></button>
-        <button class="editor-btn" onclick="execCmd('italic')"><i>I</i></button>
-        <button class="editor-btn" onclick="execCmd('formatBlock','h2')">H2</button>
-        <button class="editor-btn" onclick="execCmd('formatBlock','h3')">H3</button>
-        <button class="editor-btn" onclick="execCmd('insertUnorderedList')">• List</button>
-        <button class="editor-btn" onclick="execCmd('insertOrderedList')">1. List</button>
-        <button class="editor-btn" onclick="execCmd('formatBlock','blockquote')">"Quote"</button>
-        <button class="editor-btn" onclick="insertLink()">Link</button>
+        <button data-action="execCmd" data-args='["bold"]' class="editor-btn"><b>B</b></button>
+        <button data-action="execCmd" data-args='["italic"]' class="editor-btn"><i>I</i></button>
+        <button data-action="execCmd" data-args='["formatBlock", "h2"]' class="editor-btn">H2</button>
+        <button data-action="execCmd" data-args='["formatBlock", "h3"]' class="editor-btn">H3</button>
+        <button data-action="execCmd" data-args='["insertUnorderedList"]' class="editor-btn">• List</button>
+        <button data-action="execCmd" data-args='["insertOrderedList"]' class="editor-btn">1. List</button>
+        <button data-action="execCmd" data-args='["formatBlock", "blockquote"]' class="editor-btn">"Quote"</button>
+        <button data-action="insertLink" class="editor-btn">Link</button>
       </div>
       <div id="blog-editor-content" contenteditable="true"></div>
     </div>
@@ -4362,19 +4362,19 @@ KFS — KIIT Film Society"></textarea>
         <select id="blog-section-type" style="flex:1;border-radius:10px">
           <option value="">— Select a tag —</option>
         </select>
-        <button class="btn-sm" onclick="addBlogSection()" style="white-space:nowrap;border-radius:10px">+ Tag</button>
+        <button data-action="addBlogSection" class="btn-sm" style="white-space:nowrap;border-radius:10px">+ Tag</button>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input type="text" id="blog-new-tag-inline" placeholder="Or type a new tag name…"
           style="flex:1;border-radius:10px;font-size:13px;padding:8px 12px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:inherit;outline:none"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();addBlogSectionInline()}">
-        <button class="btn-sm" onclick="addBlogSectionInline()" style="white-space:nowrap;border-radius:10px">+ New</button>
+          data-onkeydown="if(event.key==='Enter'){event.preventDefault();addBlogSectionInline()}">
+        <button data-action="addBlogSectionInline" class="btn-sm" style="white-space:nowrap;border-radius:10px">+ New</button>
       </div>
       <div id="blog-sections-list"><p style="font-size:12px;color:var(--grey);margin:0">No tags added yet.</p></div>
     </div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeBlogModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveBlog()">Save Post</button>
+      <button data-action="closeBlogModal" class="btn-sm">Cancel</button>
+      <button data-action="saveBlog" class="btn-sm btn-success">Save Post</button>
     </div>
   </div>
 </div>
@@ -4394,8 +4394,8 @@ KFS — KIIT Film Society"></textarea>
       <select id="event-upcoming"><option value="true">Upcoming</option><option value="false">Past</option></select>
     </div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeEventModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveEvent()">Save Event</button>
+      <button data-action="closeEventModal" class="btn-sm">Cancel</button>
+      <button data-action="saveEvent" class="btn-sm btn-success">Save Event</button>
     </div>
   </div>
 </div>
@@ -4404,7 +4404,7 @@ KFS — KIIT Film Society"></textarea>
   <div class="modal-box" style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-height:90vh;overflow-y:auto">
     <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <h3 id="collab-modal-title" style="font-size:18px;font-weight:700;color:var(--white);margin:0">Post Open Call</h3>
-      <button class="modal-close" onclick="closeCollabForm()" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px">×</button>
+      <button data-action="closeCollabForm" class="modal-close" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px">×</button>
     </div>
 
     <input type="hidden" id="collab-token">
@@ -4414,10 +4414,10 @@ KFS — KIIT Film Society"></textarea>
       <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin-bottom:18px">This board is exclusive to KFS members. Enter your KIIT email to continue.</p>
       <div class="form-group">
         <label>KIIT Email *</label>
-        <input id="collab-kiit-email" type="email" placeholder="yourname@kiit.ac.in" oninput="collabGateEmailInput()" onkeydown="if(event.key==='Enter')verifyCollabMember()">
+        <input id="collab-kiit-email" type="email" placeholder="yourname@kiit.ac.in" data-oninput="collabGateEmailInput()" data-onkeydown="if(event.key==='Enter')verifyCollabMember()">
       </div>
       <p id="collab-gate-error" style="color:#ff5555;font-size:13px;margin-bottom:12px;display:none"></p>
-      <button class="btn btn-primary" id="collab-gate-btn" onclick="verifyCollabMember()" style="border-radius:10px">Verify & Continue</button>
+      <button data-action="verifyCollabMember" class="btn btn-primary" id="collab-gate-btn" style="border-radius:10px">Verify & Continue</button>
     </div>
 
     <!-- ── STEP 2: Full form (shown after email verified) ── -->
@@ -4426,7 +4426,7 @@ KFS — KIIT Film Society"></textarea>
       <div id="collab-verified-badge" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.2);border-radius:10px;margin-bottom:20px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         <span id="collab-verified-name" style="font-size:13px;font-weight:600;color:#34c759"></span>
-        <span style="font-size:12px;color:var(--grey);margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="resetCollabGate()">Change</span>
+        <span data-action="resetCollabGate" style="font-size:12px;color:var(--grey);margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Change</span>
       </div>
 
       <div class="form-group"><label>Title *</label><input id="collab-title" placeholder="Looking for a sound designer for our 10-minute short"></div>
@@ -4463,8 +4463,8 @@ KFS — KIIT Film Society"></textarea>
 
       <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="saveCollabPost()">Save Listing</button>
-        <button class="btn btn-secondary" id="collab-delete-own" onclick="deleteOwnCollabPost()" style="display:none">Delete Listing</button>
+        <button data-action="saveCollabPost" class="btn btn-primary">Save Listing</button>
+        <button data-action="deleteOwnCollabPost" class="btn btn-secondary" id="collab-delete-own" style="display:none">Delete Listing</button>
       </div>
     </div>
   </div>
@@ -4478,7 +4478,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
     <div class="form-group">
       <label>Role / Position</label>
-      <select id="member-role" onchange="autoMemberSort();toggleDomainField()">
+      <select id="member-role" data-onchange="autoMemberSort();toggleDomainField()">
         <option value="President">President</option>
         <option value="Vice President">Vice President</option>
         <option value="Lead">Lead</option>
@@ -4521,8 +4521,8 @@ KFS — KIIT Film Society"></textarea>
       <label for="member-is-past" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);cursor:pointer;margin-bottom:0">Past Member / Alumni</label>
     </div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeMemberModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveMember()">Save Member</button>
+      <button data-action="closeMemberModal" class="btn-sm">Cancel</button>
+      <button data-action="saveMember" class="btn-sm btn-success">Save Member</button>
     </div>
   </div>
 </div>
@@ -4537,8 +4537,8 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Batch</label><input type="text" id="testimonial-batch"></div>
     <div class="form-group"><label>Quote</label><textarea id="testimonial-quote"></textarea></div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeTestimonialModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveTestimonial()">Save</button>
+      <button data-action="closeTestimonialModal" class="btn-sm">Cancel</button>
+      <button data-action="saveTestimonial" class="btn-sm btn-success">Save</button>
     </div>
   </div>
 </div>
@@ -4555,7 +4555,7 @@ KFS — KIIT Film Society"></textarea>
       <div class="form-group" style="flex:1"><label>Language</label><input type="text" id="movie-language" placeholder="e.g. Hindi, English"></div>
     </div>
     <div class="form-group"><label>Genre Tags <span style="font-weight:400;color:var(--grey)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
-      <div class="tag-input-wrap" id="movie-genre-wrap" onclick="document.getElementById('movie-genre-input').focus()">
+      <div data-action="focusEl_movie_genre_input" class="tag-input-wrap" id="movie-genre-wrap">
         <input type="hidden" id="movie-genre">
         <input class="tag-bare-input" id="movie-genre-input" placeholder="Add genre…" autocomplete="off">
       </div>
@@ -4572,12 +4572,12 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-actors"></div></div>
     <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
     <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
-    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><div style="display:flex;gap:8px;align-items:center"><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." oninput="tryAutoFetchYTRuntime(this.value)" style="flex:1"><button type="button" id="yt-fetch-btn" style="display:none;padding:6px 12px;font-size:12px;border-radius:6px;border:1px solid var(--border,#333);background:var(--surface2,#1a1a1a);color:var(--text,#f5f5f5);cursor:pointer;white-space:nowrap">&#x21BA; Fetch</button></div></div>
+    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><div style="display:flex;gap:8px;align-items:center"><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." data-oninput="tryAutoFetchYTRuntime(this.value)" style="flex:1"><button type="button" id="yt-fetch-btn" style="display:none;padding:6px 12px;font-size:12px;border-radius:6px;border:1px solid var(--border,#333);background:var(--surface2,#1a1a1a);color:var(--text,#f5f5f5);cursor:pointer;white-space:nowrap">&#x21BA; Fetch</button></div></div>
     <div class="form-group"><label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-spotify" placeholder="https://open.spotify.com/album/2026"></div>
     <div class="form-group"><label>Apple Music Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-apple-music" placeholder="https://music.apple.com/2026/album/2026"></div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeMovieModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveMovie()">Save Film</button>
+      <button data-action="closeMovieModal" class="btn-sm">Cancel</button>
+      <button data-action="saveMovie" class="btn-sm btn-success">Save Film</button>
     </div>
   </div>
 </div>
@@ -4585,7 +4585,7 @@ KFS — KIIT Film Society"></textarea>
 <!-- MEMBER PROFILE MODAL -->
 <div id="member-profile-modal">
   <div class="member-profile-box">
-    <button class="member-profile-close" onclick="closeMemberProfile()">×</button>
+    <button data-action="closeMemberProfile" class="member-profile-close">×</button>
     <div class="member-profile-header">
       <div id="mprofile-photo-wrap"></div>
       <div>
@@ -4617,8 +4617,8 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Description</label><textarea id="achievement-description" style="min-height:80px"></textarea></div>
     <div class="form-group"><label>Sort Order</label><input type="number" id="achievement-sort" value="99"></div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeAchievementModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveAchievement()">Save</button>
+      <button data-action="closeAchievementModal" class="btn-sm">Cancel</button>
+      <button data-action="saveAchievement" class="btn-sm btn-success">Save</button>
     </div>
   </div>
 </div>
@@ -4635,8 +4635,8 @@ KFS — KIIT Film Society"></textarea>
     </div>
     <div class="form-group"><label>Sort Order <span style="font-weight:400;color:var(--grey)">(lower = shown first)</span></label><input type="number" id="cv-sort" value="99"></div>
     <div class="modal-actions">
-      <button class="btn-sm" onclick="closeCVModal()">Cancel</button>
-      <button class="btn-sm btn-success" onclick="saveCV()">Save Edition</button>
+      <button data-action="closeCVModal" class="btn-sm">Cancel</button>
+      <button data-action="saveCV" class="btn-sm btn-success">Save Edition</button>
     </div>
   </div>
 </div>
@@ -4652,11 +4652,11 @@ KFS — KIIT Film Society"></textarea>
         <option value="">— Select a film —</option>
       </select>
     </div>
-    <button class="btn-sm btn-success" onclick="addMovieToCV()" style="margin-bottom:24px">+ Add to CV</button>
+    <button data-action="addMovieToCV" class="btn-sm btn-success" style="margin-bottom:24px">+ Add to CV</button>
     <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:10px">Current Films in this Edition</div>
     <div id="cv-current-movies-list" style="display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto"></div>
     <div class="modal-actions" style="margin-top:24px">
-      <button class="btn-sm" onclick="closeCVMoviesModal()">Done</button>
+      <button data-action="closeCVMoviesModal" class="btn-sm">Done</button>
     </div>
   </div>
 </div>
@@ -4668,7 +4668,7 @@ KFS — KIIT Film Society"></textarea>
 <!-- Notification Modal -->
 <div class="modal-overlay" id="notif-modal-overlay">
   <div class="modal">
-    <div class="modal-header"><h3 id="notif-modal-title">New Notification</h3><button class="modal-close" onclick="closeNotifModal()">✕</button></div>
+    <div class="modal-header"><h3 id="notif-modal-title">New Notification</h3><button data-action="closeNotifModal" class="modal-close">✕</button></div>
     <input type="hidden" id="notif-id">
     <div class="form-group"><label>Title</label><input type="text" id="notif-title" placeholder="e.g. New Film Released!"></div>
     <div class="form-group"><label>Type</label>
@@ -4696,14 +4696,14 @@ KFS — KIIT Film Society"></textarea>
       <label for="notif-active" style="margin:0;cursor:pointer;font-size:14px">Active (show to visitors)</label>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveNotif()">Save</button>
-      <button class="btn btn-secondary" onclick="closeNotifModal()">Cancel</button>
+      <button data-action="saveNotif" class="btn btn-primary">Save</button>
+      <button data-action="closeNotifModal" class="btn btn-secondary">Cancel</button>
     </div>
   </div>
 </div>
 
 <!-- Member Excel Import Modal -->
-<div id="member-import-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeMemberImport()">
+<div id="member-import-modal" class="modal-overlay" style="display:none" data-action="closeMemberImport" data-backdrop="true">
   <div class="modal-inner" style="max-width:560px;width:100%;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
     <div style="padding:28px 28px 0">
       <h3 style="font-size:17px;font-weight:700;margin-bottom:4px">Import Members from Excel</h3>
@@ -4723,24 +4723,24 @@ KFS — KIIT Film Society"></textarea>
       <p id="member-import-summary" style="font-size:12px;color:var(--grey);margin-top:12px"></p>
     </div>
     <div style="padding:20px 28px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);margin-top:20px">
-      <button class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);padding:9px 20px;border-radius:20px;font-size:13px;cursor:pointer" onclick="closeMemberImport()">Cancel</button>
-      <button id="member-import-btn" class="btn btn-primary" style="padding:9px 24px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer" onclick="runMemberImport()">Import All</button>
+      <button data-action="closeMemberImport" class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);padding:9px 20px;border-radius:20px;font-size:13px;cursor:pointer">Cancel</button>
+      <button data-action="runMemberImport" id="member-import-btn" class="btn btn-primary" style="padding:9px 24px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer">Import All</button>
     </div>
   </div>
 </div>
 
 <!-- ── FORM BUILDER MODAL (Admin) ──────────────────────────────────────────── -->
-<div class="form-builder-overlay" id="form-builder-overlay" onclick="if(event.target===this)closeFormBuilder()">
+<div class="form-builder-overlay" id="form-builder-overlay" data-action="closeFormBuilder" data-backdrop="true">
   <div class="form-builder-panel" style="position:relative">
     <!-- Response Viewer (slides over the form builder) -->
     <div class="fb-resp-viewer" id="fb-resp-viewer">
       <div class="fb-rv-header">
-        <button class="fb-rv-back" onclick="closeResponseViewer()" title="Back to form">
+        <button data-action="closeResponseViewer" class="fb-rv-back" title="Back to form">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="fb-rv-title">Responses</div>
         <span class="fb-rv-count" id="fb-rv-count"></span>
-        <button class="fb-rv-dl-btn" onclick="downloadFormResponsesFromViewer()" id="fb-rv-dl-btn">
+        <button data-action="downloadFormResponsesFromViewer" class="fb-rv-dl-btn" id="fb-rv-dl-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download
         </button>
@@ -4756,20 +4756,20 @@ KFS — KIIT Film Society"></textarea>
         <h3 id="fb-title">Registration Form</h3>
       </div>
       <div class="fb-header-actions">
-        <button class="fb-dl-btn" onclick="openResponseViewer()" id="fb-dl-btn">
+        <button data-action="openResponseViewer" class="fb-dl-btn" id="fb-dl-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           Responses
         </button>
-        <button class="fb-dl-btn" onclick="clearFormResponses()" id="fb-clear-btn" title="Delete all responses (keeps form schema)" style="border-color:rgba(255,69,58,.3);color:rgba(255,130,120,.85)">
+        <button data-action="clearFormResponses" class="fb-dl-btn" id="fb-clear-btn" title="Delete all responses (keeps form schema)" style="border-color:rgba(255,69,58,.3);color:rgba(255,130,120,.85)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           Clear Responses
         </button>
-        <button class="fb-dl-btn" onclick="deleteEntireForm()" id="fb-del-form-btn" title="Delete form and all responses permanently" style="border-color:rgba(255,69,58,.4);color:rgba(255,80,68,.9)">
+        <button data-action="deleteEntireForm" class="fb-dl-btn" id="fb-del-form-btn" title="Delete form and all responses permanently" style="border-color:rgba(255,69,58,.4);color:rgba(255,80,68,.9)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           Delete Form
         </button>
-        <button class="btn-sm btn-success" onclick="saveFormBuilder()" id="fb-save-btn">Save Form</button>
-        <button class="btn-sm" onclick="closeFormBuilder()">✕</button>
+        <button data-action="saveFormBuilder" class="btn-sm btn-success" id="fb-save-btn">Save Form</button>
+        <button data-action="closeFormBuilder" class="btn-sm">✕</button>
       </div>
     </div>
     <div class="fb-body" id="fb-body">
@@ -4778,7 +4778,7 @@ KFS — KIIT Film Society"></textarea>
         <textarea id="fb-form-desc" placeholder="Short description or instructions (optional)"></textarea>
       </div>
       <div class="fb-questions" id="fb-questions"></div>
-      <button class="fb-add-q-btn" onclick="addFBQuestion()">
+      <button data-action="addFBQuestion" class="fb-add-q-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Question
       </button>
@@ -4798,17 +4798,17 @@ KFS — KIIT Film Society"></textarea>
 </div>
 
 <!-- ── REGISTRATION FORM MODAL (Public) ────────────────────────────────────── -->
-<div class="reg-form-overlay" id="reg-form-overlay" onclick="if(event.target===this)closeRegForm()">
+<div class="reg-form-overlay" id="reg-form-overlay" data-action="closeRegForm" data-backdrop="true">
   <div class="reg-form-panel">
     <div class="reg-form-header">
       <div class="reg-form-event-label" id="rf-event-label">KFS Event</div>
       <div class="reg-form-title" id="rf-title">Registration</div>
       <div class="reg-form-desc" id="rf-desc"></div>
-      <button class="reg-form-close" onclick="closeRegForm()">✕</button>
+      <button data-action="closeRegForm" class="reg-form-close">✕</button>
     </div>
     <div class="reg-form-body" id="rf-body"></div>
     <div class="reg-submit-row" id="rf-submit-row">
-      <button class="reg-submit-btn" id="rf-submit-btn" onclick="submitRegForm()">
+      <button data-action="submitRegForm" class="reg-submit-btn" id="rf-submit-btn">
         Submit
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
@@ -4818,13 +4818,13 @@ KFS — KIIT Film Society"></textarea>
 
 
 <!-- ── COLLAB MAIL MODAL (non-KFS) ── -->
-<div class="modal-overlay" id="collab-mail-modal" onclick="if(event.target===this)closeCollabMailModal()">
+<div class="modal-overlay" id="collab-mail-modal" data-action="closeCollabMailModal" data-backdrop="true">
   <div class="modal-box" style="max-width:460px;width:92%;background:var(--black);border:1px solid var(--border);border-radius:16px;padding:28px;box-sizing:border-box">
 
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h3 style="font-size:17px;font-weight:700;color:var(--white);margin:0;letter-spacing:-.01em">Collaborate with KFS</h3>
-      <button onclick="closeCollabMailModal()" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px;margin-right:-4px">×</button>
+      <button data-action="closeCollabMailModal" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px;margin-right:-4px">×</button>
     </div>
     <p style="color:var(--grey);font-size:13px;line-height:1.6;margin:0 0 20px">Not a KIIT student? Reach out directly! Tell us who you are and what you have in mind.</p>
 
@@ -4833,7 +4833,7 @@ KFS — KIIT Film Society"></textarea>
       <p style="font-size:10px;color:var(--grey);letter-spacing:.1em;text-transform:uppercase;margin:0 0 5px">Email us at</p>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
         <span style="font-size:13px;font-weight:600;color:var(--white);word-break:break-all">filmsocietykiit@gmail.com</span>
-        <button onclick="copyCollabEmail()" id="collab-copy-btn" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--grey);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .2s">Copy</button>
+        <button data-action="copyCollabEmail" id="collab-copy-btn" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--grey);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .2s">Copy</button>
       </div>
     </div>
 
@@ -4849,7 +4849,7 @@ KFS — KIIT Film Society"></textarea>
 
     <!-- CTA buttons -->
     <div style="display:flex;gap:10px">
-      <a href="#" onclick="openGmailCompose(event)" target="_blank" rel="noopener"
+      <a data-action="openGmailCompose" data-args='["__event__"]' href="#" target="_blank" rel="noopener"
          style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:#ea4335;color:#fff;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;border:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
         Open in Gmail
@@ -4866,11 +4866,11 @@ KFS — KIIT Film Society"></textarea>
 
 
 <!-- KFS Team Reply Modal -->
-<div class="fc-reply-modal-overlay" id="fc-reply-modal-overlay" onclick="if(event.target===this)closeKfsReplyModal()">
+<div class="fc-reply-modal-overlay" id="fc-reply-modal-overlay" data-action="closeKfsReplyModal" data-backdrop="true">
   <div class="fc-reply-modal">
     <div class="fc-reply-modal-header">
       <h3>Reply as KFS Team</h3>
-      <button class="fb-close-btn" onclick="closeKfsReplyModal()">
+      <button data-action="closeKfsReplyModal" class="fb-close-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -4885,8 +4885,8 @@ KFS — KIIT Film Society"></textarea>
       <p style="font-size:11px;color:var(--grey);margin-top:-4px">This will post as <strong>KFS Team</strong> with a badge, and will be pinned automatically.</p>
       <p class="fc-form-msg error" id="kfs-reply-msg"></p>
       <div class="fc-reply-modal-footer">
-        <button class="fc-reply-cancel-btn" onclick="closeKfsReplyModal()">Cancel</button>
-        <button class="fc-submit-btn" id="kfs-reply-send-btn" onclick="submitKfsReply()">
+        <button data-action="closeKfsReplyModal" class="fc-reply-cancel-btn">Cancel</button>
+        <button data-action="submitKfsReply" class="fc-submit-btn" id="kfs-reply-send-btn">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           Post Reply
         </button>
