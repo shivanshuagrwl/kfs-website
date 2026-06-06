@@ -214,6 +214,185 @@ body.light-mode .ep-card,body.light-mode .film-card,body.light-mode .blog-card,
 body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .blog-card,body.light-mode .member-card{background:#fff;border-color:#e0e0e0}
 #movie-watch-status-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border-radius:20px;border:1px solid var(--white);color:var(--white);background:transparent}
 
+/* ══ FORM BUILDER — Apple-grade redesign ══════════════════════════════════════ */
+.form-builder-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:20px 16px 40px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .3s cubic-bezier(.4,0,.2,1)}
+.form-builder-overlay.open{opacity:1;pointer-events:auto}
+.form-builder-panel{background:rgba(18,18,20,.96);border:1px solid rgba(255,255,255,.1);border-radius:22px;width:100%;max-width:820px;min-height:400px;display:flex;flex-direction:column;overflow:hidden;transform:translateY(28px) scale(.98);transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s;box-shadow:0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06) inset;margin:auto}
+.form-builder-overlay.open .form-builder-panel{transform:translateY(0) scale(1)}
+.fb-header{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 20px;border-bottom:1px solid rgba(255,255,255,.07);gap:12px;background:rgba(255,255,255,.02)}
+.fb-header-left{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.fb-event-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(245,245,245,.45);font-weight:600;margin-bottom:2px}
+.fb-event-chip svg{opacity:.6}
+.fb-header h3{font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.fb-close-btn{background:rgba(255,255,255,.08);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(245,245,245,.6);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.fb-close-btn:hover{background:rgba(255,255,255,.15);color:var(--white)}
+.fb-save-btn{padding:8px 18px;background:var(--white);color:#0a0a0a;border:none;border-radius:20px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.fb-save-btn:hover{opacity:.88;transform:scale(.97)}
+.fb-save-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.fb-dl-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:20px;color:rgba(245,245,245,.8);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.fb-dl-btn:hover{background:rgba(255,255,255,.13);color:var(--white);border-color:rgba(255,255,255,.2)}
+
+.fb-body{padding:24px 26px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.fb-body::-webkit-scrollbar{width:4px}
+.fb-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+
+/* Meta section */
+.fb-meta{display:flex;flex-direction:column;gap:10px;margin-bottom:22px;padding:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px}
+.fb-meta-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(245,245,245,.35);font-weight:600;margin-bottom:4px}
+.fb-meta input,.fb-meta textarea{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.12);padding:7px 0;color:var(--white);font:inherit;font-size:14px;outline:none;transition:border-color .2s;width:100%}
+.fb-meta input:focus,.fb-meta textarea:focus{border-bottom-color:rgba(245,245,245,.4)}
+.fb-meta input::placeholder,.fb-meta textarea::placeholder{color:rgba(245,245,245,.25)}
+.fb-meta textarea{resize:none;height:52px;font-size:13px;color:rgba(245,245,245,.75)}
+
+/* Question list */
+.fb-questions{display:flex;flex-direction:column;gap:10px}
+
+/* Question card */
+.fb-question-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;position:relative;transition:border-color .2s,box-shadow .2s;cursor:default}
+.fb-question-card:hover{border-color:rgba(255,255,255,.14)}
+.fb-question-card.fb-dragging{opacity:.4;border-color:rgba(255,255,255,.3);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+
+/* Drag handle */
+.fb-drag-handle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:grab;color:rgba(245,245,245,.22);flex-shrink:0;margin-top:2px;transition:color .15s}
+.fb-drag-handle:active{cursor:grabbing}
+.fb-drag-handle:hover{color:rgba(245,245,245,.5)}
+
+/* Question number badge */
+.fb-q-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(245,245,245,.4);flex-shrink:0;margin-top:1px}
+
+.fb-q-row{display:flex;gap:10px;align-items:center}
+.fb-q-label{flex:1;background:transparent;border:none;padding:4px 0;color:var(--white);font:inherit;font-size:14px;font-weight:500;outline:none;min-width:0}
+.fb-q-label::placeholder{color:rgba(245,245,245,.25)}
+
+/* Type pill selector */
+.fb-q-type{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:5px 10px;color:rgba(245,245,245,.8);font:inherit;font-size:11.5px;font-weight:600;outline:none;cursor:pointer;transition:all .15s;min-width:0;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(245,245,245,.5)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:26px}
+.fb-q-type:focus{border-color:rgba(255,255,255,.3);background-color:rgba(255,255,255,.12)}
+
+/* Required toggle */
+.fb-q-req-wrap{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(245,245,245,.4);cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0}
+.fb-q-req-wrap:hover{color:rgba(245,245,245,.7)}
+.fb-q-req-toggle{position:relative;width:28px;height:16px;cursor:pointer;flex-shrink:0}
+.fb-q-req-toggle input{opacity:0;width:0;height:0;position:absolute}
+.fb-q-req-track{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:20px;transition:background .2s}
+.fb-q-req-toggle input:checked~.fb-q-req-track{background:#34c759}
+.fb-q-req-thumb{position:absolute;width:10px;height:10px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.fb-q-req-toggle input:checked~.fb-q-req-thumb{transform:translateX(12px)}
+
+.fb-q-delete{background:none;border:none;color:rgba(245,245,245,.25);cursor:pointer;padding:4px;font-size:13px;line-height:1;border-radius:6px;transition:color .15s,background .15s;flex-shrink:0;display:flex;align-items:center;justify-content:center;width:24px;height:24px}
+.fb-q-delete:hover{color:#ff453a;background:rgba(255,69,58,.12)}
+
+/* Options */
+.fb-options-wrap{display:flex;flex-direction:column;gap:6px;padding-left:32px}
+.fb-option-row{display:flex;gap:8px;align-items:center}
+.fb-option-icon{color:rgba(245,245,245,.25);font-size:12px;width:16px;flex-shrink:0;text-align:center}
+.fb-option-input{flex:1;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:var(--white);font:inherit;font-size:13px;outline:none;transition:border-color .2s}
+.fb-option-input:focus{border-color:rgba(255,255,255,.3)}
+.fb-option-input::placeholder{color:rgba(245,245,245,.25)}
+.fb-option-del{background:none;border:none;color:rgba(245,245,245,.2);cursor:pointer;font-size:12px;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}
+.fb-option-del:hover{color:#ff453a}
+.fb-add-option{background:none;border:1px dashed rgba(255,255,255,.12);border-radius:8px;padding:6px 12px;color:rgba(245,245,245,.35);font:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;width:100%}
+.fb-add-option:hover{border-color:rgba(255,255,255,.3);color:rgba(245,245,245,.7);background:rgba(255,255,255,.04)}
+
+/* Image hint */
+.fb-image-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.4);padding:8px 12px;background:rgba(255,255,255,.04);border-radius:10px;margin-left:32px}
+
+/* Add question button */
+.fb-add-q-btn{margin-top:12px;background:none;border:1px dashed rgba(255,255,255,.12);border-radius:14px;padding:14px;color:rgba(245,245,245,.35);font:inherit;font-size:13px;font-weight:500;cursor:pointer;width:100%;text-align:center;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.fb-add-q-btn:hover{border-color:rgba(255,255,255,.3);color:rgba(245,245,245,.7);background:rgba(255,255,255,.03)}
+
+/* Status bar */
+.fb-status-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.2);gap:12px;flex-wrap:wrap}
+.fb-toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.5);font-weight:500}
+.fb-toggle{position:relative;width:36px;height:20px;cursor:pointer;flex-shrink:0}
+.fb-toggle input{opacity:0;width:0;height:0;position:absolute}
+.fb-toggle-track{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:20px;transition:background .2s}
+.fb-toggle input:checked~.fb-toggle-track{background:#34c759}
+.fb-toggle-thumb{position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.fb-toggle input:checked~.fb-toggle-thumb{transform:translateX(16px)}
+.fb-response-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:rgba(245,245,245,.4);font-weight:500}
+.fb-response-chip-dot{width:6px;height:6px;border-radius:50%;background:rgba(245,245,245,.25)}
+.fb-response-chip-dot.has-responses{background:#34c759}
+
+/* Response Viewer */
+.fb-resp-viewer{position:absolute;inset:0;background:rgba(18,18,20,.98);border-radius:22px;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s;z-index:10}
+.fb-resp-viewer.open{opacity:1;pointer-events:auto}
+.fb-rv-header{display:flex;align-items:center;gap:12px;padding:20px 26px;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0}
+.fb-rv-back{background:rgba(255,255,255,.08);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;color:rgba(245,245,245,.7);display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.fb-rv-back:hover{background:rgba(255,255,255,.16);color:#fff}
+.fb-rv-title{flex:1;font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--white)}
+.fb-rv-count{font-size:11px;color:rgba(245,245,245,.4);font-weight:500;flex-shrink:0}
+.fb-rv-dl-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:20px;color:rgba(245,245,245,.85);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .2s;flex-shrink:0}
+.fb-rv-dl-btn:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);color:#fff}
+.fb-rv-body{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:12px}
+.fb-rv-body::-webkit-scrollbar{width:4px}
+.fb-rv-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+.fb-rv-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:rgba(245,245,245,.3);font-size:14px;padding:60px 0}
+.fb-rv-loading{flex:1;display:flex;align-items:center;justify-content:center;color:rgba(245,245,245,.35);font-size:13px;padding:60px 0}
+.fb-rv-row{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.fb-rv-row-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fb-rv-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(245,245,245,.45);flex-shrink:0}
+.fb-rv-time{font-size:11px;color:rgba(245,245,245,.3);font-weight:500}
+.fb-rv-answers{display:flex;flex-direction:column;gap:8px}
+.fb-rv-answer{display:flex;flex-direction:column;gap:3px}
+.fb-rv-q{font-size:11px;color:rgba(245,245,245,.4);font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.fb-rv-a{font-size:13px;color:rgba(245,245,245,.85);line-height:1.5;word-break:break-word}
+
+/* light mode response viewer */
+body.light-mode .fb-resp-viewer{background:rgba(248,248,250,.98)}
+body.light-mode .fb-rv-header{border-bottom-color:rgba(0,0,0,.07)}
+body.light-mode .fb-rv-back{background:rgba(0,0,0,.06);color:rgba(0,0,0,.6)}
+body.light-mode .fb-rv-back:hover{background:rgba(0,0,0,.12);color:#111}
+body.light-mode .fb-rv-title{color:#111}
+body.light-mode .fb-rv-count{color:rgba(0,0,0,.35)}
+body.light-mode .fb-rv-dl-btn{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.75)}
+body.light-mode .fb-rv-dl-btn:hover{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.18);color:#111}
+body.light-mode .fb-rv-row{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.08)}
+body.light-mode .fb-rv-num{background:rgba(0,0,0,.07);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.4)}
+body.light-mode .fb-rv-time{color:rgba(0,0,0,.35)}
+body.light-mode .fb-rv-q{color:rgba(0,0,0,.4)}
+body.light-mode .fb-rv-a{color:rgba(0,0,0,.8)}
+body.light-mode .fb-rv-empty{color:rgba(0,0,0,.25)}
+
+/* Light mode adaptations */
+body.light-mode .form-builder-panel{background:rgba(250,250,252,.97);border-color:rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.2)}
+body.light-mode .fb-header{background:rgba(0,0,0,.015);border-bottom-color:rgba(0,0,0,.07)}
+body.light-mode .fb-event-chip{color:rgba(0,0,0,.4)}
+body.light-mode .fb-header h3{color:#111}
+body.light-mode .fb-close-btn{background:rgba(0,0,0,.06);color:rgba(0,0,0,.5)}
+body.light-mode .fb-close-btn:hover{background:rgba(0,0,0,.1);color:#111}
+body.light-mode .fb-save-btn{background:#111;color:#fff}
+body.light-mode .fb-dl-btn{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.7)}
+body.light-mode .fb-meta{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.07)}
+body.light-mode .fb-meta-label{color:rgba(0,0,0,.35)}
+body.light-mode .fb-meta input,.fb-meta textarea{color:#111;border-bottom-color:rgba(0,0,0,.12)}
+body.light-mode .fb-meta input::placeholder,.fb-meta textarea::placeholder{color:rgba(0,0,0,.2)}
+body.light-mode .fb-question-card{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.08)}
+body.light-mode .fb-question-card:hover{border-color:rgba(0,0,0,.14)}
+body.light-mode .fb-drag-handle{color:rgba(0,0,0,.2)}
+body.light-mode .fb-drag-handle:hover{color:rgba(0,0,0,.45)}
+body.light-mode .fb-q-num{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.08);color:rgba(0,0,0,.35)}
+body.light-mode .fb-q-label{color:#111}
+body.light-mode .fb-q-label::placeholder{color:rgba(0,0,0,.22)}
+body.light-mode .fb-q-type{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.8);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,.5)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")}
+body.light-mode .fb-q-req-wrap{color:rgba(0,0,0,.4)}
+body.light-mode .fb-q-req-track{background:rgba(0,0,0,.12)}
+body.light-mode .fb-q-delete{color:rgba(0,0,0,.2)}
+body.light-mode .fb-option-input{border-color:rgba(0,0,0,.1);color:#111}
+body.light-mode .fb-option-input::placeholder{color:rgba(0,0,0,.22)}
+body.light-mode .fb-option-del{color:rgba(0,0,0,.2)}
+body.light-mode .fb-option-icon{color:rgba(0,0,0,.25)}
+body.light-mode .fb-add-option{border-color:rgba(0,0,0,.12);color:rgba(0,0,0,.35)}
+body.light-mode .fb-add-option:hover{border-color:rgba(0,0,0,.3);color:rgba(0,0,0,.65)}
+body.light-mode .fb-image-hint{background:rgba(0,0,0,.04);color:rgba(0,0,0,.4)}
+body.light-mode .fb-add-q-btn{border-color:rgba(0,0,0,.12);color:rgba(0,0,0,.35)}
+body.light-mode .fb-add-q-btn:hover{border-color:rgba(0,0,0,.3);color:rgba(0,0,0,.65)}
+body.light-mode .fb-status-bar{background:rgba(0,0,0,.03);border-top-color:rgba(0,0,0,.07)}
+body.light-mode .fb-toggle-row{color:rgba(0,0,0,.45)}
+body.light-mode .fb-toggle-track{background:rgba(0,0,0,.12)}
+body.light-mode .fb-response-chip{color:rgba(0,0,0,.4)}
+body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
+
 /* ── PUBLIC REGISTRATION FORM ─────────────────────────────────────────────── */
 .reg-form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2500;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(8px)}
 .reg-form-overlay.open{opacity:1;pointer-events:auto}
@@ -327,6 +506,20 @@ body.light-mode .blog-detail-back{color:#555}
 body.light-mode .blog-detail-back:hover{color:#111}
 body.light-mode .blog-detail-title{color:#0f0f0f}
 body.light-mode .blog-detail-date{color:#777}
+/* admin sidebar */
+body.light-mode .admin-sidebar{background:#fff;border-right:1px solid #e0e0e0}
+body.light-mode .admin-sidebar-group{color:#bbb}
+body.light-mode .admin-sidebar-item{color:#555}
+body.light-mode .admin-sidebar-item:hover,body.light-mode .admin-sidebar-item.active{background:#f0f0f0;color:#111}
+body.light-mode .admin-sidebar-bottom{border-top:1px solid #e8e8e8}
+/* admin main */
+body.light-mode .admin-main{background:#f4f4f4}
+body.light-mode .admin-card{background:#fff;border-color:#e0e0e0;color:#111}
+body.light-mode .admin-header h2{color:#111}
+body.light-mode .admin-header p{color:#666}
+body.light-mode .admin-table th{background:#f0f0f0;color:#666;border-color:#e0e0e0}
+body.light-mode .admin-table td{border-color:#eaeaea;color:#111}
+body.light-mode .admin-table tr:hover td{background:#fafafa}
 /* forms */
 body.light-mode input:not([type=checkbox]),body.light-mode textarea,body.light-mode select{
   background:#fff;color:#111;border-color:#ccc}
@@ -1121,6 +1314,7 @@ body.light-mode .member-special-tag.tag-developer{
 .don-donor-name{font-size:13px;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .don-donor-meta{font-size:11px;color:var(--grey);margin-bottom:8px;letter-spacing:.04em}
 .don-donor-amt{font-size:20px;font-weight:700;letter-spacing:-.02em;display:none}
+body.kfs-admin-view .don-donor-amt{display:block}
 .don-donor-semester{font-size:10px;color:var(--grey);margin-top:2px;letter-spacing:.05em;text-transform:uppercase}
 .don-donors-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px;border:1px solid var(--border);border-radius:4px}
 .don-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:60px}
@@ -2180,6 +2374,69 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 <div id="page-wipe"></div>
 <div id="scroll-progress"></div>
 
+<!-- ADD ADMIN MODAL -->
+<div class="modal-overlay" id="add-admin-modal">
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 20px"><h3 style="font-size:18px">Add New Admin</h3><button data-action="closeAddAdminModal" class="modal-close" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FULL NAME</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma" style="border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">USERNAME</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase;border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PASSWORD</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters" style="border-radius:12px"></div>
+    <div class="form-group">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600;margin:0">SECTION ACCESS</label>
+        <span style="font-size:11px;color:var(--grey)">Uncheck to restrict</span>
+      </div>
+      <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="blogs" checked> Blog Posts</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="events" checked> Events</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="members" checked> Members</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="movies" checked> Films</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="chitra-vichitra" checked> Chitra Vichitra</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="testimonials" checked> Testimonials</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="achievements" checked> Achievements</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="notifications" checked> Notifications</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="settings" checked> Settings</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="collaborate" checked> Collaborate</label>
+        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="themes" checked> Event Themes</label>
+      </div>
+    </div>
+    <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeAddAdminModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="saveNewAdmin" class="btn btn-primary" style="border-radius:12px">Create Admin</button></div>
+  </div>
+</div>
+
+<!-- EDIT PERMISSIONS MODAL -->
+<div class="modal-overlay" id="edit-perms-modal">
+  <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0;overflow-y:auto;flex:1"><div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Edit Permissions</h3><button data-action="closeEditPermsModal" class="modal-close" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+    <input type="hidden" id="edit-perms-admin-id">
+    <p style="font-size:13px;color:var(--grey);margin:0 0 16px">Admin: <strong id="edit-perms-admin-name" style="color:var(--white)"></strong></p>
+    <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="blogs"> Blog Posts</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="events"> Events</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="members"> Members</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="movies"> Films</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="chitra-vichitra"> Chitra Vichitra</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="testimonials"> Testimonials</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="achievements"> Achievements</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="notifications"> Notifications</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="settings"> Settings</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="analytics"> Traffic Analytics</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="review-analytics"> Review Analytics</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="collaborate"> Collaborate</label>
+      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="themes"> Event Themes</label>
+    </div>
+    <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeEditPermsModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="savePermissions" class="btn btn-primary" style="border-radius:12px" id="save-perms-btn">Save Permissions</button></div>
+  </div>
+</div>
+
 <!-- TRAILER MODAL -->
 <div id="trailer-modal-overlay" data-action="closeTrailer" data-backdrop="true">
   <div id="trailer-modal-inner">
@@ -2190,11 +2447,11 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
 <!-- EVENT BANNER -->
 <div id="event-banner"></div>
-<script src="/public-app.js" defer></script>
+<script src="/app.js" defer></script>
 
 <!-- NAV -->
 <nav id="main-nav">
-  <a data-nav-page="home" class="nav-logo" style="gap:10px">
+  <a data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
     <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
   </a>
   <ul class="nav-links" id="nav-links">
@@ -3009,6 +3266,1537 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   </div>
 </div>
 
+<!-- ── ADMIN LOGIN ── -->
+<div id="admin-login">
+  <div class="login-box">
+    <h2>Admin Access</h2>
+    <p>KFS Content Management</p>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="admin-username" placeholder="Enter username" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <div style="position:relative;display:block">
+        <input type="password" id="admin-password" placeholder="Enter password" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;padding-right:44px" autocomplete="current-password">
+        <button data-action="togglePasswordVisibility" type="button" id="pw-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px">
+          <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- TOTP step — hidden until server returns require_totp:true -->
+    <div id="totp-step" style="display:none;margin-top:16px">
+      <div class="form-group">
+        <label>2FA Code</label>
+        <input type="text" id="admin-totp" placeholder="6-digit code from authenticator" inputmode="numeric" maxlength="6" data-onkeydown="if(event.key==='Enter')adminLogin()" style="width:100%;box-sizing:border-box;letter-spacing:.2em;text-align:center" autocomplete="one-time-code">
+      </div>
+      <p style="font-size:12px;color:var(--grey);margin-top:6px">Enter the code from Google Authenticator or Authy.</p>
+    </div>
+    <button data-action="adminLogin" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px">Sign In</button>
+    <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
+  </div>
+</div>
+
+<!-- ── ADMIN PANEL ── -->
+<div id="admin-panel">
+  <div class="admin-sidebar">
+    <div class="admin-sidebar-logo">KFS Admin</div>
+    <div style="padding:0 16px 14px;font-size:12px;color:var(--grey);border-bottom:1px solid var(--border);margin-bottom:8px">
+      <span id="sidebar-admin-name" style="font-weight:600;color:var(--white)"></span>
+      <span id="sidebar-admin-role" style="margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555"></span>
+    </div>
+    <div class="admin-sidebar-group">Content</div>
+    <div data-action="showAdminSection" data-args='["blogs"]' class="admin-sidebar-item active" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
+    <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["events"]' data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
+    <div data-action="showAdminSection" data-args='["members"]' class="admin-sidebar-item" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
+    <div data-action="showAdminSection" data-args='["movies"]' class="admin-sidebar-item" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
+    <div data-action="showAdminSection" data-args='["chitra-vichitra"]' class="admin-sidebar-item" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
+    <div class="admin-sidebar-group">Extras</div>
+    <div data-action="showAdminSection" data-args='["testimonials"]' class="admin-sidebar-item" data-section="testimonials"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Testimonials</div>
+    <div data-action="showAdminSection" data-args='["achievements"]' class="admin-sidebar-item" data-section="achievements"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></span> Achievements</div>
+    <div data-action="showAdminSection" data-args='["wrapped"]' class="admin-sidebar-item" data-section="wrapped"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Wrapped</div>
+    <div data-action="showAdminSection" data-args='["collaborate"]' class="admin-sidebar-item" data-section="collaborate"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collaborate</div>
+    <div class="admin-sidebar-group">Analytics</div>
+    <div data-action="showAdminSection" data-args='["analytics"]' class="admin-sidebar-item" data-section="analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Traffic</div>
+    <div data-action="showAdminSection" data-args='["review-analytics"]' class="admin-sidebar-item" data-section="review-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Reviews</div>
+    <div data-action="showAdminSection" data-args='["reg-analytics"]' class="admin-sidebar-item" data-section="reg-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Registrations</div>
+    <div data-action="showAdminSection" data-args='["payment-analytics"]' class="admin-sidebar-item" data-section="payment-analytics"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Payments</div>
+    <div data-action="showAdminSection" data-args='["comments"]' class="admin-sidebar-item" data-section="comments"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Comments</div>
+    <div data-action="showAdminSection" data-args='["broadcast"]' class="admin-sidebar-item" data-section="broadcast"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span> Broadcast</div>
+    <div data-action="showAdminSection" data-args='["themes"]' class="admin-sidebar-item" data-section="themes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></span> Event Themes</div>
+    <div class="admin-sidebar-group">System</div>
+    <div data-action="showAdminSection" data-args='["notifications"]' class="admin-sidebar-item" data-section="notifications"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> Notifications</div>
+    <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
+    <div data-action="showAdminSection" data-args='["change-password"]' class="admin-sidebar-item" data-section="change-password" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Change Password</div>
+    <div data-action="showAdminSection" data-args='["two-factor"]' class="admin-sidebar-item" data-section="two-factor" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> Two-Factor Auth</div>
+    <div data-action="showAdminSection" data-args='["admins"]' id="sidebar-admins-link" class="admin-sidebar-item" data-section="admins" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Manage Admins</div>
+    <div data-action="showAdminSection" data-args='["activity"]' id="sidebar-activity-link" class="admin-sidebar-item" data-section="activity" style="display:none"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Activity Log</div>
+    <div class="admin-sidebar-bottom">
+      <div data-action="toggleTheme" class="admin-sidebar-item" style="justify-content:space-between">
+        <span>Light Mode</span>
+        <span id="admin-theme-label" style="font-size:11px;opacity:.45;letter-spacing:.04em">OFF</span>
+      </div>
+      <div data-action="adminLogout" class="admin-sidebar-item"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Log Out</div>
+    </div>
+  </div>
+  <div class="admin-main">
+
+    <!-- BLOGS -->
+    <div class="admin-section active" id="section-blogs">
+      <div class="admin-header">
+        <div><h2>Blog Posts</h2><p>Write and publish articles</p></div>
+        <button data-action="openBlogModal" class="btn btn-primary">+ New Post</button>
+      </div>
+
+      <!-- ── Blog Analytics Strip ── -->
+      <div id="blog-analytics-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Total Views</div>
+          <div id="stat-total-views" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Published</div>
+          <div id="stat-published" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Drafts</div>
+          <div id="stat-drafts" style="font-size:26px;font-weight:700;color:var(--white)">—</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;overflow:hidden">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:6px">Top Post</div>
+          <div id="stat-top-post" style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+          <div id="stat-top-post-views" style="font-size:11px;color:var(--grey);margin-top:3px"></div>
+        </div>
+      </div>
+
+      <div id="bulk-bar-blogs" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-blogs" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button data-action="bulkDelete" data-args='["blogs"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["blogs"]' class="btn-sm" style="margin-left:auto">Cancel</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-blogs" data-onchange="selectAllBulk('blogs',this.checked)"></th><th>Cover</th><th>Title</th><th>Status</th><th>👁 Views</th><th>Date</th><th>Actions</th></tr></thead>
+          <tbody id="admin-blogs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EVENTS -->
+    <div class="admin-section" id="section-events">
+      <div class="admin-header">
+        <div><h2>Events</h2><p>Manage upcoming and past events</p></div>
+        <button data-action="openEventModal" class="btn btn-primary">+ New Event</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Actions</th></tr></thead>
+          <tbody id="admin-events-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MEMBERS -->
+    <div class="admin-section" id="section-members">
+      <div class="admin-header">
+        <div><h2>Members</h2><p>Add and manage society members</p></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button data-action="triggerClick_member_xlsx_input" class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:8px 16px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import Excel
+          </button>
+          <input type="file" id="member-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none" data-onchange="previewMemberImport(this)">
+          <button data-action="openMemberModal" class="btn btn-primary">+ Add Member</button>
+        </div>
+      </div>
+      <div id="bulk-bar-members" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-members" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button data-action="bulkDelete" data-args='["members"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["members"]' class="btn-sm" style="margin-left:auto">Cancel</button>
+      </div>
+      <div class="member-search-wrap">
+        <svg class="member-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="member-search-input" id="member-admin-search" placeholder="Search by name, role, domain, batch…" data-oninput="filterAdminMembers(this.value)">
+        <button data-action="clearMemberSearch" class="member-search-clear" id="member-search-clear-btn">✕</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-members" data-onchange="selectAllBulk('members',this.checked)"></th><th>Photo</th><th>Name</th><th>Role</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="admin-members-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MOVIES -->
+    <div class="admin-section" id="section-movies">
+      <div class="admin-header">
+        <div><h2>Films</h2><p>Manage KFS film productions</p></div>
+        <button data-action="openMovieModal" class="btn btn-primary">+ Add Film</button>
+      </div>
+      <div id="bulk-bar-movies" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:#1a0a0a;border:1px solid #ff444433;border-radius:6px;margin-bottom:12px">
+        <span id="bulk-count-movies" style="font-size:13px;color:var(--grey)">0 selected</span>
+        <button data-action="bulkDelete" data-args='["movies"]' class="btn-sm danger"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete Selected</button>
+        <button data-action="clearBulkSelect" data-args='["movies"]' class="btn-sm" style="margin-left:auto">Cancel</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th><input type="checkbox" id="bulk-select-all-movies" data-onchange="selectAllBulk('movies',this.checked)"></th><th>Poster</th><th>Title</th><th>Year</th><th>Director</th><th>Actions</th></tr></thead>
+          <tbody id="admin-movies-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CHITRA VICHITRA -->
+    <div class="admin-section" id="section-chitra-vichitra">
+      <div class="admin-header">
+        <div><h2>Chitra Vichitra</h2><p>Manage flagship event editions and screened films</p></div>
+        <button data-action="openCVModal" class="btn btn-primary">+ Add Edition</button>
+      </div>
+      <div id="cv-admin-list">
+        <div class="loading" style="padding:40px;text-align:center">Loading...</div>
+      </div>
+    </div>
+
+    <!-- TESTIMONIALS -->
+    <div class="admin-section" id="section-testimonials">
+      <div class="admin-header">
+        <div><h2>Testimonials</h2><p>Member quotes shown on homepage</p></div>
+        <button data-action="openTestimonialModal" class="btn btn-primary">+ Add Testimonial</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Photo</th><th>Name</th><th>Quote</th><th>Actions</th></tr></thead>
+          <tbody id="admin-testimonials-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ACHIEVEMENTS -->
+    <div class="admin-section" id="section-achievements">
+      <div class="admin-header">
+        <div><h2>Achievements</h2><p>Milestones and awards</p></div>
+        <button data-action="openAchievementModal" class="btn btn-primary">+ Add Achievement</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Icon</th><th>Title</th><th>Year</th><th>Actions</th></tr></thead>
+          <tbody id="admin-achievements-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="admin-section" id="section-settings">
+      <div class="admin-header">
+        <div><h2>Site Settings</h2><p>Edit homepage content and links</p></div>
+      </div>
+      <div class="settings-form">
+
+        <!-- ── SECTION 1: Hero & About ── -->
+        <p class="settings-section-title">Hero &amp; About</p>
+        <p class="settings-section-desc">Content shown on the homepage</p>
+        <div class="form-group"><label>Hero Tagline</label><input type="text" id="set-tagline" placeholder="Lights. Camera. KFS."></div>
+        <div class="form-group"><label>About Text</label><textarea id="set-about" style="min-height:120px"></textarea></div>
+        <div class="form-group">
+          <label>Team Group Photo</label>
+          <div id="team-photo-preview" style="margin-bottom:10px;display:none">
+            <img id="team-photo-img" src="" alt="Team photo" style="width:100%;max-width:320px;border-radius:6px;border:1px solid var(--border);object-fit:cover;aspect-ratio:4/3">
+          </div>
+          <input type="file" id="set-team-photo-file" accept="image/*" style="display:none" data-onchange="previewTeamPhoto(this)">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button data-action="triggerClick_set_team_photo_file" type="button" class="btn btn-secondary">Choose Photo</button>
+            <span id="team-photo-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
+            <button data-action="clearTeamPhoto" type="button" class="btn btn-secondary" id="team-photo-clear-btn" style="display:none">Remove</button>
+          </div>
+          <input type="hidden" id="set-team-photo-url" value="">
+        </div>
+
+        <!-- ── SECTION 2: Stats Counter ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Stats Counter</p>
+        <p class="settings-section-desc">Numbers shown on the homepage hero</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Total Members</label><input type="number" id="set-stat-members" placeholder="500"></div>
+          <div class="form-group"><label>Events Hosted</label><input type="number" id="set-stat-events" placeholder="50"></div>
+          <div class="form-group"><label>Films Screened</label><input type="number" id="set-stat-films" placeholder="30"></div>
+          <div class="form-group"><label>Years Active</label><input type="number" id="set-stat-years" placeholder="5"></div>
+        </div>
+
+        <!-- ── SECTION 3: Member Spotlight ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Member Spotlight</p>
+        <p class="settings-section-desc">Featured member shown on the homepage</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Featured Member Name</label><input type="text" id="set-spotlight-name" placeholder="Leave blank to hide"></div>
+          <div class="form-group"><label>Featured Member Role</label><input type="text" id="set-spotlight-role" placeholder="President, 2024-25"></div>
+        </div>
+        <div class="form-group"><label>Quote / Highlight</label><textarea id="set-spotlight-quote" style="min-height:80px" placeholder="A quote or achievement to feature..."></textarea></div>
+        <div class="form-group"><label>Photo URL (optional — paste a member's uploaded photo URL)</label><input type="text" id="set-spotlight-photo" placeholder="https://..."></div>
+
+        <!-- ── SECTION 4: Social Links ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Social Links</p>
+        <p class="settings-section-desc">Links shown in the footer</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Instagram URL</label><input type="text" id="set-instagram" placeholder="https://instagram.com/kfs"></div>
+          <div class="form-group"><label>YouTube URL</label><input type="text" id="set-youtube" placeholder="https://youtube.com/@kfs"></div>
+          <div class="form-group"><label>Contact Email</label><input type="text" id="set-email" placeholder="kfs@kiit.ac.in"></div>
+        </div>
+
+        <!-- ── SECTION 5: Easter Egg — No Shorts ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">🥚 Easter Egg — "No Shorts" Image</p>
+        <p class="settings-section-desc">When a visitor types <strong>"shorts"</strong> or <strong>"no shorts"</strong> in the search bar, these messages appear instead of normal results.</p>
+        <div class="settings-grid">
+          <div class="form-group">
+            <label>"Shorts" search — Heading</label>
+            <input type="text" id="set-egg-shorts-heading" placeholder="No Shorts." style="border-radius:10px">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Shown bold at the top when someone searches "shorts"</p>
+          </div>
+          <div class="form-group">
+            <label>"Shorts" search — Subtext</label>
+            <input type="text" id="set-egg-shorts-sub" placeholder="we only make films that last" style="border-radius:10px">
+          </div>
+          <div class="form-group">
+            <label>"No Shorts" search — Fallback text (if no image set)</label>
+            <input type="text" id="set-egg-noshorts-fallback" placeholder="that's the spirit 🎬" style="border-radius:10px">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Shown if no image is uploaded</p>
+          </div>
+        </div>
+        <div class="form-group">
+          <div id="egg-img-preview" style="margin-bottom:12px;display:none">
+            <img id="egg-img-thumb" src="" alt="Easter egg" style="max-width:280px;max-height:180px;object-fit:contain;border-radius:10px;border:1px solid var(--border)">
+          </div>
+          <input type="file" id="set-egg-img-file" accept="image/*" style="display:none" data-onchange="previewEggImg(this)">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button data-action="triggerClick_set_egg_img_file" type="button" class="btn btn-secondary" style="border-radius:10px">Choose Image</button>
+            <span id="egg-img-filename" style="font-size:13px;color:var(--grey);opacity:.7">No file chosen</span>
+            <button data-action="clearEggImg" type="button" class="btn btn-secondary" id="egg-img-clear-btn" style="display:none;border-radius:10px">Remove</button>
+          </div>
+          <input type="hidden" id="set-egg-img-url" value="">
+        </div>
+        <div style="margin-top:8px;padding:12px 0 4px">
+          <button data-action="saveNoShortsEgg" class="btn btn-primary">Save No Shorts Easter Egg</button>
+          <p id="noshorts-egg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
+        </div>
+
+        <!-- ── SECTION 6: Custom Search Easter Eggs ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">🥚 Custom Search Easter Eggs</p>
+        <p class="settings-section-desc">Add your own keywords — when someone types an exact match in search, show a custom heading, subtext, and optional image instead of normal results.</p>
+        <div id="cegg-list" class="cegg-list"><span style="font-size:12px;color:var(--grey)">Loading…</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="form-group" style="margin:0"><label>Keyword (exact match)</label><input type="text" id="cegg-kw" placeholder="e.g. work" style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0"><label>Heading</label><input type="text" id="cegg-head" placeholder="e.g. We Work." style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0"><label>Subtext</label><input type="text" id="cegg-sub" placeholder="e.g. day and night for the craft" style="border-radius:10px"></div>
+          <div class="form-group" style="margin:0">
+            <label>Image (optional)</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button data-action="triggerClick_cegg_img_file" type="button" class="btn btn-secondary" style="border-radius:10px;font-size:12px;padding:8px 14px">Choose Image</button>
+              <span id="cegg-img-name" style="font-size:12px;color:var(--grey)">No file</span>
+            </div>
+            <input type="file" id="cegg-img-file" accept="image/*" style="display:none" data-onchange="document.getElementById('cegg-img-name').textContent=this.files[0]?.name||'No file'">
+          </div>
+        </div>
+        <button data-action="addCustomEgg" class="btn btn-primary" style="border-radius:10px">+ Add Easter Egg</button>
+        <p id="cegg-msg" style="font-size:12px;color:var(--grey);margin-top:8px"></p>
+
+        <!-- ── SECTION 7: Blog Tag Management ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">Blog Tag Management</p>
+        <p class="settings-section-desc">Create custom tags for categorising blog posts. Tags appear as filter options on the blog page and in the post editor.</p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;max-width:480px">
+          <input type="text" id="new-tag-input" placeholder="e.g. Into the Stars Life" style="flex:1;border-radius:10px"
+            data-onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewTag()}">
+          <button data-action="saveNewTag" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;padding:10px 20px;font-size:12px">+ Add Tag</button>
+        </div>
+        <div id="tags-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--grey);padding:4px 0">Loading tags...</span>
+        </div>
+        <p id="tags-msg" style="font-size:12px;color:var(--grey);margin-top:4px"></p>
+
+        <!-- ── SECTION: Email Confirmation ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">✉️ Registration Confirmation Emails</p>
+        <p class="settings-section-desc">When someone registers for an event, send them an automatic confirmation email from <strong>noreply@kiitfilmsociety.in</strong>. Requires an SMTP relay that allows sending from your domain (e.g. Zoho Mail, Google Workspace, Brevo, Postmark).</p>
+
+        <div class="settings-grid">
+          <div class="form-group">
+            <label>Brevo API Key</label>
+            <input type="password" id="set-brevo-api-key" placeholder="xkeysib-••••••••••••" style="border-radius:10px" autocomplete="new-password">
+            <p style="font-size:11px;color:var(--grey);margin-top:6px">Get this from Brevo → Settings → SMTP & API → API Keys</p>
+          </div>
+          <div class="form-group">
+            <label>Sender Display Name</label>
+            <input type="text" id="set-smtp-from-name" placeholder="KFS — KIIT Film Society" style="border-radius:10px">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:4px">
+          <label>Confirmation Email Body
+            <span style="font-weight:400;color:var(--grey);font-size:11px;margin-left:6px">Supports: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{name}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{event}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{date_line}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{venue_line}}</code></span>
+          </label>
+          <textarea id="set-email-body" style="min-height:130px;font-size:13px;font-family:monospace;border-radius:10px" placeholder="Hi {{name}},
+
+You're confirmed for {{event}}!{{date_line}}{{venue_line}}
+
+See you there!
+
+Warm regards,
+KFS — KIIT Film Society"></textarea>
+          <p style="font-size:11px;color:var(--grey);margin-top:6px">The email is sent only when the registration form has an <strong>Email</strong>-type question. Date &amp; venue lines are auto-populated from the event details.</p>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
+          <button data-action="saveEmailSettings" class="btn btn-primary" style="border-radius:10px">Save Email Settings</button>
+          <button data-action="sendTestEmail" class="btn btn-secondary" style="border-radius:10px;font-size:12px">Send Test Email</button>
+          <p id="email-settings-msg" style="font-size:12px;color:var(--grey);margin:0"></p>
+        </div>
+
+        <!-- ── SAVE ALL SETTINGS ── -->
+        <div class="settings-divider"></div>
+        <div style="padding:8px 0 20px">
+          <button data-action="saveSettings" class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+          <p style="font-size:12px;color:var(--grey);margin-top:8px">Saves: Hero &amp; About, Stats, Member Spotlight, and Social Links.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CHANGE PASSWORD (always accessible, every admin) -->
+    <div class="admin-section" id="section-change-password">
+      <div class="admin-header">
+        <div><h2>Change Password</h2><p>Update your own admin login password</p></div>
+      </div>
+      <div class="settings-form">
+        <p class="settings-section-title">Change Your Password</p>
+        <p class="settings-section-desc">Update your own admin login password. You cannot change other admins' passwords from here.</p>
+        <div class="settings-grid">
+          <div class="form-group"><label>Current Password</label><input type="password" id="current-password" placeholder="Enter current password"></div>
+          <div class="form-group"><label>New Password</label><input type="password" id="new-password" placeholder="Min. 8 characters"></div>
+          <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirm-password" placeholder="Re-enter new password"></div>
+        </div>
+        <button data-action="changePassword" class="btn btn-primary">Update Password</button>
+        <p id="change-pw-msg" style="font-size:12px;color:var(--grey);margin-top:10px"></p>
+      </div>
+    </div>
+
+    <!-- TWO-FACTOR AUTH (every admin) -->
+    <div class="admin-section" id="section-two-factor">
+      <div class="admin-header">
+        <div><h2>Two-Factor Authentication</h2><p>Protect your account with an authenticator app</p></div>
+      </div>
+      <div class="settings-form">
+
+        <!-- STATUS CARD -->
+        <div id="tfa-status-card" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div id="tfa-status-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(245,245,245,.06);border:1px solid var(--border)">
+              <svg id="tfa-icon-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" style="display:none" id="tfa-slash"/></svg>
+            </div>
+            <div>
+              <div id="tfa-status-label" style="font-size:14px;font-weight:600;color:var(--white)">2FA is disabled</div>
+              <div id="tfa-status-desc" style="font-size:12px;color:var(--grey);margin-top:2px">Add a second layer of security to your account</div>
+            </div>
+          </div>
+          <div id="tfa-status-badge" style="padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.05em;background:rgba(245,245,245,.07);color:var(--grey);border:1px solid var(--border)">OFF</div>
+        </div>
+
+        <!-- STEP 1: NOT ENABLED — show setup button -->
+        <div id="tfa-setup-block">
+          <p class="settings-section-title">Set up authenticator</p>
+          <p class="settings-section-desc">Use Google Authenticator, Authy, or any TOTP app. Once enabled, you'll be asked for a 6-digit code every time you log in.</p>
+          <button data-action="tfa_startSetup" class="btn btn-primary" id="tfa-start-btn" style="border-radius:12px;margin-top:4px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Enable Two-Factor Auth
+          </button>
+        </div>
+
+        <!-- STEP 2: QR code + verify -->
+        <div id="tfa-qr-block" style="display:none">
+          <p class="settings-section-title">Scan this QR code</p>
+          <p class="settings-section-desc">Open your authenticator app and scan the QR code below, then enter the 6-digit code to confirm.</p>
+          <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;margin-top:16px">
+            <div style="background:#fff;padding:14px;border-radius:14px;display:inline-block;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.1)">
+              <img id="tfa-qr-img" src="" alt="2FA QR Code" style="width:168px;height:168px;display:block">
+            </div>
+            <div style="flex:1;min-width:240px">
+              <div style="margin-bottom:16px">
+                <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:6px">Manual entry key</div>
+                <code id="tfa-secret-text" style="font-size:13px;letter-spacing:.08em;background:rgba(245,245,245,.06);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:block;word-break:break-all;color:var(--white)"></code>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:var(--grey)">Verification code</label>
+                <input type="text" id="tfa-verify-input" placeholder="000 000" maxlength="7" inputmode="numeric" autocomplete="one-time-code"
+                  style="letter-spacing:.22em;font-size:18px;text-align:center;max-width:180px;border-radius:10px;margin-top:6px"
+                  data-oninput="this.value=this.value.replace(/[^0-9 ]/g,'')"
+                  data-onkeydown="if(event.key==='Enter')tfa_verifyCode()">
+              </div>
+              <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+                <button data-action="tfa_verifyCode" class="btn btn-primary" id="tfa-verify-btn" style="border-radius:12px">Verify &amp; Activate</button>
+                <button data-action="tfa_cancelSetup" class="btn btn-secondary" style="border-radius:12px">Cancel</button>
+              </div>
+              <p id="tfa-verify-msg" style="font-size:12px;margin-top:10px;min-height:18px;color:var(--grey)"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: Enabled — show disable option -->
+        <div id="tfa-enabled-block" style="display:none">
+          <p class="settings-section-title">Two-Factor Auth is active</p>
+          <p class="settings-section-desc" style="max-width:480px">Your account is protected. You'll be asked for a 6-digit code from your authenticator app each time you sign in.</p>
+          <div style="padding:16px 18px;background:rgba(245,245,245,.03);border:1px solid var(--border);border-radius:14px;max-width:440px;margin-top:16px">
+            <div style="font-size:12px;color:var(--grey);line-height:1.6">If you lose access to your authenticator app, contact your master admin to disable 2FA for your account.</div>
+          </div>
+          <button data-action="tfa_disableSelf" class="btn btn-secondary" style="border-radius:12px;margin-top:20px;border-color:rgba(255,80,80,.3);color:#ff6060">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            Disable Two-Factor Auth
+          </button>
+          <p id="tfa-disable-msg" style="font-size:12px;margin-top:10px;min-height:18px;color:var(--grey)"></p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MANAGE ADMINS (master only) -->
+    <div class="admin-section" id="section-admins">
+      <div class="admin-header">
+        <div><h2>Manage Admins</h2><p>Add or remove admin accounts</p></div>
+        <button data-action="openAddAdminModal" class="btn btn-primary">+ Add Admin</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Permissions</th><th>2FA</th><th>2FA Deadline</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="admins-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ACTIVITY LOG (master only) -->
+    <div class="admin-section" id="section-activity">
+      <div class="admin-header">
+        <div><h2>Activity Log</h2><p>All changes made by all admins</p></div>
+        <button data-action="loadAdminData" data-args='["activity"]' class="btn btn-secondary">Refresh</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Admin</th><th>Action</th><th>Type</th><th>Item</th><th>When</th></tr></thead>
+          <tbody id="activity-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="admin-section" id="section-notifications">
+      <div class="admin-header">
+        <div><h2>Notifications</h2><p>Popups shown to site visitors</p></div>
+        <button data-action="openNotifModal" class="btn btn-primary">+ New Notification</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Title</th><th>Type</th><th>Message</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="notif-tbody"><tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">No notifications yet.</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- EVENT THEMES -->
+    <div class="admin-section" id="section-themes">
+      <!-- LIST VIEW -->
+      <div id="themes-list-view">
+        <div class="admin-header">
+          <div><h2>Event Themes</h2><p>Temporarily retheme the site for events. Zero layout changes.</p></div>
+          <button data-action="openThemeEditor" data-args='[null]' class="btn btn-primary">+ New Theme</button>
+        </div>
+        <div id="themes-list-grid" style="display:grid;gap:16px"></div>
+      </div>
+      <!-- EDITOR VIEW -->
+      <div id="themes-editor-view" style="display:none">
+        <div class="admin-header" style="margin-bottom:24px">
+          <div>
+            <h2 id="theme-editor-title">New Theme</h2>
+            <p>Changes apply within 60 seconds of saving</p>
+          </div>
+          <button data-action="closeThemeEditor" class="btn btn-secondary">← Back to list</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:28px;align-items:start">
+          <!-- Form -->
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <input type="hidden" id="te-id">
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">THEME NAME *</label>
+              <input type="text" id="te-name" placeholder="e.g. Chitra Vichitra 2025" style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BACKGROUND</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-bg" value="#0a0a0a" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-bg-hex" placeholder="#0a0a0a" data-oninput="syncColorFromHex('te-bg','te-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">TEXT</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-text" value="#f5f5f5" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-text-hex" placeholder="#f5f5f5" data-oninput="syncColorFromHex('te-text','te-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">ACCENT</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-accent" value="#f5f5f5" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-accent-hex" placeholder="#f5f5f5" data-oninput="syncColorFromHex('te-accent','te-accent-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">CARD</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-card" value="#111111" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-card-hex" placeholder="#111111" data-oninput="syncColorFromHex('te-card','te-card-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BORDER</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-border" value="#1e1e1e" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-border-hex" placeholder="#1e1e1e" data-oninput="syncColorFromHex('te-border','te-border-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">GREY / MUTED</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="color" id="te-grey" value="#888888" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                  <input type="text" id="te-grey-hex" placeholder="#888888" data-oninput="syncColorFromHex('te-grey','te-grey-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FONT FAMILY <span style="font-weight:400;text-transform:none;letter-spacing:0">(Google Font name — leave blank to keep DM Serif Display)</span></label>
+              <input type="text" id="te-font" placeholder="e.g. Bebas Neue" style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">HERO TITLE OVERRIDE</label>
+                <input type="text" id="te-hero-title" placeholder="Leave blank for default" style="border-radius:10px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">HERO TAGLINE OVERRIDE</label>
+                <input type="text" id="te-hero-tagline" placeholder="Leave blank for default" style="border-radius:10px">
+              </div>
+            </div>
+            <div style="padding:16px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:600">Banner Strip</div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600">BANNER MESSAGE <span style="font-weight:400;text-transform:none">(leave blank for no banner)</span></label>
+                <input type="text" id="te-banner-msg" placeholder='e.g. Chitra Vichitra is LIVE — Register Now' style="border-radius:10px">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                  <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER BG</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="color" id="te-banner-bg" value="#e63946" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-bg-hex" placeholder="#e63946" data-oninput="syncColorFromHex('te-banner-bg','te-banner-bg-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:10px;letter-spacing:.08em;color:var(--grey);font-weight:600;display:block;margin-bottom:6px">BANNER TEXT</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="color" id="te-banner-text" value="#ffffff" data-oninput="updateThemePreview()" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:2px">
+                    <input type="text" id="te-banner-text-hex" placeholder="#ffffff" data-oninput="syncColorFromHex('te-banner-text','te-banner-text-hex')" style="flex:1;font-size:12px;border-radius:8px;font-family:monospace">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">LOGO URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(Cloudinary URL — leave blank to keep default logo)</span></label>
+              <input type="text" id="te-logo-url" placeholder="https://res.cloudinary.com/..." style="border-radius:10px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">SCHEDULE START <span style="font-weight:400;text-transform:none">(optional)</span></label>
+                <input type="datetime-local" id="te-from" style="border-radius:10px;color-scheme:dark">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">SCHEDULE END <span style="font-weight:400;text-transform:none">(optional — auto-reverts)</span></label>
+                <input type="datetime-local" id="te-until" style="border-radius:10px;color-scheme:dark">
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.02)">
+              <input type="checkbox" id="te-activate-now" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
+              <span style="font-size:13px;font-weight:600">Activate immediately on save</span>
+              <span style="font-size:12px;color:var(--grey);margin-left:auto">Deactivates all other themes</span>
+            </label>
+            <p id="te-error" style="color:#e74c3c;font-size:13px;display:none"></p>
+            <div style="display:flex;gap:12px;margin-top:4px">
+              <button data-action="saveTheme" data-args='[false]' class="btn btn-secondary" style="border-radius:12px">Save as Draft</button>
+              <button data-action="saveTheme" data-args='[true]' class="btn btn-primary" style="border-radius:12px">Save &amp; Activate</button>
+            </div>
+          </div>
+          <!-- Live Preview -->
+          <div style="position:sticky;top:20px">
+            <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);font-weight:600;margin-bottom:12px">Live Preview</div>
+            <div id="theme-preview-box" style="border-radius:14px;overflow:hidden;border:1px solid var(--border);transition:all .2s">
+              <div id="tp-banner" style="display:none;padding:8px 14px;font-size:12px;font-weight:600;text-align:center"></div>
+              <div id="tp-nav" style="padding:14px 18px;border-bottom:1px solid;display:flex;align-items:center;gap:10px">
+                <div style="font-size:13px;font-weight:700;letter-spacing:-.02em">KFS</div>
+                <div style="margin-left:auto;display:flex;gap:10px">
+                  <span id="tp-nav-link1" style="font-size:10px">Home</span>
+                  <span id="tp-nav-link2" style="font-size:10px">Films</span>
+                  <span id="tp-nav-link3" style="font-size:10px">Events</span>
+                </div>
+              </div>
+              <div id="tp-body" style="padding:20px 18px">
+                <div id="tp-hero-title" style="font-size:22px;font-weight:800;letter-spacing:-.04em;margin-bottom:6px">KIIT Film Society</div>
+                <div id="tp-hero-sub" style="font-size:11px;margin-bottom:16px">Lights. Camera. KFS.</div>
+                <div id="tp-card" style="border-radius:8px;border:1px solid;padding:12px 14px;margin-bottom:10px">
+                  <div style="font-size:12px;font-weight:600;margin-bottom:4px">Sample Card</div>
+                  <div id="tp-card-sub" style="font-size:11px">Card subtitle text</div>
+                </div>
+                <div id="tp-btn" style="display:inline-block;padding:7px 16px;border-radius:20px;border:2px solid;font-size:11px;font-weight:600;margin-right:8px">Primary</div>
+                <div id="tp-btn2" style="display:inline-block;padding:7px 16px;border-radius:20px;border:1px solid;font-size:11px;font-weight:600">Secondary</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRAFFIC ANALYTICS -->
+    <div class="admin-section" id="section-analytics">
+      <div class="admin-header"><div><h2>Traffic Analytics</h2><p>Visitor activity across all pages</p></div></div>
+      <div class="analytics-tabs">
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "7d", "__this__"]' class="analytics-tab active">7 Days</div>
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "30d", "__this__"]' class="analytics-tab">30 Days</div>
+        <div data-action="switchAnalyticsTab" data-args='["traffic", "all", "__this__"]' class="analytics-tab">All Time</div>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-traffic-total-views">—</div><div class="analytics-card-label">Total Views</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-today-views">—</div><div class="analytics-card-label">Today</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-peak-day">—</div><div class="analytics-card-label">Peak Day</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="stat-top-page">—</div><div class="analytics-card-label">Top Page</div><div class="analytics-card-sub" id="stat-top-page-views"></div></div>
+      </div>
+      <div class="chart-wrap">
+        <h3>Views Over Time</h3>
+        <svg class="line-chart-svg" id="traffic-line-chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px" id="traffic-line-labels"></div>
+      </div>
+      <div class="analytics-row">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Views by Page</h3>
+          <div id="page-leaderboard"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Peak Hours (today)</h3>
+          <div class="bar-chart" id="hours-bar-chart" style="height:100px"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:9px;color:var(--grey)">12am</span>
+            <span style="font-size:9px;color:var(--grey)">6am</span>
+            <span style="font-size:9px;color:var(--grey)">12pm</span>
+            <span style="font-size:9px;color:var(--grey)">6pm</span>
+            <span style="font-size:9px;color:var(--grey)">11pm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REVIEW ANALYTICS -->
+    <div class="admin-section" id="section-review-analytics">
+      <div class="admin-header"><div><h2>Review Analytics</h2><p>Ratings and feedback across all films</p></div></div>
+      <div class="analytics-grid">
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-total">—</div><div class="analytics-card-label">Total Reviews</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-avg">—</div><div class="analytics-card-label">Overall Avg</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-top-film">—</div><div class="analytics-card-label">Top Rated Film</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="ra-most-reviewed">—</div><div class="analytics-card-label">Most Reviewed</div></div>
+      </div>
+      <div class="analytics-row">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Average Score by Film</h3>
+          <div class="bar-chart" id="film-scores-chart"></div>
+          <div id="film-scores-labels" style="display:flex;gap:6px;margin-top:6px"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Category Averages</h3>
+          <div id="category-breakdown"></div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <h3>Film Leaderboard</h3>
+        <div id="film-leaderboard"></div>
+      </div>
+    </div>
+
+    <!-- REGISTRATION ANALYTICS -->
+    <div class="admin-section" id="section-reg-analytics">
+      <div class="admin-header"><div><h2>Registration Analytics</h2><p>Sign-up counts per event</p></div></div>
+      <div class="analytics-grid" id="reg-analytics-cards">
+        <div class="analytics-card"><div class="analytics-card-num" id="reg-total">—</div><div class="analytics-card-label">Total Registrations</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="reg-events-count">—</div><div class="analytics-card-label">Events with Forms</div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="reg-top-event-count">—</div><div class="analytics-card-label">Most Registrations</div><div class="analytics-card-sub" id="reg-top-event-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div></div>
+        <div class="analytics-card"><div class="analytics-card-num" id="reg-avg">—</div><div class="analytics-card-label">Avg per Event</div></div>
+      </div>
+      <div class="chart-wrap" style="margin-top:24px">
+        <h3>Registrations per Event</h3>
+        <div id="reg-bar-chart-wrap" style="overflow-x:auto;padding-bottom:8px">
+          <div id="reg-bar-chart" style="display:flex;align-items:flex-end;gap:10px;height:180px;min-width:0;margin-top:8px"></div>
+          <div id="reg-bar-labels" style="display:flex;gap:10px;margin-top:6px"></div>
+        </div>
+      </div>
+      <div class="admin-card" style="margin-top:24px">
+        <table class="admin-table">
+          <thead><tr><th>#</th><th>Event</th><th>Date</th><th>Form Open</th><th>Registrations</th></tr></thead>
+          <tbody id="reg-analytics-tbody"><tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PAYMENT ANALYTICS -->
+    <div class="admin-section" id="section-payment-analytics">
+      <div class="admin-header">
+        <div><h2>Payment Analytics</h2><p>Donation revenue, trends, and donor breakdown</p></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a href="https://docs.google.com/spreadsheets/d/1acZIqBHXT5g05CPiTLtDHpPCgdFBAmwcP81jE6ijY_M/edit?usp=sharing" target="_blank" class="btn btn-secondary" style="border-radius:20px;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            View Google Sheet
+          </a>
+          <button data-action="sheetBackfill" data-args='["__this__"]' class="btn btn-secondary" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+            Sync Old Payments
+          </button>
+          <button data-action="testDonationEmail" data-args='["__this__"]' class="btn btn-secondary" style="border-radius:20px;font-size:12px;display:flex;align-items:center;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Test Email
+          </button>
+          <button data-action="loadPaymentAnalytics" class="btn" style="border-radius:20px;font-size:12px">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-total-collected">—</div>
+          <div class="analytics-card-label">Total Collected</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-total-donors">—</div>
+          <div class="analytics-card-label">Total Donors</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-avg-donation">—</div>
+          <div class="analytics-card-label">Avg Donation</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-num" id="pa-top-donor">—</div>
+          <div class="analytics-card-label">Top Donor</div>
+          <div class="analytics-card-sub" id="pa-top-donor-sub"></div>
+        </div>
+      </div>
+
+      <!-- Daily trend chart -->
+      <div class="chart-wrap" style="margin-top:24px">
+        <h3>Daily Collections (Last 60 Days)</h3>
+        <svg class="line-chart-svg" id="pa-daily-chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px" id="pa-daily-labels"></div>
+      </div>
+
+      <!-- Row: per-semester + amount buckets -->
+      <div class="analytics-row" style="margin-top:0">
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Revenue by Semester</h3>
+          <div class="bar-chart" id="pa-semester-chart" style="height:120px"></div>
+          <div id="pa-semester-labels" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+        </div>
+        <div class="chart-wrap" style="margin-bottom:0">
+          <h3>Donation Size Breakdown</h3>
+          <div id="pa-bucket-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- All donors table -->
+      <div class="chart-wrap" style="margin-top:24px">
+        <h3>All Donors</h3>
+        <div class="admin-card" style="margin-top:12px">
+          <table class="admin-table">
+            <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Roll No</th><th>Amount</th><th>Semester</th><th>Date</th><th>Payment ID</th><th>Actions</th></tr></thead>
+            <tbody id="pa-top-donors-tbody"><tr><td colspan="9" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMENTS MODERATION -->
+    <div class="admin-section" id="section-comments">
+      <div class="admin-header">
+        <div><h2>Film Comments</h2><p>Moderate discussions across all films</p></div>
+        <button data-action="openKfsReplyModal" class="btn btn-primary">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          KFS Team Reply
+        </button>
+      </div>
+      <div class="admin-comments-filters">
+        <button data-action="filterAdminComments" data-args='["all", "__this__"]' class="admin-comment-filter-btn active">All</button>
+        <button data-action="filterAdminComments" data-args='["pinned", "__this__"]' class="admin-comment-filter-btn">Pinned</button>
+        <button data-action="filterAdminComments" data-args='["spoiler", "__this__"]' class="admin-comment-filter-btn">Spoilers</button>
+        <button data-action="filterAdminComments" data-args='["kfs", "__this__"]' class="admin-comment-filter-btn">KFS Replies</button>
+      </div>
+      <div class="admin-card" style="padding:4px 20px" id="admin-comments-list">
+        <div class="bc-loading">Loading comments…</div>
+      </div>
+    </div>
+
+    <!-- BROADCAST -->
+    <div class="admin-section" id="section-broadcast">
+      <div class="admin-header">
+        <div><h2>Broadcast</h2><p>Send emails to your registered audience</p></div>
+      </div>
+
+      <!-- Compose -->
+      <div class="bc-compose">
+        <div class="bc-compose-title">New Broadcast</div>
+
+        <div class="bc-field">
+          <label class="bc-label">Audience</label>
+          <div class="bc-audience-row">
+            <div data-action="selectBcAudience" data-args='["all_registrants"]' class="bc-audience-card selected" id="bc-aud-all">
+              <div class="bc-audience-radio"></div>
+              <div class="bc-audience-info">
+                <div class="bc-audience-name">All Registrants</div>
+                <div class="bc-audience-desc">Everyone who has ever registered for any event</div>
+              </div>
+            </div>
+            <div class="bc-audience-card" id="bc-aud-event" data-action="selectBcAudience" data-args='["event"]'>
+              <div class="bc-audience-radio"></div>
+              <div class="bc-audience-info">
+                <div class="bc-audience-name">Specific Event</div>
+                <div class="bc-audience-desc">Registrants of one event only</div>
+              </div>
+            </div>
+          </div>
+          <div id="bc-event-picker" style="display:none;margin-top:-4px;margin-bottom:14px">
+            <div class="bc-select-wrap">
+              <select class="bc-select" id="bc-event-select">
+                <option value="">Loading events…</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bc-field">
+          <label class="bc-label">Subject</label>
+          <input class="bc-input" id="bc-subject" type="text" placeholder="e.g. Upcoming screening this Saturday — KFS" maxlength="150">
+        </div>
+
+        <div class="bc-field">
+          <label class="bc-label">Message</label>
+          <textarea class="bc-textarea" id="bc-body" placeholder="Write your message here. Plain text — links and basic formatting are supported."></textarea>
+        </div>
+
+        <div class="bc-preview-row" id="bc-preview-row">
+          <div>
+            <div class="bc-preview-count" id="bc-recipient-count">—</div>
+            <div class="bc-preview-label">estimated recipients</div>
+          </div>
+          <button data-action="previewBroadcastRecipients" class="bc-preview-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Check count
+          </button>
+        </div>
+
+        <div class="bc-send-row">
+          <button data-action="sendBroadcast" class="bc-send-btn" id="bc-send-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Broadcast
+          </button>
+        </div>
+        <div class="bc-send-msg" id="bc-send-msg" style="display:none"></div>
+      </div>
+
+      <!-- History -->
+      <div class="bc-history-section">
+        <div class="bc-history-title">Sent Broadcasts</div>
+        <div class="admin-card" style="padding:0">
+          <table class="admin-table" id="bc-history-table">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Audience</th>
+                <th>Sent</th>
+                <th>Recipients</th>
+                <th>Open Rate</th>
+              </tr>
+            </thead>
+            <tbody id="bc-history-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- WRAPPED ADMIN -->
+    <div class="admin-section" id="section-wrapped">
+      <div class="admin-header">
+        <div><h2>KFS Wrapped</h2><p>Customise the annual Wrapped experience for users</p></div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--card);border:1px solid var(--border);border-radius:20px">
+            <span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey)">Wrapped</span>
+            <label class="wrapped-toggle-switch" title="Show or hide the Wrapped page for all users">
+              <input type="checkbox" id="wrapped-enabled-toggle" data-onchange="updateWrappedToggleLabel(this)">
+              <span class="wrapped-toggle-track">
+                <span class="wrapped-toggle-thumb"></span>
+              </span>
+            </label>
+            <span id="wrapped-toggle-label" style="font-size:12px;font-weight:600;color:var(--grey);min-width:30px">Off</span>
+          </div>
+          <button data-action="saveWrappedConfig" class="btn btn-primary">Save Config</button>
+        </div>
+      </div>
+
+      <!-- Collapsed state when disabled -->
+      <div id="wrapped-disabled-notice" style="display:none;padding:32px;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:4px;margin-bottom:20px">
+        <div style="font-size:32px;margin-bottom:12px">🎬</div>
+        <div style="font-size:14px;font-weight:600;color:var(--white);margin-bottom:6px">Wrapped is currently hidden</div>
+        <div style="font-size:13px;color:var(--grey)">Toggle it On above to make the Wrapped page visible to users. You can still edit the config below.</div>
+      </div>
+
+      <div id="wrapped-config-body">
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:16px;color:var(--white)">Year &amp; Taglines</h3>
+        <div class="form-group"><label>Year (shown on Wrapped page)</label><input type="text" id="wrapped-cfg-year" placeholder="e.g. 2025" style="max-width:160px"></div>
+        <div class="form-group"><label>Hero subtitle</label><input type="text" id="wrapped-cfg-sub" placeholder="e.g. Films watched. Events attended. Stories read."></div>
+        <div class="form-group"><label>Closing message (last card)</label><textarea id="wrapped-cfg-outro" rows="3" placeholder="e.g. Thanks for being part of KFS this year. See you at the next screening."></textarea></div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Featured Movie of the Year</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Override the auto-computed top-rated film — shown on a special card with poster art</p>
+        <div class="form-group">
+          <label>Select Movie</label>
+          <select id="wrapped-cfg-featured-movie" style="max-width:360px" data-onchange="wrappedFeaturedMoviePreview()">
+            <option value="">— Auto (highest-rated by community) —</option>
+          </select>
+        </div>
+        <div id="wrapped-featured-movie-preview" style="display:none;margin-top:12px;align-items:center;gap:14px;padding:12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px">
+          <img id="wrapped-featured-movie-thumb" style="width:48px;height:72px;object-fit:cover;border-radius:6px" src="" alt="">
+          <div>
+            <div id="wrapped-featured-movie-title" style="font-weight:600;font-size:14px"></div>
+            <div id="wrapped-featured-movie-meta" style="font-size:12px;color:var(--grey);margin-top:2px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Broadcast Message</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Show a special message card at the very start of everyone's Wrapped — leave blank to disable</p>
+        <div class="form-group"><label>Message</label><textarea id="wrapped-cfg-broadcast" rows="3" placeholder="e.g. KFS turns 5 this year! Thanks for being part of the journey."></textarea></div>
+        <div class="form-group">
+          <label>Card theme</label>
+          <select id="wrapped-cfg-broadcast-theme" style="max-width:220px">
+            <option value="dark">Dark — deep black</option>
+            <option value="slate">Slate — blue-grey</option>
+            <option value="forest">Forest — dark green</option>
+            <option value="crimson">Crimson — deep red</option>
+            <option value="gold">Gold — warm amber</option>
+          </select>
+        </div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Year Highlight Cards</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Showcase memorable moments of the year — each card shows an image + headline + description. Perfect for "what we did this year" storytelling. These appear after the stats cards.</p>
+        <div id="wrapped-blog-highlights-list"></div>
+        <button data-action="addWrappedBlogHighlight" class="btn-sm" style="margin-top:12px;border-radius:10px">+ Add Highlight Card</button>
+      </div>
+      <div class="admin-card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Fun Fact Cards</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Extra slides shown between stat cards — choose an icon and write the text</p>
+        <div id="wrapped-fun-cards-list"></div>
+        <button data-action="addWrappedFunCard" class="btn-sm" style="margin-top:12px;border-radius:10px">+ Add Card</button>
+      </div>
+      </div><!-- end wrapped-config-body -->
+    </div>
+
+    <div class="admin-section" id="section-collaborate">
+      <div class="admin-header">
+        <div><h2>Collaboration Board</h2><p>Delete inappropriate or expired open calls</p></div>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Title</th><th>Role</th><th>Domain</th><th>KFS Member</th><th>Until</th><th>Contact</th><th>Actions</th></tr></thead>
+          <tbody id="admin-collab-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" id="blog-modal">
+  <div class="modal">
+    <h3 id="blog-modal-title">New Blog Post</h3>
+    <input type="hidden" id="blog-edit-id">
+    <div class="form-group"><label>Title</label><input type="text" id="blog-title"></div>
+    <div class="form-group">
+      <label>Author</label>
+      <div id="blog-author-picker" style="position:relative"></div>
+      <p style="font-size:11px;color:var(--grey);margin-top:6px">Search KFS members or type any name and press Enter. Add as many authors as needed.</p>
+    </div>
+    <div class="form-group"><label>Excerpt (short summary)</label><input type="text" id="blog-excerpt"></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="blog-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group">
+      <label>Content</label>
+      <div class="editor-toolbar">
+        <button data-action="execCmd" data-args='["bold"]' class="editor-btn"><b>B</b></button>
+        <button data-action="execCmd" data-args='["italic"]' class="editor-btn"><i>I</i></button>
+        <button data-action="execCmd" data-args='["formatBlock", "h2"]' class="editor-btn">H2</button>
+        <button data-action="execCmd" data-args='["formatBlock", "h3"]' class="editor-btn">H3</button>
+        <button data-action="execCmd" data-args='["insertUnorderedList"]' class="editor-btn">• List</button>
+        <button data-action="execCmd" data-args='["insertOrderedList"]' class="editor-btn">1. List</button>
+        <button data-action="execCmd" data-args='["formatBlock", "blockquote"]' class="editor-btn">"Quote"</button>
+        <button data-action="insertLink" class="editor-btn">Link</button>
+      </div>
+      <div id="blog-editor-content" contenteditable="true"></div>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="blog-published"><option value="true">Published</option><option value="false">Draft</option></select>
+    </div>
+    <div class="form-group">
+      <label>Tags / Sections</label>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select id="blog-section-type" style="flex:1;border-radius:10px">
+          <option value="">— Select a tag —</option>
+        </select>
+        <button data-action="addBlogSection" class="btn-sm" style="white-space:nowrap;border-radius:10px">+ Tag</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="blog-new-tag-inline" placeholder="Or type a new tag name…"
+          style="flex:1;border-radius:10px;font-size:13px;padding:8px 12px;background:var(--black);border:1px solid var(--border);color:var(--white);font-family:inherit;outline:none"
+          data-onkeydown="if(event.key==='Enter'){event.preventDefault();addBlogSectionInline()}">
+        <button data-action="addBlogSectionInline" class="btn-sm" style="white-space:nowrap;border-radius:10px">+ New</button>
+      </div>
+      <div id="blog-sections-list"><p style="font-size:12px;color:var(--grey);margin:0">No tags added yet.</p></div>
+    </div>
+    <div class="modal-actions">
+      <button data-action="closeBlogModal" class="btn-sm">Cancel</button>
+      <button data-action="saveBlog" class="btn-sm btn-success">Save Post</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <h3 id="event-modal-title">New Event</h3>
+    <input type="hidden" id="event-edit-id">
+    <div class="form-group"><label>Title</label><input type="text" id="event-title"></div>
+    <div class="form-group"><label>Description</label><textarea id="event-description"></textarea></div>
+    <div class="form-group"><label>Date</label><input type="date" id="event-date"></div>
+    <div class="form-group"><label>Time</label><input type="time" id="event-time"></div>
+    <div class="form-group"><label>Location</label><textarea id="event-location" rows="3" style="resize:vertical;min-height:70px"></textarea></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="event-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="event-upcoming"><option value="true">Upcoming</option><option value="false">Past</option></select>
+    </div>
+    <div class="modal-actions">
+      <button data-action="closeEventModal" class="btn-sm">Cancel</button>
+      <button data-action="saveEvent" class="btn-sm btn-success">Save Event</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="collab-modal">
+  <div class="modal-box" style="max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 id="collab-modal-title" style="font-size:18px;font-weight:700;color:var(--white);margin:0">Post Open Call</h3>
+      <button data-action="closeCollabForm" class="modal-close" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:22px;line-height:1;padding:4px">×</button>
+    </div>
+
+    <input type="hidden" id="collab-token">
+
+    <!-- ── STEP 1: KIIT email gate ── -->
+    <div id="collab-gate" style="">
+      <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin-bottom:18px">This board is exclusive to KFS members. Enter your KIIT email to continue.</p>
+      <div class="form-group">
+        <label>KIIT Email *</label>
+        <input id="collab-kiit-email" type="email" placeholder="yourname@kiit.ac.in" data-oninput="collabGateEmailInput()" data-onkeydown="if(event.key==='Enter')verifyCollabMember()">
+      </div>
+      <p id="collab-gate-error" style="color:#ff5555;font-size:13px;margin-bottom:12px;display:none"></p>
+      <button data-action="verifyCollabMember" class="btn btn-primary" id="collab-gate-btn" style="border-radius:10px">Verify & Continue</button>
+    </div>
+
+    <!-- ── STEP 2: Full form (shown after email verified) ── -->
+    <div id="collab-form-body" style="display:none">
+      <!-- Verified member badge -->
+      <div id="collab-verified-badge" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.2);border-radius:10px;margin-bottom:20px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="collab-verified-name" style="font-size:13px;font-weight:600;color:#34c759"></span>
+        <span data-action="resetCollabGate" style="font-size:12px;color:var(--grey);margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Change</span>
+      </div>
+
+      <div class="form-group"><label>Title *</label><input id="collab-title" placeholder="Looking for a sound designer for our 10-minute short"></div>
+      <div class="form-group"><label>Role Needed *</label><input id="collab-role" placeholder="Sound designer, actor, editor…"></div>
+      <div class="form-group">
+        <label>Domain</label>
+        <select id="collab-domain">
+          <option value="">— Select domain —</option>
+          <option value="Direction">Direction</option>
+          <option value="Cinematography">Cinematography</option>
+          <option value="Scriptwriting">Scriptwriting</option>
+          <option value="Video Editing">Video Editing</option>
+          <option value="Sound Design">Sound Design</option>
+          <option value="Graphic Design">Graphic Design</option>
+          <option value="Animation">Animation</option>
+          <option value="Acting">Acting</option>
+          <option value="Photography">Photography</option>
+          <option value="Content Creation">Content Creation</option>
+          <option value="Social Media">Social Media</option>
+          <option value="HR & PR">HR &amp; PR</option>
+          <option value="Production Management">Production Management</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Skills Needed</label><input id="collab-skills" placeholder="Sync sound, Foley, acting, colour grading…"></div>
+      <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
+      <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
+      <div class="form-group">
+        <label>Your Name</label>
+        <div id="collab-name-picker" class="mpicker-wrap"></div>
+      </div>
+      <div class="form-group"><label>Email *</label><input id="collab-email" type="email" placeholder="yourname@kiit.ac.in" readonly style="opacity:.6;cursor:not-allowed"></div>
+      <div class="form-group"><label>Phone (optional)</label><input id="collab-phone" placeholder="+91 XXXXX XXXXX"></div>
+      <div class="form-group"><label>Listing Expiry Date *</label><input id="collab-date" type="date"><p style="font-size:12px;color:var(--grey);margin-top:6px">Your listing will be automatically removed after this date.</p></div>
+
+      <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button data-action="saveCollabPost" class="btn btn-primary">Save Listing</button>
+        <button data-action="deleteOwnCollabPost" class="btn btn-secondary" id="collab-delete-own" style="display:none">Delete Listing</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="member-modal">
+  <div class="modal">
+    <h3 id="member-modal-title">Add Member</h3>
+    <input type="hidden" id="member-edit-id">
+    <div class="form-group"><label>Photo</label><input type="file" id="member-photo" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
+    <div class="form-group">
+      <label>Role / Position</label>
+      <select id="member-role" data-onchange="autoMemberSort();toggleDomainField()">
+        <option value="President">President</option>
+        <option value="Vice President">Vice President</option>
+        <option value="Lead">Lead</option>
+        <option value="Core Member">Core Member</option>
+        <option value="Member">Member</option>
+      </select>
+    </div>
+    <div class="form-group" id="domain-group" style="display:none">
+      <label id="domain-label">Domain</label>
+      <select id="member-domain">
+        <option value="">— Select domain —</option>
+        <option value="Direction">Direction</option>
+        <option value="Cinematography">Cinematography</option>
+        <option value="Scriptwriting">Scriptwriting</option>
+        <option value="Video Editing">Video Editing</option>
+        <option value="Sound Design">Sound Design</option>
+        <option value="Graphic Design">Graphic Design</option>
+        <option value="Animation">Animation</option>
+        <option value="Acting">Acting</option>
+        <option value="Photography">Photography</option>
+        <option value="Content Creation">Content Creation</option>
+        <option value="Social Media">Social Media</option>
+        <option value="HR & PR">HR &amp; PR</option>
+        <option value="Production Management">Production Management</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Batch (Year)</label><input type="text" id="member-batch" placeholder="2024-25"></div>
+    <div class="form-group">
+      <label>Special Tag (optional)</label>
+      <select id="member-special-tag">
+        <option value="">— None —</option>
+        <option value="admin-developer"></> Admin-Developer</option>
+        <option value="developer">&lt;/&gt; Developer</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Bio (optional)</label><textarea id="member-bio" style="min-height:80px"></textarea></div>
+    <input type="hidden" id="member-sort" value="5">
+    <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-top:8px">
+      <input type="checkbox" id="member-is-past" style="width:18px;height:18px;border:1px solid var(--border);background:var(--black);accent-color:var(--white);cursor:pointer">
+      <label for="member-is-past" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);cursor:pointer;margin-bottom:0">Past Member / Alumni</label>
+    </div>
+    <div class="modal-actions">
+      <button data-action="closeMemberModal" class="btn-sm">Cancel</button>
+      <button data-action="saveMember" class="btn-sm btn-success">Save Member</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="testimonial-modal">
+  <div class="modal">
+    <h3 id="testimonial-modal-title">Add Testimonial</h3>
+    <input type="hidden" id="testimonial-edit-id">
+    <div class="form-group"><label>Photo (optional)</label><input type="file" id="testimonial-photo" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group"><label>Name</label><input type="text" id="testimonial-name"></div>
+    <div class="form-group"><label>Role</label><input type="text" id="testimonial-role" placeholder="Cinematographer, 2023-24"></div>
+    <div class="form-group"><label>Batch</label><input type="text" id="testimonial-batch"></div>
+    <div class="form-group"><label>Quote</label><textarea id="testimonial-quote"></textarea></div>
+    <div class="modal-actions">
+      <button data-action="closeTestimonialModal" class="btn-sm">Cancel</button>
+      <button data-action="saveTestimonial" class="btn-sm btn-success">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="movie-modal">
+  <div class="modal">
+    <h3 id="movie-modal-title">Add Film</h3>
+    <input type="hidden" id="movie-edit-id">
+    <div class="form-group"><label>Movie Poster</label><input type="file" id="movie-poster" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group"><label>Title</label><input type="text" id="movie-title"></div>
+    <div class="form-group"><label>Release Year</label><input type="text" id="movie-year" placeholder="2024"></div>
+    <div style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label>Runtime <span style="font-weight:400;color:var(--grey)">(minutes)</span></label><input type="number" id="movie-runtime" placeholder="e.g. 18" min="1"></div>
+      <div class="form-group" style="flex:1"><label>Language</label><input type="text" id="movie-language" placeholder="e.g. Hindi, English"></div>
+    </div>
+    <div class="form-group"><label>Genre Tags <span style="font-weight:400;color:var(--grey)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
+      <div data-action="focusEl_movie_genre_input" class="tag-input-wrap" id="movie-genre-wrap">
+        <input type="hidden" id="movie-genre">
+        <input class="tag-bare-input" id="movie-genre-input" placeholder="Add genre…" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-group"><label>Description</label><textarea id="movie-description" style="min-height:80px" placeholder="A brief synopsis or description of the film..."></textarea></div>
+    <div class="form-group"><label>Director</label><div class="mpicker-wrap" id="mpick-director"></div></div>
+    <div class="form-group"><label>Producer</label><div class="mpicker-wrap" id="mpick-producer"></div></div>
+    <div class="form-group"><label>DOP (Director of Photography)</label><div class="mpicker-wrap" id="mpick-dop"></div></div>
+    <div class="form-group"><label>Script Writer</label><div class="mpicker-wrap" id="mpick-screenwriter"></div></div>
+    <div class="form-group"><label>Video Editor</label><div class="mpicker-wrap" id="mpick-editor"></div></div>
+    <div class="form-group"><label>Sound Design</label><div class="mpicker-wrap" id="mpick-sound"></div></div>
+    <div class="form-group"><label>Management</label><div class="mpicker-wrap" id="mpick-management"></div></div>
+    <div class="form-group"><label>Graphic Design</label><div class="mpicker-wrap" id="mpick-gd"></div></div>
+    <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-actors"></div></div>
+    <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--grey)">(comma separated or pick)</span></label><div class="mpicker-wrap" id="mpick-support"></div></div>
+    <div class="form-group"><label>Trailer URL <span style="font-weight:400;color:var(--grey)">(YouTube link)</span></label><input type="text" id="movie-trailer" placeholder="https://youtube.com/watch?v=... or youtu.be/..."></div>
+    <div class="form-group"><label>▶ Watch Now URL <span style="font-weight:400;color:var(--grey)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label><div style="display:flex;gap:8px;align-items:center"><input type="text" id="movie-watch" placeholder="https://youtube.com/watch?v=..." data-oninput="tryAutoFetchYTRuntime(this.value)" style="flex:1"><button type="button" id="yt-fetch-btn" style="display:none;padding:6px 12px;font-size:12px;border-radius:6px;border:1px solid var(--border,#333);background:var(--surface2,#1a1a1a);color:var(--text,#f5f5f5);cursor:pointer;white-space:nowrap">&#x21BA; Fetch</button></div></div>
+    <div class="form-group"><label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-spotify" placeholder="https://open.spotify.com/album/2026"></div>
+    <div class="form-group"><label>Apple Music Soundtrack URL <span style="font-weight:400;color:var(--grey)">(album, playlist, or track)</span></label><input type="text" id="movie-apple-music" placeholder="https://music.apple.com/2026/album/2026"></div>
+    <div class="modal-actions">
+      <button data-action="closeMovieModal" class="btn-sm">Cancel</button>
+      <button data-action="saveMovie" class="btn-sm btn-success">Save Film</button>
+    </div>
+  </div>
+</div>
+
+<!-- MEMBER PROFILE MODAL -->
+<div id="member-profile-modal">
+  <div class="member-profile-box">
+    <button data-action="closeMemberProfile" class="member-profile-close">×</button>
+    <div class="member-profile-header">
+      <div id="mprofile-photo-wrap"></div>
+      <div>
+        <div class="member-profile-name" id="mprofile-name"></div>
+        <div class="member-profile-role" id="mprofile-role"></div>
+        <div class="member-profile-batch" id="mprofile-batch"></div>
+      </div>
+    </div>
+    <div class="member-profile-body">
+      <div class="member-profile-bio" id="mprofile-bio"></div>
+      <div id="mprofile-films-wrap" style="display:none">
+        <div class="member-profile-section-title">Films</div>
+        <div class="member-films-grid" id="mprofile-films-grid"></div>
+      </div>
+      <div id="mprofile-blogs-wrap" style="display:none">
+        <div class="member-profile-section-title">Blog Posts</div>
+        <div id="mprofile-blogs-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="achievement-modal">
+  <div class="modal">
+    <h3 id="achievement-modal-title">Add Achievement</h3>
+    <input type="hidden" id="achievement-edit-id">
+    <div class="form-group"><label>Title</label><input type="text" id="achievement-title"></div>
+    <div class="form-group"><label>Year</label><input type="text" id="achievement-year" placeholder="2024"></div>
+    <div class="form-group"><label>Description</label><textarea id="achievement-description" style="min-height:80px"></textarea></div>
+    <div class="form-group"><label>Sort Order</label><input type="number" id="achievement-sort" value="99"></div>
+    <div class="modal-actions">
+      <button data-action="closeAchievementModal" class="btn-sm">Cancel</button>
+      <button data-action="saveAchievement" class="btn-sm btn-success">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHITRA VICHITRA MODAL -->
+<div class="modal-overlay" id="cv-modal">
+  <div class="modal">
+    <h3 id="cv-modal-title">Add CV Edition</h3>
+    <input type="hidden" id="cv-edit-id">
+    <div class="form-group"><label>Year (e.g. 2026)</label><input type="text" id="cv-year" placeholder="2026"></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="cv-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group" id="cv-cover-preview-wrap" style="display:none">
+      <img id="cv-cover-preview" src="" alt="" style="width:100%;max-width:280px;aspect-ratio:3/2;object-fit:cover;border:1px solid var(--border);border-radius:4px">
+    </div>
+    <div class="form-group"><label>Sort Order <span style="font-weight:400;color:var(--grey)">(lower = shown first)</span></label><input type="number" id="cv-sort" value="99"></div>
+    <div class="modal-actions">
+      <button data-action="closeCVModal" class="btn-sm">Cancel</button>
+      <button data-action="saveCV" class="btn-sm btn-success">Save Edition</button>
+    </div>
+  </div>
+</div>
+
+<!-- CV MOVIES MODAL -->
+<div class="modal-overlay" id="cv-movies-modal">
+  <div class="modal" style="max-width:600px">
+    <h3>Manage Films — CV <span id="cv-movies-modal-year"></span></h3>
+    <p style="font-size:13px;color:var(--grey);margin-bottom:20px">Add movies from your Films database to this edition.</p>
+    <div class="form-group">
+      <label>Add a Film</label>
+      <select id="cv-movie-dropdown" style="width:100%">
+        <option value="">— Select a film —</option>
+      </select>
+    </div>
+    <button data-action="addMovieToCV" class="btn-sm btn-success" style="margin-bottom:24px">+ Add to CV</button>
+    <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:10px">Current Films in this Edition</div>
+    <div id="cv-current-movies-list" style="display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:24px">
+      <button data-action="closeCVMoviesModal" class="btn-sm">Done</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ep-actions{flex-direction:column;}
+</style>
+
+<!-- Notification Modal -->
+<div class="modal-overlay" id="notif-modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><h3 id="notif-modal-title">New Notification</h3><button data-action="closeNotifModal" class="modal-close">✕</button></div>
+    <input type="hidden" id="notif-id">
+    <div class="form-group"><label>Title</label><input type="text" id="notif-title" placeholder="e.g. New Film Released!"></div>
+    <div class="form-group"><label>Type</label>
+      <select id="notif-type" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:12px 14px;font-family:inherit;font-size:14px">
+        <option value="announcement">General Announcement</option>
+        <option value="achievement">Achievement</option>
+        <option value="film">New Film</option>
+        <option value="event">Event</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Message</label><textarea id="notif-message" style="min-height:80px" placeholder="Short description shown in the popup"></textarea></div>
+    <div class="form-group"><label>Button Text</label><input type="text" id="notif-btn-text" placeholder="e.g. Watch Now"></div>
+    <div class="form-group"><label>Button Links To</label>
+      <select id="notif-btn-page" style="width:100%;background:var(--black);border:1px solid var(--border);color:var(--white);padding:12px 14px;font-family:inherit;font-size:14px">
+        <option value="">No button</option>
+        <option value="home">Home</option>
+        <option value="events">Events</option>
+        <option value="movies">Films</option>
+        <option value="members">Members</option>
+        <option value="blog">Blog</option>
+      </select>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:12px;flex-direction:row">
+      <input type="checkbox" id="notif-active" style="width:16px;height:16px;accent-color:var(--white);flex-shrink:0">
+      <label for="notif-active" style="margin:0;cursor:pointer;font-size:14px">Active (show to visitors)</label>
+    </div>
+    <div class="modal-actions">
+      <button data-action="saveNotif" class="btn btn-primary">Save</button>
+      <button data-action="closeNotifModal" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Member Excel Import Modal -->
+<div id="member-import-modal" class="modal-overlay" style="display:none" data-action="closeMemberImport" data-backdrop="true">
+  <div class="modal-inner" style="max-width:560px;width:100%;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="padding:28px 28px 0">
+      <h3 style="font-size:17px;font-weight:700;margin-bottom:4px">Import Members from Excel</h3>
+      <p style="font-size:12px;color:var(--grey);margin-bottom:20px">Column A should contain member names. Role defaults to <strong>Member</strong>. Photos can be added later.</p>
+      <div id="member-import-preview" style="overflow-y:auto;max-height:340px;border:1px solid var(--border);border-radius:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="position:sticky;top:0;background:var(--bg)">
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">#</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">Name</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);border-bottom:1px solid var(--border)">Status</th>
+            </tr>
+          </thead>
+          <tbody id="member-import-tbody"></tbody>
+        </table>
+      </div>
+      <p id="member-import-summary" style="font-size:12px;color:var(--grey);margin-top:12px"></p>
+    </div>
+    <div style="padding:20px 28px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);margin-top:20px">
+      <button data-action="closeMemberImport" class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);padding:9px 20px;border-radius:20px;font-size:13px;cursor:pointer">Cancel</button>
+      <button data-action="runMemberImport" id="member-import-btn" class="btn btn-primary" style="padding:9px 24px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer">Import All</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── FORM BUILDER MODAL (Admin) ──────────────────────────────────────────── -->
+<div class="form-builder-overlay" id="form-builder-overlay" data-action="closeFormBuilder" data-backdrop="true">
+  <div class="form-builder-panel" style="position:relative">
+    <!-- Response Viewer (slides over the form builder) -->
+    <div class="fb-resp-viewer" id="fb-resp-viewer">
+      <div class="fb-rv-header">
+        <button data-action="closeResponseViewer" class="fb-rv-back" title="Back to form">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="fb-rv-title">Responses</div>
+        <span class="fb-rv-count" id="fb-rv-count"></span>
+        <button data-action="downloadFormResponsesFromViewer" class="fb-rv-dl-btn" id="fb-rv-dl-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+      <div class="fb-rv-body" id="fb-rv-body">
+        <div class="fb-rv-loading">Loading responses…</div>
+      </div>
+    </div>
+
+    <div class="fb-header">
+      <div>
+        <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:4px" id="fb-event-label">Event Form</div>
+        <h3 id="fb-title">Registration Form</h3>
+      </div>
+      <div class="fb-header-actions">
+        <button data-action="openResponseViewer" class="fb-dl-btn" id="fb-dl-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Responses
+        </button>
+        <button data-action="clearFormResponses" class="fb-dl-btn" id="fb-clear-btn" title="Delete all responses (keeps form schema)" style="border-color:rgba(255,69,58,.3);color:rgba(255,130,120,.85)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Clear Responses
+        </button>
+        <button data-action="deleteEntireForm" class="fb-dl-btn" id="fb-del-form-btn" title="Delete form and all responses permanently" style="border-color:rgba(255,69,58,.4);color:rgba(255,80,68,.9)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Delete Form
+        </button>
+        <button data-action="saveFormBuilder" class="btn-sm btn-success" id="fb-save-btn">Save Form</button>
+        <button data-action="closeFormBuilder" class="btn-sm">✕</button>
+      </div>
+    </div>
+    <div class="fb-body" id="fb-body">
+      <div class="fb-meta">
+        <input type="text" id="fb-form-title" placeholder="Form title (e.g. KFS Screening Registration)">
+        <textarea id="fb-form-desc" placeholder="Short description or instructions (optional)"></textarea>
+      </div>
+      <div class="fb-questions" id="fb-questions"></div>
+      <button data-action="addFBQuestion" class="fb-add-q-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Question
+      </button>
+    </div>
+    <div class="fb-status-bar">
+      <label class="fb-toggle-row">
+        <span class="fb-toggle" id="fb-open-toggle">
+          <input type="checkbox" id="fb-is-open" checked>
+          <div class="fb-toggle-track"></div>
+          <div class="fb-toggle-thumb"></div>
+        </span>
+        <span id="fb-open-label">Form is Open</span>
+      </label>
+      <span style="font-size:12px;color:var(--grey)" id="fb-response-count">0 responses</span>
+    </div>
+  </div>
+</div>
+
 <!-- ── REGISTRATION FORM MODAL (Public) ────────────────────────────────────── -->
 <div class="reg-form-overlay" id="reg-form-overlay" data-action="closeRegForm" data-backdrop="true">
   <div class="reg-form-panel">
@@ -3076,6 +4864,36 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
   </div>
 </div>
 
+
+<!-- KFS Team Reply Modal -->
+<div class="fc-reply-modal-overlay" id="fc-reply-modal-overlay" data-action="closeKfsReplyModal" data-backdrop="true">
+  <div class="fc-reply-modal">
+    <div class="fc-reply-modal-header">
+      <h3>Reply as KFS Team</h3>
+      <button data-action="closeKfsReplyModal" class="fb-close-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="fc-reply-modal-body">
+      <div id="kfs-reply-movie-wrap" style="display:none;margin-bottom:4px">
+        <label class="bc-label" style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--grey);margin-bottom:6px;display:block">Film</label>
+        <div class="bc-select-wrap">
+          <select class="bc-select" id="kfs-reply-movie-select"></select>
+        </div>
+      </div>
+      <textarea class="fc-reply-textarea" id="kfs-reply-body" placeholder="Write an official KFS Team response…" rows="4" maxlength="2000"></textarea>
+      <p style="font-size:11px;color:var(--grey);margin-top:-4px">This will post as <strong>KFS Team</strong> with a badge, and will be pinned automatically.</p>
+      <p class="fc-form-msg error" id="kfs-reply-msg"></p>
+      <div class="fc-reply-modal-footer">
+        <button data-action="closeKfsReplyModal" class="fc-reply-cancel-btn">Cancel</button>
+        <button data-action="submitKfsReply" class="fc-submit-btn" id="kfs-reply-send-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Post Reply
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Razorpay SDK loaded statically in <head> for SRI eligibility -->
 
