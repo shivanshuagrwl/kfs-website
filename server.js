@@ -401,6 +401,20 @@ const strictWriteLimit = rateLimit({
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
+// ── P1: Protected /admin route — serves admin shell only to authenticated admins ──
+// The admin HTML/JS/CSS lives in /admin-panel/ (never under /public/).
+// Unauthenticated requests are redirected to / (no login hint in error).
+app.get("/admin", authMiddleware, (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-panel", "index.html"));
+});
+// Serve admin-panel static assets (admin.js, admin CSS) — also auth-gated
+app.use(
+  "/admin-assets",
+  authMiddleware,
+  express.static(path.join(__dirname, "admin-panel"), { index: false }),
+);
+
+// ── Public static files (public site only — no admin files here) ──────────────
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Response cache helper ──────────────────────────────────────────────────────
@@ -1331,6 +1345,15 @@ app.post("/api/admin/logout-all", authMiddleware, async (req, res) => {
     clearRefreshCookie(res);
   }
   res.json({ success: true, message: "All sessions revoked" });
+});
+
+// ── Google Sheet link (auth-gated — ID never exposed in public HTML) ──────────
+// The Sheet ID lives in GOOGLE_SHEET_ID env var. This endpoint returns the full
+// URL only to authenticated admins; unauthenticated visitors never receive it.
+app.get("/api/admin/sheet-link", authMiddleware, (req, res) => {
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  if (!sheetId) return res.json({ url: null });
+  res.json({ url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing` });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6242,7 +6265,12 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
+// NOTE: /admin is handled above by the auth-gated route.
+// Any unmatched /admin/* sub-path returns 404 (no admin shell leak).
 app.get("*", (req, res) => {
+  if (req.path.startsWith("/admin")) {
+    return res.status(404).sendFile(path.join(__dirname, "public", "index.html"));
+  }
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
