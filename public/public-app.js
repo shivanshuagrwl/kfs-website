@@ -1,7 +1,5 @@
-// app.js — KFS Frontend (extracted from inline scripts)
-// Blocks: theme-applier, main-app, search, member-import, form-builder, collab, donations
-
-// ── CSRF token (fetched once on load) ─────────────────────────────────────────
+// app.js — KFS Frontend
+// ── CSRF token ────────────────────────────────────────────────────────────────
 let _csrfToken = '';
 (async function fetchCsrf() {
   try {
@@ -10,7 +8,7 @@ let _csrfToken = '';
   } catch(e) {}
 })();
 
-// ── apiFetch — central fetch wrapper used by all public data loaders ──────────
+// ── apiFetch ──────────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
   try {
     const res = await fetch(url, options);
@@ -21,6 +19,8 @@ async function apiFetch(url, options = {}) {
     return null;
   }
 }
+
+// Blocks: theme-applier, main-app, search, member-import, form-builder, collab, donations
 
 // Apply banner + hero overrides from theme loaded in <head>
 (function() {
@@ -1860,34 +1860,7 @@ function _evalDataHandler(el, expr, eventObj) {
     }
   }
 }
-
-// ── ROUTE CHECK — reads URL on first load and navigates to the right page ─────
-function checkRoute() {
-  const raw = window.location.pathname.replace(/^\//, '') || 'home';
-
-  // Films deep link: /films/some-title-123
-  const filmMatch = raw.match(/^films\/[^/]+-(\d+)$/);
-  if (filmMatch) { openMovie(filmMatch[1]); return; }
-
-  // Blog deep link: /blog/some-title-123
-  const blogMatch = raw.match(/^blog\/[^/]+-(\d+)$/);
-  if (blogMatch) { openBlog(blogMatch[1]); return; }
-
-  // Named pages
-  const knownPages = [
-    'home','events','blog','movies','members',
-    'wrapped','collaborate','donations','about','team'
-  ];
-  const page = knownPages.includes(raw) ? raw : 'home';
-  _doNavigate(page, false);
-}
-
-// ── APP BOOTSTRAP ─────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function () {
-  document.body.classList.add('loaded');
-  checkRoute();
-});
-// ── PUBLIC FUNCTIONS (extracted from admin.js — belong to public site) ─────────
+// ── ALL PUBLIC FUNCTIONS (extracted from admin.js) ───────────────────────────
 
 function updateScrollProgress() {
   const el = document.getElementById('scroll-progress');
@@ -2348,6 +2321,14 @@ class CollabMemberPicker {
 
 let _moviePickers = {};
 
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 async function openMemberProfile(member) {
   window._currentProfileMember = member;  // store for passport download
   const modal = document.getElementById('member-profile-modal');
@@ -2460,33 +2441,14 @@ function openMemberProfileById(uuid) {
   if (member) openMemberProfile(member);
 }
 
-async function loadCVCards() {
-  _cvData = await apiFetch('/api/chitra-vichitra') || [];
-  const row = document.getElementById('cv-cards-row');
-  if (!row) return;
-  if (!_cvData.length) {
-    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.<\/div>`;
-    return;
-  }
-  row.innerHTML = _cvData.map(cv => {
-    const movieCount = cv.movie_count || 0;
-    return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
-      ${cv.cover_image
-        ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
-        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
-      <div class="cv-year-card-overlay"><\/div>
-      <div class="cv-year-card-info">
-        <div class="cv-year-badge">Chitra Vichitra<\/div>
-        <div class="cv-year-num">${cv.year}<\/div>
-        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened<\/div>
-        <div class="cv-year-arrow">View Films →<\/div>
-      <\/div>
-    <\/div>`;
-  }).join('');
-}
-
 function getWatchedMovies() {
   try { return JSON.parse(localStorage.getItem('kfs_watched_movies') || '{}'); } catch { return {}; }
+}
+
+function setMovieWatched(id, val) {
+  const w = getWatchedMovies();
+  if (val) w[id] = Date.now(); else delete w[id];
+  localStorage.setItem('kfs_watched_movies', JSON.stringify(w));
 }
 
 function isMovieWatched(id) { return !!getWatchedMovies()[id]; }
@@ -2522,11 +2484,259 @@ function toggleWatchStatusCard(id, cardEl) {
 // ── Member Excel Import ──────────────────────────────────────
 let _memberImportNames = [];
 
+function toggleWatchStatus() {
+  const id = window._currentMovieId;
+  if (!id) return;
+  const nowWatched = !isMovieWatched(id);
+  setMovieWatched(id, nowWatched);
+  updateDetailWatchBtn(id);
+  // Also update any card in the grid
+  document.querySelectorAll('.movie-card').forEach(card => {
+    const badge = card.querySelector('.movie-watch-badge');
+    if (!badge) return;
+    const onclick = card.getAttribute('onclick') || '';
+    if (!onclick.includes(id)) return;
+    badge.textContent = nowWatched ? '✓ Watched' : '+ Watchlist';
+    badge.classList.toggle('movie-watch-badge--done', nowWatched);
+    card.classList.toggle('watched', nowWatched);
+  });
+}
+
+function svgFilm(size=18){return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>';}
+
+function svgPerson(size=16){return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg>';}
+
+async function loadCVCards() {
+  _cvData = await apiFetch('/api/chitra-vichitra') || [];
+  const row = document.getElementById('cv-cards-row');
+  if (!row) return;
+  if (!_cvData.length) {
+    row.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card);color:var(--grey);font-size:13px">No editions yet.<\/div>`;
+    return;
+  }
+  row.innerHTML = _cvData.map(cv => {
+    const movieCount = cv.movie_count || 0;
+    return `<div class="cv-year-card" onclick="openCVDetail('${cv.id}','${cv.year}')">
+      ${cv.cover_image
+        ? `<img class="cv-year-card-img" src="${cv.cover_image}" alt="CV ${cv.year}">`
+        : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
+      <div class="cv-year-card-overlay"><\/div>
+      <div class="cv-year-card-info">
+        <div class="cv-year-badge">Chitra Vichitra<\/div>
+        <div class="cv-year-num">${cv.year}<\/div>
+        <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened<\/div>
+        <div class="cv-year-arrow">View Films →<\/div>
+      <\/div>
+    <\/div>`;
+  }).join('');
+}
+
 function openEventFormById(eventId) {
   const e = (window._eventRegistry || {})[eventId];
   if (!e) return;
   openEventForm(e.id, e.title, e.event_date || '', e.event_time || '', e.location || '');
 }
+
+async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', eventLocation='') {
+  _rfEventId = eventId;
+  _rfEventTitle = eventTitle;
+  _rfEventDate = eventDate;
+  _rfEventTime = eventTime;
+  _rfEventLocation = eventLocation;
+  _rfForm = null;
+  _rfImageFiles = {};
+
+  document.getElementById('rf-event-label').textContent = eventTitle;
+  document.getElementById('rf-title').textContent = 'Registration';
+  document.getElementById('rf-desc').textContent = '';
+  document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey);font-size:14px">Loading form…</div>';
+  document.getElementById('rf-submit-row').style.display = 'flex';
+  document.getElementById('reg-form-overlay').classList.add('open');
+
+  const res = await fetch('/api/events/' + eventId + '/form');
+  if (!res.ok) {
+    document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">No registration form available for this event.</div>';
+    document.getElementById('rf-submit-row').style.display = 'none';
+    return;
+  }
+  const form = await res.json();
+  if (!form.is_open) {
+    document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">Registrations are currently closed.</div>';
+    document.getElementById('rf-submit-row').style.display = 'none';
+    return;
+  }
+
+  _rfForm = form;
+  let questions = [];
+  try { questions = JSON.parse(form.questions || '[]'); } catch(e){}
+
+  document.getElementById('rf-title').textContent = form.title || eventTitle + ' Registration';
+  document.getElementById('rf-desc').textContent = form.description || '';
+
+  document.getElementById('rf-body').innerHTML = questions.map(q => buildRegField(q)).join('');
+}
+
+async function submitRegForm() {
+  if (!_rfForm || !_rfEventId) return;
+  let questions = [];
+  try { questions = JSON.parse(_rfForm.questions || '[]'); } catch(e){}
+
+  // Collect answers
+  const answers = {};
+  let valid = true;
+  let firstInvalid = null;
+  for (const q of questions) {
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      // Target the actual input/textarea, NOT the wrapper div
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
+      const val = el ? el.value.trim() : '';
+      if (q.required && !val) { firstInvalid = el; valid = false; break; }
+      answers[q.id] = val;
+    } else if (q.type === 'radio') {
+      const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+      if (q.required && !checked) { valid = false; break; }
+      answers[q.id] = checked ? checked.value : '';
+    } else if (q.type === 'checkbox') {
+      const checked = [...document.querySelectorAll(`input[data-qid="${q.id}"]:checked`)].map(i => i.value);
+      if (q.required && !checked.length) { valid = false; break; }
+      answers[q.id] = checked;
+    } else if (q.type === 'image') {
+      if (q.required && !_rfImageFiles[q.id]) { valid = false; break; }
+    }
+  }
+
+  if (!valid) {
+    if (firstInvalid) firstInvalid.focus();
+    const btn = document.getElementById('rf-submit-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = 'Please fill all required fields';
+    btn.style.background = '#ff453a';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
+    return;
+  }
+
+  const btn = document.getElementById('rf-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg> Submitting…';
+
+  // Clear any previous duplicate/error message before each attempt
+  const prevErr = document.getElementById('rf-submit-error');
+  if (prevErr) prevErr.style.display = 'none';
+
+  try {
+    const fd = new FormData();
+    fd.append('answers', JSON.stringify(answers));
+    for (const [qid, file] of Object.entries(_rfImageFiles)) {
+      fd.append(qid, file);
+    }
+
+    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', body: fd });
+
+    if (res.ok) {
+      document.querySelector('.reg-form-header').style.display = 'none';
+      document.getElementById('rf-submit-row').style.display = 'none';
+      const errEl2 = document.getElementById('rf-submit-error');
+      if (errEl2) errEl2.style.display = 'none';
+
+      // ── Track event registration in localStorage for Wrapped ──
+      try {
+        const evts = JSON.parse(localStorage.getItem('kfs_registered_events') || '{}');
+        evts[_rfEventId] = { title: _rfEventTitle, ts: Date.now() };
+        localStorage.setItem('kfs_registered_events', JSON.stringify(evts));
+      } catch(e) {}
+
+      // Build Google Calendar URL from stored event variables
+      const _gcTitle = encodeURIComponent(_rfEventTitle);
+      const _gcLoc   = encodeURIComponent(_rfEventLocation || '');
+      let _gcDates = '';
+      if (_rfEventDate) {
+        const base = _rfEventDate.replace(/-/g, '');
+        if (_rfEventTime) {
+          const t = _rfEventTime.trim();
+          let h = 0, m = 0;
+          const ampm = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          const h24  = t.match(/^(\d{1,2}):(\d{2})$/);
+          if (ampm) {
+            h = parseInt(ampm[1]); m = parseInt(ampm[2]);
+            if (/PM/i.test(ampm[3]) && h !== 12) h += 12;
+            if (/AM/i.test(ampm[3]) && h === 12) h = 0;
+          } else if (h24) { h = parseInt(h24[1]); m = parseInt(h24[2]); }
+          const pad = n => String(n).padStart(2,'0');
+          const eh = Math.min(h + 2, 23);
+          _gcDates = base + 'T' + pad(h) + pad(m) + '00/' + base + 'T' + pad(eh) + pad(m) + '00';
+        } else {
+          _gcDates = base + '/' + base;
+        }
+      }
+      const _gcUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + _gcTitle + '&dates=' + _gcDates + '&location=' + _gcLoc + '&details=' + encodeURIComponent('Registered via KFS — KIIT Film Society');
+
+      document.getElementById('rf-body').innerHTML = `
+        <div class="reg-success">
+          <div class="reg-success-icon">
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="26" cy="26" r="25" stroke="rgba(245,245,245,0.15)" stroke-width="1.5"/>
+              <rect x="12" y="17" width="28" height="20" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/>
+              <path d="M12 21h28M12 29h28M20 17v20M32 17v20" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="38" cy="14" r="6" fill="#34c759"/>
+              <path d="M35.5 14l1.8 1.8 3-3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="reg-success-title">You\'re registered!</div>
+          <div class="reg-success-sub">We\'ll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
+          <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
+            ${_rfEventDate ? `<a href="${_gcUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(255,255,255,.1);color:var(--white);border:1px solid rgba(255,255,255,.2);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(255,255,255,.18)\'" onmouseout="this.style.background=\'rgba(255,255,255,.1)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Add to Google Calendar</a>` : ''}
+            <a href="https://wa.me/?text=${encodeURIComponent('I just registered for ' + _rfEventTitle + ' by KFS — KIIT Film Society! Join me: https://kiitfilmsociety.in/events')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(37,211,102,.2)\'" onmouseout="this.style.background=\'rgba(37,211,102,.12)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Share on WhatsApp</a>
+            <button onclick="closeRegForm()" style="padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+          </div>
+        </div>`;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.error('Form submit failed:', res.status, err);
+      const errMsg = err.error || `Submission failed (${res.status}). Please try again.`;
+      let errEl = document.getElementById('rf-submit-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'rf-submit-error';
+        errEl.style.cssText = 'color:#ff453a;font-size:13px;text-align:center;margin-top:10px;padding:10px 16px;background:rgba(255,69,58,.1);border-radius:10px;border:1px solid rgba(255,69,58,.25)';
+        document.getElementById('rf-submit-row').after(errEl);
+      }
+      errEl.textContent = errMsg;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+    }
+  } catch(err) {
+    console.error('Form submit error:', err);
+    alert('Network error. Please check your connection and try again.');
+    btn.disabled = false;
+    btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+}
+
+// ── SHARE EVENT ──────────────────────────────────────────────────────────────
+
+function closeRegForm() {
+  document.getElementById('reg-form-overlay').classList.remove('open');
+  // Reset header visibility for next open
+  const hdr = document.querySelector('.reg-form-header');
+  if (hdr) hdr.style.display = '';
+}
+
+// Load SheetJS for Excel export
+(function() {
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  document.head.appendChild(s);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SMART RECOMMENDATIONS — tag/genre/director-based engine
+// Injected into movie-detail after every film page view.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _recsFilmIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/></svg>`;
+const _recsDirIcon  = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+const _recsGenreIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
 
 function shareEventById(eventId) {
   const e = (window._eventRegistry || {})[eventId];
@@ -2575,6 +2785,162 @@ async function loadWrapped() {
   }
 }
 
+async function startWrapped() {
+  // Ensure data loaded (loadWrapped guards against double-loading)
+  _wrappedStats = null; // force fresh load each time Start is clicked
+  await loadWrapped();
+  _wrappedCards = buildWrappedCards(_wrappedStats, _wrappedConfig);
+  _wrappedIndex = 0;
+
+  // Hide hero, reveal deck with animation
+  const hero = document.getElementById('wrapped-hero');
+  const deck = document.getElementById('wrapped-deck-wrap');
+  const restartRow = document.getElementById('wrapped-restart-row');
+  if (restartRow) restartRow.remove();
+  if (hero) { hero.style.transition = 'opacity .35s ease, transform .35s ease'; hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)'; setTimeout(() => { hero.style.display = 'none'; }, 360); }
+  deck.style.display = 'flex';
+  deck.classList.remove('visible');
+  renderWrappedDeck();
+  requestAnimationFrame(() => requestAnimationFrame(() => { deck.classList.add('visible'); }));
+}
+
+function wrappedNext() {
+  if (!_wrappedCards.length) return;
+  if (_wrappedIndex >= _wrappedCards.length - 1) {
+    let restartRow = document.getElementById('wrapped-restart-row');
+    if (!restartRow) {
+      restartRow = document.createElement('div');
+      restartRow.id = 'wrapped-restart-row';
+      restartRow.className = 'wrapped-restart-row';
+      restartRow.innerHTML = `<button class="wrapped-start-btn" style="margin-top:16px" onclick="restartWrapped()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        Replay
+      </button>`;
+      document.getElementById('wrapped-deck-wrap').appendChild(restartRow);
+    }
+    return;
+  }
+  // Animate exit-left before advancing
+  const activeCard = document.querySelector('.wrapped-card.is-active');
+  if (activeCard) {
+    activeCard.classList.remove('is-active');
+    activeCard.classList.add('is-exit-left');
+  }
+  _wrappedIndex++;
+  setTimeout(() => renderWrappedDeck(), 40);
+}
+
+function wrappedPrev() {
+  if (_wrappedIndex <= 0) return;
+  const activeCard = document.querySelector('.wrapped-card.is-active');
+  if (activeCard) {
+    activeCard.classList.remove('is-active');
+    activeCard.classList.add('is-exit-right');
+  }
+  _wrappedIndex--;
+  setTimeout(() => renderWrappedDeck(), 40);
+}
+
+async function shareWrappedCard() {
+  if (!_wrappedCards.length) return;
+  const card = _wrappedCards[_wrappedIndex];
+  if (!card) return;
+  const t = card.theme;
+  const canvas = document.getElementById('wrapped-share-canvas');
+  if (!canvas) { _copyShareFallback('https://kiitfilmsociety.in/wrapped'); return; }
+
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Background gradient
+  const grd = ctx.createLinearGradient(0, 0, W, H);
+  const bgColors = t.bg.match(/#[0-9a-f]{3,8}/gi) || ['#0a0a0a', '#181818'];
+  grd.addColorStop(0, bgColors[0]);
+  grd.addColorStop(1, bgColors[1] || bgColors[0]);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle radial overlay
+  const r = ctx.createRadialGradient(W*.2, H*.8, 0, W*.2, H*.8, W*.6);
+  r.addColorStop(0, 'rgba(255,255,255,.03)');
+  r.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = r;
+  ctx.fillRect(0, 0, W, H);
+
+  // KFS wordmark
+  ctx.fillStyle = t.fg;
+  ctx.globalAlpha = 0.38;
+  ctx.font = '600 26px system-ui,sans-serif';
+  ctx.fillText('KFS — KIIT FILM SOCIETY', 72, 80);
+  ctx.globalAlpha = 1;
+
+  // Progress bars
+  const barW = (W - 144) / _wrappedCards.length - 4;
+  _wrappedCards.forEach((_, i) => {
+    ctx.globalAlpha = i < _wrappedIndex ? 0.8 : i === _wrappedIndex ? 1 : 0.2;
+    ctx.fillStyle = t.fg;
+    ctx.beginPath();
+    ctx.roundRect(72 + i * (barW + 4), 108, barW, 5, 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Card text content
+  ctx.fillStyle = t.fg;
+  const year = (_wrappedConfig.year || new Date().getFullYear()).toString();
+  const watched = watchedIds_share();
+  const read = readIds_share();
+  const events = eventIds_share();
+  const lines = [];
+  if      (card.id === 'films-watched')    { lines.push([String(watched), 96, 900]); lines.push(['films watched', 28, 400]); }
+  else if (card.id === 'events-attended')  { lines.push([String(events), 96, 900]); lines.push(['events attended', 28, 400]); }
+  else if (card.id === 'blogs-read')       { lines.push([String(read), 96, 900]); lines.push(['articles read', 28, 400]); }
+  else if (card.id === 'outro')            { lines.push(["That's a", 60, 800]); lines.push(['Wrap.', 96, 900]); }
+  else if (card.id === 'intro')            { lines.push(['Your Year', 60, 800]); lines.push(['in Cinema', 60, 400]); }
+  else if (card.id === 'top-genre' || card.id === 'top-genre-kfs') {
+    const g = _wrappedStats?.topGenres?.[0]?.genre || 'Cinema';
+    lines.push([g, 72, 900]);
+  }
+  else { lines.push(['KFS', 96, 900]); lines.push([year, 48, 400]); }
+
+  let y = H / 2 - 40;
+  lines.forEach(([text, size, weight]) => {
+    ctx.font = `${weight} ${size}px system-ui,sans-serif`;
+    ctx.fillText(text, 72, y);
+    y += size + 16;
+  });
+
+  // Bottom URL
+  ctx.globalAlpha = 0.32;
+  ctx.font = '400 22px system-ui,sans-serif';
+  ctx.fillText('kiitfilmsociety.in/wrapped', 72, H - 56);
+  ctx.globalAlpha = 1;
+
+  canvas.toBlob(async blob => {
+    const url = 'https://kiitfilmsociety.in/wrapped';
+    const yearStr = (_wrappedConfig.year || new Date().getFullYear()).toString();
+    if (navigator.share && blob) {
+      try {
+        await navigator.share({
+          title: `My KFS Wrapped ${yearStr}`,
+          text: `My KFS Wrapped ${yearStr} — kiitfilmsociety.in/wrapped`,
+          url,
+          files: [new File([blob], `kfs-wrapped-${yearStr}.png`, { type: 'image/png' })],
+        });
+        return;
+      } catch(e) { /* fall through */ }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `kfs-wrapped-${yearStr}.png`;
+    a.click();
+    _showShareToast('Card downloaded!');
+  }, 'image/png');
+}
+
+// Helper shims for share canvas (avoid closure over changing vars)
+
 async function loadCollaborate() {
   const list = document.getElementById('collab-list');
   if (!list) return;
@@ -2609,6 +2975,328 @@ async function loadCollaborate() {
   _renderCollabPosts(posts || [], null);
 }
 
+function _buildCollabFilterDropdown(domains) {
+  const dd = document.getElementById('collab-filter-dropdown');
+  if (!dd) return;
+  const allItem = `<button class="blog-filter-item active" id="cfi-all" onclick="applyCollabFilter(null,this)"><span class="blog-filter-item-dot"></span>All Domains<\/button>`;
+  const items = domains.map(d =>
+    `<button class="blog-filter-item" id="cfi-${d.replace(/\s+/g,'-')}" onclick="applyCollabFilter('${d}',this)"><span class="blog-filter-item-dot"></span>${d}<\/button>`
+  ).join('');
+  dd.innerHTML = allItem + '<div class="blog-filter-divider-line"><\/div>' + items;
+}
+
+function toggleCollabFilter(btn) {
+  const dd = document.getElementById('collab-filter-dropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const close = e => {
+      if (!btn.closest('.blog-filter-wrap').contains(e.target)) {
+        dd.classList.remove('open'); btn.classList.remove('open');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function applyCollabFilter(domain, btn) {
+  document.querySelectorAll('#collab-filter-dropdown .blog-filter-item').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('collab-filter-dropdown').classList.remove('open');
+  document.getElementById('collab-filter-btn')?.classList.remove('open');
+  const filterBtn = document.getElementById('collab-filter-btn');
+  if (filterBtn) {
+    const textNode = Array.from(filterBtn.childNodes).find(n=>n.nodeType===3 && n.textContent.trim());
+    if (textNode) textNode.textContent = domain ? ` ${domain} ` : ' Filter ';
+  }
+  _renderCollabPosts(window._allCollabPosts || [], domain);
+}
+
+function _renderCollabPosts(posts, activeDomain) {
+  const list = document.getElementById('collab-list');
+  if (!list) return;
+  const filtered = activeDomain ? posts.filter(p => p.domain === activeDomain) : posts;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="admin-empty" style="text-align:center;padding:48px 24px"><p style="color:var(--grey);font-size:15px">' +
+      (activeDomain ? `No open calls for "${activeDomain}" right now.` : 'No open calls right now. Be the first to post one!') +
+      '</p></div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(p => {
+    const rawName = p.contact_name || '';
+    const nameParts = rawName.split('||');
+    const displayName = nameParts[0].trim();
+    const memberUuid  = nameParts[1] ? nameParts[1].trim() : null;
+
+    const memberBadge = memberUuid
+      ? `<span onclick="openMemberProfileById('${memberUuid}')" style="color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">✓ KFS Member</span>`
+      : `<span style="color:var(--accent)">✓ KFS Member</span>`;
+
+    const domainFlair = p.domain
+      ? `<span style="display:inline-flex;align-items:center;padding:3px 10px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;color:var(--grey);letter-spacing:.04em">${escapeHtml(p.domain)}</span>`
+      : '';
+
+    const contactParts = [];
+    if (displayName)     contactParts.push(`<span>${escapeHtml(displayName)}</span>`);
+    if (p.contact_email) contactParts.push(`<a href="mailto:${escapeHtml(p.contact_email)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_email)}</a>`);
+    if (p.contact_phone) contactParts.push(`<a href="tel:${escapeHtml(p.contact_phone)}" style="color:var(--white);text-decoration:underline;text-underline-offset:3px">${escapeHtml(p.contact_phone)}</a>`);
+
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px 26px;margin-bottom:14px;transition:border-color .2s">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <h3 style="font-size:18px;font-weight:700;margin-bottom:5px;color:var(--white);letter-spacing:-.02em">${escapeHtml(p.title)}</h3>
+          <p style="color:var(--grey);font-size:13px;margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>${escapeHtml(p.role)}</span>
+            <span style="opacity:.35">·</span>
+            ${memberBadge}
+            ${p.domain ? `<span style="opacity:.35">·</span>${domainFlair}` : ''}
+          </p>
+        </div>
+        <span class="tag upcoming" style="flex-shrink:0;font-size:11px">Until ${new Date(p.fulfillment_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+      </div>
+      <p style="color:var(--white);line-height:1.7;margin-bottom:14px;font-size:14.5px">${escapeHtml(p.description)}</p>
+      ${p.skills   ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Skills needed:</strong> ${escapeHtml(p.skills)}</p>` : ''}
+      ${p.timeline ? `<p style="color:var(--grey);font-size:13px;margin-bottom:5px"><strong style="color:var(--white);font-weight:600">Timeline:</strong> ${escapeHtml(p.timeline)}</p>` : ''}
+      ${contactParts.length ? `
+      <p style="color:var(--grey);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <strong style="color:var(--white);font-weight:600">Contact:</strong>
+        ${contactParts.join('<span style="opacity:.3">·</span>')}
+      </p>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── COLLAB: KIIT email gate ────────────────────────────────────────────────────
+let _collabVerifiedMember = null; // { id, name, role, domain, email }
+
+function collabGateEmailInput() {
+  const err = document.getElementById('collab-gate-error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+}
+
+function _isKiitEmail(email) {
+  const e = email.toLowerCase();
+  return e.endsWith('@kiit.ac.in') ||
+         e.includes('.kiit.ac.in') ||
+         e.endsWith('@ksom.ac.in') ||
+         e.endsWith('@kiitbiotech.ac.in');
+}
+
+async function verifyCollabMember() {
+  const emailInput = document.getElementById('collab-kiit-email');
+  const errEl = document.getElementById('collab-gate-error');
+  const btn = document.getElementById('collab-gate-btn');
+  const email = (emailInput?.value || '').trim();
+
+  errEl.style.display = 'none'; errEl.textContent = '';
+
+  if (!email) {
+    errEl.textContent = 'Please enter your KIIT email.';
+    errEl.style.display = 'block'; return;
+  }
+  if (!_isKiitEmail(email)) {
+    errEl.textContent = 'This feature is exclusive to KFS members only. Contact us at filmsocietykiit@gmail.com for external support.';
+    errEl.style.display = 'block'; return;
+  }
+
+  // Valid KIIT domain — unlock form, no server call needed
+  _collabVerifiedMember = { email };
+  document.getElementById('collab-gate').style.display = 'none';
+  document.getElementById('collab-form-body').style.display = 'block';
+  document.getElementById('collab-verified-name').textContent = '✓ ' + email + ' — KIIT verified';
+  document.getElementById('collab-email').value = email;
+
+  // Init member-only name picker (no free text)
+  if (!window._collabNamePicker) {
+    window._collabNamePicker = new CollabMemberPicker('collab-name-picker');
+  } else {
+    window._collabNamePicker.reset();
+  }
+}
+
+function resetCollabGate() {
+  _collabVerifiedMember = null;
+  document.getElementById('collab-gate').style.display = 'block';
+  document.getElementById('collab-form-body').style.display = 'none';
+  document.getElementById('collab-gate-error').style.display = 'none';
+  document.getElementById('collab-kiit-email').value = '';
+}
+
+function openCollabForm(post) {
+  document.getElementById('collab-modal').classList.add('open');
+  document.getElementById('collab-modal-title').textContent = post ? 'Edit Open Call' : 'Post Open Call';
+  document.getElementById('collab-token').value = post?.edit_token || '';
+  document.getElementById('collab-error').textContent = '';
+  document.getElementById('collab-delete-own').style.display = post ? 'inline-flex' : 'none';
+
+  if (post) {
+    // Editing — skip the gate, show form directly
+    document.getElementById('collab-gate').style.display = 'none';
+    document.getElementById('collab-form-body').style.display = 'block';
+    document.getElementById('collab-verified-badge').style.display = 'none';
+
+    document.getElementById('collab-title').value = post.title || '';
+    document.getElementById('collab-role').value = post.role || '';
+    document.getElementById('collab-skills').value = post.skills || '';
+    document.getElementById('collab-timeline').value = post.timeline || '';
+    document.getElementById('collab-description').value = post.description || '';
+    document.getElementById('collab-domain').value = post.domain || '';
+    document.getElementById('collab-email').value = post.contact_email || '';
+    document.getElementById('collab-email').readOnly = false;
+    document.getElementById('collab-email').style.opacity = '1';
+    document.getElementById('collab-email').style.cursor = 'auto';
+    document.getElementById('collab-phone').value = post.contact_phone || '';
+    document.getElementById('collab-date').value = post.fulfillment_date || '';
+
+    if (!window._collabNamePicker) {
+      window._collabNamePicker = new MemberPicker('collab-name-picker', false);
+    } else {
+      window._collabNamePicker.render();
+    }
+    window._collabNamePicker.setValue(post.contact_name || '');
+  } else {
+    // New post — show gate
+    document.getElementById('collab-gate').style.display = 'block';
+    document.getElementById('collab-form-body').style.display = 'none';
+    document.getElementById('collab-gate-error').style.display = 'none';
+    document.getElementById('collab-kiit-email').value = '';
+    document.getElementById('collab-gate-btn').disabled = false;
+    document.getElementById('collab-gate-btn').textContent = 'Verify & Continue';
+
+    // Reset form fields
+    ['collab-title','collab-role','collab-skills','collab-timeline','collab-description','collab-phone','collab-date'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('collab-domain').value = '';
+    document.getElementById('collab-email').value = '';
+    _collabVerifiedMember = null;
+  }
+}
+
+function closeCollabForm() {
+  document.getElementById('collab-modal').classList.remove('open');
+}
+
+function collabPayload() {
+  const nameVal = window._collabNamePicker ? window._collabNamePicker.getValue() : (document.getElementById('collab-contact-name')?.value || '');
+  return {
+    title:            document.getElementById('collab-title').value,
+    role:             document.getElementById('collab-role').value,
+    domain:           document.getElementById('collab-domain').value,
+    skills:           document.getElementById('collab-skills').value,
+    timeline:         document.getElementById('collab-timeline').value,
+    description:      document.getElementById('collab-description').value,
+    contact_name:     nameVal,
+    is_kfs_member:    true,
+    contact_email:    document.getElementById('collab-email').value,
+    contact_phone:    document.getElementById('collab-phone').value,
+    fulfillment_date: document.getElementById('collab-date').value,
+  };
+}
+
+async function saveCollabPost() {
+  const token = document.getElementById('collab-token').value;
+  // Validate member picker — must select an existing KFS member
+  if (!token && window._collabNamePicker && !window._collabNamePicker.isValid()) {
+    document.getElementById('collab-error').textContent = 'Please select your name from the KFS members list.';
+    return;
+  }
+  let res, data;
+  try {
+    res = await fetch(token ? '/api/collaborate/' + token : '/api/collaborate', {
+      method: token ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify(collabPayload()),
+    });
+    data = await res.json();
+  } catch(e) {
+    document.getElementById('collab-error').textContent = 'Network error — please try again.';
+    return;
+  }
+
+  if (!res.ok) {
+    document.getElementById('collab-error').textContent = data.error || 'Could not save listing.';
+    return;
+  }
+
+  closeCollabForm();
+  loadCollaborate();
+
+  if (data.edit_url) {
+    const full = location.origin + data.edit_url;
+    const successEl = document.getElementById('collab-success');
+    if (successEl) {
+      successEl.style.display = 'block';
+      document.getElementById('collab-edit-link').value = full;
+      setTimeout(() => {
+        const input = document.getElementById('collab-edit-link');
+        if (input) { input.focus(); input.select(); }
+      }, 100);
+    }
+  }
+}
+
+async function loadCollabEditToken(token) {
+  try {
+    navigate('collaborate', false);
+    const res = await fetch('/api/collaborate/edit/' + token);
+    const post = await res.json();
+    if (!res.ok) {
+      alert(post.error || 'Invalid or expired edit link.');
+      return;
+    }
+    // Wait for page to render then open modal
+    await loadCollaborate();
+    openCollabForm(post);
+  } catch(e) {
+    alert('Could not load listing.');
+  }
+}
+
+async function deleteOwnCollabPost() {
+  const token = document.getElementById('collab-token').value;
+  if (!token || !confirm('Delete this listing? This cannot be undone.')) return;
+  try {
+    await fetch('/api/collaborate/' + token, { method: 'DELETE', headers: { 'X-CSRF-Token': _csrfToken || '' } });
+  } catch(e) {}
+  closeCollabForm();
+  loadCollaborate();
+}
+
+// ── ADMIN: Collaboration Board ─────────────────────────────────────────────────
+
+function openCollabMailModal(){document.getElementById('collab-mail-modal').classList.add('open');}
+
+function closeCollabMailModal(){document.getElementById('collab-mail-modal').classList.remove('open');}
+
+function copyCollabEmail(){
+  navigator.clipboard.writeText('filmsocietykiit@gmail.com').then(()=>{
+    const btn=document.getElementById('collab-copy-btn');
+    btn.textContent='Copied!';btn.style.color='#34c759';btn.style.borderColor='#34c759';
+    setTimeout(()=>{btn.textContent='Copy';btn.style.color='';btn.style.borderColor='';},2000);
+  });
+}
+
+function openGmailCompose(e){
+  e.preventDefault();
+  const subject=encodeURIComponent('Collaboration Enquiry — External Collaborator');
+  const body=encodeURIComponent('Hi KFS Team,\n\nI am interested in collaborating with KIIT Film Society.\n\n--- My Details ---\n\nName: \nInstitution / Organisation: \nRole / Skill I can offer: \nProject idea: \nTimeline / Availability: \nContact number: \nWhat I Require: \n\nAdditional details:\n\n---');
+  window.open('https://mail.google.com/mail/?view=cm&to=filmsocietykiit@gmail.com&su='+subject+'&body='+body,'_blank');
+}
+
+// ══════════════════════════════════════════════════════════
+// FILM COMMENTS — PUBLIC
+// ══════════════════════════════════════════════════════════
+let _fcMovieId = null;
+let _fcAllComments = [];
+let _fcShowing = 10;
+const FC_PAGE = 10;
+
 async function loadFilmComments(movieId) {
   _fcMovieId = movieId;
   _fcAllComments = [];
@@ -2624,6 +3312,123 @@ async function loadFilmComments(movieId) {
   }
 }
 
+function renderFilmComments() {
+  const list = document.getElementById('fc-list');
+  const countEl = document.getElementById('fc-count');
+  const moreBtn = document.getElementById('fc-load-more');
+  const total = _fcAllComments.length;
+  countEl.textContent = total;
+  if (!total) {
+    list.innerHTML = '<div class="fc-empty">Be the first to share your thoughts.</div>';
+    moreBtn.style.display = 'none';
+    return;
+  }
+  const slice = _fcAllComments.slice(0, _fcShowing);
+  list.innerHTML = slice.map(c => renderComment(c)).join('');
+  moreBtn.style.display = _fcShowing < total ? 'block' : 'none';
+}
+
+function renderComment(c) {
+  const av = c.is_kfs_reply
+    ? `<div class="fc-avatar is-kfs">K</div>`
+    : `<div class="fc-avatar">${initials(c.author_name)}</div>`;
+
+  const badges = [];
+  if (c.is_kfs_reply) badges.push('<span class="fc-badge kfs">KFS Team</span>');
+  if (c.is_pinned && !c.is_kfs_reply) badges.push('<span class="fc-badge pinned">Pinned</span>');
+
+  const bodyClass = c.is_spoiler ? 'fc-body is-blurred' : 'fc-body';
+  const spoilerLabel = c.is_spoiler
+    ? '<div class="fc-spoiler-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> Spoiler</div>'
+    : '';
+
+  return `<div class="fc-item${c.is_pinned?' is-pinned':''}" data-id="${c.id}">
+    <div class="fc-item-top">
+      ${av}
+      <div class="fc-meta">
+        <div class="fc-meta-row">
+          <span class="fc-author">${escHtml(c.author_name)}</span>
+          ${badges.join('')}
+          <span class="fc-time">${timeAgo(c.created_at)}</span>
+        </div>
+        <div class="${bodyClass}" id="fc-body-${c.id}">
+          ${spoilerLabel}
+          <div class="fc-body-text">${escHtml(c.body)}</div>
+          ${c.is_spoiler ? `<button class="fc-spoiler-reveal" onclick="revealSpoiler('${c.id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Reveal spoiler</button>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function revealSpoiler(id) {
+  const el = document.getElementById('fc-body-' + id);
+  if (el) el.classList.remove('is-blurred');
+}
+
+async function submitFilmComment() {
+  const nameEl = document.getElementById('fc-name');
+  const bodyEl = document.getElementById('fc-body');
+  const spoilerEl = document.getElementById('fc-spoiler');
+  const msgEl = document.getElementById('fc-form-msg');
+  const btn = document.getElementById('fc-submit-btn');
+
+  const name = (nameEl.value || '').trim();
+  const body = (bodyEl.value || '').trim();
+  const is_spoiler = spoilerEl.checked;
+
+  msgEl.className = 'fc-form-msg';
+  if (!name) { msgEl.textContent = 'Please enter your name.'; msgEl.classList.add('error'); return; }
+  if (!body) { msgEl.textContent = 'Comment cannot be empty.'; msgEl.classList.add('error'); return; }
+  if (!_fcMovieId) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Posting…';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch('/api/films/' + _fcMovieId + '/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_name: name, body, is_spoiler }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.textContent = data.error || 'Failed to post comment.';
+      msgEl.classList.add('error');
+    } else {
+      bodyEl.value = '';
+      spoilerEl.checked = false;
+      // Insert at top of list (after any pinned items)
+      const firstUnpinned = _fcAllComments.findIndex(c => !c.is_pinned);
+      if (firstUnpinned === -1) _fcAllComments.push(data);
+      else _fcAllComments.splice(firstUnpinned, 0, data);
+      _fcShowing = Math.max(_fcShowing, _fcAllComments.length);
+      renderFilmComments();
+      msgEl.textContent = 'Comment posted!';
+      setTimeout(() => { msgEl.textContent = ''; }, 3000);
+    }
+  } catch(e) {
+    msgEl.textContent = 'Network error. Please try again.';
+    msgEl.classList.add('error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Post';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// FILM COMMENTS — ADMIN MODERATION
+// ══════════════════════════════════════════════════════════
+let _adminAllComments = [];
+let _adminCommentFilter = 'all';
+let _kfsReplyTargetMovieId = null;
+
+function loadMoreComments() {
+  _fcShowing += FC_PAGE;
+  renderFilmComments();
+}
+
 async function loadDonationsPage() {
   _syncAdminAmountVisibility();
   resetDonForm();
@@ -2632,11 +3437,1052 @@ async function loadDonationsPage() {
 
 // ── Amount preset buttons ────────────────────────────────────────────────────
 
+function selectDonAmount(amount, btn) {
+  _donSelectedAmount = amount;
+  document.querySelectorAll('.don-amount-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Clear custom input
+  const custom = document.getElementById('don-custom-amount');
+  if (custom) custom.value = '';
+  updateDonSubmit();
+}
+
+// ── Custom amount input ──────────────────────────────────────────────────────
+
+function onDonCustomAmount(input) {
+  const val = parseInt(input.value, 10);
+  // Deselect presets
+  document.querySelectorAll('.don-amount-btn').forEach(b => b.classList.remove('active'));
+  if (!isNaN(val) && val >= 10 && val <= 500) {
+    _donSelectedAmount = val;
+  } else {
+    _donSelectedAmount = null;
+  }
+  updateDonSubmit();
+}
+
+// ── T&C modal toggle ─────────────────────────────────────────────────────────
+
+function toggleDonTC(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const overlay = document.getElementById('don-tc-overlay');
+  if (!overlay) return;
+  const opening = !overlay.classList.contains('open');
+  overlay.classList.toggle('open', opening);
+  document.body.style.overflow = opening ? 'hidden' : '';
+}
+
+function handleDonTCOverlayClick(e) {
+  // close on backdrop click (not on modal itself)
+  if (e.target === e.currentTarget || e.target.classList.contains('don-tc-backdrop')) toggleDonTC(e);
+}
+// Escape key closes modal
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('don-tc-overlay');
+    if (overlay && overlay.classList.contains('open')) toggleDonTC(null);
+  }
+});
+
+// ── Anonymous toggle ─────────────────────────────────────────────────────────
+
+function toggleDonAnon() {
+  _donIsAnon = !_donIsAnon;
+  const toggle = document.getElementById('don-anon-toggle');
+  if (toggle) toggle.classList.toggle('active', _donIsAnon);
+}
+
+// ── Enable/disable submit button based on T&C + amount validity ──────────────
+
+function updateDonSubmit() {
+  const tandcChecked = document.getElementById('don-tandc')?.checked;
+  const amountOk = _donSelectedAmount && _donSelectedAmount >= 10 && _donSelectedAmount <= 500;
+  const btn = document.getElementById('don-submit-btn');
+  if (btn) btn.disabled = !(tandcChecked && amountOk);
+}
+
+// ── Show/hide error ──────────────────────────────────────────────────────────
+
+function _donShowError(msg) {
+  const el = document.getElementById('don-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('show', !!msg);
+}
+
+// ── Reset form to initial state ──────────────────────────────────────────────
+
+function resetDonForm() {
+  _donIsAnon = false;
+  _donSelectedAmount = 250;
+  const toggle = document.getElementById('don-anon-toggle');
+  if (toggle) toggle.classList.remove('active');
+
+  // Reset preset buttons — highlight ₹250
+  document.querySelectorAll('.don-amount-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes('250'));
+  });
+
+  const ids = ['don-name', 'don-email', 'don-rollno', 'don-bio', 'don-custom-amount'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const tandc = document.getElementById('don-tandc');
+  if (tandc) tandc.checked = false;
+  const tcCard = document.getElementById('don-tc-overlay');
+  if (tcCard) { tcCard.classList.remove('open'); document.body.style.overflow = ''; }
+
+  _donShowError('');
+  const formBody = document.getElementById('don-form-body');
+  const success  = document.getElementById('don-success');
+  if (formBody) formBody.style.display = '';
+  if (success)  success.classList.remove('show');
+
+  updateDonSubmit();
+}
+
+// ── Main donation flow ───────────────────────────────────────────────────────
+
+async function submitDonation() {
+  _donShowError('');
+
+  // Guard: T&C
+  if (!document.getElementById('don-tandc')?.checked) {
+    _donShowError('Please agree to the Terms & Conditions before donating.');
+    return;
+  }
+
+  // Guard: amount — must be whole integer between 10 and 500 (guide Section 3.2)
+  if (!_donSelectedAmount || !Number.isInteger(_donSelectedAmount) || _donSelectedAmount < 10 || _donSelectedAmount > 500) {
+    _donShowError('Please choose a valid whole-number amount between ₹10 and ₹500.');
+    return;
+  }
+
+  // Razorpay SDK loaded statically in <head> — no lazy load needed
+
+  // Guard: email required
+  const email = (document.getElementById('don-email')?.value || '').trim();
+  if (!email || !email.includes('@')) {
+    _donShowError('A valid email is required for your receipt.');
+    return;
+  }
+
+  const name    = (document.getElementById('don-name')?.value    || '').trim();
+  const rollNo  = (document.getElementById('don-rollno')?.value  || '').trim();
+  const bio     = (document.getElementById('don-bio')?.value     || '').trim();
+
+  const btn = document.getElementById('don-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening payment…'; }
+
+  try {
+    // Step 1 — Create order on our backend (amount enforced server-side)
+    const orderRes = await fetch('/api/donation/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({
+        amount: _donSelectedAmount,
+        email,
+        tandc_acknowledged: true,
+        is_anonymous: _donIsAnon,
+        ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
+      }),
+    });
+
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) {
+      _donShowError(orderData.error || 'Could not initiate payment. Please try again.');
+      return;
+    }
+
+    const { order_id, key_id, amount_paise } = orderData;
+
+    // Show TEST MODE banner if using test keys
+    const existingBanner = document.getElementById('don-test-mode-banner');
+    if (existingBanner) existingBanner.remove();
+    if (key_id && key_id.startsWith('rzp_test_')) {
+      const banner = document.createElement('div');
+      banner.id = 'don-test-mode-banner';
+      banner.style.cssText = 'background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:12px;text-align:center;letter-spacing:.04em';
+      banner.textContent = '⚠️ TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
+      const submitBtn = document.getElementById('don-submit-btn');
+      if (submitBtn && submitBtn.parentNode) submitBtn.parentNode.insertBefore(banner, submitBtn);
+    }
+
+    // Step 2 — Open Razorpay Checkout
+    const rzp = new Razorpay({
+      key:         key_id,
+      amount:      amount_paise,
+      currency:    'INR',
+      name:        'KFS — KIIT Film Society',
+      description: 'Donation to KFS',
+      order_id:    order_id,
+      prefill: {
+        name:  _donIsAnon ? '' : name,
+        email: email,
+      },
+      theme: { color: '#f5f5f5' },
+      modal: {
+        ondismiss: () => {
+          if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+        },
+      },
+      handler: async (response) => {
+        // Step 3 — Verify payment signature on backend
+        if (btn) btn.textContent = 'Verifying…';
+        try {
+          const verifyRes = await fetch('/api/donation/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+            body: JSON.stringify({
+              razorpay_order_id:   response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature:  response.razorpay_signature,
+              donor: {
+                email,
+                tandc_acknowledged: true,
+                is_anonymous: _donIsAnon,
+                ...(_donIsAnon ? {} : { name, roll_no: rollNo, bio }),
+              },
+            }),
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok) {
+            _donShowError(verifyData.error || 'Payment verification failed. Contact support if amount was deducted.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+            return;
+          }
+          // Success
+          const formBody = document.getElementById('don-form-body');
+          const success  = document.getElementById('don-success');
+          if (formBody) formBody.style.display = 'none';
+          if (success)  success.classList.add('show');
+          // Refresh donors list
+          loadDonors();
+          loadDonStats();
+        } catch(e) {
+          _donShowError('Network error during verification. Contact us if your amount was deducted.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+        }
+      },
+    });
+
+    rzp.open();
+
+  } catch(e) {
+    _donShowError('Something went wrong. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Donate with Razorpay'; }
+  }
+}
+
+// ── Load impact stats ─────────────────────────────────────────────────────────
+
+async function loadDonStats() {
+  try {
+    const data = await fetch('/api/donation/stats').then(r => r.ok ? r.json() : null);
+    if (!data) return;
+
+    const donorsEl = document.getElementById('don-stat-donors');
+    const filmsEl  = document.getElementById('don-stat-films');
+    if (donorsEl) donorsEl.textContent = data.active_donors ?? '—';
+    if (filmsEl)  filmsEl.textContent  = data.films_supported ?? '—';
+  } catch(e) {}
+}
+
+// ── Load & render donors list ─────────────────────────────────────────────────
+
+async function loadDonors() {
+  const container = document.getElementById('don-donors-container');
+  if (!container) return;
+  container.innerHTML = '<div class="don-donors-empty">Loading…</div>';
+
+  try {
+    // Use admin endpoint (includes amount) if logged in, else public endpoint
+    const endpoint = adminToken ? '/api/admin/donation/donors' : '/api/donation/donors';
+    const donors = await fetch(endpoint, {
+      headers: adminToken ? { Authorization: 'Bearer ' + adminToken } : {},
+    }).then(r => r.ok ? r.json() : []);
+
+    if (!donors || !donors.length) {
+      container.innerHTML = '<div class="don-donors-empty">No donors yet this semester. Be the first!</div>';
+      return;
+    }
+
+    container.innerHTML = '<div class="don-donors-grid">' +
+      donors.map(d => renderDonorCard(d)).join('') +
+    '</div>';
+
+  } catch(e) {
+    container.innerHTML = '<div class="don-donors-empty">Could not load donors.</div>';
+  }
+}
+
+function renderDonorCard(d) {
+  const name    = d.is_anonymous ? 'Anonymous Donor' : escHtml(d.display_name || d.name || 'Donor');
+  const rollNo  = d.is_anonymous ? null : (d.roll_no || null);
+  const photo   = d.is_anonymous ? null : (d.photo_path  || null);
+  const bio     = d.is_anonymous ? null : (d.bio         || null);
+  const semester = escHtml(d.semester_label || '');
+
+  const nameHtml = `<div class="don-donor-name">${name}</div>`;
+
+  const rollHtml = rollNo
+    ? `<div style="font-size:10px;color:var(--grey);letter-spacing:.06em;text-transform:uppercase;margin-top:2px">${escHtml(rollNo)}</div>`
+    : '';
+
+  const photoHtml = photo
+    ? `<img src="${escHtml(photo)}" alt="${name}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-bottom:8px;display:block">`
+    : '';
+
+  const bioHtml = bio ? `<div style="font-size:11px;color:var(--grey);margin-top:4px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(bio)}</div>` : '';
+
+  // Amount — only rendered if server sent it (admin endpoint) and kfs-admin-view is active
+  const amtHtml = d.amount_paise != null
+    ? `<div class="don-donor-amt">₹${Math.round(d.amount_paise / 100).toLocaleString('en-IN')}</div>`
+    : '';
+
+  const donorIdSafe = escHtml(String(d.id || ''));
+
+  return `<div class="don-donor-card" data-donor-id="${donorIdSafe}" style="position:relative">
+    ${photoHtml}
+    ${nameHtml}
+    ${rollHtml}
+    <div class="don-donor-meta">${semester}</div>
+    ${bioHtml}
+    ${amtHtml}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVENT DELEGATION — replaces all inline onclick=/onchange=/oninput=/onkeydown=
+
+// EVENT DELEGATION — replaces all inline onclick=/onchange=/oninput=/onkeydown=
+// One listener per event type on document handles every data-action element.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Helper stubs for elements that used complex inline expressions ────────────
+
+function launchKFSScreensaver() {
+  var el = document.getElementById('kfs-screensaver');
+  if (!el || _ssActive) return;
+  _ssActive = true;
+  el.style.display = 'flex';
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.style.opacity = '1'; }); });
+
+  // Load real films — fetch from API if cache is empty
+  var doLaunch = function() {
+    _ssFilms = _ssGetFilms();
+    _ssIdx = 0;
+    _ssCycleFilm();
+    _ssTimer = setInterval(_ssCycleFilm, 3200);
+  };
+
+  if (!window._allMoviesCache || !window._allMoviesCache.length) {
+    fetch('/api/movies').then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(movies){ window._allMoviesCache = movies || []; doLaunch(); })
+      .catch(function(){ doLaunch(); });
+  } else {
+    doLaunch();
+  }
+
+  document.addEventListener('keydown', exitKFSScreensaver, { once: true });
+}
+
+function _ssCycleFilm() {
+  if (!_ssFilms.length) _ssFilms = _ssGetFilms();
+  var f = _ssFilms[_ssIdx % _ssFilms.length];
+  var titleEl = document.getElementById('kfs-ss-title');
+  var yearEl = document.getElementById('kfs-ss-year');
+  if (!titleEl || !yearEl) return;
+  titleEl.style.opacity = '0'; yearEl.style.opacity = '0';
+  setTimeout(function() {
+    titleEl.textContent = f.title;
+    yearEl.textContent = f.year || '';
+    titleEl.style.opacity = '1';
+    yearEl.style.opacity = f.year ? '1' : '0';
+  }, 500);
+  _ssIdx++;
+}
+
+function exitKFSScreensaver() {
+  var el = document.getElementById('kfs-screensaver');
+  if (!el) return;
+  _ssActive = false;
+  el.style.opacity = '0';
+  clearInterval(_ssTimer);
+  setTimeout(function(){ el.style.display = 'none'; }, 1200);
+  _resetIdleTimer();
+}
+// Allow clicking inside screensaver to not double-fire via bubbled events
+document.getElementById('kfs-screensaver') && document.getElementById('kfs-screensaver').addEventListener('click', function(e){ e.stopPropagation(); exitKFSScreensaver(); });
+
+// ── COLLABORATE ────────────────────────────────────────────────────────────────
+
+function _resetIdleTimer() {
+  clearTimeout(_ssIdleTimer);
+  if (_ssActive) return;
+  _ssIdleTimer = setTimeout(function() {
+    // Don't trigger on admin panel or admin login
+    var ap = document.getElementById('admin-panel');
+    var al = document.getElementById('admin-login');
+    if ((ap && ap.classList.contains('active')) || (al && al.classList.contains('active'))) return;
+    launchKFSScreensaver();
+  }, _SS_IDLE_MS);
+}
+
+(function initIdleWatcher() {
+  ['mousemove','keydown','scroll','click','touchstart'].forEach(function(ev) {
+    document.addEventListener(ev, _resetIdleTimer, { passive: true });
+  });
+  _resetIdleTimer();
+})();
+
+function _ssGetFilms() {
+  // Use real movies from cache; fall back to placeholder only if nothing loaded yet
+  var movies = window._allMoviesCache || [];
+  if (movies.length > 0) {
+    // Shuffle so order varies each screensaver session
+    var shuffled = movies.slice().sort(function() { return Math.random() - 0.5; });
+    return shuffled.map(function(m) {
+      return { title: m.title, year: m.release_year ? String(m.release_year) : '' };
+    });
+  }
+  return [{ title: 'KFS', year: '' }];
+}
+
+function sortHomeFilms(type, btn) {
+  document.querySelectorAll('.film-sort-pill').forEach(p=>p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (!_allHomeMovies.length) return;
+  let sorted = [..._allHomeMovies];
+  if (type === 'top') {
+    sorted.sort((a,b) => {
+      const ra = window._movieRatings?.[a.id]?.avg || 0;
+      const rb = window._movieRatings?.[b.id]?.avg || 0;
+      return rb - ra;
+    });
+  } else if (type === 'loved') {
+    sorted.sort((a,b) => {
+      const ca = window._movieRatings?.[a.id]?.count || 0;
+      const cb = window._movieRatings?.[b.id]?.count || 0;
+      return cb - ca;
+    });
+  } else {
+    sorted.sort((a,b) => (b.release_year||0) - (a.release_year||0));
+  }
+  const hmg = document.getElementById('home-movies-grid');
+  if (!hmg) return;
+  hmg.innerHTML = sorted.slice(0,8).map(m => {
+    const rt = window._movieRatings && window._movieRatings[m.id];
+    const ratingHtml = rt
+      ? `<div class="hc-film-rating"><svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${rt.avg.toFixed(1)}<span class="hc-film-rating-count">(${rt.count})</span></div>`
+      : '';
+    const posterHtml = m.poster_image
+      ? `<div class="hc-film-poster-wrap"><img class="hc-film-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy"></div>`
+      : `<div class="hc-film-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".3"><rect x="2" y="2" width="20" height="20" rx="2"></rect><path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5"></path></svg></div>`;
+    return `<div class="hc-film-card" onclick="openMovie('${m.id}')">
+      ${posterHtml}
+      <div class="hc-film-info">
+        <div class="hc-film-title">${m.title}</div>
+        <div class="hc-film-meta">${[m.release_year,(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).join(', ')].filter(Boolean).join(' · ')}</div>
+        ${ratingHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function shareContent(type) {
+  if (type === 'blog') {
+    const id      = window._currentBlogId;
+    const title   = document.getElementById('blog-detail-title')?.textContent || 'KFS Blog';
+    const excerpt = window._currentBlogExcerpt || '';
+    const cover   = window._currentBlogCover || document.getElementById('blog-detail-img')?.src || '';
+    if (id) { shareBlogCard(id, title, excerpt, cover); return; }
+    _copyShareFallback(window.location.href);
+  } else {
+    const id    = window._currentMovieId;
+    const title = document.getElementById('movie-detail-title')?.textContent || 'KFS Film';
+    const desc  = document.getElementById('movie-detail-description')?.textContent || '';
+    if (!id) { _copyShareFallback(window.location.href); return; }
+
+    const movieData = _gatherCurrentMovieData();
+    const pageUrl   = movieData.pageUrl;
+    const shareText = desc
+      ? `"${title}" — a film by KFS | KIIT Film Society\n${desc.slice(0,120)}${desc.length>120?'…':''}`
+      : `"${title}" — a film by KFS | KIIT Film Society`;
+
+    // Try to share with the story card image (so the recipient sees a rich preview)
+    if (navigator.share && navigator.canShare) {
+      try {
+        const blob = await _renderStoryCardBlob(movieData);
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+        const file = new File([blob], `kfs-${slug}.png`, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: title + ' — KFS', text: shareText, url: pageUrl, files: [file] });
+          return;
+        }
+      } catch(e) { /* fall through to text-only share */ }
+    }
+    // Text-only share (desktop or unsupported)
+    if (navigator.share) {
+      navigator.share({ title: title + ' — KFS', text: shareText, url: pageUrl }).catch(()=>{});
+    } else {
+      _copyShareFallback(pageUrl);
+    }
+  }
+}
+
+// ── KONFETTI ─────────────────────────────────────────────────────────
+
+function closeCVDetail() {
+  document.getElementById('events-main-view').style.display = 'block';
+  document.getElementById('cv-detail-view').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+// CHITRA VICHITRA — ADMIN
+// ══════════════════════════════════════════════════════════
+let _cvEditId = null;
+let _cvMoviesEditId = null;
+let _cvMoviesEditYear = null;
+let _allMoviesForDropdown = [];
+
+async function downloadPassportFromProfile() {
+  var name     = document.getElementById('mprofile-name')?.textContent?.trim() || '';
+  var roleEl   = document.getElementById('mprofile-role')?.textContent || '';
+  // role text is "Role · Domain"
+  var parts    = roleEl.split('·');
+  var role     = parts[0]?.trim() || '';
+  var domain   = parts[1]?.trim() || '';
+  var batchEl  = document.getElementById('mprofile-batch')?.textContent || '';
+  var batch    = batchEl.replace(/^Batch of\s*/i,'').trim();
+  var bio      = document.getElementById('mprofile-bio')?.textContent?.trim() || '';
+
+  // Photo from the img tag inside mprofile-photo-wrap
+  var photoImg = document.querySelector('#mprofile-photo-wrap img');
+  var photo    = photoImg ? photoImg.src : '';
+
+  // Special tag — read from window._currentProfileMember set by openMemberProfile
+  var special_tag = window._currentProfileMember?.special_tag || '';
+
+  // Film posters from the films grid
+  var filmPosters = [];
+  document.querySelectorAll('#mprofile-films-grid .member-film-card').forEach(function(card) {
+    var img = card.querySelector('img.member-film-poster');
+    if (img && img.src) filmPosters.push(img.src);
+  });
+
+  await downloadPassportCard({ name, role, domain, batch, bio, photo, special_tag, filmPosters });
+}
+
+async function downloadPassportCard(data) {
+  data = data || {};
+  var W = 1080, H = 1620;
+  var PAD = 64;
+  var name       = data.name       || 'Your Name';
+  var role       = data.role       || '';
+  var domain     = data.domain     || '';
+  var batch      = data.batch      || '';
+  var bio        = data.bio        || '';
+  var specialTag = data.special_tag|| '';   // 'admin-developer' | 'developer' | ''
+  var filmPosters= data.filmPosters|| [];    // array of poster URLs (up to 3)
+  var photoUrl   = data.photo      || '';
+  var yr         = new Date().getFullYear();
+
+  var cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var ctx = cv.getContext('2d');
+
+  // ── Background ──────────────────────────────────────────────
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle top gradient wash
+  var topGrad = ctx.createLinearGradient(0, 0, 0, 500);
+  topGrad.addColorStop(0, 'rgba(255,255,255,0.04)');
+  topGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, W, 500);
+
+  // ── Header row: KFS left, badge right ──────────────────────
+  ctx.font = '600 28px monospace';
+  ctx.fillStyle = '#4a4a4a';
+  ctx.fillText('K F S', PAD, 88);
+
+  // MEMBER badge
+  var badgeLabel = 'MEMBER';
+  ctx.font = '600 20px monospace';
+  var bw = ctx.measureText(badgeLabel).width + 48;
+  var bh = 40, bx = W - PAD - bw, by = 62;
+  ctx.strokeStyle = '#2e2e2e'; ctx.lineWidth = 1.5;
+  _kfsRoundRect(ctx, bx, by, bw, bh, 6); ctx.stroke();
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillText(badgeLabel, bx + 24, by + 26);
+
+  // Special tag (if any) — right of header, below badge
+  if (specialTag) {
+    var tagLabel = specialTag === 'admin-developer' ? '</> ADMIN-DEV' : '</> DEV';
+    ctx.font = '600 18px monospace';
+    var tw2 = ctx.measureText(tagLabel).width + 40;
+    var ty2 = by + bh + 10;
+    if (specialTag === 'admin-developer') {
+      ctx.strokeStyle = '#8b5cf640'; ctx.fillStyle = '#8b5cf6';
+    } else {
+      ctx.strokeStyle = '#3b82f640'; ctx.fillStyle = '#60a5fa';
+    }
+    _kfsRoundRect(ctx, W - PAD - tw2, ty2, tw2, 36, 6);
+    ctx.globalAlpha = 0.18; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = specialTag === 'admin-developer' ? '#c4b5fd' : '#93c5fd';
+    ctx.fillText(tagLabel, W - PAD - tw2 + 20, ty2 + 24);
+  }
+
+  // ── Photo circle ────────────────────────────────────────────
+  var photoSize = 200, photoX = PAD, photoY = 136;
+  // Draw placeholder circle first
+  ctx.save();
+  ctx.beginPath(); ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 0, Math.PI*2);
+  ctx.fillStyle = '#1e1e1e'; ctx.fill();
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+
+  // Load and clip photo if available
+  var photoLoaded = false;
+  if (photoUrl) {
+    try {
+      var photoImg = await _kfsLoadImage(photoUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2 - 2, 0, Math.PI*2);
+      ctx.clip();
+      // cover-fit: draw centered square crop
+      var ps = photoSize - 4;
+      var iw = photoImg.naturalWidth, ih = photoImg.naturalHeight;
+      var scale = Math.max(ps/iw, ps/ih);
+      var dw = iw*scale, dh = ih*scale;
+      ctx.drawImage(photoImg, photoX+2 + (ps-dw)/2, photoY+2 + (ps-dh)/2, dw, dh);
+      ctx.restore();
+      photoLoaded = true;
+    } catch(e) { /* keep placeholder */ }
+  }
+  if (!photoLoaded) {
+    // Silhouette icon
+    ctx.save();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(photoX+photoSize/2, photoY+68, 36, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(photoX+photoSize/2, photoY+photoSize/2+30, 56, 44, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Name block ──────────────────────────────────────────────
+  var nameX = photoX + photoSize + 40;
+  var nameMaxW = W - nameX - PAD;
+
+  // Name — auto-shrink font to fit
+  var nameFontSize = 72;
+  ctx.font = `bold ${nameFontSize}px serif`;
+  while (ctx.measureText(name).width > nameMaxW && nameFontSize > 36) {
+    nameFontSize -= 4;
+    ctx.font = `bold ${nameFontSize}px serif`;
+  }
+  ctx.fillStyle = '#e8e8e2';
+  ctx.fillText(name, nameX, photoY + 74);
+
+  // Role
+  ctx.font = '600 26px monospace';
+  ctx.fillStyle = '#606060';
+  ctx.fillText(role.toUpperCase(), nameX, photoY + 74 + 46);
+
+  // Domain (if different from role)
+  if (domain && domain.toLowerCase() !== role.toLowerCase()) {
+    ctx.font = '500 22px monospace';
+    ctx.fillStyle = '#424242';
+    ctx.fillText(domain.toUpperCase(), nameX, photoY + 74 + 46 + 34);
+  }
+
+  // Batch pill
+  if (batch) {
+    ctx.font = '500 20px monospace';
+    ctx.fillStyle = '#3a3a3a';
+    var batchText = 'BATCH ' + batch;
+    var bpw = ctx.measureText(batchText).width + 32;
+    var bpy = photoY + photoSize - 38;
+    _kfsRoundRect(ctx, nameX, bpy, bpw, 32, 16);
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#505050';
+    ctx.fillText(batchText, nameX + 16, bpy + 21);
+  }
+
+  // ── Divider line ────────────────────────────────────────────
+  var divY = photoY + photoSize + 48;
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, divY); ctx.lineTo(W-PAD, divY); ctx.stroke();
+
+  // ── Bio ─────────────────────────────────────────────────────
+  var bioY = divY + 48;
+  if (bio) {
+    ctx.font = 'italic 400 30px serif';
+    ctx.fillStyle = '#4a4a4a';
+    // wrap bio
+    var bioMaxW = W - PAD*2;
+    var bioLines = _kfsWrapTextLines(ctx, bio, bioMaxW, 3); // max 3 lines
+    bioLines.forEach(function(line, i) {
+      ctx.fillText(line, PAD, bioY + i * 44);
+    });
+    bioY += bioLines.length * 44 + 32;
+  }
+
+  // ── Data fields ─────────────────────────────────────────────
+  var numFilms = filmPosters.length || data.filmCount || 0;
+  var fieldRows = [];
+  if (numFilms) fieldRows.push(['FILMS',   String(numFilms) + (numFilms === 1 ? ' film' : ' films')]);
+  if (batch)    fieldRows.push(['BATCH',   batch]);
+  if (domain)   fieldRows.push(['DOMAIN',  domain]);
+
+  var fy = bioY;
+  fieldRows.forEach(function(pair) {
+    ctx.font = '600 20px monospace'; ctx.fillStyle = '#383838';
+    ctx.fillText(pair[0], PAD, fy);
+    ctx.font = '400 28px sans-serif'; ctx.fillStyle = '#888880';
+    ctx.fillText(pair[1], PAD, fy + 38);
+    fy += 96;
+  });
+
+  // ── Film posters strip ──────────────────────────────────────
+  var postersY = Math.max(fy + 16, H - 380);
+  if (filmPosters.length) {
+    // Section label
+    ctx.font = '600 20px monospace'; ctx.fillStyle = '#2e2e2e';
+    ctx.fillText('FILMS', PAD, postersY);
+    postersY += 28;
+
+    var maxPosters = Math.min(filmPosters.length, 4);
+    var posterH = 200, posterW = Math.round(posterH * 2/3); // 2:3 ratio
+    var posterGap = 20;
+    var totalW = maxPosters * posterW + (maxPosters-1) * posterGap;
+    var startX = PAD;
+
+    for (var pi = 0; pi < maxPosters; pi++) {
+      var px = startX + pi * (posterW + posterGap);
+      var py = postersY;
+      // Placeholder
+      ctx.fillStyle = '#191919';
+      _kfsRoundRect(ctx, px, py, posterW, posterH, 8);
+      ctx.fill();
+      try {
+        var pImg = await _kfsLoadImage(filmPosters[pi]);
+        ctx.save();
+        _kfsRoundRect(ctx, px, py, posterW, posterH, 8);
+        ctx.clip();
+        var sc = Math.max(posterW/pImg.naturalWidth, posterH/pImg.naturalHeight);
+        var dw2 = pImg.naturalWidth*sc, dh2 = pImg.naturalHeight*sc;
+        ctx.drawImage(pImg, px+(posterW-dw2)/2, py+(posterH-dh2)/2, dw2, dh2);
+        ctx.restore();
+      } catch(e) {
+        // film icon fallback
+        ctx.fillStyle = '#2a2a2a';
+        ctx.font = '32px monospace';
+        ctx.fillText('▶', px + posterW/2 - 12, py + posterH/2 + 10);
+      }
+    }
+  }
+
+  // ── Footer band ─────────────────────────────────────────────
+  ctx.fillStyle = '#090909';
+  ctx.fillRect(0, H-100, W, 100);
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H-100); ctx.lineTo(W, H-100); ctx.stroke();
+
+  ctx.font = '500 22px monospace'; ctx.fillStyle = '#2e2e2e';
+  ctx.fillText('kiitfilmsociety.in', PAD, H-38);
+  ctx.fillText('KFS · ' + yr, W-PAD - ctx.measureText('KFS · '+yr).width, H-38);
+
+  // ── Download ─────────────────────────────────────────────────
+  var lnk = document.createElement('a');
+  lnk.download = 'kfs-passport-' + name.toLowerCase().replace(/\s+/g,'-') + '.png';
+  lnk.href = cv.toDataURL('image/png');
+  lnk.click();
+}
+
+// Load an image cross-origin, returning a promise<HTMLImageElement>
+
+async function downloadStoryCard(data) {
+  var blob = await _renderStoryCardBlob(data);
+  if (!blob) return;
+  var url = URL.createObjectURL(blob);
+  var lnk = document.createElement('a');
+  var slug = (data.title||'film').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  lnk.download = 'kfs-story-' + slug + '.png';
+  lnk.href = url;
+  lnk.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+}
+
+// Download story card for the currently open movie
+
+async function downloadMovieStoryCard() {
+  var data = _gatherCurrentMovieData();
+  await downloadStoryCard(data);
+}
+
+// Gather all current movie data from the DOM + window state
+
+function _gatherCurrentMovieData() {
+  var title   = document.getElementById('movie-detail-title')?.textContent?.trim() || '';
+  var year    = document.getElementById('movie-detail-year')?.textContent?.trim()  || '';
+  var desc    = document.getElementById('movie-detail-description')?.textContent?.trim() || '';
+  var posterEl= document.getElementById('movie-detail-poster-img');
+  var posterUrl = (posterEl && posterEl.style.display !== 'none') ? posterEl.src : '';
+  var id      = window._currentMovieId || '';
+  var slug    = title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  var pageUrl = id ? ('https://kiitfilmsociety.in/films/' + slug + '-' + id) : 'https://kiitfilmsociety.in';
+
+  // Genre tags
+  var genreTags = [];
+  document.querySelectorAll('#movie-detail-genre-wrap .genre-tag').forEach(function(el){
+    genreTags.push(el.textContent.trim());
+  });
+
+  // Crew — read from the rendered crew items
+  var crew = [];
+  document.querySelectorAll('#movie-detail-crew .movie-crew-item').forEach(function(item){
+    var label = item.querySelector('.movie-crew-label')?.textContent?.trim() || '';
+    var value = item.querySelector('.movie-crew-value')?.textContent?.replace(/\s+/g,' ')?.trim() || '';
+    if (label && value) crew.push({ label: label, value: value });
+  });
+
+  return { type: 'FILM', title: title, year: year, description: desc,
+           genres: genreTags, crew: crew, posterUrl: posterUrl, pageUrl: pageUrl };
+}
+
+// Render story card to a Blob (PNG). Returns null on failure.
+
+async function _renderStoryCardBlob(data) {
+  data = data || {};
+  var W = 1080, H = 1920, PAD = 64;
+  var type   = (data.type  || 'FILM').toUpperCase();
+  var title  = data.title  || 'Untitled';
+  var year   = data.year   || '';
+  var desc   = data.description || '';
+  var genres = data.genres || [];
+  var crew   = (data.crew  || []).slice(0, 4); // max 4 crew rows
+  var poster = data.posterUrl || '';
+  var pageUrl= data.pageUrl || 'kiitfilmsociety.in';
+  var displayUrl = pageUrl.replace(/^https?:\/\//,'');
+
+  var cv  = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var ctx = cv.getContext('2d');
+
+  // ── Background ──────────────────────────────────────────────
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Poster image (top ~55% of card) ─────────────────────────
+  var imgZoneH = 1060;
+  if (poster) {
+    try {
+      var pImg = await _kfsLoadImage(poster);
+      // Cover-fill the image zone
+      var sc = Math.max(W / pImg.naturalWidth, imgZoneH / pImg.naturalHeight);
+      var dw = pImg.naturalWidth * sc, dh = pImg.naturalHeight * sc;
+      ctx.drawImage(pImg, (W - dw) / 2, (imgZoneH - dh) / 2, dw, dh);
+    } catch(e) { /* no poster — leave dark bg */ }
+  }
+
+  // Gradient overlay on poster — dark vignette bottom
+  var grad = ctx.createLinearGradient(0, imgZoneH * 0.3, 0, imgZoneH);
+  grad.addColorStop(0, 'rgba(10,10,10,0)');
+  grad.addColorStop(0.6, 'rgba(10,10,10,0.55)');
+  grad.addColorStop(1,   'rgba(10,10,10,0.95)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, imgZoneH);
+
+  // Top gradient (for KFS label legibility)
+  var topGrad = ctx.createLinearGradient(0, 0, 0, 180);
+  topGrad.addColorStop(0, 'rgba(10,10,10,0.7)');
+  topGrad.addColorStop(1, 'rgba(10,10,10,0)');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, W, 180);
+
+  // ── KFS wordmark top-left ────────────────────────────────────
+  ctx.font = '600 28px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('K F S', PAD, 80);
+
+  // ── Type badge top-right ─────────────────────────────────────
+  ctx.font = '600 22px monospace';
+  var bw = ctx.measureText(type).width + 44;
+  _kfsRoundRect(ctx, W - PAD - bw, 48, bw, 42, 6);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(type, W - PAD - bw + 22, 76);
+
+  // ── Content panel (bottom of card) ──────────────────────────
+  var panelY = imgZoneH;  // where text panel starts
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, panelY, W, H - panelY);
+
+  var cy = panelY + 64;
+
+  // Year + genres row
+  var metaParts = [];
+  if (year) metaParts.push(year);
+  genres.slice(0, 3).forEach(function(g){ metaParts.push(g); });
+  if (metaParts.length) {
+    ctx.font = '500 26px monospace';
+    ctx.fillStyle = '#505050';
+    ctx.fillText(metaParts.join('  ·  '), PAD, cy);
+    cy += 52;
+  }
+
+  // Title — large, auto-wraps at 2 lines max
+  var titleFontSize = 96;
+  ctx.font = 'bold ' + titleFontSize + 'px serif';
+  while (ctx.measureText(title).width > W - PAD*2 - 20 && titleFontSize > 52) {
+    titleFontSize -= 4;
+    ctx.font = 'bold ' + titleFontSize + 'px serif';
+  }
+  // Wrap to 2 lines if still needed
+  var titleLines = _kfsWrapTextLines(ctx, title, W - PAD*2, 2);
+  ctx.fillStyle = '#ebebE5';
+  titleLines.forEach(function(line, i){ ctx.fillText(line, PAD, cy + i * (titleFontSize + 12)); });
+  cy += titleLines.length * (titleFontSize + 12) + 32;
+
+  // Thin divider
+  ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, cy); ctx.lineTo(W - PAD, cy); ctx.stroke();
+  cy += 36;
+
+  // Crew rows
+  if (crew.length) {
+    crew.forEach(function(c) {
+      ctx.font = '600 22px monospace'; ctx.fillStyle = '#383838';
+      ctx.fillText(c.label.toUpperCase(), PAD, cy);
+      ctx.font = '400 28px sans-serif'; ctx.fillStyle = '#787870';
+      // truncate long crew strings
+      var crewVal = c.value;
+      ctx.font = '400 28px sans-serif';
+      while (ctx.measureText(crewVal).width > W - PAD*2 - 10 && crewVal.length > 4) {
+        crewVal = crewVal.slice(0, -4) + '…';
+      }
+      ctx.fillText(crewVal, PAD, cy + 36);
+      cy += 84;
+    });
+    cy += 8;
+  }
+
+  // Description (italic, capped to 3 lines)
+  if (desc) {
+    ctx.font = 'italic 400 32px serif'; ctx.fillStyle = '#3e3e3a';
+    // quote bar
+    ctx.fillStyle = '#222'; ctx.fillRect(PAD, cy, 3, 100);
+    ctx.font = 'italic 400 32px serif'; ctx.fillStyle = '#484844';
+    var descLines = _kfsWrapTextLines(ctx, desc, W - PAD*2 - 20, 3);
+    descLines.forEach(function(line, i){ ctx.fillText(line, PAD + 20, cy + 36 + i * 46); });
+    cy += 100 + descLines.length * 4;
+  }
+
+  // ── Footer ───────────────────────────────────────────────────
+  var footerY = H - 80;
+  ctx.fillStyle = '#141414';
+  ctx.fillRect(0, footerY - 1, W, H - footerY + 1);
+
+  // URL with subtle arrow — acts as the deep link hint
+  ctx.font = '500 24px monospace'; ctx.fillStyle = '#303030';
+  ctx.fillText(displayUrl, PAD, H - 32);
+
+  // Small arrow indicator
+  ctx.font = '500 24px monospace'; ctx.fillStyle = '#282828';
+  ctx.fillText('↗', W - PAD - ctx.measureText('↗').width, H - 32);
+
+  return new Promise(function(resolve) {
+    cv.toBlob(function(blob){ resolve(blob); }, 'image/png');
+  });
+}
+
+// ── SCREENSAVER ────────────────────────────────────────────────────────────
+var _ssFilms = [];
+var _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null;
+var _SS_IDLE_MS = 3 * 60 * 1000; // 3 minutes
+
+function _kfsRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+// ── PASSPORT CARD ─────────────────────────────────────────────────────────────
+// data = { name, role, domain, batch, bio, photo, special_tag, filmPosters[] }
+
+function _kfsLoadImage(url) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = function() { resolve(img); };
+    img.onerror = function() { reject(new Error('img load failed: ' + url)); };
+    img.src = url;
+  });
+}
+
+// Wrap text and return array of line strings (max maxLines)
+
+function _kfsWrapTextLines(ctx, text, maxW, maxLines) {
+  var words = text.split(' '), lines = [], line = '';
+  for (var n = 0; n < words.length; n++) {
+    var test = line + (line ? ' ' : '') + words[n];
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line);
+      if (lines.length >= maxLines) {
+        // Truncate last line with ellipsis
+        var last = lines[lines.length-1];
+        while (ctx.measureText(last + '…').width > maxW && last.length > 0) last = last.slice(0,-1);
+        lines[lines.length-1] = last + '…';
+        return lines;
+      }
+      line = words[n];
+    } else { line = test; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// Download passport pre-filled from the currently open member profile
+
+function _kfsWrapText(ctx, text, x, y, maxW, lineH) {
+  var words = text.split(' '), line = '';
+  for(var n=0;n<words.length;n++){
+    var tl = line + words[n] + ' ';
+    if(ctx.measureText(tl).width > maxW && n > 0){ ctx.fillText(line, x, y); line = words[n] + ' '; y += lineH; }
+    else { line = tl; }
+  }
+  ctx.fillText(line, x, y);
+}
+
+// ── STORY CARD ─────────────────────────────────────────────────────────────────
+// data = { type, title, year, description, genres[], crew[], posterUrl, pageUrl }
+
+function timeAgo(dateStr) {
+  const d = new Date(dateStr);
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  if (s < 604800) return Math.floor(s/86400) + 'd ago';
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+
+function initials(name) {
+  const parts = (name || '?').trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+
 
 // ── filterMoviesByGenre — called from genre tags on movie detail page ─────────
 function filterMoviesByGenre(genre) {
   window._activeGenreFilter = genre;
-  // update the genre filter UI if visible
   document.querySelectorAll('.blog-filter-item[id^="mgfi-"]').forEach(b => {
     b.classList.toggle('active', b.id === 'mgfi-' + (genre ? genre.replace(/\s+/g, '-') : 'all'));
   });
@@ -2645,23 +4491,14 @@ function filterMoviesByGenre(genre) {
   }
 }
 
-// ── ROUTE CHECK — reads URL on first load and navigates to the right page ─────
+// ── ROUTE CHECK ───────────────────────────────────────────────────────────────
 function checkRoute() {
   const raw = window.location.pathname.replace(/^\//, '') || 'home';
-
-  // Films deep link: /films/some-title-123
   const filmMatch = raw.match(/^films\/[^/]+-(\d+)$/);
   if (filmMatch) { openMovie(filmMatch[1]); return; }
-
-  // Blog deep link: /blog/some-title-123
   const blogMatch = raw.match(/^blog\/[^/]+-(\d+)$/);
   if (blogMatch) { openBlog(blogMatch[1]); return; }
-
-  // Named pages
-  const knownPages = [
-    'home','events','blog','movies','members',
-    'wrapped','collaborate','donations','about','team'
-  ];
+  const knownPages = ['home','events','blog','movies','members','wrapped','collaborate','donations','about','team'];
   const page = knownPages.includes(raw) ? raw : 'home';
   _doNavigate(page, false);
 }
