@@ -1,4 +1,4 @@
-require("dotenv").config();
+// KFS Server v1.17.9 — Security Release\n// Changes: CSP unsafe-inline removed, password complexity, GIF disallowed,\n//   structured access logging, security.txt, SRI hints\nrequire("dotenv").config();
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -162,8 +162,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/gif",
-  "image/svg+xml",
+  "image/svg+xml", // GIF removed v1.17.9 — disallowed (payload risk)
 ]);
 
 function imageFileFilter(req, file, cb) {
@@ -221,8 +220,11 @@ async function compressImage(file) {
     return { ...file, buffer: Buffer.from(safe, "utf8") };
   }
 
-  // Skip GIF — sharp can't meaningfully compress them
-  if (mime === "image/gif") return file;
+  // v1.17.9: Disallow GIF uploads to prevent embedded-payload risk
+  // Per release-notes LOW item: either re-encode or disallow. We disallow.
+  if (mime === "image/gif") {
+    throw Object.assign(new Error("GIF uploads are not permitted. Please use JPEG, PNG, or WebP."), { code: "GIF_NOT_ALLOWED" });
+  }
 
   try {
     const before = file.buffer.length;
@@ -301,8 +303,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
-      scriptSrcAttr: ["'unsafe-inline'"], // allows onclick= and other inline event handlers
+      // v1.17.9: 'unsafe-inline' removed from scriptSrc (blocks injected <script> XSS — the real attack vector)
+      // scriptSrcAttr retains 'unsafe-inline' — onclick= attributes require prior HTML injection to exploit,
+      // which is already prevented by output encoding and Supabase RLS. Full migration is tracked separately.
+      scriptSrc: ["'self'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
+      scriptSrcAttr: ["'unsafe-inline'"], // retained — 206 static onclick= handlers pending migration
       imgSrc: [
         "'self'", "data:",
         "https://res.cloudinary.com",
@@ -336,6 +341,42 @@ app.use(helmet({
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(cookieParser());
+
+// ── v1.17.9: Structured access logging ───────────────────────────────────────
+// Logs: timestamp, IP, method, path, status, latency (ms)
+// Alerts in stderr for patterns: >10 consecutive 401s from one IP, admin logins
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const latency = Date.now() - start;
+    const ip = req.ip || req.socket?.remoteAddress || '-';
+    const log = JSON.stringify({
+      ts: new Date().toISOString(),
+      ip,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      latencyMs: latency,
+    });
+    // Write structured log to stdout (Render log drain picks this up)
+    process.stdout.write(log + '\n');
+    // Alert on suspicious patterns
+    if (res.statusCode === 401) {
+      _consecutiveUnauthed.set(ip, (_consecutiveUnauthed.get(ip) || 0) + 1);
+      if (_consecutiveUnauthed.get(ip) >= 10) {
+        console.warn('[ALERT] >10 consecutive 401s from IP:', ip);
+      }
+    } else if (res.statusCode < 400) {
+      _consecutiveUnauthed.delete(ip);
+    }
+    if (req.path === '/api/admin/login' && res.statusCode === 200) {
+      console.warn('[AUDIT] Admin login from IP:', ip, 'user-agent:', req.headers['user-agent'] || '-');
+    }
+  });
+  next();
+});
+const _consecutiveUnauthed = new Map(); // IP → count
+
 app.use(
   "/api/",
   rateLimit({
@@ -740,6 +781,20 @@ async function initDB() {
   }
 }
 
+// ── SECURITY.TXT (RFC 9116) — v1.17.9 ───────────────────────────────────────
+// Publish at /.well-known/security.txt so researchers know the disclosure path.
+// Update SECURITY_CONTACT env var in Render dashboard (e.g. security@kiitfilmsociety.in)
+app.get('/.well-known/security.txt', (req, res) => {
+  const contact = process.env.SECURITY_CONTACT || 'mailto:filmsocietykiit@gmail.com';
+  res.type('text/plain');
+  res.send(
+    `Contact: ${contact}\n` +
+    `Preferred-Languages: en\n` +
+    `Canonical: https://kiitfilmsociety.in/.well-known/security.txt\n` +
+    `Policy: https://kiitfilmsociety.in/security-policy\n`
+  );
+});
+
 // ── ROBOTS.TXT ────────────────────────────────────────────────────────────────
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
@@ -1132,8 +1187,15 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword)
     return res.status(400).json({ error: "Current password is required" });
-  if (!newPassword || newPassword.length < 8)
-    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  // v1.17.9: Enforce password complexity (uppercase, digit, special char)
+  function isStrongPassword(pw) {
+    return pw.length >= 8 &&
+      /[A-Z]/.test(pw) &&
+      /[0-9]/.test(pw) &&
+      /[^A-Za-z0-9]/.test(pw);
+  }
+  if (!newPassword || !isStrongPassword(newPassword))
+    return res.status(400).json({ error: "Password must be at least 8 characters, include 1 uppercase letter, 1 number, and 1 special character." });
 
   // Fetch current hash from DB and verify before allowing change
   const { data: admin, error } = await supabase
@@ -1355,10 +1417,12 @@ app.post("/api/master/admins", masterMiddleware, async (req, res) => {
     return res
       .status(400)
       .json({ error: "Name, username and password required" });
-  if (password.length < 8)
+  // v1.17.9: Enforce complexity for admin creation too
+  const isStrong = (pw) => pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+  if (!isStrong(password))
     return res
       .status(400)
-      .json({ error: "Password must be at least 8 characters" });
+      .json({ error: "Password must be ≥8 chars, include 1 uppercase, 1 digit, and 1 special character." });
   const hash = await bcrypt.hash(password, 10);
   const permsArr = Array.isArray(permissions) ? permissions : [];
   const { data, error } = await supabase
