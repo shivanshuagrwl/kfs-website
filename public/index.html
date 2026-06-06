@@ -124,40 +124,44 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
-<!-- ── EVENT THEME LOADER — runs before styles render to prevent flash ── -->
+<!-- ── EVENT THEME LOADER — async, non-blocking ── -->
 <script>
 (function() {
+  function applyTheme(theme) {
+    if (!theme) return;
+    var css = ':root{';
+    if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
+    if (theme.text_color)   css += '--white:' + theme.text_color + ';';
+    if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
+    if (theme.card_color)   css += '--card:' + theme.card_color + ';';
+    if (theme.border_color) css += '--border:' + theme.border_color + ';';
+    if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
+    css += '}';
+    var styleEl = document.createElement('style');
+    styleEl.id = 'event-theme-vars';
+    styleEl.textContent = css;
+    document.head.appendChild(styleEl);
+    if (theme.font_family) {
+      var fontLink = document.createElement('link');
+      fontLink.rel = 'stylesheet';
+      fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
+      document.head.appendChild(fontLink);
+      var fontStyle = document.createElement('style');
+      fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
+      document.head.appendChild(fontStyle);
+    }
+    window.__kfsEventTheme = theme;
+  }
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/theme', false); // synchronous to block render
-    xhr.send();
-    if (xhr.status === 200) {
-      var theme = JSON.parse(xhr.responseText);
-      if (theme) {
-        var css = ':root{';
-        if (theme.bg_color)     css += '--black:' + theme.bg_color + ';';
-        if (theme.text_color)   css += '--white:' + theme.text_color + ';';
-        if (theme.accent_color) css += '--accent:' + theme.accent_color + ';';
-        if (theme.card_color)   css += '--card:' + theme.card_color + ';';
-        if (theme.border_color) css += '--border:' + theme.border_color + ';';
-        if (theme.grey_color)   css += '--grey:' + theme.grey_color + ';';
-        css += '}';
-        var styleEl = document.createElement('style');
-        styleEl.id = 'event-theme-vars';
-        styleEl.textContent = css;
-        document.head.appendChild(styleEl);
-        if (theme.font_family) {
-          var fontLink = document.createElement('link');
-          fontLink.rel = 'stylesheet';
-          fontLink.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(theme.font_family) + ':wght@400;700&display=swap';
-          document.head.appendChild(fontLink);
-          var fontStyle = document.createElement('style');
-          fontStyle.textContent = 'body { font-family: "' + theme.font_family + '", serif !important; }';
-          document.head.appendChild(fontStyle);
-        }
-        window.__kfsEventTheme = theme;
+    xhr.open('GET', '/api/theme', true); // async — does not block render
+    xhr.timeout = 3000;
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try { applyTheme(JSON.parse(xhr.responseText)); } catch(e) {}
       }
-    }
+    };
+    xhr.send();
   } catch(e) { /* silent fail — site loads with default theme */ }
 })();
 </script>
@@ -3158,7 +3162,7 @@ KFS — KIIT Film Society"></textarea>
 </div>
 
 
-<script src="/admin-assets/admin.js" defer></script>
+<script src="/app.js" defer></script>
 
 </body>
 </html>
