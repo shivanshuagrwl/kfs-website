@@ -309,7 +309,7 @@ app.use(helmet({
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
       scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
-      // scriptSrcAttr: removed — all inline event handlers migrated to data-action delegation
+      scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:",
         "https://res.cloudinary.com",
