@@ -303,10 +303,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      // v1.17.9: 'unsafe-inline' removed from scriptSrc (blocks injected <script> XSS — the real attack vector)
-      // scriptSrcAttr retains 'unsafe-inline' — onclick= attributes require prior HTML injection to exploit,
-      // which is already prevented by output encoding and Supabase RLS. Full migration is tracked separately.
-      scriptSrc: ["'self'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
+
+      // 'unsafe-inline' removed — all JS is now in /public/app.js (external, covered by 'self')
+      // The one remaining inline script is the synchronous theme-loader in <head>; its hash is pinned below.
+      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // retained — 206 static onclick= handlers pending migration
       imgSrc: [
         "'self'", "data:",
