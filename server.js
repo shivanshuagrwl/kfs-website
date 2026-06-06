@@ -162,7 +162,9 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/svg+xml", // GIF removed v1.17.9 — disallowed (payload risk)
+  // SVG removed v1.17.10 — MIME bypass risk: attacker can rename .svg to .jpg;
+  // browser sniffs content-type and executes embedded scripts. Sanitisation
+  // alone is insufficient defence. Posters/covers don't need SVG.
 ]);
 
 function imageFileFilter(req, file, cb) {
@@ -170,7 +172,7 @@ function imageFileFilter(req, file, cb) {
     cb(null, true);
   } else {
     cb(
-      Object.assign(new Error("Only image files are allowed (JPEG, PNG, WebP, GIF, SVG)."), {
+      Object.assign(new Error("Only image files are allowed (JPEG, PNG, WebP)."), {
         code: "INVALID_FILE_TYPE",
       }),
       false,
@@ -1513,7 +1515,7 @@ app.get("/api/settings", async (req, res) => {
     const { data } = await supabasePublic
       .from("settings")
       .select("*")
-      .neq("key", "admin_password");
+      .not("key", "in", '("admin_password","brevo_api_key","smtp_from_name")');
     const o = {};
     (data || []).forEach((r) => (o[r.key] = r.value));
     return o;
