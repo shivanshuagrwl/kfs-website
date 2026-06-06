@@ -310,7 +310,7 @@ app.use(helmet({
       // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
-      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com"],
+      scriptSrc: ["'self'", "'sha256-wkKq5DwYGPrJW0MS9OL6lsL2ra+BEBjv/+6hpFwAdog='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:",
