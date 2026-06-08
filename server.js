@@ -5416,82 +5416,6 @@ function getFeaturedUntil(paymentDate) {
 }
 
 // ── Helper: send Brevo thank-you email (non-blocking) ────────────────────────
-async function sendBrevoThankYou({ donorId, name, email, amountPaise, paymentId, isAnonymous }) {
-  // Read key from Supabase settings table first (same as broadcast + confirmation emails),
-  // fall back to env var so both config paths work.
-  let BREVO_API_KEY = process.env.BREVO_API_KEY || null;
-  let BREVO_NAME    = process.env.BREVO_SENDER_NAME  || "KFS — KIIT Film Society";
-  const BREVO_SENDER   = process.env.BREVO_SENDER_EMAIL || "noreply@kiitfilmsociety.in";
-  const BREVO_TEMPLATE = process.env.BREVO_TEMPLATE_ID  ? parseInt(process.env.BREVO_TEMPLATE_ID) : null;
-
-  try {
-    const { data: rows } = await supabase
-      .from("settings")
-      .select("key,value")
-      .in("key", ["brevo_api_key", "smtp_from_name"]);
-    (rows || []).forEach(r => {
-      if (r.key === "brevo_api_key"  && r.value) BREVO_API_KEY = r.value;
-      if (r.key === "smtp_from_name" && r.value) BREVO_NAME    = r.value;
-    });
-  } catch (e) {
-    console.warn("[Brevo] Could not fetch settings from DB, using env vars:", e.message);
-  }
-
-  if (!BREVO_API_KEY) {
-    console.warn("[Brevo] No API key found in settings or env — skipping thank-you email");
-    return { success: false, reason: "no_api_key" };
-  }
-  if (!email) {
-    console.warn("[Brevo] No recipient email for donor", donorId, "— skipping");
-    return { success: false, reason: "no_email" };
-  }
-
-  const displayName = isAnonymous ? "Valued Supporter" : (name || "Donor");
-  const amountRs    = Math.round((amountPaise || 0) / 100);
-
-  const payload = BREVO_TEMPLATE
-    ? {
-        templateId: BREVO_TEMPLATE,
-        to: [{ email, name: displayName }],
-        sender: { name: BREVO_NAME, email: BREVO_SENDER },
-        params: { donorName: displayName, amount: amountRs, paymentId },
-      }
-    : {
-        subject: `Thank you for supporting KFS, ${displayName}!`,
-        to: [{ email, name: displayName }],
-        sender: { name: BREVO_NAME, email: BREVO_SENDER },
-        htmlContent: `<p>Hi ${displayName},</p><p>Thank you for your generous donation of ₹${amountRs} to KIIT Film Society!</p><p>Payment reference: <strong>${paymentId}</strong></p><p>You will be featured on our donors page for this semester.</p><p>With gratitude,<br>KFS — KIIT Film Society</p>`,
-      };
-
-  try {
-    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method:  "POST",
-      headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json" },
-      body:    JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.error("[Brevo] Email failed:", data.message || JSON.stringify(data));
-      return { success: false, error: data.message };
-    }
-    const messageId = data.messageId || null;
-    console.log("[Brevo] Email sent. MessageId:", messageId);
-    // Update email_sent in DB (best-effort, non-blocking)
-    if (donorId) {
-      supabase.from("donors").update({
-        email_sent:      true,
-        email_sent_at:   new Date().toISOString(),
-        brevo_message_id: messageId,
-      }).eq("id", donorId).then(({ error }) => {
-        if (error) console.warn("[Brevo] Could not update email_sent flag:", error.message);
-      });
-    }
-    return { success: true, messageId };
-  } catch (err) {
-    console.error("[Brevo] Email exception:", err.message);
-    return { success: false, error: err.message };
-  }
-}
 
 // ── Helper: generate KFS invoice number ──────────────────────────────────────
 function generateInvoiceNo(type) {
@@ -5659,26 +5583,6 @@ async function generateReceiptPdf({
 
     y += 68;
 
-    // ── T&C ───────────────────────────────────────────────────────────────────
-    const tncLines = [
-      typeLabel === "DONATION"
-        ? "1. Donations are voluntary & non-refundable. Once processed, payments cannot be reversed, refunded, or transferred."
-        : "1. Registrations are non-refundable. Once processed, payments cannot be reversed, refunded, or transferred.",
-      "2. No-refund policy applies to: Change of mind | Device/browser errors | Accidental duplicates (contact support before re-paying) | Missing confirmation email (check spam).",
-      "3. Payment gateway — Razorpay. Processed by Razorpay Payments Pvt. Ltd. We do not store card numbers, CVV, or banking credentials. Disputes: support@razorpay.com.",
-      "4. Data & privacy. Name and email used for recognition/communication only. Payment data retained for financial reconciliation. Not shared with third parties other than Razorpay.",
-    ];
-
-    doc.rect(ML, y, CW, 110).fill("#0f0f0f");
-    doc.fillColor("#444444").fontSize(7).font("Helvetica")
-      .text("TERMS & CONDITIONS", ML + 14, y + 12);
-    tncLines.forEach((line, i) => {
-      doc.fillColor("#484848").fontSize(8).font("Helvetica")
-        .text(line, ML + 14, y + 24 + i * 20, { width: CW - 28, lineGap: 2 });
-    });
-
-    y += 122;
-
     // ── Footer ────────────────────────────────────────────────────────────────
     doc.rect(0, y, W, 1).fill("#191919");
     doc.fillColor("#3a3a3a").fontSize(8).font("Helvetica")
@@ -5707,7 +5611,7 @@ async function sendPaymentBill({
   paymentDateTime,
   invoiceNo,
 }) {
-  // ── Fetch Brevo creds from DB (same pattern as sendBrevoThankYou) ──────────
+  // ── Fetch Brevo creds from DB ──────────────────────────────────────────────
   let BREVO_API_KEY  = process.env.BREVO_API_KEY   || null;
   let BREVO_NAME     = process.env.BREVO_SENDER_NAME  || "KFS — KIIT Film Society";
   const BREVO_SENDER = process.env.BREVO_SENDER_EMAIL || "noreply@kiitfilmsociety.in";

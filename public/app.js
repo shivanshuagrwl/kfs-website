@@ -5326,11 +5326,6 @@ function adminDownloadReceipt(donor) {
   .amount-bar{margin:24px 36px;background:#1a1a1a;border:1px solid #252525;border-radius:6px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
   .amount-label{font-size:13px;font-weight:600;letter-spacing:1px;color:#e8e8e8;text-transform:uppercase}
   .amount-value{font-size:28px;font-weight:700;color:#fff}
-  .tnc{margin:20px 36px 0;background:#0f0f0f;border:1px solid #191919;border-radius:6px;padding:18px 24px}
-  .tnc-title{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;margin-bottom:12px}
-  .tnc ol{padding-left:16px}
-  .tnc li{font-size:10px;color:#484848;line-height:1.7;margin-bottom:4px}
-  .tnc li strong{color:#555}
   .footer{padding:18px 36px;border-top:1px solid #191919;text-align:center}
   .footer-note{font-size:10px;color:#3a3a3a}
   .footer-links{font-size:11px;color:#444;margin-top:4px}
@@ -5387,16 +5382,6 @@ function adminDownloadReceipt(donor) {
   <div class="amount-bar">
     <div class="amount-label">Total Amount Paid</div>
     <div class="amount-value">Rs. ${amountRs}</div>
-  </div>
-
-  <div class="tnc">
-    <div class="tnc-title">Terms &amp; Conditions</div>
-    <ol>
-      <li><strong>Donations are voluntary &amp; non-refundable.</strong> Once processed, payments cannot be reversed, refunded, or transferred.</li>
-      <li><strong>No-refund policy applies to:</strong> Change of mind | Device/connection errors | Accidental duplicates | Missing confirmation email (check spam).</li>
-      <li><strong>Payment gateway — Razorpay.</strong> Processed by Razorpay Payments Pvt. Ltd. We do not store card numbers or banking credentials.</li>
-      <li><strong>Data &amp; privacy.</strong> Name and email used for donor recognition only. We do not sell or share data with any third party other than Razorpay.</li>
-    </ol>
   </div>
 
   <div class="footer">
