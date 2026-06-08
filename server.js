@@ -5589,6 +5589,10 @@ async function generateReceiptPdf({
       .text("Computer-generated receipt — no signature required.", 0, y + 12, { align: "center", width: W });
     doc.fillColor("#444444").fontSize(9)
       .text("kiitfilmsociety.in  ·  filmsocietykiit@gmail.com  ·  KIIT University, Bhubaneswar", 0, y + 26, { align: "center", width: W });
+    doc.fillColor("#555555").fontSize(8).font("Helvetica")
+      .text("T&C apply — ", 0, y + 42, { align: "center", width: W, continued: true })
+      .fillColor("#888888")
+      .text("kiitfilmsociety.in/terms", { link: "https://kiitfilmsociety.in/terms", underline: true, continued: false });
 
     doc.end();
   });
