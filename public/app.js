@@ -5232,7 +5232,11 @@ async function loadPaymentAnalytics() {
           <td style="font-size:12px;color:var(--grey)">${safeSem}<\/td>
           <td style="font-size:12px;color:var(--grey)">${safeDate}<\/td>
           <td style="font-size:11px;color:var(--grey);font-family:monospace">${safePid}<\/td>
-          <td><div class="action-btns">${safeId ? `<button class="admin-action-btn admin-action-btn--danger" title="Delete this record" onclick="adminDeleteDonor('${safeId}','${nameForBtn}',this)">
+          <td><div class="action-btns">${safeId ? `
+            <button class="admin-action-btn" title="Download receipt as PDF" onclick="adminDownloadReceipt(${JSON.stringify({id:d.id,name:d.name,email:d.email,amount_paise:d.amount_paise,payment_id:d.payment_id,order_id:d.order_id||'',date:d.date,is_anonymous:d.is_anonymous}).replace(/"/g,'&quot;')})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><\/svg>
+              Receipt<\/button>
+            <button class="admin-action-btn admin-action-btn--danger" title="Delete this record" onclick="adminDeleteDonor('${safeId}','${nameForBtn}',this)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/><\/svg>
             Delete<\/button>` : '<span style="color:var(--grey);font-size:11px">—<\/span>'}<\/div><\/td>
         <\/tr>`;
@@ -5265,6 +5269,165 @@ async function adminDeleteDonor(donorId, donorName, btn) {
     alert('Network error. Please try again.');
     if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
   }
+}
+
+// ── Admin: Download receipt as printable HTML (opens in new tab → Save as PDF) ─
+function adminDownloadReceipt(donor) {
+  if (!donor) return;
+
+  const amountRs    = Math.round((donor.amount_paise || 0) / 100);
+  const displayName = donor.is_anonymous ? 'Anonymous' : (donor.name || '—');
+  const displayEmail = donor.email || '—';
+  const paymentId   = donor.payment_id || '—';
+  const orderId     = donor.order_id   || '—';
+  const year        = donor.date ? new Date(donor.date).getFullYear() : new Date().getFullYear();
+  const rand        = String(Math.floor(Math.random() * 90000) + 10000);
+  const invoiceNo   = `KFS-${year}-${rand}`;
+
+  // Format date nicely
+  let dtStr = '—';
+  if (donor.date) {
+    try {
+      dtStr = new Date(donor.date).toLocaleDateString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata'
+      }) + ' IST';
+    } catch(e) { dtStr = donor.date; }
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KFS Receipt — ${invoiceNo}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{size:A4;margin:20mm}
+  body{background:#0d0d0d;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#e8e8e8;padding:40px 20px;min-height:100vh}
+  .wrap{max-width:640px;margin:0 auto;background:#111;border:1px solid #222;border-radius:8px;overflow:hidden}
+  .header{background:#111;border-bottom:1px solid #1f1f1f;padding:28px 36px;display:flex;align-items:center;gap:16px}
+  .logo-text{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
+  .header-title{font-size:16px;font-weight:300;letter-spacing:1.5px;color:#aaa}
+  .meta-bar{display:flex;justify-content:space-between;padding:16px 36px;border-bottom:1px solid #1a1a1a}
+  .meta-item{font-size:10px;letter-spacing:.8px;color:#666;text-transform:uppercase}
+  .meta-val{font-size:13px;font-weight:600;color:#e8e8e8;margin-top:3px}
+  .badge{display:inline-block;padding:3px 10px;border-radius:3px;font-size:11px;letter-spacing:1px;background:#1a2a3a;color:#4ea8de;border:1px solid #2a5a8a}
+  .info-card{margin:24px 36px;background:#161616;border:1px solid #1f1f1f;border-radius:6px;padding:20px 24px}
+  .info-row{display:flex;gap:32px;flex-wrap:wrap}
+  .field-label{font-size:9px;letter-spacing:1.2px;color:#555;text-transform:uppercase;margin-bottom:4px}
+  .field-val{font-size:14px;font-weight:600;color:#e8e8e8}
+  .section-title{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;padding:0 36px;margin:24px 0 12px}
+  .details-table{margin:0 36px;border:1px solid #1a1a1a;border-radius:6px;overflow:hidden}
+  .dt-row{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #161616}
+  .dt-row:last-child{border-bottom:none}
+  .dt-label{font-size:12px;color:#666}
+  .dt-val{font-size:12px;font-weight:500;color:#e0e0e0;text-align:right;font-family:monospace}
+  .dt-val.status{color:#4ade80;font-weight:700;font-family:inherit;font-size:13px}
+  .amount-bar{margin:24px 36px;background:#1a1a1a;border:1px solid #252525;border-radius:6px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
+  .amount-label{font-size:13px;font-weight:600;letter-spacing:1px;color:#e8e8e8;text-transform:uppercase}
+  .amount-value{font-size:28px;font-weight:700;color:#fff}
+  .tnc{margin:20px 36px 0;background:#0f0f0f;border:1px solid #191919;border-radius:6px;padding:18px 24px}
+  .tnc-title{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;margin-bottom:12px}
+  .tnc ol{padding-left:16px}
+  .tnc li{font-size:10px;color:#484848;line-height:1.7;margin-bottom:4px}
+  .tnc li strong{color:#555}
+  .footer{padding:18px 36px;border-top:1px solid #191919;text-align:center}
+  .footer-note{font-size:10px;color:#3a3a3a}
+  .footer-links{font-size:11px;color:#444;margin-top:4px}
+  .print-btn{position:fixed;bottom:24px;right:24px;background:#fff;color:#000;border:none;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4);z-index:999}
+  .print-btn:hover{background:#eee}
+  @media print{.print-btn{display:none}body{background:#0d0d0d!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">⬇ Save as PDF</button>
+<div class="wrap">
+  <div class="header">
+    <div style="width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <span style="font-size:13px;font-weight:800;color:#000;letter-spacing:-.02em">KFS</span>
+    </div>
+    <div>
+      <div class="logo-text">KIIT Film Society</div>
+      <div class="header-title">PAYMENT RECEIPT</div>
+    </div>
+  </div>
+
+  <div class="meta-bar">
+    <div class="meta-item">Invoice No.<div class="meta-val">${invoiceNo}</div></div>
+    <div class="meta-item" style="text-align:right">Type<div class="meta-val"><span class="badge">DONATION</span></div></div>
+  </div>
+
+  <div class="info-card">
+    <div class="info-row">
+      <div style="min-width:140px">
+        <div class="field-label">Name</div>
+        <div class="field-val">${displayName}</div>
+      </div>
+      <div style="min-width:140px">
+        <div class="field-label">Email</div>
+        <div class="field-val" style="font-size:13px">${displayEmail}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="field-label">Cause</div>
+      <div class="field-val">Chitra Vichitra 2025 — Film Fest</div>
+    </div>
+  </div>
+
+  <div class="section-title">Payment Details</div>
+  <div class="details-table">
+    <div class="dt-row"><span class="dt-label">Payment ID</span><span class="dt-val">${paymentId}</span></div>
+    <div class="dt-row"><span class="dt-label">Order ID</span><span class="dt-val">${orderId}</span></div>
+    <div class="dt-row"><span class="dt-label">Date</span><span class="dt-val" style="font-family:inherit">${dtStr}</span></div>
+    <div class="dt-row"><span class="dt-label">Method</span><span class="dt-val" style="font-family:inherit">Razorpay (UPI / Card / Net Banking)</span></div>
+    <div class="dt-row"><span class="dt-label">Status</span><span class="dt-val status">PAID ✓</span></div>
+  </div>
+
+  <div class="amount-bar">
+    <div class="amount-label">Total Amount Paid</div>
+    <div class="amount-value">Rs. ${amountRs}</div>
+  </div>
+
+  <div class="tnc">
+    <div class="tnc-title">Terms &amp; Conditions</div>
+    <ol>
+      <li><strong>Donations are voluntary &amp; non-refundable.</strong> Once processed, payments cannot be reversed, refunded, or transferred.</li>
+      <li><strong>No-refund policy applies to:</strong> Change of mind | Device/connection errors | Accidental duplicates | Missing confirmation email (check spam).</li>
+      <li><strong>Payment gateway — Razorpay.</strong> Processed by Razorpay Payments Pvt. Ltd. We do not store card numbers or banking credentials.</li>
+      <li><strong>Data &amp; privacy.</strong> Name and email used for donor recognition only. We do not sell or share data with any third party other than Razorpay.</li>
+    </ol>
+  </div>
+
+  <div class="footer">
+    <div class="footer-note">Computer-generated receipt — no signature required. &nbsp;|&nbsp; ${donor._isDonorCopy ? 'Donor copy.' : 'Admin copy.'}</div>
+    <div class="footer-links">kiitfilmsociety.in &nbsp;·&nbsp; filmsocietykiit@gmail.com &nbsp;·&nbsp; KIIT University, Bhubaneswar</div>
+  </div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    // Fallback: direct download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KFS-Receipt-${invoiceNo}.html`;
+    a.click();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// ── Donor-facing: Download receipt from the success card ──────────────────────
+// Called via data-action="donorDownloadReceipt" on #don-rec-dl-btn.
+// Receipt data is stored on the button element as _receiptData by submitDonation().
+function donorDownloadReceipt() {
+  const btn = document.getElementById('don-rec-dl-btn');
+  if (!btn || !btn._receiptData) return;
+  // Reuse the admin receipt renderer — same format, donor copy label is swapped inside.
+  const data = { ...btn._receiptData, _isDonorCopy: true };
+  adminDownloadReceipt(data);
 }
 
 // ── Admin: Backfill all existing payments to Google Sheet ─────────────────────
@@ -8958,6 +9121,37 @@ async function submitDonation() {
           const success  = document.getElementById('don-success');
           if (formBody) formBody.style.display = 'none';
           if (success)  success.classList.add('show');
+
+          // ── Populate receipt card ───────────────────────────────────────
+          const recCard   = document.getElementById('don-receipt-card');
+          const recDlBtn  = document.getElementById('don-rec-dl-btn');
+          if (recCard) {
+            const recAmtRs = Math.round((verifyData.amount_paise || amount_paise || 0) / 100);
+            const recDate  = verifyData.date
+              ? new Date(verifyData.date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', timeZone:'Asia/Kolkata' }) + ' IST'
+              : new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', timeZone:'Asia/Kolkata' }) + ' IST';
+            const setRec = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+            setRec('don-rec-name',       _donIsAnon ? 'Anonymous' : (name || '—'));
+            setRec('don-rec-email',      email);
+            setRec('don-rec-amount',     `₹${recAmtRs.toLocaleString('en-IN')}`);
+            setRec('don-rec-payment-id', response.razorpay_payment_id || verifyData.payment_id || '—');
+            setRec('don-rec-order-id',   response.razorpay_order_id   || order_id || '—');
+            setRec('don-rec-date',       recDate);
+            recCard.style.display = 'block';
+            // Store receipt data on the button for donorDownloadReceipt()
+            if (recDlBtn) {
+              recDlBtn._receiptData = {
+                name:        _donIsAnon ? null : name,
+                email:       email,
+                amount_paise: verifyData.amount_paise || amount_paise,
+                payment_id:  response.razorpay_payment_id || verifyData.payment_id,
+                order_id:    response.razorpay_order_id   || order_id,
+                date:        verifyData.date || new Date().toISOString(),
+                is_anonymous: _donIsAnon,
+              };
+              recDlBtn.style.display = 'flex';
+            }
+          }
           // Refresh donors list
           loadDonors();
           loadDonStats();
@@ -9040,6 +9234,24 @@ function renderDonorCard(d) {
     ? `<div class="don-donor-amt">₹${Math.round(d.amount_paise / 100).toLocaleString('en-IN')}</div>`
     : '';
 
+  // Download Receipt button — only for admins (amount_paise present = admin endpoint response)
+  const receiptBtnHtml = (d.amount_paise != null && d.payment_id)
+    ? `<button class="don-donor-receipt-btn" title="Download receipt"
+         onclick="event.stopPropagation();adminDownloadReceipt(${JSON.stringify({
+           id:           d.id,
+           name:         d.name,
+           email:        d.email,
+           amount_paise: d.amount_paise,
+           payment_id:   d.payment_id,
+           order_id:     d.order_id || '',
+           date:         d.date,
+           is_anonymous: d.is_anonymous,
+         }).replace(/"/g,'&quot;')})">
+         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+         Receipt
+       </button>`
+    : '';
+
   const donorIdSafe = escHtml(String(d.id || ''));
 
   return `<div class="don-donor-card" data-donor-id="${donorIdSafe}" style="position:relative">
@@ -9049,6 +9261,7 @@ function renderDonorCard(d) {
     <div class="don-donor-meta">${semester}</div>
     ${bioHtml}
     ${amtHtml}
+    ${receiptBtnHtml}
   </div>`;
 }
 

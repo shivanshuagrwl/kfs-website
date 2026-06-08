@@ -1305,6 +1305,19 @@ body.light-mode .member-special-tag.tag-developer{
 .don-success-icon{width:56px;height:56px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
 .don-success h3{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
 .don-success p{font-size:14px;color:var(--grey);line-height:1.6}
+.don-receipt-card{margin:28px auto 0;max-width:420px;border:1px solid var(--border);border-radius:6px;overflow:hidden;text-align:left}
+.don-receipt-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--card)}
+.don-receipt-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
+.don-receipt-badge{font-size:11px;font-weight:700;letter-spacing:.06em;color:#4ade80}
+.don-receipt-rows{padding:8px 0}
+.don-receipt-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:8px 18px}
+.don-receipt-row+.don-receipt-row{border-top:1px solid var(--border)}
+.don-receipt-key{font-size:11px;color:var(--grey);flex-shrink:0}
+.don-receipt-val{font-size:13px;font-weight:500;text-align:right;word-break:break-all}
+.don-receipt-amt{font-size:18px;font-weight:700;letter-spacing:-.02em}
+.don-receipt-mono{font-family:monospace;font-size:11px}
+.don-receipt-dl-btn{display:flex;align-items:center;gap:6px;margin:14px 18px;padding:8px 16px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;transition:background .2s}
+.don-receipt-dl-btn:hover{background:var(--card)}
 .don-donors-section{margin-top:20px}
 .don-donors-section h2{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
 .don-donors-section p{font-size:13px;color:var(--grey);margin-bottom:28px}
@@ -1315,6 +1328,9 @@ body.light-mode .member-special-tag.tag-developer{
 .don-donor-meta{font-size:11px;color:var(--grey);margin-bottom:8px;letter-spacing:.04em}
 .don-donor-amt{font-size:20px;font-weight:700;letter-spacing:-.02em;display:none}
 body.kfs-admin-view .don-donor-amt{display:block}
+.don-donor-receipt-btn{display:none;margin-top:10px;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--grey);font-size:11px;font-weight:600;cursor:pointer;transition:background .2s,color .2s}
+.don-donor-receipt-btn:hover{background:var(--card);color:var(--text)}
+body.kfs-admin-view .don-donor-receipt-btn{display:flex}
 .don-donor-semester{font-size:10px;color:var(--grey);margin-top:2px;letter-spacing:.05em;text-transform:uppercase}
 .don-donors-empty{text-align:center;padding:48px;color:var(--grey);font-size:14px;border:1px solid var(--border);border-radius:4px}
 .don-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:60px}
@@ -2998,6 +3014,46 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         </div>
         <h3>Thank you.</h3>
         <p id="don-success-msg">Your donation has been received and verified.<br>Check your email for a confirmation receipt.</p>
+
+        <!-- Receipt card — populated by submitDonation() success handler -->
+        <div class="don-receipt-card" id="don-receipt-card" style="display:none">
+          <div class="don-receipt-header">
+            <span class="don-receipt-label">Payment Receipt</span>
+            <span class="don-receipt-badge">PAID ✓</span>
+          </div>
+          <div class="don-receipt-rows">
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Name</span>
+              <span class="don-receipt-val" id="don-rec-name">—</span>
+            </div>
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Email</span>
+              <span class="don-receipt-val" id="don-rec-email">—</span>
+            </div>
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Amount</span>
+              <span class="don-receipt-val don-receipt-amt" id="don-rec-amount">—</span>
+            </div>
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Payment ID</span>
+              <span class="don-receipt-val don-receipt-mono" id="don-rec-payment-id">—</span>
+            </div>
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Order ID</span>
+              <span class="don-receipt-val don-receipt-mono" id="don-rec-order-id">—</span>
+            </div>
+            <div class="don-receipt-row">
+              <span class="don-receipt-key">Date</span>
+              <span class="don-receipt-val" id="don-rec-date">—</span>
+            </div>
+          </div>
+          <button class="don-receipt-dl-btn" id="don-rec-dl-btn" style="display:none"
+            data-action="donorDownloadReceipt">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Receipt
+          </button>
+        </div>
+
         <button data-action="resetDonForm" class="btn btn-secondary" style="margin-top:24px">Donate again</button>
       </div>
     </div>
