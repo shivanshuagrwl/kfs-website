@@ -5501,12 +5501,202 @@ function generateInvoiceNo(type) {
   return `${prefix}-${year}-${rand}`;
 }
 
+// ── Helper: generate KFS Payment Receipt as PDF Buffer (pdfkit) ──────────────
+async function generateReceiptPdf({
+  type, displayName, displayEmail, cause, billInvoiceNo,
+  typeLabel, amountRs, paymentId, orderId, dtStr,
+}) {
+  // Pre-fetch logo before opening the PDF stream
+  const LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
+  const logoBuffer = await new Promise(res => {
+    try {
+      const https = require("https");
+      const logoChunks = [];
+      https.get(LOGO_URL, resp => {
+        if (resp.statusCode !== 200) { resp.resume(); return res(null); }
+        resp.on("data", c => logoChunks.push(c));
+        resp.on("end",  () => res(Buffer.concat(logoChunks)));
+        resp.on("error", () => res(null));
+      }).on("error", () => res(null));
+    } catch (_) { res(null); }
+  });
+
+  return new Promise((resolve, reject) => {
+    const PDFDocument = require("pdfkit");
+    const chunks      = [];
+    const doc         = new PDFDocument({ size: "A4", margin: 0, info: { Title: `KFS Receipt ${billInvoiceNo}` } });
+
+    doc.on("data",  c => chunks.push(c));
+    doc.on("end",   () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const W  = 595.28;          // A4 width pt
+    const H  = 841.89;          // A4 height pt
+    const ML = 48;              // left margin
+    const MR = 48;              // right margin
+    const CW = W - ML - MR;    // content width
+
+    // ── Background ───────────────────────────────────────────────────────────
+    doc.rect(0, 0, W, H).fill("#0d0d0d");
+
+    // ── Header band ──────────────────────────────────────────────────────────
+    doc.rect(0, 0, W, 72).fill("#111111");
+    doc.rect(0, 72, W, 1).fill("#1f1f1f");
+
+    // Logo circle — uses pre-fetched logoBuffer (fetched before opening PDF stream)
+    const logoX = ML, logoY = 12, logoSize = 48;
+    doc.save()
+      .circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2)
+      .clip();
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
+      } catch (_) {
+        // fallback: filled circle with "KFS" text
+        doc.restore().save()
+          .circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2)
+          .fill("#222222");
+        doc.fillColor("#ffffff").fontSize(14).font("Helvetica-Bold")
+          .text("KFS", logoX, logoY + 17, { width: logoSize, align: "center" });
+      }
+    } else {
+      // fallback: filled circle with "KFS" text
+      doc.restore().save()
+        .circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2)
+        .fill("#222222");
+      doc.fillColor("#ffffff").fontSize(14).font("Helvetica-Bold")
+        .text("KFS", logoX, logoY + 17, { width: logoSize, align: "center" });
+    }
+    doc.restore();
+
+    // Header title
+    doc.fillColor("#e8e8e8").fontSize(14).font("Helvetica")
+      .text("KIIT Film Society  —  Payment Receipt", ML + logoSize + 14, 26);
+
+    let y = 90;
+
+    // ── Invoice meta bar ─────────────────────────────────────────────────────
+    doc.rect(0, y, W, 44).fill("#111111");
+    doc.rect(0, y + 44, W, 1).fill("#1a1a1a");
+
+    doc.fillColor("#555555").fontSize(7).font("Helvetica")
+      .text("INVOICE NO.", ML, y + 8);
+    doc.fillColor("#e8e8e8").fontSize(11).font("Helvetica-Bold")
+      .text(billInvoiceNo, ML, y + 19);
+
+    // Type badge
+    const badgeColor  = typeLabel === "REGISTRATION" ? "#4ecb8d" : "#4ea8de";
+    const badgeBg     = typeLabel === "REGISTRATION" ? "#1a3a2a" : "#1a2a3a";
+    const badgeBorder = typeLabel === "REGISTRATION" ? "#2a6a4a" : "#2a5a8a";
+    const badgeW      = 100, badgeH = 18, badgeX = W - MR - badgeW;
+    doc.rect(badgeX, y + 13, badgeW, badgeH).fill(badgeBg);
+    doc.rect(badgeX, y + 13, badgeW, badgeH).stroke(badgeBorder);
+    doc.fillColor(badgeColor).fontSize(8).font("Helvetica-Bold")
+      .text(typeLabel, badgeX, y + 18, { width: badgeW, align: "center" });
+
+    y += 56;
+
+    // ── Info card ────────────────────────────────────────────────────────────
+    const cardH = 90;
+    doc.rect(ML, y, CW, cardH).fill("#161616").stroke("#1f1f1f");
+    const cardPad = 18;
+
+    doc.fillColor("#555555").fontSize(7).font("Helvetica")
+      .text("NAME", ML + cardPad, y + cardPad);
+    doc.fillColor("#e8e8e8").fontSize(13).font("Helvetica-Bold")
+      .text(displayName, ML + cardPad, y + cardPad + 10, { width: (CW / 2) - 10 });
+
+    doc.fillColor("#555555").fontSize(7).font("Helvetica")
+      .text("EMAIL", ML + CW / 2, y + cardPad);
+    doc.fillColor("#e8e8e8").fontSize(11).font("Helvetica")
+      .text(displayEmail, ML + CW / 2, y + cardPad + 10, { width: (CW / 2) - cardPad });
+
+    doc.fillColor("#555555").fontSize(7).font("Helvetica")
+      .text("CAUSE", ML + cardPad, y + cardPad + 36);
+    doc.fillColor("#e8e8e8").fontSize(13).font("Helvetica-Bold")
+      .text(cause, ML + cardPad, y + cardPad + 46, { width: CW - 2 * cardPad });
+
+    y += cardH + 20;
+
+    // ── Payment details section label ─────────────────────────────────────────
+    doc.fillColor("#444444").fontSize(7).font("Helvetica")
+      .text("PAYMENT DETAILS", ML, y);
+    y += 12;
+
+    // Details table
+    const rows = [
+      ["Payment ID",    paymentId || "—"],
+      ["Order ID",      orderId   || "—"],
+      ["Date & Time",   dtStr],
+      ["Method",        "Razorpay (UPI / Card / Net Banking)"],
+      ["Status",        "PAID ✓"],
+    ];
+    const rowH = 28;
+    rows.forEach(([label, val], i) => {
+      const rowY  = y + i * rowH;
+      const isLast = i === rows.length - 1;
+      doc.rect(ML, rowY, CW, rowH).fill(i % 2 === 0 ? "#141414" : "#111111");
+      if (!isLast) doc.rect(ML, rowY + rowH - 1, CW, 1).fill("#1a1a1a");
+
+      doc.fillColor("#666666").fontSize(10).font("Helvetica")
+        .text(label, ML + 12, rowY + 9);
+
+      const isStatus = label === "Status";
+      doc.fillColor(isStatus ? "#4ade80" : "#e0e0e0")
+        .fontSize(isStatus ? 10 : 10)
+        .font(isStatus ? "Helvetica-Bold" : "Helvetica")
+        .text(val, ML, rowY + 9, { width: CW - 12, align: "right" });
+    });
+
+    y += rows.length * rowH + 20;
+
+    // ── Total amount bar ──────────────────────────────────────────────────────
+    doc.rect(ML, y, CW, 48).fill("#1a1a1a");
+    doc.fillColor("#e8e8e8").fontSize(11).font("Helvetica-Bold")
+      .text("TOTAL AMOUNT PAID", ML + 16, y + 16);
+    doc.fillColor("#ffffff").fontSize(22).font("Helvetica-Bold")
+      .text(`Rs. ${amountRs}`, ML, y + 12, { width: CW - 16, align: "right" });
+
+    y += 68;
+
+    // ── T&C ───────────────────────────────────────────────────────────────────
+    const tncLines = [
+      typeLabel === "DONATION"
+        ? "1. Donations are voluntary & non-refundable. Once processed, payments cannot be reversed, refunded, or transferred."
+        : "1. Registrations are non-refundable. Once processed, payments cannot be reversed, refunded, or transferred.",
+      "2. No-refund policy applies to: Change of mind | Device/browser errors | Accidental duplicates (contact support before re-paying) | Missing confirmation email (check spam).",
+      "3. Payment gateway — Razorpay. Processed by Razorpay Payments Pvt. Ltd. We do not store card numbers, CVV, or banking credentials. Disputes: support@razorpay.com.",
+      "4. Data & privacy. Name and email used for recognition/communication only. Payment data retained for financial reconciliation. Not shared with third parties other than Razorpay.",
+    ];
+
+    doc.rect(ML, y, CW, 110).fill("#0f0f0f");
+    doc.fillColor("#444444").fontSize(7).font("Helvetica")
+      .text("TERMS & CONDITIONS", ML + 14, y + 12);
+    tncLines.forEach((line, i) => {
+      doc.fillColor("#484848").fontSize(8).font("Helvetica")
+        .text(line, ML + 14, y + 24 + i * 20, { width: CW - 28, lineGap: 2 });
+    });
+
+    y += 122;
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    doc.rect(0, y, W, 1).fill("#191919");
+    doc.fillColor("#3a3a3a").fontSize(8).font("Helvetica")
+      .text("Computer-generated receipt — no signature required.", 0, y + 12, { align: "center", width: W });
+    doc.fillColor("#444444").fontSize(9)
+      .text("kiitfilmsociety.in  ·  filmsocietykiit@gmail.com  ·  KIIT University, Bhubaneswar", 0, y + 26, { align: "center", width: W });
+
+    doc.end();
+  });
+}
+
 // ── Helper: send KFS Payment Bill via Brevo (non-blocking) ───────────────────
 // Works for both DONATION and REGISTRATION types.
-// params: { type, recipientEmail, recipientName, isAnonymous, cause,
-//           amountPaise, paymentId, orderId, paymentDateTime }
+// params: { type, donorId, recipientEmail, recipientName, isAnonymous, cause,
+//           amountPaise, paymentId, orderId, paymentDateTime, invoiceNo }
 async function sendPaymentBill({
   type          = "DONATION",   // "DONATION" | "REGISTRATION"
+  donorId       = null,
   recipientEmail,
   recipientName,
   isAnonymous   = false,
@@ -5559,150 +5749,50 @@ async function sendPaymentBill({
     timeZone: "Asia/Kolkata",
   }).replace(",", "").replace("am", "AM").replace("pm", "PM") + " IST";
 
-  // ── HTML email template ────────────────────────────────────────────────────
-  const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>KFS Payment Receipt</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#0d0d0d;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#e8e8e8;padding:32px 16px;}
-  .wrap{max-width:600px;margin:0 auto;background:#111;border:1px solid #222;border-radius:8px;overflow:hidden;}
-  .header{background:#111;border-bottom:1px solid #1f1f1f;padding:28px 36px;display:flex;align-items:center;gap:16px;}
-  .logo-circle{width:48px;height:48px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .logo-circle img{width:40px;height:40px;object-fit:contain;border-radius:50%;}
-  .header-title{font-size:18px;font-weight:300;letter-spacing:1.5px;color:#e8e8e8;}
-  .meta-bar{display:flex;justify-content:space-between;padding:18px 36px;border-bottom:1px solid #1a1a1a;}
-  .meta-item{font-size:10px;letter-spacing:0.8px;color:#666;text-transform:uppercase;}
-  .meta-val{font-size:13px;font-weight:600;color:#e8e8e8;margin-top:3px;letter-spacing:0.5px;}
-  .meta-val.type-badge{
-    display:inline-block;padding:3px 10px;border-radius:3px;font-size:11px;letter-spacing:1px;
-    background:${type === "REGISTRATION" ? "#1a3a2a" : "#1a2a3a"};
-    color:${type === "REGISTRATION" ? "#4ecb8d" : "#4ea8de"};
-    border:1px solid ${type === "REGISTRATION" ? "#2a6a4a" : "#2a5a8a"};
+  // ── Generate PDF receipt ───────────────────────────────────────────────────
+  let pdfBuffer;
+  try {
+    pdfBuffer = await generateReceiptPdf({
+      type, displayName, displayEmail, cause, billInvoiceNo,
+      typeLabel, amountRs, paymentId, orderId, dtStr,
+    });
+  } catch (pdfErr) {
+    console.error("[PaymentBill] PDF generation failed:", pdfErr.message);
+    return { success: false, error: "pdf_generation_failed" };
   }
-  .info-card{margin:24px 36px;background:#161616;border:1px solid #1f1f1f;border-radius:6px;padding:20px 24px;}
-  .info-row{display:flex;gap:32px;flex-wrap:wrap;}
-  .info-field{min-width:140px;}
-  .info-field + .info-field{margin-top:0;}
-  .field-label{font-size:9px;letter-spacing:1.2px;color:#555;text-transform:uppercase;margin-bottom:4px;}
-  .field-val{font-size:14px;font-weight:600;color:#e8e8e8;}
-  .cause-row{margin-top:16px;}
-  .section-title{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;padding:0 36px;margin-top:28px;margin-bottom:12px;}
-  .details-table{margin:0 36px;border:1px solid #1a1a1a;border-radius:6px;overflow:hidden;}
-  .dt-row{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #161616;}
-  .dt-row:last-child{border-bottom:none;}
-  .dt-label{font-size:12px;color:#666;}
-  .dt-val{font-size:13px;font-weight:500;color:#e0e0e0;text-align:right;}
-  .dt-val.status-paid{color:#4ade80;font-weight:700;}
-  .amount-bar{margin:24px 36px;background:#1a1a1a;border:1px solid #252525;border-radius:6px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;}
-  .amount-label{font-size:13px;font-weight:600;letter-spacing:1px;color:#e8e8e8;text-transform:uppercase;}
-  .amount-value{font-size:26px;font-weight:700;color:#fff;letter-spacing:0.5px;}
-  .tnc{margin:24px 36px;background:#0f0f0f;border:1px solid #191919;border-radius:6px;padding:20px 24px;}
-  .tnc-title{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;margin-bottom:14px;}
-  .tnc ol{padding-left:18px;}
-  .tnc li{font-size:10px;color:#484848;line-height:1.7;margin-bottom:6px;}
-  .tnc li strong{color:#555;}
-  .footer{padding:20px 36px;border-top:1px solid #191919;text-align:center;}
-  .footer-note{font-size:10px;color:#3a3a3a;letter-spacing:0.5px;}
-  .footer-links{font-size:11px;color:#444;margin-top:6px;}
-  .footer-links a{color:#555;text-decoration:none;}
-  .divider{height:1px;background:#1a1a1a;margin:0 36px;}
-</style>
-</head>
-<body>
-<div class="wrap">
 
-  <!-- Header -->
-  <div class="header">
-    <div class="logo-circle">
-      <img src="https://kiitfilmsociety.in/assets/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none';this.parentNode.style.background='#222';this.parentNode.innerHTML='<span style=font-size:16px;font-weight:700;color:#111>KFS</span>'"/>
-    </div>
-    <div class="header-title">KIIT Film Society &nbsp;—&nbsp; Payment Receipt</div>
-  </div>
-
-  <!-- Invoice meta bar -->
-  <div class="meta-bar">
-    <div class="meta-item">Invoice No.<div class="meta-val">${billInvoiceNo}</div></div>
-    <div class="meta-item" style="text-align:right">Type<div><span class="meta-val type-badge">${typeLabel}</span></div></div>
-  </div>
-
-  <!-- Donor/registrant info card -->
-  <div class="info-card">
-    <div class="info-row">
-      <div class="info-field">
-        <div class="field-label">Name</div>
-        <div class="field-val">${displayName}</div>
-      </div>
-      <div class="info-field">
-        <div class="field-label">Email</div>
-        <div class="field-val" style="font-size:13px">${displayEmail}</div>
-      </div>
-    </div>
-    <div class="info-row cause-row">
-      <div class="info-field" style="min-width:100%">
-        <div class="field-label">Cause</div>
-        <div class="field-val">${cause}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Payment details section -->
-  <div class="section-title">Payment Details</div>
-  <div class="details-table">
-    <div class="dt-row"><span class="dt-label">Payment ID</span><span class="dt-val" style="font-family:monospace;font-size:12px">${paymentId || "—"}</span></div>
-    <div class="dt-row"><span class="dt-label">Order ID</span><span class="dt-val" style="font-family:monospace;font-size:12px">${orderId || "—"}</span></div>
-    <div class="dt-row"><span class="dt-label">Date &amp; Time</span><span class="dt-val">${dtStr}</span></div>
-    <div class="dt-row"><span class="dt-label">Method</span><span class="dt-val">Razorpay (UPI / Card / Net Banking)</span></div>
-    <div class="dt-row"><span class="dt-label">Status</span><span class="dt-val status-paid">PAID ✓</span></div>
-  </div>
-
-  <!-- Total amount -->
-  <div class="amount-bar">
-    <div class="amount-label">Total Amount Paid</div>
-    <div class="amount-value">Rs. ${amountRs}</div>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- T&C -->
-  <div class="tnc">
-    <div class="tnc-title">Terms &amp; Conditions</div>
-    <ol>
-      <li><strong>${typeLabel === "DONATION" ? "Donations are voluntary &amp; non-refundable." : "Registrations are non-refundable."}</strong> Once processed, payments cannot be reversed, refunded, or transferred under any circumstances.</li>
-      <li><strong>No-refund policy applies to:</strong> Change of mind | Device/browser/connection errors | Accidental duplicates (contact support before re-paying) | Missing confirmation email (check spam). Limited exception: duplicate charges from a verified server-side error.</li>
-      <li><strong>Payment gateway — Razorpay.</strong> Payments processed by Razorpay Payments Pvt. Ltd. We do not store card numbers, CVV, or banking credentials. Disputes: support@razorpay.com.</li>
-      <li><strong>Data &amp; privacy.</strong> Name and email used for recognition/communication only. Payment data retained for financial reconciliation. We do not sell or share data with any third party other than Razorpay.</li>
-    </ol>
-  </div>
-
-  <!-- Footer -->
-  <div class="footer">
-    <div class="footer-note">Computer-generated receipt — no signature required.</div>
-    <div class="footer-links">
-      <a href="https://kiitfilmsociety.in">kiitfilmsociety.in</a> &nbsp;·&nbsp;
-      <a href="mailto:filmsocietykiit@gmail.com">filmsocietykiit@gmail.com</a> &nbsp;·&nbsp;
-      KIIT University, Bhubaneswar
-    </div>
-  </div>
-
-</div>
-</body>
-</html>`;
-
+  // ── Build Brevo payload with PDF attachment ────────────────────────────────
   const subjectMap = {
     DONATION:     `Your KFS Donation Receipt — ${billInvoiceNo}`,
     REGISTRATION: `Your KFS Registration Receipt — ${billInvoiceNo}`,
   };
 
+  const bodyText = typeLabel === "DONATION"
+    ? `Hi ${displayName},\n\nThank you for your generous donation to KIIT Film Society!\n\nPlease find your payment receipt (Invoice: ${billInvoiceNo}) attached to this email.\n\nWith gratitude,\nKFS — KIIT Film Society\nhttps://kiitfilmsociety.in`
+    : `Hi ${displayName},\n\nYour registration for ${cause} has been confirmed!\n\nPlease find your payment receipt (Invoice: ${billInvoiceNo}) attached to this email.\n\nSee you there,\nKFS — KIIT Film Society\nhttps://kiitfilmsociety.in`;
+
   const payload = {
-    subject: subjectMap[typeLabel] || `KFS Payment Receipt — ${billInvoiceNo}`,
-    to:      [{ email: recipientEmail, name: displayName }],
-    sender:  { name: BREVO_NAME, email: BREVO_SENDER },
-    htmlContent,
+    subject:     subjectMap[typeLabel] || `KFS Payment Receipt — ${billInvoiceNo}`,
+    to:          [{ email: recipientEmail, name: displayName }],
+    sender:      { name: BREVO_NAME, email: BREVO_SENDER },
+    textContent: bodyText,
+    attachment: [
+      {
+        name:    `KFS-Receipt-${billInvoiceNo}.pdf`,
+        content: pdfBuffer.toString("base64"),
+      },
+    ],
   };
+
+  // Update email_sent in DB once we attempt to send (best-effort)
+  if (donorId) {
+    supabase.from("donors").update({
+      email_sent:    true,
+      email_sent_at: new Date().toISOString(),
+    }).eq("id", donorId).then(({ error }) => {
+      if (error) console.warn("[PaymentBill] Could not update email_sent flag:", error.message);
+    });
+  }
 
   try {
     const res  = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -5715,7 +5805,7 @@ async function sendPaymentBill({
       console.error("[PaymentBill] Brevo send failed:", data.message || JSON.stringify(data));
       return { success: false, error: data.message };
     }
-    console.log("[PaymentBill] Receipt sent to", recipientEmail, "| MessageId:", data.messageId);
+    console.log("[PaymentBill] Receipt (PDF) sent to", recipientEmail, "| MessageId:", data.messageId);
     return { success: true, messageId: data.messageId, invoiceNo: billInvoiceNo };
   } catch (err) {
     console.error("[PaymentBill] Exception:", err.message);
@@ -5884,27 +5974,18 @@ app.post("/api/donation/verify", donationLimit, csrfProtect, async (req, res) =>
   // Invalidate donor/stats caches
   memInvalidate("donation:stats", "donation:donors:");
 
-  // ── Send Brevo thank-you email (non-blocking — email failure must not block response) ──
-  const newDonorId = insertedRows?.[0]?.id || null;
-  sendBrevoThankYou({
-    donorId:     newDonorId,
-    name:        name || null,
-    email:       email || null,
-    amountPaise,
-    paymentId:   razorpay_payment_id,
-    isAnonymous: !!is_anonymous,
-  }).catch(err => console.error("[Brevo] Background email error:", err.message));
-
   // ── Send KFS Payment Bill receipt (non-blocking) ────────────────────────
+  const newDonorId = insertedRows?.[0]?.id || null;
   sendPaymentBill({
-    type:           "DONATION",
-    recipientEmail: email || null,
-    recipientName:  name  || null,
-    isAnonymous:    !!is_anonymous,
-    cause:          "Chitra Vichitra 2025 — Film Fest",
+    type:            "DONATION",
+    donorId:         newDonorId,
+    recipientEmail:  email || null,
+    recipientName:   name  || null,
+    isAnonymous:     !!is_anonymous,
+    cause:           "KIIT Film Society",
     amountPaise,
-    paymentId:      razorpay_payment_id,
-    orderId:        razorpay_order_id,
+    paymentId:       razorpay_payment_id,
+    orderId:         razorpay_order_id,
     paymentDateTime: now.toISOString(),
   }).catch(err => console.error("[PaymentBill] Donation bill error:", err.message));
 
@@ -6192,16 +6273,20 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
     .maybeSingle();
 
   if (existing) {
-    // Already recorded by /verify — but check if email was sent; if not, send now
+    // Already recorded by /verify — but check if bill was sent; if not, send now
     if (existing.email_sent === false && existing.email) {
-      sendBrevoThankYou({
-        donorId:     existing.id,
-        name:        existing.name,
-        email:       existing.email,
-        amountPaise: existing.amount_paise,
+      sendPaymentBill({
+        type:            "DONATION",
+        donorId:         existing.id,
+        recipientEmail:  existing.email,
+        recipientName:   existing.name,
+        isAnonymous:     existing.is_anonymous,
+        cause:           "KIIT Film Society",
+        amountPaise:     existing.amount_paise,
         paymentId,
-        isAnonymous: existing.is_anonymous,
-      }).catch(err => console.error("[Brevo/webhook-backup] Email error:", err.message));
+        orderId,
+        paymentDateTime: new Date().toISOString(),
+      }).catch(err => console.error("[PaymentBill/webhook-backup] Email error:", err.message));
     }
     return res.status(200).json({ status: "already_recorded" });
   }
@@ -6235,16 +6320,20 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
   memInvalidate("donation:stats", "donation:donors:");
   console.log(`[webhook] Donor recorded from webhook: order=${orderId}`);
 
-  // Send thank-you email from webhook path too (non-blocking)
+  // Send payment bill from webhook path (non-blocking)
   const webhookDonorId = webhookInserted?.[0]?.id || null;
-  sendBrevoThankYou({
-    donorId:     webhookDonorId,
-    name:        payment.contact || null,
-    email:       payment.email   || null,
-    amountPaise: payment.amount  || null,
+  sendPaymentBill({
+    type:            "DONATION",
+    donorId:         webhookDonorId,
+    recipientEmail:  payment.email   || null,
+    recipientName:   payment.contact || null,
+    isAnonymous:     false,
+    cause:           "KIIT Film Society",
+    amountPaise:     payment.amount  || null,
     paymentId,
-    isAnonymous: false,
-  }).catch(err => console.error("[Brevo/webhook] Background email error:", err.message));
+    orderId,
+    paymentDateTime: webhookNow.toISOString(),
+  }).catch(err => console.error("[PaymentBill/webhook] Background email error:", err.message));
 
   // Append to Google Sheet from webhook path (non-blocking)
   appendDonorToSheet({
@@ -6264,21 +6353,25 @@ app.post("/api/donation/webhook", express.raw({ type: "application/json" }), asy
 });
 
 // ── POST /api/admin/donation/test-email ──────────────────────────────────────
-// Admin only — sends a test thank-you email to the logged-in admin's address.
+// Admin only — sends a test payment-bill receipt to the logged-in admin's address.
 app.post("/api/admin/donation/test-email", requireSection("settings"), async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "email required in body." });
   try {
-    const result = await sendBrevoThankYou({
-      donorId:     null,
-      name:        "Test Donor",
-      email,
-      amountPaise: 10000, // ₹100 test amount
-      paymentId:   "test_pay_" + Date.now(),
-      isAnonymous: false,
+    const result = await sendPaymentBill({
+      type:            "DONATION",
+      donorId:         null,
+      recipientEmail:  email,
+      recipientName:   "Test Donor",
+      isAnonymous:     false,
+      cause:           "KIIT Film Society",
+      amountPaise:     10000, // ₹100 test amount
+      paymentId:       "test_pay_" + Date.now(),
+      orderId:         "test_order_" + Date.now(),
+      paymentDateTime: new Date().toISOString(),
     });
     if (result.success) {
-      return res.json({ success: true, messageId: result.messageId });
+      return res.json({ success: true, messageId: result.messageId, invoiceNo: result.invoiceNo });
     } else {
       return res.status(500).json({ error: result.reason || result.error || "Email failed." });
     }

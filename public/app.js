@@ -5343,8 +5343,9 @@ function adminDownloadReceipt(donor) {
 <button class="print-btn" onclick="window.print()">⬇ Save as PDF</button>
 <div class="wrap">
   <div class="header">
-    <div style="width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <span style="font-size:13px;font-weight:800;color:#000;letter-spacing:-.02em">KFS</span>
+    <div style="width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0">
+      <img src="https://kiitfilmsociety.in/images/kfs-logo.png" alt="KFS" width="44" height="44" style="display:block;width:44px;height:44px;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+      <div style="display:none;width:44px;height:44px;border-radius:50%;background:#fff;align-items:center;justify-content:center"><span style="font-size:13px;font-weight:800;color:#000;letter-spacing:-.02em">KFS</span></div>
     </div>
     <div>
       <div class="logo-text">KIIT Film Society</div>
@@ -5370,7 +5371,7 @@ function adminDownloadReceipt(donor) {
     </div>
     <div style="margin-top:16px">
       <div class="field-label">Cause</div>
-      <div class="field-val">Chitra Vichitra 2025 — Film Fest</div>
+      <div class="field-val">KIIT Film Society</div>
     </div>
   </div>
 
@@ -5458,7 +5459,7 @@ async function testDonationEmail(btn) {
     if (res && res.success) {
       alert(`✅ Test email sent to ${email}!\nCheck your inbox (and spam folder).\nMessageId: ${res.messageId || '—'}`);
     } else {
-      alert('Failed: ' + (res?.error || 'Unknown error — check server logs for [Brevo] lines'));
+      alert('Failed: ' + (res?.error || 'Unknown error — check server logs for [bill] lines'));
     }
   } catch (e) {
     alert('Network error. Check server logs.');
