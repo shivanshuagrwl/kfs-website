@@ -1787,7 +1787,7 @@ async function adminLogin() {
   const body = { username, password };
   if (totpVal) body.totp_code = totpVal;
   const res = await fetch('/api/admin/login',{
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(body)
   });
   const data = await res.json();
@@ -2272,7 +2272,7 @@ function _defaultTags() {
 }
 async function saveCustomTagsToServer() {
   await fetch('/api/admin/settings', {
-    method:'POST',
+    method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+(adminToken||''),'X-CSRF-Token':_csrfToken||''},
     body: JSON.stringify({ blog_tags: JSON.stringify(window._customBlogTags||[]) })
   }).catch(()=>{});
@@ -2904,7 +2904,7 @@ async function saveSettings() {
     const photoFile = document.getElementById('set-team-photo-file').files[0];
     if (photoFile) fd.append('team_photo', photoFile);
     const res = await fetch('/api/admin/settings', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
       body: fd
     });
@@ -2943,7 +2943,7 @@ async function saveEmailSettings() {
     fd.append('smtp_from_name', document.getElementById('set-smtp-from-name').value.trim());
     fd.append('email_confirmation_body', document.getElementById('set-email-body').value);
     const res = await fetch('/api/admin/settings', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + adminToken, 'x-csrf-token': _csrfToken || '' }, body: fd
+      method: 'POST', credentials: 'include', headers: { 'Authorization': 'Bearer ' + adminToken, 'x-csrf-token': _csrfToken || '' }, body: fd
     });
     if (res.ok) {
       if (msg) { msg.style.color='#4caf50'; msg.textContent = '✓ Email settings saved!'; setTimeout(()=>{ msg.textContent=''; }, 4000); }
@@ -2968,7 +2968,7 @@ async function sendTestEmail() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   try {
     const res = await fetch('/api/admin/email/test', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'x-csrf-token': _csrfToken || '' },
       body: JSON.stringify({ to })
     });
@@ -2999,7 +2999,7 @@ async function saveNoShortsEgg() {
     fd.append('easter_egg_shorts_sub', document.getElementById('set-egg-shorts-sub').value);
     fd.append('easter_egg_noshorts_fallback', document.getElementById('set-egg-noshorts-fallback').value);
     const res = await fetch('/api/admin/settings', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
       body: fd
     });
@@ -3645,7 +3645,7 @@ async function deleteNotif(idx) {
 }
 async function saveNotifToServer() {
   await fetch('/api/admin/settings', {
-    method:'POST',
+    method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json','Authorization':'Bearer ' + (adminToken||''),'X-CSRF-Token':_csrfToken||''},
     body: JSON.stringify({ notifications: JSON.stringify(allNotifications) })
   });
@@ -3883,7 +3883,7 @@ async function saveNewAdmin() {
   try {
     // Use a direct fetch so we always get the response body even on 4xx
     const rawRes = await fetch('/api/master/admins', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ name, username, password, permissions })
     });
@@ -3903,7 +3903,7 @@ async function saveNewAdmin() {
         localStorage.setItem('kfs_role', 'master');
         // Retry with fresh token
         const retry = await fetch('/api/master/admins', {
-          method: 'POST',
+          method: 'POST', credentials: 'include',
           headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
           body: JSON.stringify({ name, username, password, permissions })
         });
@@ -3960,7 +3960,7 @@ async function savePermissions() {
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
     const res = await fetch('/api/master/admins/' + id + '/permissions', {
-      method: 'PUT',
+      method: 'PUT', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ permissions })
     });
@@ -5599,7 +5599,7 @@ async function runMemberImport() {
       fd.append('sort_order', '99');
       fd.append('is_past', 'false');
       const res = await fetch('/api/admin/members', {
-        method: 'POST',
+        method: 'POST', credentials: 'include',
         headers: { Authorization: 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
         body: fd
       });
@@ -5789,7 +5789,7 @@ async function saveFormBuilder() {
   try {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
     });
@@ -5816,7 +5816,7 @@ async function clearFormResponses() {
   try {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
-      method: 'DELETE',
+      method: 'DELETE', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
     if (res.ok) {
@@ -5844,7 +5844,7 @@ async function deleteEntireForm() {
   try {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
-      method: 'DELETE',
+      method: 'DELETE', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
     if (res.ok) {
@@ -7438,7 +7438,7 @@ async function saveWrappedConfig() {
   const token = adminToken;
   try {
     const res = await fetch('/api/admin/wrapped/config', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify(config),
     });
@@ -8572,8 +8572,8 @@ async function submitFilmComment() {
 
   try {
     const res = await fetch('/api/films/' + _fcMovieId + '/comments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ author_name: name, body, is_spoiler }),
     });
     const data = await res.json();
@@ -9033,7 +9033,7 @@ async function submitDonation() {
   try {
     // Step 1 — Create order on our backend (amount enforced server-side)
     const orderRes = await fetch('/api/donation/create-order', {
-      method: 'POST',
+      method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({
         amount: _donSelectedAmount,
@@ -9087,7 +9087,7 @@ async function submitDonation() {
         if (btn) btn.textContent = 'Verifying…';
         try {
           const verifyRes = await fetch('/api/donation/verify', {
-            method: 'POST',
+            method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
             body: JSON.stringify({
               razorpay_order_id:   response.razorpay_order_id,
