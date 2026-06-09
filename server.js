@@ -1227,11 +1227,10 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
 });
 
 // Protect all admin and master write routes.
-// /api/admin/login is protected by rate-limit + bcrypt — no CSRF token needed.
-// /api/admin/refresh is protected by httpOnly cookie — browser can't forge it.
+// /login and /refresh are exempt — login uses rate-limit+bcrypt, refresh uses httpOnly cookie.
+// When mounted at /api/admin, req.path is the remainder e.g. "/login", "/refresh".
 function csrfProtectAdmin(req, res, next) {
-  const exempt = ["/api/admin/login", "/api/admin/refresh"];
-  if (exempt.some(p => req.originalUrl === p || req.path === p)) return next();
+  if (req.path === "/login" || req.path === "/refresh") return next();
   return csrfProtect(req, res, next);
 }
 app.use("/api/admin", csrfProtectAdmin);

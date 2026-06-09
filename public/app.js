@@ -2051,6 +2051,11 @@ function showAdminPanel() {
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.add('active');
 
+  // Update URL to /admin so the address bar reflects the admin panel
+  if (window.location.pathname !== '/admin') {
+    history.pushState({ page: 'admin' }, '', '/admin');
+  }
+
   const nameEl = document.getElementById('sidebar-admin-name');
   const roleEl = document.getElementById('sidebar-admin-role');
   const lastEl = document.getElementById('sidebar-last-login');
