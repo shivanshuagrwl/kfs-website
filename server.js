@@ -3315,7 +3315,7 @@ app.delete(
 
 // PUBLIC: Submit a response to an event registration form
 // Handles multipart/form-data so image files can be uploaded per-question
-app.post("/api/events/:id/form/submit", strictWriteLimit, csrfProtect, upload.any(), async (req, res) => {
+app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (req, res) => {
   // 1. Verify the form exists and is open
   const { data: form, error: formErr } = await supabasePublic
     .from("event_forms")
@@ -6681,7 +6681,7 @@ const registrationRateLimit = rateLimit({
   keyGenerator: (req) => req.ip,
 });
 
-app.post("/api/events/:id/register", registrationRateLimit, csrfProtect, async (req, res) => {
+app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
   const { name, email, phone, roll_no } = req.body;
   const eventId = req.params.id;
 

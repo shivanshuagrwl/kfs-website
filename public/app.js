@@ -6532,7 +6532,7 @@ async function submitRegForm() {
       fd.append(qid, file);
     }
 
-    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': _csrfToken || '' }, body: fd });
+    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', body: fd });
 
     if (res.ok) {
       document.querySelector('.reg-form-header').style.display = 'none';
@@ -9981,7 +9981,6 @@ async function submitEventRegistration(eventId) {
   try {
     const r = await fetch(`/api/events/${eventId}/register`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, roll_no, phone }),
     });
