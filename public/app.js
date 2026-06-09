@@ -2644,7 +2644,7 @@ async function deleteBlog(id) {
   if (!ok) return;
   await apiFetch('/api/admin/blogs/'+id,'DELETE');
   window._allBlogsCache = null;
-  const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
+  row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
     setTimeout(() => {
@@ -2724,7 +2724,7 @@ async function deleteEvent(id) {
   if (!ok) return;
   await apiFetch('/api/admin/events/'+id,'DELETE');
   // Instant DOM removal
-  const row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
+  row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s';
     row.style.opacity = '0';
@@ -2811,7 +2811,7 @@ async function deleteMember(id) {
   const ok = await kfsConfirm({ title: `Remove member?`, msg: `<strong style="color:var(--white)">"${name}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Remove Member' });
   if (!ok) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
-  const row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
+  row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
     setTimeout(() => {
@@ -3030,7 +3030,7 @@ async function deleteMovie(id) {
   const ok = await kfsConfirm({ title: `Delete film?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Film' });
   if (!ok) return;
   await apiFetch('/api/admin/movies/'+id,'DELETE');
-  const row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
+  row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
     setTimeout(() => {
