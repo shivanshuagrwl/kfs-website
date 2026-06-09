@@ -330,7 +330,7 @@
     margin-bottom: 16px;
   }
   #start-scan-btn:hover { background: #1a1a1a; }
-  #camera-icon { font-size: 28px; display: block; margin-bottom: 4px; }
+  #camera-icon { display: block; margin-bottom: 4px; }
 
   /* ── RESULT CARD ── */
   #result-card {
@@ -675,7 +675,7 @@
 <!-- ── LOGIN ── -->
 <div id="login-screen">
   <div class="login-logo">
-    <img src="/images/kfs-logo" alt="KFS" style="width:56px;height:56px;border-radius:14px;object-fit:cover;">
+    <img src="/images/kfs-logo.png" alt="KFS" style="width:56px;height:56px;border-radius:14px;object-fit:cover;">
     <h1>Event Scanner</h1>
   </div>
 
@@ -706,7 +706,7 @@
 <div id="app">
   <!-- Top bar -->
   <div class="topbar">
-    <img src="/images/kfs-logo" alt="KFS" class="kfs-badge" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
+    <img src="/images/kfs-logo.png" alt="KFS" class="kfs-badge" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
     <div class="event-name" id="topbar-event">Select event</div>
     <div class="admin-name" id="topbar-admin"></div>
     <button class="logout-btn" onclick="doLogout()" title="Sign out">
@@ -718,8 +718,8 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" id="tab-btn-scanner" onclick="switchTab('scanner')">📷 Scan</button>
-    <button class="tab" id="tab-btn-data"    onclick="switchTab('data')">📋 Registrations</button>
+    <button class="tab active" id="tab-btn-scanner" onclick="switchTab('scanner')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Scan</button>
+    <button class="tab" id="tab-btn-data"    onclick="switchTab('data')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Registrations</button>
   </div>
 
   <!-- Scanner tab -->
@@ -734,7 +734,7 @@
     <!-- Camera / start button -->
     <button id="start-scan-btn" onclick="startCamera()">
       <div>
-        <span id="camera-icon">📷</span>
+        <span id="camera-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin-bottom:4px;opacity:.7"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
         <div>Tap to start camera</div>
       </div>
     </button>
@@ -779,7 +779,7 @@
     </div>
 
     <div id="data-content">
-      <div class="empty-state"><div class="icon">📋</div>Select an event to view registrations</div>
+      <div class="empty-state"><div class="icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>Select an event to view registrations</div>
     </div>
   </div>
 </div>

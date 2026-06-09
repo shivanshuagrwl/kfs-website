@@ -310,7 +310,7 @@ app.use(helmet({
       // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
-      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
+      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:",
@@ -6912,6 +6912,16 @@ app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), a
 // END QR REGISTRATION SYSTEM ROUTES
 // ══════════════════════════════════════════════════════════════════════════════
 
+
+// ── ADMIN MOVIES alias (dashboard + bulk ops use /api/admin/movies) ──────────
+app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("movies")
+    .select("*")
+    .order("release_year", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json((data || []).map(m => ({ ...m, genre: typeof m.genre === 'string' ? m.genre.replace(/[{}"]/g,'').split(',').filter(Boolean) : (m.genre || []) })));
+});
 
 // ── SCANNER PAGE ──────────────────────────────────────────────────────────────
 app.get("/scanner", (req, res) => {
