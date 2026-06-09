@@ -1696,6 +1696,7 @@ async function submitReview() {
   try {
     const res = await fetch('/api/reviews', {
       method: 'POST',
+      credentials: 'include',
       headers: {'Content-Type':'application/json','X-CSRF-Token':_csrfToken||''},
       body: JSON.stringify(body)
     });
@@ -2346,7 +2347,7 @@ async function saveBlog() {
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/blogs/'+id : '/api/admin/blogs';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { alert('Error saving post'); return; }
     const saved = await res.json();
     window._allBlogsCache = null;
@@ -2424,7 +2425,7 @@ async function saveEvent() {
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving event'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeEventModal();
@@ -2510,7 +2511,7 @@ async function saveMember() {
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving member'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeMemberModal();
@@ -2709,7 +2710,7 @@ async function saveMovie() {
   if (poster) fd.append('poster', poster);
   const url = id ? '/api/admin/movies/'+id : '/api/admin/movies';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving film'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeMovieModal();
@@ -2780,7 +2781,7 @@ async function saveTestimonial() {
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/testimonials/'+id : '/api/admin/testimonials';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { alert('Error saving testimonial'); return; }
     const saved = await res.json();
     closeTestimonialModal();
@@ -2842,7 +2843,7 @@ async function saveAchievement() {
   };
   const url = id ? '/api/admin/achievements/'+id : '/api/admin/achievements';
   try {
-    const res = await fetch(url,{method:id?'PUT':'POST',
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include',
       headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','X-CSRF-Token':_csrfToken||''},
       body:JSON.stringify(body)});
     if (!res.ok) { alert('Error saving achievement'); return; }
@@ -3036,7 +3037,7 @@ async function changePassword() {
   if (!curr) { if(msg) msg.textContent = '❌ Please enter your current password'; else alert('Please enter your current password'); return; }
   if (np !== cp) { if(msg) msg.textContent = '❌ Passwords do not match'; else alert('Passwords do not match'); return; }
   if (np.length < 8) { if(msg) msg.textContent = '❌ Password must be at least 8 characters'; else alert('Password must be at least 8 characters'); return; }
-  const res = await fetch('/api/admin/change-password',{method:'POST',
+  const res = await fetch('/api/admin/change-password',{method:'POST', credentials:'include',
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','x-csrf-token': _csrfToken || ''},
     body:JSON.stringify({currentPassword:curr, newPassword:np})});
   if (res.ok) {
@@ -4820,7 +4821,7 @@ async function saveCV() {
 
   const method = _cvEditId ? 'PUT' : 'POST';
   const url = _cvEditId ? `/api/admin/chitra-vichitra/${_cvEditId}` : '/api/admin/chitra-vichitra';
-  const res = await fetch(url, { method, headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
+  const res = await fetch(url, { method, credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
   if (!res.ok) { const e=await res.json(); alert(e.error||'Error'); return; }
   closeCVModal();
   loadAdminCV();
@@ -6216,7 +6217,7 @@ async function submitRegForm() {
       fd.append(qid, file);
     }
 
-    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', body: fd });
+    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', body: fd });
 
     if (res.ok) {
       document.querySelector('.reg-form-header').style.display = 'none';
@@ -8336,6 +8337,7 @@ async function saveCollabPost() {
   try {
     res = await fetch(token ? '/api/collaborate/' + token : '/api/collaborate', {
       method: token ? 'PUT' : 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify(collabPayload()),
     });
@@ -8388,7 +8390,7 @@ async function deleteOwnCollabPost() {
   const token = document.getElementById('collab-token').value;
   if (!token || !confirm('Delete this listing? This cannot be undone.')) return;
   try {
-    await fetch('/api/collaborate/' + token, { method: 'DELETE', headers: { 'X-CSRF-Token': _csrfToken || '' } });
+    await fetch('/api/collaborate/' + token, { method: 'DELETE', credentials: 'include', headers: { 'X-CSRF-Token': _csrfToken || '' } });
   } catch(e) {}
   closeCollabForm();
   loadCollaborate();

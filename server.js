@@ -3037,13 +3037,16 @@ app.get(
 
 // ── REVIEWS ───────────────────────────────────────────────────────────────────
 app.get("/api/reviews/all", async (req, res) => {
-  cacheFor(res, 300); // 5 min
-  const { data } = await supabasePublic.from("reviews").select("movie_id,overall");
-  res.json(data || []);
+  noStore(res); // must revalidate after new reviews — browser cache would serve stale data
+  const data = await memCache("reviews:all", 30, async () => {
+    const { data } = await supabasePublic.from("reviews").select("movie_id,overall");
+    return data || [];
+  });
+  res.json(data);
 });
 
 app.get("/api/reviews/:movieId", async (req, res) => {
-  cacheFor(res, 300);
+  noStore(res); // reviews update in real-time; browser cache causes "no instant update" UX bug
   const data = await memCache(
     `reviews:${req.params.movieId}`,
     300,
@@ -3097,7 +3100,7 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
     .select()
     .single();
   if (error) return res.status(500).json({ error: "Internal server error" });
-  memInvalidate(`reviews:${movie_id}`);
+  memInvalidate(`reviews:${movie_id}`, "reviews:all");
   res.json(data);
 });
 
@@ -4555,6 +4558,7 @@ function cleanCollabPayload(body) {
 // No server-side member verify needed — domain check only, name must be picked from members dropdown in UI
 
 app.get("/api/collaborate", async (req, res) => {
+  noStore(res); // listings change on every POST/DELETE — browser must not cache
   try {
     await cleanupExpiredCollaborations();
     const today = new Date().toISOString().split("T")[0];
