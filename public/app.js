@@ -62,7 +62,9 @@ function hasPermission(section) {
   if (['change-password','two-factor'].includes(section)) return true;
   // Empty permissions = no access (mirrors server-side requireSection fix)
   if (!currentAdminPermissions || currentAdminPermissions.length === 0) return false;
-  return currentAdminPermissions.includes(section);
+  // 'scanner' is gated by 'events' permission — same role, different UI section
+  const effectiveSection = section === 'scanner' ? 'events' : section;
+  return currentAdminPermissions.includes(effectiveSection);
 }
 let allEvents = [];
 
@@ -9872,7 +9874,7 @@ function renderModalRegs(list) {
 
 async function deleteRegFromModal(id) {
   if (!confirm('Remove this registration?')) return;
-  await apiFetch(`/api/admin/events/${_regEventId}/registrations/${id}`, { method: 'DELETE' });
+  await apiFetch(`/api/admin/events/${_regEventId}/registrations/${id}`, 'DELETE');
   _regsList = _regsList.filter(r => r.id !== id);
   updateRegStats();
   renderModalRegs(_regsList);
