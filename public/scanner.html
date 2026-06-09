@@ -873,12 +873,21 @@ async function doLogin() {
   const totp_code = document.getElementById('l-totp').value.trim();
 
   try {
-    const { ok, data } = await api('POST', '/api/admin/login', {
-      username, password, ...(totp_code ? { totp_code } : {})
+    // Login does NOT need CSRF — call fetch directly, not via api()
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, ...(totp_code ? { totp_code } : {}) }),
     });
 
-    if (!ok) {
-      errEl.textContent = data.error || 'Login failed';
+    let data = {};
+    try { data = await res.json(); } catch(_) {}
+
+    console.log('[scanner login] status:', res.status, 'data:', data);
+
+    if (!res.ok) {
+      errEl.textContent = data.error || `Login failed (${res.status})`;
       errEl.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Sign in';
@@ -897,7 +906,7 @@ async function doLogin() {
     // Check permission — must have 'events' or be master
     const perms = data.permissions || [];
     if (data.role !== 'master' && !perms.includes('events')) {
-      errEl.textContent = 'Access denied: no permission for events / scanning.';
+      errEl.textContent = 'Access denied: no events permission.';
       errEl.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Sign in';
@@ -911,7 +920,8 @@ async function doLogin() {
     await fetchCsrf();
     await bootApp();
   } catch (e) {
-    errEl.textContent = 'Network error — check connection.';
+    console.error('[scanner login] exception:', e);
+    errEl.textContent = 'Network error — ' + (e.message || 'check connection.');
     errEl.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Sign in';

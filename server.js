@@ -1230,7 +1230,8 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
 // /login and /refresh are exempt — login uses rate-limit+bcrypt, refresh uses httpOnly cookie.
 // When mounted at /api/admin, req.path is the remainder e.g. "/login", "/refresh".
 function csrfProtectAdmin(req, res, next) {
-  if (req.path === "/login" || req.path === "/refresh") return next();
+  // login and refresh have their own protections — exempt from CSRF
+  if (req.path.startsWith("/login") || req.path.startsWith("/refresh")) return next();
   return csrfProtect(req, res, next);
 }
 app.use("/api/admin", csrfProtectAdmin);
