@@ -6913,6 +6913,11 @@ app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), a
 // ══════════════════════════════════════════════════════════════════════════════
 
 
+// ── SCANNER PAGE ──────────────────────────────────────────────────────────────
+app.get("/scanner", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "scanner.html"));
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
