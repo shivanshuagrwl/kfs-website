@@ -6555,12 +6555,20 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 // Paste BEFORE the catch-all route (app.get("*", ...)) at the bottom of server.js
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── QR Ticket email helper ─────────────────────────────────────────────────────
-// Generates a styled PDF ticket (matching KFS brand) and sends it via Brevo
+// ── QR Ticket PDF generator ────────────────────────────────────────────────────
+// Layout mirrors the KFS reference ticket:
+//   • Full black bg
+//   • Top: logo (circle-clipped) + "KIIT FILM SOCIETY" bold header
+//   • Large centered event name
+//   • DATE , TIME / Venue line centered
+//   • Large white-box QR centered
+//   • PERSON NAME (huge, bold, centered)
+//   • Mail id centered
+//   • Welcome text bold centered
+//   • Footer: contact email small at bottom
 async function generateTicketPdf({ event, reg, qrDataUrl }) {
   const PDFDocument = require("pdfkit");
 
-  // Convert QR data URL to buffer
   const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
   const qrBuffer = Buffer.from(qrBase64, "base64");
 
@@ -6569,125 +6577,159 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
   const logoBuffer = await new Promise(res => {
     try {
       const https = require("https");
-      const chunks = [];
-      https.get(LOGO_URL, resp => {
-        if (resp.statusCode !== 200) { resp.resume(); return res(null); }
-        resp.on("data", c => chunks.push(c));
-        resp.on("end",  () => res(Buffer.concat(chunks)));
-        resp.on("error", () => res(null));
+      const ch = [];
+      https.get(LOGO_URL, r => {
+        if (r.statusCode !== 200) { r.resume(); return res(null); }
+        r.on("data", c => ch.push(c));
+        r.on("end",  () => res(Buffer.concat(ch)));
+        r.on("error", () => res(null));
       }).on("error", () => res(null));
     } catch (_) { res(null); }
   });
 
   return new Promise((resolve, reject) => {
-    const doc    = new PDFDocument({ size: [440, 620], margin: 0, info: { Title: `KFS Ticket — ${event.title || "Event"}` } });
+    // A5-ish portrait — close to reference proportions
+    const W = 480, H = 680;
+    const doc = new PDFDocument({
+      size: [W, H], margin: 0,
+      info: { Title: `KFS Ticket — ${event.title || "Event"}` }
+    });
     const chunks = [];
     doc.on("data",  c => chunks.push(c));
     doc.on("end",   () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const W = 440, H = 620;
-    const PAD = 36;
+    const CX = W / 2;       // horizontal center
+    const PAD = 40;
 
-    // ── Background ────────────────────────────────────────────────────
-    doc.rect(0, 0, W, H).fill("#0a0a0a");
+    // ── Full black background ─────────────────────────────────────────
+    doc.rect(0, 0, W, H).fill("#000000");
 
-    // ── Header band ───────────────────────────────────────────────────
-    doc.rect(0, 0, W, 80).fill("#111111");
-    doc.rect(0, 80, W, 1).fill("#1e1e1e");
+    // ── HEADER: logo circle + "KIIT FILM SOCIETY" ────────────────────
+    const logoSize = 52;
+    const headerY  = 28;
 
-    // Logo
-    const logoSize = 44;
-    const logoX = PAD, logoY = 18;
+    // Logo circle
     if (logoBuffer) {
       try {
-        doc.save().circle(logoX + logoSize/2, logoY + logoSize/2, logoSize/2).clip();
-        doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
+        doc.save()
+          .circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2)
+          .clip();
+        doc.image(logoBuffer, PAD, headerY, { width: logoSize, height: logoSize });
         doc.restore();
-      } catch(_) {}
+        // Circle stroke
+        doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2)
+          .lineWidth(1.5).stroke("#ffffff");
+      } catch (_) {
+        // Fallback: white circle with "KFS"
+        doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2).fill("#111");
+        doc.fillColor("#fff").fontSize(14).font("Helvetica-Bold")
+          .text("KFS", PAD, headerY + 18, { width: logoSize, align: "center" });
+      }
+    } else {
+      doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2).fill("#111");
+      doc.fillColor("#fff").fontSize(14).font("Helvetica-Bold")
+        .text("KFS", PAD, headerY + 18, { width: logoSize, align: "center" });
     }
-    // KFS + KIIT Film Society
-    doc.fillColor("#f5f5f5").fontSize(16).font("Helvetica-Bold")
-      .text("KFS", logoX + logoSize + 12, logoY + 6);
-    doc.fillColor("#555555").fontSize(9).font("Helvetica")
-      .text("KIIT FILM SOCIETY", logoX + logoSize + 12, logoY + 26, { characterSpacing: 1 });
 
-    // "YOUR TICKET" pill top-right
-    doc.rect(W - PAD - 90, logoY + 10, 90, 20).fill("#1a1a1a");
-    doc.rect(W - PAD - 90, logoY + 10, 90, 20).stroke("#2a2a2a");
-    doc.fillColor("#888888").fontSize(7.5).font("Helvetica-Bold")
-      .text("YOUR TICKET", W - PAD - 90, logoY + 15, { width: 90, align: "center", characterSpacing: 1 });
+    // "KIIT FILM SOCIETY" — large bold white, vertically centred with logo
+    doc.fillColor("#ffffff")
+      .fontSize(26).font("Helvetica-Bold")
+      .text("KIIT FILM SOCIETY", PAD + logoSize + 16, headerY + (logoSize - 26) / 2 + 2, {
+        lineBreak: false,
+        characterSpacing: 0.5,
+      });
 
-    // ── Event title block ──────────────────────────────────────────────
-    let y = 100;
-    doc.fillColor("#f5f5f5").fontSize(26).font("Helvetica-Bold")
-      .text(event.title || "Event", PAD, y, { width: W - 2*PAD, lineGap: 2 });
+    // ── EVENT NAME ────────────────────────────────────────────────────
+    let y = headerY + logoSize + 44;
 
-    y += doc.heightOfString(event.title || "Event", { width: W - 2*PAD, fontSize: 26 }) + 8;
+    doc.fillColor("#ffffff")
+      .fontSize(46).font("Helvetica-Bold")
+      .text(event.title || "Event", PAD, y, {
+        width: W - 2 * PAD,
+        align: "center",
+        lineGap: 4,
+      });
 
+    const titleH = doc.heightOfString(event.title || "Event", {
+      width: W - 2 * PAD, fontSize: 46, lineGap: 4,
+    });
+    y += titleH + 18;
+
+    // ── DATE , TIME  /  Venue ─────────────────────────────────────────
     const eventDate = event.event_date
       ? new Date(event.event_date).toLocaleDateString("en-IN", {
-          weekday: "long", day: "numeric", month: "long", year: "numeric",
+          day: "numeric", month: "long", year: "numeric",
         })
       : null;
 
-    if (eventDate) {
-      doc.fillColor("#888888").fontSize(11).font("Helvetica")
-        .text(eventDate, PAD, y);
-      y += 18;
-    }
-    if (event.location) {
-      doc.fillColor("#888888").fontSize(11).font("Helvetica")
-        .text(event.location, PAD, y);
-      y += 18;
+    const dateVenueLine = [eventDate, event.location].filter(Boolean).join("   ·   ");
+    if (dateVenueLine) {
+      doc.fillColor("#ffffff")
+        .fontSize(13).font("Helvetica-Bold")
+        .text(dateVenueLine, PAD, y, { width: W - 2 * PAD, align: "center" });
+      y += 22;
     }
 
-    // ── Dashed divider ────────────────────────────────────────────────
-    y += 10;
-    doc.save().dash(4, { space: 6 }).moveTo(PAD, y).lineTo(W - PAD, y).stroke("#222222").restore();
-    y += 20;
+    // ── QR CODE (large, centered, white box) ──────────────────────────
+    y += 24;
+    const qrSize   = 170;
+    const qrPad    = 14;
+    const boxSize  = qrSize + qrPad * 2;
+    const boxX     = CX - boxSize / 2;
 
-    // ── QR + person block ─────────────────────────────────────────────
-    const qrSize = 150;
-    const qrX = (W - qrSize) / 2;
-    // QR white bg
-    doc.rect(qrX - 10, y - 10, qrSize + 20, qrSize + 20).fill("#ffffff");
-    try { doc.image(qrBuffer, qrX, y, { width: qrSize, height: qrSize }); } catch(_) {}
+    doc.rect(boxX, y, boxSize, boxSize).fill("#ffffff");
+    try {
+      doc.image(qrBuffer, boxX + qrPad, y + qrPad, { width: qrSize, height: qrSize });
+    } catch (_) {}
 
-    y += qrSize + 24;
+    y += boxSize + 32;
 
-    // Name
-    doc.fillColor("#f5f5f5").fontSize(22).font("Helvetica-Bold")
-      .text(reg.name, PAD, y, { width: W - 2*PAD, align: "center" });
-    y += 30;
+    // ── PERSON NAME ───────────────────────────────────────────────────
+    doc.fillColor("#ffffff")
+      .fontSize(38).font("Helvetica-Bold")
+      .text((reg.name || "").toUpperCase(), PAD, y, {
+        width: W - 2 * PAD,
+        align: "center",
+        lineGap: 2,
+      });
 
-    // Email
-    doc.fillColor("#666666").fontSize(11).font("Helvetica")
-      .text(reg.email, PAD, y, { width: W - 2*PAD, align: "center" });
+    const nameH = doc.heightOfString((reg.name || "").toUpperCase(), {
+      width: W - 2 * PAD, fontSize: 38, lineGap: 2,
+    });
+    y += nameH + 10;
+
+    // ── Mail id ───────────────────────────────────────────────────────
+    doc.fillColor("#ffffff")
+      .fontSize(12).font("Helvetica-Bold")
+      .text(reg.email, PAD, y, { width: W - 2 * PAD, align: "center" });
     y += 18;
 
-    // Roll no badge if present
+    // Roll no (subtle, if present)
     if (reg.roll_no) {
-      const badgeW = 100, badgeX = (W - badgeW) / 2;
-      doc.rect(badgeX, y, badgeW, 20).fill("#1a1a1a");
-      doc.rect(badgeX, y, badgeW, 20).stroke("#2a2a2a");
-      doc.fillColor("#888888").fontSize(9).font("Helvetica-Bold")
-        .text(reg.roll_no, badgeX, y + 6, { width: badgeW, align: "center", characterSpacing: 0.5 });
-      y += 30;
+      doc.fillColor("#aaaaaa")
+        .fontSize(11).font("Helvetica")
+        .text(reg.roll_no, PAD, y, { width: W - 2 * PAD, align: "center" });
+      y += 16;
     }
 
-    // ── Welcome + footer ──────────────────────────────────────────────
-    y = H - 90;
-    doc.rect(0, y, W, 1).fill("#1a1a1a");
+    // ── Welcome text ──────────────────────────────────────────────────
+    y += 16;
+    doc.fillColor("#ffffff")
+      .fontSize(14).font("Helvetica-Bold")
+      .text("Welcome to the event!!", PAD, y, { width: W - 2 * PAD, align: "center" });
+    y += 20;
+    doc.fillColor("#ffffff")
+      .fontSize(14).font("Helvetica-Bold")
+      .text("hope you have a great time", PAD, y, { width: W - 2 * PAD, align: "center" });
 
-    doc.fillColor("#444444").fontSize(10).font("Helvetica-BoldOblique")
-      .text("Welcome to the event! Hope you have a great time.", PAD, y + 14, { width: W - 2*PAD, align: "center" });
-
-    doc.fillColor("#333333").fontSize(8.5).font("Helvetica")
-      .text("Show this QR at the entry gate  ·  filmsocietykiit@gmail.com", PAD, y + 38, { width: W - 2*PAD, align: "center" });
-
-    // bottom border stripe
-    doc.rect(0, H - 6, W, 6).fill("#111111");
+    // ── Footer ────────────────────────────────────────────────────────
+    doc.fillColor("#666666")
+      .fontSize(9).font("Helvetica")
+      .text(
+        "For details or queries contact us at filmsocietykiit@gmail.com",
+        PAD, H - 24, { width: W - 2 * PAD, align: "center" }
+      );
 
     doc.end();
   });
