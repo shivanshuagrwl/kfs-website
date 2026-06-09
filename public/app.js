@@ -103,6 +103,11 @@ let allEvents = [];
         localStorage.setItem('kfs_role', d.role);
         localStorage.setItem('kfs_admin_name', d.name || '');
         localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
+        // FIX: refresh CSRF token alongside JWT so it never expires mid-session
+        try {
+          const cr = await fetch('/api/csrf-token');
+          if (cr.ok) { const cd = await cr.json(); _csrfToken = cd.csrf_token; }
+        } catch(ce) {}
       } else {
         // Refresh failed — force re-login
         adminToken = null;
@@ -6527,7 +6532,7 @@ async function submitRegForm() {
       fd.append(qid, file);
     }
 
-    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', body: fd });
+    const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': _csrfToken || '' }, body: fd });
 
     if (res.ok) {
       document.querySelector('.reg-form-header').style.display = 'none';
@@ -9976,6 +9981,7 @@ async function submitEventRegistration(eventId) {
   try {
     const r = await fetch(`/api/events/${eventId}/register`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, roll_no, phone }),
     });

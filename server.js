@@ -394,7 +394,7 @@ app.use(
 // Prevents bots from flooding comments/reviews within the global 100-req window.
 const strictWriteLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,                    // 5 submissions per IP per window
+  max: 20,                   // 20 submissions per IP per window (raised from 5 — campus NAT shares one public IP)
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many submissions. Please wait 15 minutes and try again." },
@@ -1081,7 +1081,7 @@ app.get("/api/csrf-token", (req, res) => {
     httpOnly: false, // JS must read this to send as header
     secure:   process.env.NODE_ENV === "production",
     sameSite: "strict",
-    maxAge:   4 * 60 * 60 * 1000,
+    maxAge:   24 * 60 * 60 * 1000, // 24h — long enough to survive a full admin session
   });
   res.json({ csrf_token: token });
 });
@@ -3315,7 +3315,7 @@ app.delete(
 
 // PUBLIC: Submit a response to an event registration form
 // Handles multipart/form-data so image files can be uploaded per-question
-app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (req, res) => {
+app.post("/api/events/:id/form/submit", strictWriteLimit, csrfProtect, upload.any(), async (req, res) => {
   // 1. Verify the form exists and is open
   const { data: form, error: formErr } = await supabasePublic
     .from("event_forms")
@@ -3420,8 +3420,8 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
   // 5. Merge image URLs into answers
   const finalAnswers = { ...answers, ...imageUrls };
 
-  // 6. Store response
-  const { data: response, error: insertErr } = await supabasePublic
+  // 6. Store response — use admin client (service_role) so this works regardless of RLS policy on form_responses
+  const { data: response, error: insertErr } = await supabase
     .from("form_responses")
     .insert([
       {
@@ -6376,7 +6376,6 @@ app.post("/api/admin/donation/sheet-backfill", requireSection("settings"), async
     return res.json({ success: true, synced, failed, total: donors.length });
   } catch (e) {
     console.error("[sheet-backfill]", e.message);
-    console.error("[sheet-backfill]", e.message);
     return res.status(500).json({ error: "Backfill failed. Check server logs." });
   }
 });
@@ -6511,7 +6510,21 @@ app.get("/api/admin/emergency-unlock", async (req, res) => {
 app.get("/api/admin/lockout-status", async (req, res) => {
   const { username, secret } = req.query;
   const UNLOCK_SECRET = process.env.UNLOCK_SECRET;
-  if (!UNLOCK_SECRET || !secret || secret !== UNLOCK_SECRET) {
+  if (!UNLOCK_SECRET) {
+    return res.status(403).json({ error: "UNLOCK_SECRET not configured." });
+  }
+  // Use timingSafeEqual to match emergency-unlock's security posture
+  let secretValid = false;
+  try {
+    if (secret) {
+      const a = Buffer.alloc(64);
+      const b = Buffer.alloc(64);
+      a.write(secret, 0, "utf8");
+      b.write(UNLOCK_SECRET, 0, "utf8");
+      secretValid = crypto.timingSafeEqual(a, b) && secret.length === UNLOCK_SECRET.length;
+    }
+  } catch { secretValid = false; }
+  if (!secretValid) {
     return res.status(403).json({ error: "Invalid or missing secret." });
   }
   if (!username) return res.status(400).json({ error: "username required." });
@@ -6663,12 +6676,12 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 // ── PUBLIC: Register for event (creates registration + sends QR ticket email) ──
 const registrationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 20, // raised from 5 — campus users share the same NAT IP
   message: { error: "Too many registration attempts. Please wait 15 minutes." },
   keyGenerator: (req) => req.ip,
 });
 
-app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
+app.post("/api/events/:id/register", registrationRateLimit, csrfProtect, async (req, res) => {
   const { name, email, phone, roll_no } = req.body;
   const eventId = req.params.id;
 
