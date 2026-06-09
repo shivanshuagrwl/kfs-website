@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>KFS Scanner</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" defer></script>
 <style>
   :root {
     --bg: #090909;
@@ -812,14 +812,17 @@ let _regsCache = {};      // eventId → registrations array
 async function fetchCsrf() {
   try {
     const r = await fetch('/api/csrf-token');
+    if (!r.ok) return;
     const d = await r.json();
-    _csrfToken = d.csrf_token;
+    if (d.csrf_token) _csrfToken = d.csrf_token;
   } catch {}
 }
 
-// Fetch CSRF on load — disable login button until it's ready
+// Fetch CSRF on load — disable login button until it's ready (5s max wait)
 document.getElementById('login-btn').disabled = true;
-fetchCsrf().then(() => {
+const _csrfReady = fetchCsrf();
+const _csrfTimeout = new Promise(r => setTimeout(r, 5000));
+Promise.race([_csrfReady, _csrfTimeout]).then(() => {
   document.getElementById('login-btn').disabled = false;
 });
 
