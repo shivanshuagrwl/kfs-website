@@ -6550,6 +6550,143 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── QR Ticket email helper ─────────────────────────────────────────────────────
+// Generates a styled PDF ticket (matching KFS brand) and sends it via Brevo
+async function generateTicketPdf({ event, reg, qrDataUrl }) {
+  const PDFDocument = require("pdfkit");
+
+  // Convert QR data URL to buffer
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+  const qrBuffer = Buffer.from(qrBase64, "base64");
+
+  // Fetch KFS logo
+  const LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
+  const logoBuffer = await new Promise(res => {
+    try {
+      const https = require("https");
+      const chunks = [];
+      https.get(LOGO_URL, resp => {
+        if (resp.statusCode !== 200) { resp.resume(); return res(null); }
+        resp.on("data", c => chunks.push(c));
+        resp.on("end",  () => res(Buffer.concat(chunks)));
+        resp.on("error", () => res(null));
+      }).on("error", () => res(null));
+    } catch (_) { res(null); }
+  });
+
+  return new Promise((resolve, reject) => {
+    const doc    = new PDFDocument({ size: [440, 620], margin: 0, info: { Title: `KFS Ticket — ${event.title || "Event"}` } });
+    const chunks = [];
+    doc.on("data",  c => chunks.push(c));
+    doc.on("end",   () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const W = 440, H = 620;
+    const PAD = 36;
+
+    // ── Background ────────────────────────────────────────────────────
+    doc.rect(0, 0, W, H).fill("#0a0a0a");
+
+    // ── Header band ───────────────────────────────────────────────────
+    doc.rect(0, 0, W, 80).fill("#111111");
+    doc.rect(0, 80, W, 1).fill("#1e1e1e");
+
+    // Logo
+    const logoSize = 44;
+    const logoX = PAD, logoY = 18;
+    if (logoBuffer) {
+      try {
+        doc.save().circle(logoX + logoSize/2, logoY + logoSize/2, logoSize/2).clip();
+        doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
+        doc.restore();
+      } catch(_) {}
+    }
+    // KFS + KIIT Film Society
+    doc.fillColor("#f5f5f5").fontSize(16).font("Helvetica-Bold")
+      .text("KFS", logoX + logoSize + 12, logoY + 6);
+    doc.fillColor("#555555").fontSize(9).font("Helvetica")
+      .text("KIIT FILM SOCIETY", logoX + logoSize + 12, logoY + 26, { characterSpacing: 1 });
+
+    // "YOUR TICKET" pill top-right
+    doc.rect(W - PAD - 90, logoY + 10, 90, 20).fill("#1a1a1a");
+    doc.rect(W - PAD - 90, logoY + 10, 90, 20).stroke("#2a2a2a");
+    doc.fillColor("#888888").fontSize(7.5).font("Helvetica-Bold")
+      .text("YOUR TICKET", W - PAD - 90, logoY + 15, { width: 90, align: "center", characterSpacing: 1 });
+
+    // ── Event title block ──────────────────────────────────────────────
+    let y = 100;
+    doc.fillColor("#f5f5f5").fontSize(26).font("Helvetica-Bold")
+      .text(event.title || "Event", PAD, y, { width: W - 2*PAD, lineGap: 2 });
+
+    y += doc.heightOfString(event.title || "Event", { width: W - 2*PAD, fontSize: 26 }) + 8;
+
+    const eventDate = event.event_date
+      ? new Date(event.event_date).toLocaleDateString("en-IN", {
+          weekday: "long", day: "numeric", month: "long", year: "numeric",
+        })
+      : null;
+
+    if (eventDate) {
+      doc.fillColor("#888888").fontSize(11).font("Helvetica")
+        .text(eventDate, PAD, y);
+      y += 18;
+    }
+    if (event.location) {
+      doc.fillColor("#888888").fontSize(11).font("Helvetica")
+        .text(event.location, PAD, y);
+      y += 18;
+    }
+
+    // ── Dashed divider ────────────────────────────────────────────────
+    y += 10;
+    doc.save().dash(4, { space: 6 }).moveTo(PAD, y).lineTo(W - PAD, y).stroke("#222222").restore();
+    y += 20;
+
+    // ── QR + person block ─────────────────────────────────────────────
+    const qrSize = 150;
+    const qrX = (W - qrSize) / 2;
+    // QR white bg
+    doc.rect(qrX - 10, y - 10, qrSize + 20, qrSize + 20).fill("#ffffff");
+    try { doc.image(qrBuffer, qrX, y, { width: qrSize, height: qrSize }); } catch(_) {}
+
+    y += qrSize + 24;
+
+    // Name
+    doc.fillColor("#f5f5f5").fontSize(22).font("Helvetica-Bold")
+      .text(reg.name, PAD, y, { width: W - 2*PAD, align: "center" });
+    y += 30;
+
+    // Email
+    doc.fillColor("#666666").fontSize(11).font("Helvetica")
+      .text(reg.email, PAD, y, { width: W - 2*PAD, align: "center" });
+    y += 18;
+
+    // Roll no badge if present
+    if (reg.roll_no) {
+      const badgeW = 100, badgeX = (W - badgeW) / 2;
+      doc.rect(badgeX, y, badgeW, 20).fill("#1a1a1a");
+      doc.rect(badgeX, y, badgeW, 20).stroke("#2a2a2a");
+      doc.fillColor("#888888").fontSize(9).font("Helvetica-Bold")
+        .text(reg.roll_no, badgeX, y + 6, { width: badgeW, align: "center", characterSpacing: 0.5 });
+      y += 30;
+    }
+
+    // ── Welcome + footer ──────────────────────────────────────────────
+    y = H - 90;
+    doc.rect(0, y, W, 1).fill("#1a1a1a");
+
+    doc.fillColor("#444444").fontSize(10).font("Helvetica-BoldOblique")
+      .text("Welcome to the event! Hope you have a great time.", PAD, y + 14, { width: W - 2*PAD, align: "center" });
+
+    doc.fillColor("#333333").fontSize(8.5).font("Helvetica")
+      .text("Show this QR at the entry gate  ·  filmsocietykiit@gmail.com", PAD, y + 38, { width: W - 2*PAD, align: "center" });
+
+    // bottom border stripe
+    doc.rect(0, H - 6, W, 6).fill("#111111");
+
+    doc.end();
+  });
+}
+
 async function sendTicketEmail({ event, reg, qrDataUrl }) {
   const { data: rows } = await memCache("settings:email", 300, () =>
     supabase.from("settings").select("key,value").in("key", ["brevo_api_key", "smtp_from_name"]),
@@ -6568,8 +6705,15 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       })
     : null;
 
-  // QR image is already a data URL — strip prefix to get pure base64 for email inline
-  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+  // Generate PDF ticket
+  let ticketPdfBuffer;
+  try {
+    ticketPdfBuffer = await generateTicketPdf({ event, reg, qrDataUrl });
+  } catch (e) {
+    console.error("[ticket-email] PDF generation failed:", e.message);
+    // Fall back: no PDF attachment, still send HTML email
+    ticketPdfBuffer = null;
+  }
 
   const htmlContent = `<!DOCTYPE html>
 <html>
@@ -6579,7 +6723,6 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 <tr><td align="center">
 <table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden">
 
-  <!-- Header -->
   <tr><td style="background:#000;padding:24px 32px;border-bottom:1px solid #1e1e1e">
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
@@ -6589,30 +6732,25 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     </table>
   </td></tr>
 
-  <!-- Event title block -->
   <tr><td style="padding:28px 32px 0">
     <div style="font-size:11px;color:#555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Your Ticket</div>
-    <h1 style="margin:0 0 6px;font-size:26px;font-weight:800;color:#f5f5f5;line-height:1.2;letter-spacing:-.02em">${event.title || "Event"}</h1>
-    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:4px">📅 ${eventDate}</div>` : ""}
-    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:2px">📍 ${event.location}</div>` : ""}
+    <h1 style="margin:0 0 6px;font-size:24px;font-weight:800;color:#f5f5f5;line-height:1.2;letter-spacing:-.02em">${event.title || "Event"}</h1>
+    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:6px">&#128197; ${eventDate}</div>` : ""}
+    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:4px">&#128205; ${event.location}</div>` : ""}
   </td></tr>
 
-  <!-- Divider -->
   <tr><td style="padding:20px 32px"><div style="border-top:1px dashed #1e1e1e"></div></td></tr>
 
-  <!-- QR Code + name block (ticket body) -->
   <tr><td style="padding:0 32px 24px">
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
-        <!-- QR code -->
         <td align="center" width="160" style="vertical-align:top">
           <div style="background:#fff;padding:12px;border-radius:10px;display:inline-block">
             <img src="cid:qr_ticket" alt="QR Code" width="136" height="136" style="display:block">
           </div>
         </td>
-        <!-- Person details -->
         <td style="padding-left:20px;vertical-align:middle">
-          <div style="font-size:22px;font-weight:800;color:#f5f5f5;letter-spacing:-.01em;margin-bottom:4px">${reg.name}</div>
+          <div style="font-size:20px;font-weight:800;color:#f5f5f5;letter-spacing:-.01em;margin-bottom:4px">${reg.name}</div>
           <div style="font-size:12px;color:#666;margin-bottom:12px">${reg.email}</div>
           ${reg.roll_no ? `<div style="font-size:12px;color:#555;background:#1a1a1a;border:1px solid #222;display:inline-block;padding:4px 10px;border-radius:6px;letter-spacing:.05em">${reg.roll_no}</div>` : ""}
         </td>
@@ -6620,17 +6758,14 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     </table>
   </td></tr>
 
-  <!-- Welcome text -->
   <tr><td style="padding:16px 32px;background:#0d0d0d;border-top:1px solid #1a1a1a">
-    <p style="margin:0;font-size:14px;color:#666;font-style:italic;text-align:center">
-      Welcome to the event! hope you have a great time 🎬
+    <p style="margin:0;font-size:13px;color:#555;text-align:center">
+      ${ticketPdfBuffer ? "Your ticket PDF is attached — show it at the gate." : "Show your QR code at the entry gate."}
     </p>
   </td></tr>
 
-  <!-- Footer -->
   <tr><td style="padding:20px 32px;border-top:1px solid #1a1a1a">
     <p style="margin:0;font-size:11px;color:#333;text-align:center">
-      Show this QR at the entry gate.<br>
       For queries: <a href="mailto:filmsocietykiit@gmail.com" style="color:#555;text-decoration:none">filmsocietykiit@gmail.com</a>
     </p>
   </td></tr>
@@ -6641,7 +6776,25 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Event Ticket\n\n${event.title || "Event"}\n${eventDate ? `Date: ${eventDate}\n` : ""}${event.location ? `Venue: ${event.location}\n` : ""}\nRegistered for: ${reg.name} (${reg.email})\nShow the QR code attached at the event entry.\n\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Event Ticket\n\n${event.title || "Event"}\n${eventDate ? `Date: ${eventDate}\n` : ""}${event.location ? `Venue: ${event.location}\n` : ""}\nRegistered: ${reg.name} (${reg.email})\n${ticketPdfBuffer ? "Ticket PDF attached — show it at the entry gate.\n" : "Show your QR at entry.\n"}\nFor queries: filmsocietykiit@gmail.com`;
+
+  // QR as inline image (cid:qr_ticket)
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+
+  const attachments = [
+    {
+      name: "ticket-qr.png",
+      content: qrBase64,
+      contentId: "qr_ticket",
+    },
+  ];
+
+  if (ticketPdfBuffer) {
+    attachments.push({
+      name: `kfs-ticket-${(event.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
+      content: ticketPdfBuffer.toString("base64"),
+    });
+  }
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -6656,13 +6809,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       subject: `Your ticket for ${event.title || "the event"} — KFS`,
       textContent,
       htmlContent,
-      attachment: [
-        {
-          name: "ticket-qr.png",
-          content: qrBase64,
-          contentId: "qr_ticket",
-        },
-      ],
+      attachment: attachments,
     }),
   });
 
@@ -6670,7 +6817,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     const err = await response.text();
     throw new Error(`Brevo ticket email error ${response.status}: ${err}`);
   }
-  console.log(`[ticket-email] Ticket sent to ${reg.email} for event "${event.title}"`);
+  console.log(`[ticket-email] Ticket sent to ${reg.email} for event "${event.title}" (PDF: ${!!ticketPdfBuffer})`);
 }
 
 // ── PUBLIC: Register for event (creates registration + sends QR ticket email) ──

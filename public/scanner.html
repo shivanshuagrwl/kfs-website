@@ -967,6 +967,8 @@ function switchTab(tab) {
     const scanEvent = document.getElementById('event-select').value;
     if (scanEvent) sel.value = scanEvent;
     if (sel.value) loadRegistrations();
+  } else {
+    if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
   }
 }
 
@@ -1174,11 +1176,58 @@ async function loadRegistrations() {
   content.innerHTML = '<div class="loading-state">Loading…</div>';
 
   const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations`);
-  if (!ok) { content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>Failed to load registrations</div>'; return; }
+  if (!ok) { content.innerHTML = '<div class="empty-state"><div class="icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>Failed to load registrations</div>'; return; }
 
   _allRegs = data || [];
   _regsCache[eventId] = _allRegs;
   renderDataTab(eventId);
+  startAutoRefresh(eventId);
+}
+
+let _autoRefreshTimer = null;
+
+function startAutoRefresh(eventId) {
+  if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
+  _autoRefreshTimer = setInterval(() => silentRefresh(eventId), 15000);
+}
+
+async function silentRefresh(eventId) {
+  const sel = document.getElementById('data-event-select');
+  if (!sel || sel.value !== String(eventId)) { clearInterval(_autoRefreshTimer); return; }
+  const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations`);
+  if (!ok) return;
+  _allRegs = data || [];
+  _regsCache[eventId] = _allRegs;
+
+  const total = _allRegs.length;
+  const checked = _allRegs.filter(r => r.checked_in).length;
+  const totalEl = document.querySelector('.stat-box:nth-child(1) .num');
+  const checkedEl = document.querySelector('.stat-box.checked .num');
+  const pendingEl = document.querySelector('.stat-box.pending .num');
+  if (totalEl) totalEl.textContent = total;
+  if (checkedEl) checkedEl.textContent = checked;
+  if (pendingEl) pendingEl.textContent = total - checked;
+
+  const lastEl = document.getElementById('last-updated');
+  if (lastEl) lastEl.textContent = `Updated ${new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' })}`;
+
+  const q = document.getElementById('regs-search')?.value || '';
+  const filtered = q ? _allRegs.filter(r =>
+    (r.name||'').toLowerCase().includes(q.toLowerCase()) ||
+    (r.email||'').toLowerCase().includes(q.toLowerCase()) ||
+    (r.roll_no||'').toLowerCase().includes(q.toLowerCase())
+  ) : _allRegs;
+  renderRegsList(filtered);
+}
+
+async function refreshRegistrations() {
+  const sel = document.getElementById('data-event-select');
+  const eventId = sel?.value;
+  if (!eventId) return;
+  const btn = document.getElementById('refresh-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+  await silentRefresh(eventId);
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
 }
 
 function renderDataTab(eventId) {
@@ -1190,8 +1239,16 @@ function renderDataTab(eventId) {
 
   document.getElementById('data-content').innerHTML = `
     <div class="data-header">
-      <h2>${ev ? ev.title : 'Registrations'}</h2>
-      <button class="btn btn-ghost btn-sm" onclick="exportData('${eventId}')">↓ Export</button>
+      <div>
+        <h2>${ev ? ev.title : 'Registrations'}</h2>
+        <div id="last-updated" style="font-size:10px;color:var(--muted);margin-top:2px">Updated just now</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" id="refresh-btn" onclick="refreshRegistrations()" title="Refresh" style="padding:10px;width:auto">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="exportData('${eventId}')">↓ Export</button>
+      </div>
     </div>
 
     <div class="stats-strip">
@@ -1234,7 +1291,10 @@ function renderRegsList(regs) {
   if (!list) return;
 
   if (!regs.length) {
-    list.innerHTML = `<div class="empty-state"><div class="icon">${_searchQuery ? '🔍' : '📭'}</div>${_searchQuery ? 'No matches' : 'No registrations yet'}</div>`;
+    const emptyIcon = _searchQuery
+      ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+      : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.4"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.68 2.81a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6.1 6.1l1.27-1.27a2 2 0 0 1 2.11-.45c.91.32 1.85.55 2.81.68a2 2 0 0 1 1.72 2.03z"/></svg>`;
+    list.innerHTML = `<div class="empty-state"><div class="icon">${emptyIcon}</div>${_searchQuery ? 'No matches' : 'No registrations yet'}</div>`;
     return;
   }
 
