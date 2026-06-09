@@ -6531,6 +6531,388 @@ app.get("/api/admin/lockout-status", async (req, res) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// KFS QR REGISTRATION SYSTEM — add this block to server.js
+// Paste BEFORE the catch-all route (app.get("*", ...)) at the bottom of server.js
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── QR Ticket email helper ─────────────────────────────────────────────────────
+async function sendTicketEmail({ event, reg, qrDataUrl }) {
+  const { data: rows } = await memCache("settings:email", 300, () =>
+    supabase.from("settings").select("key,value").in("key", ["brevo_api_key", "smtp_from_name"]),
+  );
+  const s = {};
+  (rows || []).forEach((r) => (s[r.key] = r.value));
+  if (!s.brevo_api_key) {
+    console.warn("[ticket-email] Brevo API key not configured — skipping ticket email");
+    return;
+  }
+
+  const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
+  const eventDate = event.event_date
+    ? new Date(event.event_date).toLocaleDateString("en-IN", {
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
+      })
+    : null;
+
+  // QR image is already a data URL — strip prefix to get pure base64 for email inline
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+
+  const htmlContent = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px">
+<tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden">
+
+  <!-- Header -->
+  <tr><td style="background:#000;padding:24px 32px;border-bottom:1px solid #1e1e1e">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:.05em;text-transform:uppercase">KFS</td>
+        <td align="right" style="font-size:11px;color:#555;letter-spacing:.08em;text-transform:uppercase">KIIT Film Society</td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Event title block -->
+  <tr><td style="padding:28px 32px 0">
+    <div style="font-size:11px;color:#555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Your Ticket</div>
+    <h1 style="margin:0 0 6px;font-size:26px;font-weight:800;color:#f5f5f5;line-height:1.2;letter-spacing:-.02em">${event.title || "Event"}</h1>
+    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:4px">📅 ${eventDate}</div>` : ""}
+    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:2px">📍 ${event.location}</div>` : ""}
+  </td></tr>
+
+  <!-- Divider -->
+  <tr><td style="padding:20px 32px"><div style="border-top:1px dashed #1e1e1e"></div></td></tr>
+
+  <!-- QR Code + name block (ticket body) -->
+  <tr><td style="padding:0 32px 24px">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <!-- QR code -->
+        <td align="center" width="160" style="vertical-align:top">
+          <div style="background:#fff;padding:12px;border-radius:10px;display:inline-block">
+            <img src="cid:qr_ticket" alt="QR Code" width="136" height="136" style="display:block">
+          </div>
+        </td>
+        <!-- Person details -->
+        <td style="padding-left:20px;vertical-align:middle">
+          <div style="font-size:22px;font-weight:800;color:#f5f5f5;letter-spacing:-.01em;margin-bottom:4px">${reg.name}</div>
+          <div style="font-size:12px;color:#666;margin-bottom:12px">${reg.email}</div>
+          ${reg.roll_no ? `<div style="font-size:12px;color:#555;background:#1a1a1a;border:1px solid #222;display:inline-block;padding:4px 10px;border-radius:6px;letter-spacing:.05em">${reg.roll_no}</div>` : ""}
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Welcome text -->
+  <tr><td style="padding:16px 32px;background:#0d0d0d;border-top:1px solid #1a1a1a">
+    <p style="margin:0;font-size:14px;color:#666;font-style:italic;text-align:center">
+      Welcome to the event! hope you have a great time 🎬
+    </p>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:20px 32px;border-top:1px solid #1a1a1a">
+    <p style="margin:0;font-size:11px;color:#333;text-align:center">
+      Show this QR at the entry gate.<br>
+      For queries: <a href="mailto:filmsocietykiit@gmail.com" style="color:#555;text-decoration:none">filmsocietykiit@gmail.com</a>
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+
+  const textContent = `Your KFS Event Ticket\n\n${event.title || "Event"}\n${eventDate ? `Date: ${eventDate}\n` : ""}${event.location ? `Venue: ${event.location}\n` : ""}\nRegistered for: ${reg.name} (${reg.email})\nShow the QR code attached at the event entry.\n\nFor queries: filmsocietykiit@gmail.com`;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": s.brevo_api_key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
+      to: [{ email: reg.email, name: reg.name }],
+      subject: `Your ticket for ${event.title || "the event"} — KFS`,
+      textContent,
+      htmlContent,
+      attachment: [
+        {
+          name: "ticket-qr.png",
+          content: qrBase64,
+          contentId: "qr_ticket",
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Brevo ticket email error ${response.status}: ${err}`);
+  }
+  console.log(`[ticket-email] Ticket sent to ${reg.email} for event "${event.title}"`);
+}
+
+// ── PUBLIC: Register for event (creates registration + sends QR ticket email) ──
+const registrationRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many registration attempts. Please wait 15 minutes." },
+  keyGenerator: (req) => req.ip,
+});
+
+app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
+  const { name, email, phone, roll_no } = req.body;
+  const eventId = req.params.id;
+
+  if (!name || !email) {
+    return res.status(400).json({ error: "Name and email are required" });
+  }
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_RE.test(email)) {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  // 1. Check event exists
+  const { data: event, error: evErr } = await supabasePublic
+    .from("events")
+    .select("id,title,event_date,location,is_upcoming")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (evErr || !event) return res.status(404).json({ error: "Event not found" });
+
+  // 2. Check already registered (same event + email)
+  const { data: existing } = await supabase
+    .from("event_registrations")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("email", email.toLowerCase().trim())
+    .maybeSingle();
+  if (existing) return res.status(409).json({ error: "This email is already registered for this event." });
+
+  // 3. Generate unique token
+  const qrToken = crypto.randomUUID();
+
+  // 4. Save to DB
+  const { data: reg, error: insertErr } = await supabase
+    .from("event_registrations")
+    .insert([{
+      event_id: eventId,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone ? phone.trim() : null,
+      roll_no: roll_no ? roll_no.trim().toUpperCase() : null,
+      qr_token: qrToken,
+    }])
+    .select()
+    .single();
+  if (insertErr) {
+    console.error("[register] DB insert error:", insertErr);
+    return res.status(500).json({ error: "Registration failed. Please try again." });
+  }
+
+  // 5. Generate QR image (encode only the token — clean and small)
+  let qrDataUrl;
+  try {
+    qrDataUrl = await QRCode.toDataURL(qrToken, {
+      width: 300,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    });
+  } catch (e) {
+    console.error("[register] QR generation failed:", e.message);
+    return res.status(500).json({ error: "Could not generate ticket QR." });
+  }
+
+  // 6. Send ticket email (non-blocking — don't fail registration if email fails)
+  sendTicketEmail({ event, reg, qrDataUrl }).catch((e) =>
+    console.error("[register] ticket email failed:", e.message)
+  );
+
+  console.log(`[register] ${reg.name} (${reg.email}) registered for event ${eventId}`);
+  res.json({
+    success: true,
+    message: "Registered! Check your email for the QR ticket.",
+    id: reg.id,
+  });
+});
+
+// ── ADMIN/SCANNER: Lookup QR (validates, does NOT mark checked-in) ─────────────
+// Used by scanner page to display person details before confirming entry
+app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
+  const { qr_token } = req.body;
+  if (!qr_token) return res.status(400).json({ error: "qr_token required" });
+
+  const { data: reg, error } = await supabase
+    .from("event_registrations")
+    .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, event_id, events(title, event_date, location)")
+    .eq("qr_token", qr_token)
+    .maybeSingle();
+
+  if (error) return res.status(500).json({ error: "DB error" });
+  if (!reg) return res.status(404).json({ status: "invalid", error: "QR not recognised — not a valid KFS ticket." });
+
+  if (reg.checked_in) {
+    return res.json({
+      status: "already_used",
+      name: reg.name,
+      email: reg.email,
+      roll_no: reg.roll_no,
+      phone: reg.phone,
+      event: reg.events?.title,
+      checked_in_at: reg.checked_in_at,
+      checked_in_by: reg.checked_in_by,
+      registration_id: reg.id,
+    });
+  }
+
+  return res.json({
+    status: "valid",
+    registration_id: reg.id,
+    name: reg.name,
+    email: reg.email,
+    roll_no: reg.roll_no,
+    phone: reg.phone,
+    event: reg.events?.title,
+    event_date: reg.events?.event_date,
+  });
+});
+
+// ── ADMIN/SCANNER: Confirm entry (marks checked_in = true) ────────────────────
+app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
+  const { registration_id } = req.body;
+  if (!registration_id) return res.status(400).json({ error: "registration_id required" });
+
+  // Re-check hasn't been scanned in the meantime (race condition)
+  const { data: reg } = await supabase
+    .from("event_registrations")
+    .select("id, name, email, checked_in, event_id")
+    .eq("id", registration_id)
+    .maybeSingle();
+
+  if (!reg) return res.status(404).json({ error: "Registration not found" });
+  if (reg.checked_in) {
+    return res.status(409).json({ error: "Already checked in", status: "already_used" });
+  }
+
+  const { error: updateErr } = await supabase
+    .from("event_registrations")
+    .update({
+      checked_in: true,
+      checked_in_at: new Date().toISOString(),
+      checked_in_by: req.admin.username,
+    })
+    .eq("id", registration_id);
+
+  if (updateErr) return res.status(500).json({ error: "Failed to mark entry" });
+
+  logActivity(req.admin.id, req.admin.name, "scan", "event_registration", `${reg.name} — event ${reg.event_id}`).catch(() => {});
+
+  console.log(`[scan] ✓ ${reg.name} checked in by ${req.admin.username} for event ${reg.event_id}`);
+  res.json({ success: true, name: reg.name });
+});
+
+// ── ADMIN: Get all registrations for an event ─────────────────────────────────
+app.get("/api/admin/events/:id/registrations", requireSection("events"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("event_registrations")
+    .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
+    .eq("event_id", req.params.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// ── ADMIN: Export registrations as XLSX ───────────────────────────────────────
+app.get("/api/admin/events/:id/registrations/export", requireSection("events"), async (req, res) => {
+  const { data: ev } = await supabase
+    .from("events")
+    .select("title")
+    .eq("id", req.params.id)
+    .maybeSingle();
+
+  const { data: regs, error } = await supabase
+    .from("event_registrations")
+    .select("name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
+    .eq("event_id", req.params.id)
+    .order("created_at");
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  const XLSX = require("xlsx");
+  const rows = (regs || []).map((r) => ({
+    "Name":            r.name,
+    "Email":           r.email,
+    "Phone":           r.phone || "—",
+    "Roll No":         r.roll_no || "—",
+    "Registered At":   new Date(r.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    "Checked In":      r.checked_in ? "YES" : "NO",
+    "Check-in Time":   r.checked_in_at ? new Date(r.checked_in_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—",
+    "Checked In By":   r.checked_in_by || "—",
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Auto-width columns
+  const colWidths = Object.keys(rows[0] || {}).map((k) => ({
+    wch: Math.max(k.length, ...rows.map((r) => String(r[k] || "").length)) + 2,
+  }));
+  ws["!cols"] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  const sheetName = (ev?.title || "Event").slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+  const safeName = (ev?.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  res.setHeader("Content-Disposition", `attachment; filename="kfs-registrations-${safeName}.xlsx"`);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.send(buf);
+});
+
+// ── ADMIN: Delete a single registration ───────────────────────────────────────
+app.delete("/api/admin/events/:eventId/registrations/:regId", requireSection("events"), async (req, res) => {
+  const { data: reg } = await supabase
+    .from("event_registrations")
+    .select("name, event_id")
+    .eq("id", req.params.regId)
+    .eq("event_id", req.params.eventId)
+    .maybeSingle();
+
+  if (!reg) return res.status(404).json({ error: "Registration not found" });
+
+  await supabase.from("event_registrations").delete().eq("id", req.params.regId);
+  logActivity(req.admin.id, req.admin.name, "delete", "event_registration", reg.name).catch(() => {});
+  res.json({ success: true });
+});
+
+// ── ADMIN: Get registration stats for an event (for event list view) ──────────
+app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("event_registrations")
+    .select("id, checked_in")
+    .eq("event_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  const total = (data || []).length;
+  const checkedIn = (data || []).filter((r) => r.checked_in).length;
+  res.json({ total, checked_in: checkedIn, pending: total - checkedIn });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// END QR REGISTRATION SYSTEM ROUTES
+// ══════════════════════════════════════════════════════════════════════════════
+
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

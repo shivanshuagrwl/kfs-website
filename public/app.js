@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs'];
+const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -2097,6 +2097,7 @@ function showAdminSection(name) {
 
 async function loadAdminData(name) {
   if (name==='themes') { loadThemes(); return; }
+  if (name==='scanner') { loadScannerSection(); return; }
   if (name==='two-factor') { tfa_initSection(); return; }
   if (name==='dashboard') { loadDashboard(); return; }
   if (name==='blogs') {
@@ -2139,22 +2140,7 @@ async function loadAdminData(name) {
     _attachInlineEdits('blogs', tbody);
   }
   else if (name==='events') {
-    const events = await apiFetch('/api/events');
-    const tbody = document.getElementById('admin-events-tbody');
-    if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
-    if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = events.map(e=>{ const eJson=JSON.stringify(e).replace(/"/g,'&quot;'); return `<tr data-id="${e.id}">
-      <td style="font-weight:500">${e.title}<\/td>
-      <td style="color:var(--grey)">${e.event_date||'—'}<\/td>
-      <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span><\/td>
-      <td style="color:var(--grey)">${e.location||'—'}<\/td>
-      <td><div class="action-btns">
-        <button class="btn-sm" onclick="editEvent(${eJson})">Edit<\/button>
-        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,'\\x27')}')">Form<\/button>
-        <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
-      <\/div><\/td>
-    <\/tr>`; }).join('');
-    _attachInlineEdits('events', tbody);
+    loadEventsWithRegs();
   }
   else if (name==='members') {
     const members = await apiFetch('/api/members');
@@ -9723,3 +9709,292 @@ function _evalDataHandler(el, expr, eventObj) {
     }
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// KFS QR REGISTRATION SYSTEM — additions
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function loadScannerSection() {
+  const events = await apiFetch('/api/events');
+  const scanEvSel = document.getElementById('scan-event-select');
+  const dataEvSel = document.getElementById('scan-data-event-select');
+
+  if (events && events.length) {
+    const sorted = [...events].sort((a, b) => {
+      if (a.is_upcoming !== b.is_upcoming) return a.is_upcoming ? -1 : 1;
+      return new Date(b.event_date || 0) - new Date(a.event_date || 0);
+    });
+    const opts = sorted.map(e =>
+      `<option value="${e.id}">${e.is_upcoming ? '🟢' : '⚫'} ${e.title}${e.event_date ? ' — ' + new Date(e.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</option>`
+    ).join('');
+    if (scanEvSel) scanEvSel.innerHTML = '<option value="">— Select event —</option>' + opts;
+    if (dataEvSel) dataEvSel.innerHTML = '<option value="">— Select event —</option>' + opts;
+  }
+}
+
+async function loadEventsWithRegs() {
+  const events = await apiFetch('/api/events');
+  const tbody = document.getElementById('admin-events-tbody');
+  if (!tbody) return;
+  if (events === null) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`;
+    return;
+  }
+  if (!events.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No events yet.</td></tr>`;
+    return;
+  }
+
+  const statsMap = {};
+  await Promise.allSettled(
+    events.filter(e => e.is_upcoming).map(async e => {
+      try {
+        const s = await apiFetch(`/api/admin/events/${e.id}/registrations/stats`);
+        if (s) statsMap[e.id] = s;
+      } catch {}
+    })
+  );
+
+  tbody.innerHTML = events.map(e => {
+    const eJson = JSON.stringify(e).replace(/"/g, '&quot;');
+    const stats = statsMap[e.id];
+    const regBadge = stats
+      ? `<span style="font-size:11px;color:var(--grey)">${stats.checked_in}/${stats.total} present</span>`
+      : '';
+    return `<tr data-id="${e.id}">
+      <td style="font-weight:500">${e.title}</td>
+      <td style="color:var(--grey)">${e.event_date || '—'}</td>
+      <td><span class="tag ${e.is_upcoming ? 'upcoming' : ''}">${e.is_upcoming ? 'Upcoming' : 'Past'}</span></td>
+      <td style="color:var(--grey)">${e.location || '—'}</td>
+      <td>${regBadge}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editEvent(${eJson})">Edit</button>
+        <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${e.id}','${e.title.replace(/'/g,"\\x27")}')">Form</button>
+        <button class="btn-sm" style="background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25)" onclick="openEventRegistrations('${e.id}')">Regs</button>
+        <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  _attachInlineEdits('events', tbody);
+}
+
+let _regEventId = null;
+let _regsList = [];
+
+async function openEventRegistrations(eventId) {
+  _regEventId = eventId;
+  const events = await apiFetch('/api/events');
+  const ev = (events || []).find(e => String(e.id) === String(eventId));
+
+  const modalHtml = `
+    <div class="modal-header" style="padding:24px 28px;border-bottom:1px solid var(--border-subtle)">
+      <h2 style="font-size:18px;font-weight:700;margin:0">Registrations — ${ev ? ev.title : 'Event'}</h2>
+    </div>
+    <div style="padding:20px 28px">
+      <div id="reg-stats-strip" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+        <div style="background:#1a1a1a;border:1px solid var(--border-subtle);border-radius:10px;padding:14px;text-align:center">
+          <div id="rstat-total" style="font-size:24px;font-weight:800;letter-spacing:-.03em">—</div>
+          <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Total</div>
+        </div>
+        <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:10px;padding:14px;text-align:center">
+          <div id="rstat-checked" style="font-size:24px;font-weight:800;letter-spacing:-.03em;color:#22c55e">—</div>
+          <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Present</div>
+        </div>
+        <div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:14px;text-align:center">
+          <div id="rstat-pending" style="font-size:24px;font-weight:800;letter-spacing:-.03em;color:#f59e0b">—</div>
+          <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Pending</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <input id="reg-search-input" type="text" placeholder="Search by name, email, roll no…"
+          style="flex:1;background:#0d0d0d;border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);outline:none"
+          oninput="filterModalRegs(this.value)">
+        <button class="btn-sm" style="background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2);padding:10px 14px" onclick="downloadRegsExport('${eventId}')">↓ Export</button>
+      </div>
+      <div id="regs-modal-list" style="max-height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:6px">
+        <div style="text-align:center;padding:24px;color:var(--grey);font-size:13px">Loading…</div>
+      </div>
+    </div>
+  `;
+
+  showModal(modalHtml, '680px');
+
+  const data = await apiFetch(`/api/admin/events/${eventId}/registrations`);
+  _regsList = data || [];
+  updateRegStats();
+  renderModalRegs(_regsList);
+}
+
+function updateRegStats() {
+  const total = _regsList.length;
+  const checked = _regsList.filter(r => r.checked_in).length;
+  const pending = total - checked;
+  const el = id => document.getElementById(id);
+  if (el('rstat-total'))   el('rstat-total').textContent = total;
+  if (el('rstat-checked')) el('rstat-checked').textContent = checked;
+  if (el('rstat-pending')) el('rstat-pending').textContent = pending;
+}
+
+function filterModalRegs(q) {
+  const ql = q.toLowerCase();
+  const filtered = _regsList.filter(r =>
+    (r.name || '').toLowerCase().includes(ql) ||
+    (r.email || '').toLowerCase().includes(ql) ||
+    (r.roll_no || '').toLowerCase().includes(ql)
+  );
+  renderModalRegs(filtered);
+}
+
+function renderModalRegs(list) {
+  const el = document.getElementById('regs-modal-list');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--grey);font-size:13px">No registrations found</div>`;
+    return;
+  }
+  el.innerHTML = list.map(r => `
+    <div style="background:#111;border:1px solid ${r.checked_in ? 'rgba(34,197,94,.2)' : 'var(--border-subtle)'};border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+      <div style="width:7px;height:7px;border-radius:50%;background:${r.checked_in ? '#22c55e' : '#333'};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+        <div style="font-size:11px;color:var(--grey);margin-top:2px">${r.email}${r.roll_no ? ' · ' + r.roll_no : ''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        ${r.checked_in
+          ? `<div style="font-size:11px;color:#22c55e;font-weight:600">✓ ${r.checked_in_at ? new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : 'Present'}</div>`
+          : `<div style="font-size:11px;color:var(--grey)">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : ''}</div>`
+        }
+        <button class="btn-sm danger" style="margin-top:4px;font-size:10px;padding:3px 8px" onclick="deleteRegFromModal(${r.id})">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteRegFromModal(id) {
+  if (!confirm('Remove this registration?')) return;
+  await apiFetch(`/api/admin/events/${_regEventId}/registrations/${id}`, { method: 'DELETE' });
+  _regsList = _regsList.filter(r => r.id !== id);
+  updateRegStats();
+  renderModalRegs(_regsList);
+}
+
+async function downloadRegsExport(eventId) {
+  try {
+    const r = await fetch(`/api/admin/events/${eventId}/registrations/export`, {
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'x-csrf-token': _csrfToken || '' },
+    });
+    if (!r.ok) { showAdminError('Export failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kfs-registrations-event-${eventId}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    showAdminError('Export failed');
+  }
+}
+
+async function downloadRegsExportFromSection() {
+  const sel = document.getElementById('scan-data-event-select');
+  if (!sel || !sel.value) return;
+  await downloadRegsExport(sel.value);
+}
+
+async function loadScanDataSection() {
+  const sel = document.getElementById('scan-data-event-select');
+  const content = document.getElementById('scan-data-content');
+  const exportBtn = document.getElementById('scan-export-btn');
+  if (!sel || !sel.value) return;
+  const eventId = sel.value;
+  if (exportBtn) exportBtn.style.display = 'inline-flex';
+  if (content) content.innerHTML = `<div style="text-align:center;padding:24px;color:var(--grey);font-size:13px">Loading…</div>`;
+
+  const data = await apiFetch(`/api/admin/events/${eventId}/registrations`);
+  const list = data || [];
+  if (!content) return;
+  if (!list.length) {
+    content.innerHTML = `<div style="text-align:center;padding:32px;color:var(--grey);font-size:13px">No registrations yet for this event.</div>`;
+    return;
+  }
+  const total = list.length;
+  const checked = list.filter(r => r.checked_in).length;
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:#1a1a1a;border:1px solid var(--border-subtle);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800">${total}</div>
+        <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Total</div>
+      </div>
+      <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.15);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:#22c55e">${checked}</div>
+        <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Present</div>
+      </div>
+      <div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:#f59e0b">${total - checked}</div>
+        <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Pending</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${list.map(r => `
+        <div style="background:#111;border:1px solid ${r.checked_in ? 'rgba(34,197,94,.2)' : 'var(--border-subtle)'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <div style="width:7px;height:7px;border-radius:50%;background:${r.checked_in ? '#22c55e' : '#333'};flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${r.name}</div>
+            <div style="font-size:11px;color:var(--grey)">${r.email}${r.roll_no ? ' · ' + r.roll_no : ''}</div>
+          </div>
+          <div style="font-size:11px;${r.checked_in ? 'color:#22c55e;font-weight:600' : 'color:var(--grey)'}">${r.checked_in ? '✓ Present' : 'Pending'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function submitEventRegistration(eventId) {
+  const btn = document.getElementById('reg-submit-btn');
+  const errEl = document.getElementById('reg-form-error');
+  const successEl = document.getElementById('reg-form-success');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Registering…';
+
+  const name    = document.getElementById('reg-name').value.trim();
+  const email   = document.getElementById('reg-email').value.trim();
+  const roll_no = document.getElementById('reg-rollno').value.trim();
+  const phone   = document.getElementById('reg-phone').value.trim();
+
+  if (!name || !email) {
+    errEl.textContent = 'Name and email are required.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Register & Get QR Ticket';
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/events/${eventId}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, roll_no, phone }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Registration failed.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Register & Get QR Ticket';
+    } else {
+      document.getElementById('reg-form-fields').style.display = 'none';
+      successEl.style.display = 'block';
+    }
+  } catch {
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Register & Get QR Ticket';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// END QR REGISTRATION SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════

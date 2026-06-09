@@ -3400,6 +3400,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="admin-sidebar-group">Content</div>
     <div data-action="showAdminSection" data-args='["blogs"]' class="admin-sidebar-item" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["events"]' data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
+    <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["scanner"]' data-section="scanner"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="16" y1="11" x2="21" y2="11"/><line x1="11" y1="3" x2="11" y2="8"/><line x1="11" y1="11" x2="11" y2="16"/><line x1="3" y1="11" x2="8" y2="11"/></svg></span> Scanner</div>
     <div data-action="showAdminSection" data-args='["members"]' class="admin-sidebar-item" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
     <div data-action="showAdminSection" data-args='["movies"]' class="admin-sidebar-item" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
     <div data-action="showAdminSection" data-args='["chitra-vichitra"]' class="admin-sidebar-item" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
@@ -3524,9 +3525,46 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Regs</th><th>Actions</th></tr></thead>
           <tbody id="admin-events-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- SCANNER -->
+    <div class="admin-section" id="section-scanner">
+      <div class="admin-header">
+        <div><h2>Event Scanner</h2><p style="color:var(--grey);font-size:13px;margin-top:4px">QR-based check-in and registration management</p></div>
+        <a href="/scanner" target="_blank" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">📷 Open Scanner</a>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+        <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;padding:20px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Mobile Scanner</div>
+          <p style="font-size:13px;color:var(--grey);line-height:1.6;margin-bottom:16px">Open the scanner on your phone to scan QR tickets at the event gate. Works in any mobile browser — no app required.</p>
+          <a href="/scanner" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none">📷 Launch Scanner</a>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;padding:20px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Who can scan</div>
+          <p style="font-size:13px;color:var(--grey);line-height:1.6;margin-bottom:12px">Admins with <strong style="color:var(--text)">events</strong> permission can scan QR codes and view attendance.</p>
+          <div style="font-size:11px;color:var(--grey);background:rgba(255,255,255,.04);border:1px solid var(--border-subtle);border-radius:6px;padding:8px 10px;font-family:monospace">Permission required: <strong style="color:#58a6ff">events</strong></div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <h3 style="font-size:14px;font-weight:700">Registrations</h3>
+          <div style="display:flex;align-items:center;gap:10px">
+            <select id="scan-data-event-select" onchange="loadScanDataSection()"
+              style="background:#0d0d0d;border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);outline:none">
+              <option value="">— Select event —</option>
+            </select>
+            <button class="btn-sm" id="scan-export-btn" style="display:none;background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2)" onclick="downloadRegsExportFromSection()">↓ Export XLSX</button>
+          </div>
+        </div>
+        <div id="scan-data-content" style="padding:20px">
+          <div style="text-align:center;padding:48px;color:var(--grey);font-size:13px">Select an event to view registrations</div>
+        </div>
       </div>
     </div>
 

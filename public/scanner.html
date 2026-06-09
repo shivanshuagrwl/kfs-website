@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KFS Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #090909;
+    --surface: #111;
+    --border: #1c1c1c;
+    --text: #f0f0f0;
+    --muted: #555;
+    --accent: #fff;
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,.12);
+    --blue: #58a6ff;
+    --blue-dim: rgba(88,166,255,.1);
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    gap: 24px;
+  }
+  .login-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .login-logo .kfs-mark {
+    width: 56px;
+    height: 56px;
+    background: var(--text);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--bg);
+    letter-spacing: -.03em;
+  }
+  .login-logo h1 {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 360px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .login-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin-bottom: 2px;
+  }
+  .login-card p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%;
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 13px 14px;
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+  }
+  .field input:focus { border-color: #333; }
+  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; display: block; margin-bottom: 6px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    -webkit-font-smoothing: antialiased;
+  }
+  .btn:active { opacity: .75; transform: scale(.98); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-green  { background: var(--green); color: #fff; }
+  .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+  .btn-sm { padding: 10px 16px; font-size: 13px; width: auto; border-radius: 8px; }
+
+  #login-error {
+    background: var(--red-dim);
+    border: 1px solid rgba(239,68,68,.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--red);
+    display: none;
+  }
+
+  /* ── MAIN APP ── */
+  #app { flex: 1; display: none; flex-direction: column; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #0a0a0a;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar .kfs-badge {
+    background: var(--text);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 5px;
+    letter-spacing: .03em;
+  }
+  .topbar .event-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar .admin-name {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .topbar .logout-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+  }
+  .topbar .logout-btn:hover { color: var(--red); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: #0a0a0a;
+    position: sticky;
+    top: 57px;
+    z-index: 9;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+  /* ── SCANNER TAB ── */
+  #tab-scanner, #tab-data { padding: 16px; display: none; }
+  #tab-scanner.visible, #tab-data.visible { display: block; }
+
+  /* ── EVENT SELECTOR ── */
+  .event-select-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .event-select-wrap select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--text);
+    appearance: none;
+    outline: none;
+  }
+  .event-select-wrap::after {
+    content: '▾';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* ── QR CAMERA ── */
+  #qr-reader-wrap {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+    aspect-ratio: 1;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  #qr-reader { width: 100% !important; border: none !important; }
+  #qr-reader video { width: 100% !important; object-fit: cover; }
+  #qr-reader img { display: none !important; }
+  #qr-reader * { border: none !important; }
+
+  /* scanner overlay corners */
+  .scan-frame {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .scan-corners {
+    width: 200px;
+    height: 200px;
+    position: relative;
+  }
+  .scan-corners::before,
+  .scan-corners::after,
+  .scan-corners > span::before,
+  .scan-corners > span::after {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: rgba(255,255,255,.8);
+    border-style: solid;
+  }
+  .scan-corners::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 3px 0 0 0; }
+  .scan-corners::after  { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 3px 0 0; }
+  .scan-corners > span::before { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 3px; }
+  .scan-corners > span::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 3px 0; }
+
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+    animation: scan 2s ease-in-out infinite;
+    top: 50%;
+  }
+  @keyframes scan {
+    0%, 100% { transform: translateY(-90px); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    50% { transform: translateY(90px); }
+  }
+
+  /* scanner status hint */
+  .scan-hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  #start-scan-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: background .15s;
+    margin-bottom: 16px;
+  }
+  #start-scan-btn:hover { background: #1a1a1a; }
+  #camera-icon { font-size: 28px; display: block; margin-bottom: 4px; }
+
+  /* ── RESULT CARD ── */
+  #result-card {
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: none;
+    animation: slideUp .2s ease;
+  }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } }
+
+  #result-card.valid   { background: var(--green-dim); border-color: rgba(34,197,94,.25); }
+  #result-card.used    { background: var(--red-dim);   border-color: rgba(239,68,68,.2); }
+  #result-card.invalid { background: var(--red-dim);   border-color: rgba(239,68,68,.2); }
+
+  .result-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .status-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .valid   .status-icon { background: rgba(34,197,94,.2); }
+  .used    .status-icon { background: rgba(239,68,68,.2); }
+  .invalid .status-icon { background: rgba(239,68,68,.2); }
+
+  .status-label {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  .valid   .status-label { color: var(--green); }
+  .used    .status-label { color: var(--red);   }
+  .invalid .status-label { color: var(--red);   }
+
+  .result-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .info-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .info-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+    width: 60px;
+    flex-shrink: 0;
+  }
+  .info-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .info-value.name { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+
+  .result-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  /* confirm success state */
+  #confirm-success {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    background: var(--green-dim);
+    border: 1px solid rgba(34,197,94,.25);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--green);
+    animation: slideUp .2s ease;
+    margin-top: 12px;
+  }
+
+  /* spinner for confirm action */
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* scan again hint after confirm */
+  #scan-again-hint {
+    display: none;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+
+  /* ── DATA TAB ── */
+  .data-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 10px;
+  }
+  .data-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-box .num {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.03em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-box .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+  .stat-box.checked .num { color: var(--green); }
+  .stat-box.pending .num { color: var(--amber); }
+
+  /* search + export bar */
+  .data-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .data-toolbar input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+  }
+  .data-toolbar input::placeholder { color: var(--muted); }
+
+  /* registrations list */
+  #regs-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .reg-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .reg-card:hover { border-color: #333; }
+  .reg-card.checked-in { border-color: rgba(34,197,94,.25); background: rgba(34,197,94,.04); }
+
+  .reg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--muted);
+  }
+  .reg-card.checked-in .reg-dot { background: var(--green); }
+
+  .reg-info { flex: 1; min-width: 0; }
+  .reg-name {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .reg-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reg-time {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .reg-card.checked-in .reg-time { color: var(--green); }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+
+  /* ── MODAL (registration detail) ── */
+  #modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+    padding: 0 0 env(safe-area-inset-bottom);
+  }
+  #modal-overlay.visible { display: flex; }
+  #modal-sheet {
+    background: #111;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 480px;
+    animation: sheetUp .22s ease;
+  }
+  @keyframes sheetUp { from { transform: translateY(60px); opacity: 0; } }
+  .modal-handle {
+    width: 36px;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    margin: 0 auto 18px;
+  }
+  .modal-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    margin-bottom: 4px;
+  }
+  .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+
+  .modal-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .mfield { display: flex; gap: 12px; align-items: baseline; }
+  .mfield-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; width: 72px; flex-shrink: 0; }
+  .mfield-value { font-size: 14px; font-weight: 500; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .badge.green { background: var(--green-dim); color: var(--green); }
+  .badge.grey  { background: rgba(255,255,255,.06); color: var(--muted); }
+  .badge.red   { background: var(--red-dim); color: var(--red); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    z-index: 200;
+    transition: transform .25s ease, opacity .25s;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* ── LOADING ── */
+  .loading-state {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* Beep feedback animation on scan */
+  @keyframes flashGreen {
+    0%   { background: var(--bg); }
+    10%  { background: rgba(34,197,94,.08); }
+    100% { background: var(--bg); }
+  }
+  @keyframes flashRed {
+    0%   { background: var(--bg); }
+    10%  { background: rgba(239,68,68,.08); }
+    100% { background: var(--bg); }
+  }
+  body.flash-green { animation: flashGreen .5s ease forwards; }
+  body.flash-red   { animation: flashRed .5s ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-logo">
+    <img src="/images/kfs-logo" alt="KFS" style="width:56px;height:56px;border-radius:14px;object-fit:cover;">
+    <h1>Event Scanner</h1>
+  </div>
+
+  <div class="login-card">
+    <h2>Sign in</h2>
+    <p>Use your KFS admin credentials</p>
+
+    <div id="login-error"></div>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="l-user" autocomplete="username" autocapitalize="none" placeholder="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="l-pass" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div class="field" id="totp-field" style="display:none">
+      <label>2FA Code</label>
+      <input type="text" id="l-totp" inputmode="numeric" pattern="[0-9]*" placeholder="000000" maxlength="6">
+    </div>
+
+    <button class="btn btn-primary" id="login-btn" onclick="doLogin()">Sign in</button>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <img src="/images/kfs-logo" alt="KFS" class="kfs-badge" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
+    <div class="event-name" id="topbar-event">Select event</div>
+    <div class="admin-name" id="topbar-admin"></div>
+    <button class="logout-btn" onclick="doLogout()" title="Sign out">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" id="tab-btn-scanner" onclick="switchTab('scanner')">📷 Scan</button>
+    <button class="tab" id="tab-btn-data"    onclick="switchTab('data')">📋 Registrations</button>
+  </div>
+
+  <!-- Scanner tab -->
+  <div id="tab-scanner" class="visible">
+    <!-- Event select -->
+    <div class="event-select-wrap">
+      <select id="event-select" onchange="onEventChange()">
+        <option value="">— Select event to scan for —</option>
+      </select>
+    </div>
+
+    <!-- Camera / start button -->
+    <button id="start-scan-btn" onclick="startCamera()">
+      <div>
+        <span id="camera-icon">📷</span>
+        <div>Tap to start camera</div>
+      </div>
+    </button>
+
+    <!-- QR reader (hidden until started) -->
+    <div id="qr-reader-wrap" style="display:none">
+      <div id="qr-reader"></div>
+      <div class="scan-frame">
+        <div class="scan-corners">
+          <span></span>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scan-hint" id="scan-hint" style="display:none">Align QR code inside the frame</div>
+
+    <!-- Result card -->
+    <div id="result-card">
+      <div class="result-status">
+        <div class="status-icon" id="res-icon"></div>
+        <div>
+          <div class="status-label" id="res-label"></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="res-sublabel"></div>
+        </div>
+      </div>
+      <div class="result-info" id="res-info"></div>
+      <div class="result-actions" id="res-actions"></div>
+    </div>
+
+    <div id="confirm-success">✓ Entry confirmed — <span id="confirm-name"></span></div>
+    <div id="scan-again-hint">Camera paused — scan next ticket</div>
+  </div>
+
+  <!-- Data tab -->
+  <div id="tab-data">
+    <!-- event select for data -->
+    <div class="event-select-wrap">
+      <select id="data-event-select" onchange="loadRegistrations()">
+        <option value="">— Select event —</option>
+      </select>
+    </div>
+
+    <div id="data-content">
+      <div class="empty-state"><div class="icon">📋</div>Select an event to view registrations</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── DETAIL MODAL ── -->
+<div id="modal-overlay" onclick="closeModal()">
+  <div id="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let _token = null;
+let _adminName = '';
+let _adminRole = '';
+let _events = [];
+let _scanner = null;
+let _scanning = false;
+let _lastScanned = null;
+let _pendingReg = null;   // { registration_id, name } awaiting confirm
+let _csrfToken = null;
+let _regsCache = {};      // eventId → registrations array
+
+// ── CSRF ───────────────────────────────────────────────────────────────────────
+async function fetchCsrf() {
+  try {
+    const r = await fetch('/api/csrf-token');
+    const d = await r.json();
+    _csrfToken = d.csrf_token;
+  } catch {}
+}
+fetchCsrf();
+
+// Auto-refresh CSRF every 3.5 hours (token valid 4h)
+setInterval(fetchCsrf, 3.5 * 60 * 60 * 1000);
+
+// ── API helper ─────────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ..._token ? { 'Authorization': `Bearer ${_token}` } : {},
+      ..._csrfToken && method !== 'GET' ? { 'x-csrf-token': _csrfToken } : {},
+    },
+    credentials: 'include',
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+
+// Auto-refresh token every 12 min
+setInterval(async () => {
+  if (!_token) return;
+  const r = await fetch('/api/admin/refresh', { method: 'POST', credentials: 'include',
+    headers: { 'x-csrf-token': _csrfToken || '' } });
+  if (r.ok) { const d = await r.json(); _token = d.token; }
+}, 12 * 60 * 1000);
+
+// ── LOGIN ──────────────────────────────────────────────────────────────────────
+let _needTotp = false;
+
+document.getElementById('l-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('l-totp')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>';
+
+  const username = document.getElementById('l-user').value.trim();
+  const password  = document.getElementById('l-pass').value;
+  const totp_code = document.getElementById('l-totp').value.trim();
+
+  try {
+    const { ok, data } = await api('POST', '/api/admin/login', {
+      username, password, ...(totp_code ? { totp_code } : {})
+    });
+
+    if (!ok) {
+      errEl.textContent = data.error || 'Login failed';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+      return;
+    }
+
+    if (data.require_totp) {
+      _needTotp = true;
+      document.getElementById('totp-field').style.display = 'block';
+      document.getElementById('l-totp').focus();
+      btn.disabled = false;
+      btn.textContent = 'Verify';
+      return;
+    }
+
+    // Check permission — must have 'events' or be master
+    const perms = data.permissions || [];
+    if (data.role !== 'master' && !perms.includes('events')) {
+      errEl.textContent = 'Access denied: no permission for events / scanning.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+      return;
+    }
+
+    _token = data.token;
+    _adminName = data.name;
+    _adminRole = data.role;
+
+    await fetchCsrf();
+    await bootApp();
+  } catch (e) {
+    errEl.textContent = 'Network error — check connection.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+}
+
+async function doLogout() {
+  try { await api('POST', '/api/admin/logout', {}); } catch {}
+  _token = null;
+  _scanning = false;
+  if (_scanner) { try { await _scanner.stop(); } catch {} _scanner = null; }
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('l-totp').value = '';
+  document.getElementById('totp-field').style.display = 'none';
+  document.getElementById('login-btn').textContent = 'Sign in';
+}
+
+// ── BOOT APP ───────────────────────────────────────────────────────────────────
+async function bootApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('topbar-admin').textContent = _adminName;
+
+  await loadEvents();
+}
+
+async function loadEvents() {
+  const { ok, data } = await api('GET', '/api/events');
+  if (!ok) return;
+
+  // Only upcoming or recent events
+  _events = (data || []).sort((a, b) => {
+    // upcoming first, then by date desc
+    if (a.is_upcoming !== b.is_upcoming) return a.is_upcoming ? -1 : 1;
+    return new Date(b.event_date || 0) - new Date(a.event_date || 0);
+  });
+
+  const opts = _events.map(e =>
+    `<option value="${e.id}">${e.is_upcoming ? '🟢' : '⚫'} ${e.title}${e.event_date ? ' — ' + new Date(e.event_date).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : ''}</option>`
+  ).join('');
+
+  document.getElementById('event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
+  document.getElementById('data-event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
+}
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('tab-scanner').classList.toggle('visible', tab === 'scanner');
+  document.getElementById('tab-data').classList.toggle('visible', tab === 'data');
+  document.getElementById('tab-btn-scanner').classList.toggle('active', tab === 'scanner');
+  document.getElementById('tab-btn-data').classList.toggle('active', tab === 'data');
+
+  if (tab === 'data') {
+    const sel = document.getElementById('data-event-select');
+    // Sync selected event
+    const scanEvent = document.getElementById('event-select').value;
+    if (scanEvent) sel.value = scanEvent;
+    if (sel.value) loadRegistrations();
+  }
+}
+
+// ── EVENT SELECT ───────────────────────────────────────────────────────────────
+function onEventChange() {
+  const sel = document.getElementById('event-select');
+  const ev = _events.find(e => String(e.id) === String(sel.value));
+  document.getElementById('topbar-event').textContent = ev ? ev.title : 'Select event';
+  // Reset result card
+  hideResult();
+}
+
+// ── SCANNER ────────────────────────────────────────────────────────────────────
+async function startCamera() {
+  const eventId = document.getElementById('event-select').value;
+  if (!eventId) { toast('Select an event first'); return; }
+
+  document.getElementById('start-scan-btn').style.display = 'none';
+  document.getElementById('qr-reader-wrap').style.display = 'block';
+  document.getElementById('scan-hint').style.display = 'block';
+
+  _scanner = new Html5Qrcode('qr-reader');
+  try {
+    await _scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1.0 },
+      onQrScanned,
+      () => {}
+    );
+    _scanning = true;
+  } catch (e) {
+    console.error('Camera error:', e);
+    toast('Camera not accessible — check permissions');
+    document.getElementById('start-scan-btn').style.display = 'flex';
+    document.getElementById('qr-reader-wrap').style.display = 'none';
+    document.getElementById('scan-hint').style.display = 'none';
+  }
+}
+
+let _scanCooldown = false;
+
+async function onQrScanned(text) {
+  if (_scanCooldown) return;
+  if (text === _lastScanned) return; // same QR, ignore repeat
+  _lastScanned = text;
+  _scanCooldown = true;
+  setTimeout(() => { _scanCooldown = false; }, 2500);
+
+  // Pause scanner visually while processing
+  showResult({ status: 'loading' });
+
+  const eventId = document.getElementById('event-select').value;
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/lookup', { qr_token: text });
+
+  if (!ok || data.status === 'invalid') {
+    flashBody('red');
+    vibrateDevice([100, 50, 100]);
+    showResult({ status: 'invalid', error: data?.error || 'Invalid QR code — not a KFS ticket.' });
+    return;
+  }
+
+  if (data.status === 'already_used') {
+    flashBody('red');
+    vibrateDevice([200, 100, 200]);
+    showResult({ status: 'already_used', ...data });
+    return;
+  }
+
+  if (data.status === 'valid') {
+    flashBody('green');
+    vibrateDevice([50]);
+    _pendingReg = { registration_id: data.registration_id, name: data.name };
+    showResult({ status: 'valid', ...data });
+  }
+}
+
+function showResult(d) {
+  const card = document.getElementById('result-card');
+  card.style.display = 'block';
+
+  const icon = document.getElementById('res-icon');
+  const label = document.getElementById('res-label');
+  const sublabel = document.getElementById('res-sublabel');
+  const info = document.getElementById('res-info');
+  const actions = document.getElementById('res-actions');
+
+  card.className = '';
+  icon.textContent = '';
+  label.textContent = '';
+  sublabel.textContent = '';
+  info.innerHTML = '';
+  actions.innerHTML = '';
+  document.getElementById('confirm-success').style.display = 'none';
+  document.getElementById('scan-again-hint').style.display = 'none';
+
+  if (d.status === 'loading') {
+    card.classList.add('valid');
+    icon.textContent = '⏳';
+    label.textContent = 'Checking…';
+    return;
+  }
+
+  if (d.status === 'invalid') {
+    card.classList.add('invalid');
+    icon.textContent = '✗';
+    label.textContent = 'Invalid QR';
+    sublabel.textContent = d.error || '';
+    actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="resumeScanner()">Scan again</button>`;
+    return;
+  }
+
+  if (d.status === 'already_used') {
+    card.classList.add('used');
+    icon.textContent = '⛔';
+    label.textContent = 'Already checked in';
+    const when = d.checked_in_at ? new Date(d.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : '';
+    sublabel.textContent = when ? `Scanned at ${when}` : '';
+    info.innerHTML = `
+      <div class="info-row"><span class="info-label">Name</span><span class="info-value name">${esc(d.name)}</span></div>
+      ${d.roll_no ? `<div class="info-row"><span class="info-label">Roll No</span><span class="info-value">${esc(d.roll_no)}</span></div>` : ''}
+      ${d.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${esc(d.email)}</span></div>` : ''}
+      ${d.checked_in_by ? `<div class="info-row"><span class="info-label">By</span><span class="info-value" style="color:var(--muted)">${esc(d.checked_in_by)}</span></div>` : ''}
+    `;
+    actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="resumeScanner()">Scan again</button>`;
+    return;
+  }
+
+  if (d.status === 'valid') {
+    card.classList.add('valid');
+    icon.textContent = '✓';
+    label.textContent = 'Valid ticket';
+    sublabel.textContent = d.event || '';
+    info.innerHTML = `
+      <div class="info-row"><span class="info-label">Name</span><span class="info-value name">${esc(d.name)}</span></div>
+      ${d.roll_no ? `<div class="info-row"><span class="info-label">Roll No</span><span class="info-value">${esc(d.roll_no)}</span></div>` : ''}
+      ${d.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${esc(d.email)}</span></div>` : ''}
+    `;
+    actions.innerHTML = `
+      <button class="btn btn-green" id="confirm-btn" onclick="confirmEntry()">
+        ✓ Allow Entry
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="resumeScanner()">Skip</button>
+    `;
+  }
+}
+
+function hideResult() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('confirm-success').style.display = 'none';
+  document.getElementById('scan-again-hint').style.display = 'none';
+  _pendingReg = null;
+  _lastScanned = null;
+  _scanCooldown = false;
+}
+
+async function confirmEntry() {
+  if (!_pendingReg) return;
+  const btn = document.getElementById('confirm-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
+
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/confirm', {
+    registration_id: _pendingReg.registration_id
+  });
+
+  if (!ok) {
+    toast(data?.error || 'Confirm failed');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Allow Entry'; }
+    return;
+  }
+
+  // Show success
+  const successEl = document.getElementById('confirm-success');
+  document.getElementById('confirm-name').textContent = _pendingReg.name;
+  successEl.style.display = 'flex';
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('scan-again-hint').style.display = 'block';
+
+  vibrateDevice([80, 40, 80, 40, 120]);
+
+  // Auto-resume after 2.5s
+  setTimeout(() => {
+    resumeScanner();
+  }, 3000);
+
+  // Invalidate data cache for this event
+  const eventId = document.getElementById('event-select').value;
+  if (eventId) delete _regsCache[eventId];
+}
+
+function resumeScanner() {
+  hideResult();
+  _lastScanned = null;
+}
+
+// ── DATA TAB ───────────────────────────────────────────────────────────────────
+let _allRegs = [];
+let _searchQuery = '';
+
+async function loadRegistrations() {
+  const sel = document.getElementById('data-event-select');
+  const eventId = sel.value;
+  if (!eventId) return;
+
+  const content = document.getElementById('data-content');
+  content.innerHTML = '<div class="loading-state">Loading…</div>';
+
+  const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations`);
+  if (!ok) { content.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>Failed to load registrations</div>'; return; }
+
+  _allRegs = data || [];
+  _regsCache[eventId] = _allRegs;
+  renderDataTab(eventId);
+}
+
+function renderDataTab(eventId) {
+  const total = _allRegs.length;
+  const checked = _allRegs.filter(r => r.checked_in).length;
+  const pending = total - checked;
+
+  const ev = _events.find(e => String(e.id) === String(eventId));
+
+  document.getElementById('data-content').innerHTML = `
+    <div class="data-header">
+      <h2>${ev ? ev.title : 'Registrations'}</h2>
+      <button class="btn btn-ghost btn-sm" onclick="exportData('${eventId}')">↓ Export</button>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat-box">
+        <div class="num">${total}</div>
+        <div class="label">Total</div>
+      </div>
+      <div class="stat-box checked">
+        <div class="num">${checked}</div>
+        <div class="label">Present</div>
+      </div>
+      <div class="stat-box pending">
+        <div class="num">${pending}</div>
+        <div class="label">Pending</div>
+      </div>
+    </div>
+
+    <div class="data-toolbar">
+      <input type="text" id="regs-search" placeholder="Search name, email, roll no…" oninput="filterRegs(this.value)">
+    </div>
+
+    <div id="regs-list"></div>
+  `;
+
+  renderRegsList(_allRegs);
+}
+
+function filterRegs(q) {
+  _searchQuery = q.toLowerCase();
+  const filtered = _allRegs.filter(r =>
+    (r.name || '').toLowerCase().includes(_searchQuery) ||
+    (r.email || '').toLowerCase().includes(_searchQuery) ||
+    (r.roll_no || '').toLowerCase().includes(_searchQuery)
+  );
+  renderRegsList(filtered);
+}
+
+function renderRegsList(regs) {
+  const list = document.getElementById('regs-list');
+  if (!list) return;
+
+  if (!regs.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">${_searchQuery ? '🔍' : '📭'}</div>${_searchQuery ? 'No matches' : 'No registrations yet'}</div>`;
+    return;
+  }
+
+  list.innerHTML = regs.map(r => `
+    <div class="reg-card ${r.checked_in ? 'checked-in' : ''}" onclick="openRegDetail(${r.id})">
+      <div class="reg-dot"></div>
+      <div class="reg-info">
+        <div class="reg-name">${esc(r.name)}</div>
+        <div class="reg-sub">${esc(r.email)}${r.roll_no ? ' · ' + r.roll_no : ''}</div>
+      </div>
+      <div class="reg-time">
+        ${r.checked_in
+          ? (r.checked_in_at ? new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : '✓')
+          : (r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : '')
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+function openRegDetail(id) {
+  const r = _allRegs.find(x => x.id === id);
+  if (!r) return;
+
+  const evId = document.getElementById('data-event-select').value;
+
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-name">${esc(r.name)}</div>
+    <div class="modal-sub">${esc(r.email)}</div>
+
+    <div class="modal-fields">
+      ${r.roll_no ? `<div class="mfield"><span class="mfield-label">Roll No</span><span class="mfield-value">${esc(r.roll_no)}</span></div>` : ''}
+      ${r.phone   ? `<div class="mfield"><span class="mfield-label">Phone</span><span class="mfield-value">${esc(r.phone)}</span></div>` : ''}
+      <div class="mfield">
+        <span class="mfield-label">Status</span>
+        <span class="mfield-value">
+          ${r.checked_in
+            ? `<span class="badge green">✓ Checked in</span>`
+            : `<span class="badge grey">Pending</span>`}
+        </span>
+      </div>
+      ${r.checked_in && r.checked_in_at ? `
+        <div class="mfield"><span class="mfield-label">Check-in</span><span class="mfield-value">${new Date(r.checked_in_at).toLocaleString('en-IN', { timeZone:'Asia/Kolkata' })}</span></div>
+        ${r.checked_in_by ? `<div class="mfield"><span class="mfield-label">By</span><span class="mfield-value" style="color:var(--muted)">${esc(r.checked_in_by)}</span></div>` : ''}
+      ` : ''}
+      <div class="mfield"><span class="mfield-label">Registered</span><span class="mfield-value">${new Date(r.created_at).toLocaleString('en-IN', { timeZone:'Asia/Kolkata' })}</span></div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger btn-sm" onclick="deleteReg(${r.id}, '${evId}')">Delete</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button>
+    </div>
+  `;
+  document.getElementById('modal-overlay').classList.add('visible');
+}
+
+async function deleteReg(id, eventId) {
+  if (!confirm('Delete this registration?')) return;
+  const { ok } = await api('DELETE', `/api/admin/events/${eventId}/registrations/${id}`);
+  if (!ok) { toast('Delete failed'); return; }
+  closeModal();
+  toast('Registration deleted');
+  _allRegs = _allRegs.filter(r => r.id !== id);
+  renderDataTab(eventId);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('visible');
+}
+
+async function exportData(eventId) {
+  if (!eventId) return;
+  // Download via direct link with auth header isn't possible; use window.open with token in query
+  // Instead open a fresh fetch + blob download
+  try {
+    const r = await fetch(`/api/admin/events/${eventId}/registrations/export`, {
+      headers: { 'Authorization': `Bearer ${_token}`, 'x-csrf-token': _csrfToken || '' },
+    });
+    if (!r.ok) { toast('Export failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kfs-registrations-event-${eventId}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    toast('Export failed — check connection');
+  }
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _toastTimer;
+function toast(msg, duration = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function flashBody(color) {
+  document.body.classList.remove('flash-green', 'flash-red');
+  void document.body.offsetWidth; // reflow
+  document.body.classList.add(`flash-${color}`);
+  setTimeout(() => document.body.classList.remove(`flash-${color}`), 600);
+}
+
+function vibrateDevice(pattern) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// Try to auto-login on page load via refresh cookie
+(async function autoLogin() {
+  try {
+    const r = await fetch('/api/admin/refresh', {
+      method: 'POST', credentials: 'include',
+      headers: { 'x-csrf-token': _csrfToken || '' },
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.token) return;
+
+    const perms = d.permissions || [];
+    if (d.role !== 'master' && !perms.includes('events')) return; // no scanner access
+
+    _token = d.token;
+    _adminName = d.name;
+    _adminRole = d.role;
+    await bootApp();
+  } catch {}
+})();
+</script>
+</body>
+</html>
