@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','notifications','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password'];
+const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -2027,6 +2027,23 @@ async function loadAdminData(name) {
   else if (name==='notifications') {
     renderNotifTable();
   }
+  else if (name==='easter-eggs') {
+    const settings = await apiFetch('/api/settings');
+    if (settings) {
+      if (settings.easter_egg_img) {
+        document.getElementById('set-egg-img-url').value = settings.easter_egg_img;
+        document.getElementById('egg-img-thumb').src = settings.easter_egg_img;
+        document.getElementById('egg-img-preview').style.display = 'block';
+        document.getElementById('egg-img-clear-btn').style.display = 'inline-flex';
+        document.getElementById('egg-img-filename').textContent = 'Current image';
+        window._easterEggImg = settings.easter_egg_img;
+      }
+      document.getElementById('set-egg-shorts-heading').value = settings.easter_egg_shorts_heading || '';
+      document.getElementById('set-egg-shorts-sub').value = settings.easter_egg_shorts_sub || '';
+      document.getElementById('set-egg-noshorts-fallback').value = settings.easter_egg_noshorts_fallback || '';
+      loadCustomEggsUI();
+    }
+  }
   else if (name==='settings') {
     const settings = await apiFetch('/api/settings');
     if (settings) {
@@ -2054,22 +2071,8 @@ async function loadAdminData(name) {
       if (settings.brevo_api_key) document.getElementById('set-brevo-api-key').placeholder = '(saved — enter new to change)';
       document.getElementById('set-smtp-from-name').value = settings.smtp_from_name || '';
       document.getElementById('set-email-body').value     = settings.email_confirmation_body || '';
-      // Easter egg image
-      if (settings.easter_egg_img) {
-        document.getElementById('set-egg-img-url').value = settings.easter_egg_img;
-        document.getElementById('egg-img-thumb').src = settings.easter_egg_img;
-        document.getElementById('egg-img-preview').style.display = 'block';
-        document.getElementById('egg-img-clear-btn').style.display = 'inline-flex';
-        document.getElementById('egg-img-filename').textContent = 'Current image';
-        window._easterEggImg = settings.easter_egg_img;
-      }
-      document.getElementById('set-egg-shorts-heading').value = settings.easter_egg_shorts_heading || '';
-      document.getElementById('set-egg-shorts-sub').value = settings.easter_egg_shorts_sub || '';
-      document.getElementById('set-egg-noshorts-fallback').value = settings.easter_egg_noshorts_fallback || '';
       // Load custom tags
       loadTagsUI(settings);
-      // Load custom search easter eggs
-      loadCustomEggsUI();
     }
   }
   else if (name==='admins') {
@@ -2077,7 +2080,7 @@ async function loadAdminData(name) {
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
-    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','notifications':'Notifications','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate'};
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate','easter-eggs':'Easter Eggs'};
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
     tbody.innerHTML = admins.map(a => {
