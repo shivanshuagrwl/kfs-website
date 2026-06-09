@@ -7151,6 +7151,10 @@ app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
 app.get("/scanner", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "scanner.html"));
 });
+app.get("/scanner.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.sendFile(path.join(__dirname, "public", "scanner.js"));
+});
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
