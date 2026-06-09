@@ -816,7 +816,12 @@ async function fetchCsrf() {
     _csrfToken = d.csrf_token;
   } catch {}
 }
-fetchCsrf();
+
+// Fetch CSRF on load — disable login button until it's ready
+document.getElementById('login-btn').disabled = true;
+fetchCsrf().then(() => {
+  document.getElementById('login-btn').disabled = false;
+});
 
 // Auto-refresh CSRF every 3.5 hours (token valid 4h)
 setInterval(fetchCsrf, 3.5 * 60 * 60 * 1000);
