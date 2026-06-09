@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs'];
+const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -1807,6 +1807,7 @@ async function adminLogin() {
     localStorage.setItem('kfs_role', currentAdminRole);
     localStorage.setItem('kfs_admin_name', currentAdminName);
     localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
+    localStorage.setItem('kfs_last_login', new Date().toISOString());
     // Store full admin info for 2FA section
     window._currentAdmin = { totp_enabled: !!data.totp_enabled, role: data.role };
     err.textContent = '';
@@ -1839,6 +1840,200 @@ function adminLogout() {
   navigate('home');
 }
 
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const loading = document.getElementById('dashboard-loading');
+  if (loading) loading.style.display = 'block';
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greetEl = document.getElementById('dashboard-greeting');
+  const subEl   = document.getElementById('dashboard-subtitle');
+  if (greetEl) greetEl.textContent = greet + (currentAdminName ? ', ' + currentAdminName.split(' ')[0] : '');
+  if (subEl)   subEl.textContent   = "Here's what's happening at KFS";
+
+  // Hide cards the sub-admin can't access
+  const cardMap = { blogs:'db-stat-blogs', events:'db-stat-events', members:'db-stat-members', movies:'db-stat-films', analytics:'db-stat-traffic', collaborate:'db-stat-collabs' };
+  Object.entries(cardMap).forEach(([sec, cardId]) => {
+    const el = document.getElementById(cardId);
+    if (el) el.style.display = hasPermission(sec) ? '' : 'none';
+  });
+
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  try {
+    const results = await Promise.allSettled([
+      hasPermission('blogs')       ? apiFetch('/api/admin/blogs')            : Promise.resolve(null),
+      hasPermission('events')      ? apiFetch('/api/events')                 : Promise.resolve(null),
+      hasPermission('members')     ? apiFetch('/api/members')                : Promise.resolve(null),
+      hasPermission('movies')      ? apiFetch('/api/admin/movies')           : Promise.resolve(null),
+      hasPermission('analytics')   ? apiFetch('/api/admin/analytics/traffic?range=24h') : Promise.resolve(null),
+      hasPermission('collaborate') ? fetch('/api/collaborate').then(r=>r.json()).catch(()=>null) : Promise.resolve(null),
+    ]);
+    const [blogsR, eventsR, membersR, filmsR, trafficR, collabsR] = results.map(r => r.status === 'fulfilled' ? r.value : null);
+
+    if (blogsR)   setVal('db-val-blogs',   blogsR.length   ?? '—');
+    if (eventsR)  setVal('db-val-events',  eventsR.length  ?? '—');
+    if (membersR) setVal('db-val-members', membersR.length ?? '—');
+    if (filmsR)   setVal('db-val-films',   filmsR.length   ?? '—');
+    if (trafficR) setVal('db-val-traffic', (trafficR.today ?? 0).toLocaleString());
+    if (collabsR) {
+      const collabCard = document.getElementById('db-stat-collabs');
+      if (collabCard && hasPermission('collaborate')) {
+        collabCard.style.display = '';
+        setVal('db-val-collabs', (Array.isArray(collabsR) ? collabsR.length : 0));
+      }
+    }
+  } catch(e) {
+    if (subEl) subEl.textContent = 'Some stats could not be loaded.';
+  }
+  if (loading) loading.style.display = 'none';
+}
+window.loadDashboard = loadDashboard;
+
+// ── STYLED CONFIRMATION MODAL (replaces browser confirm()) ────────────────────
+// Usage: const ok = await kfsConfirm({ title, msg, okLabel? })
+function kfsConfirm({ title='Delete item?', msg='', okLabel='Delete' } = {}) {
+  return new Promise(resolve => {
+    const modal  = document.getElementById('kfs-confirm-modal');
+    const titleEl = document.getElementById('kfs-confirm-title');
+    const msgEl  = document.getElementById('kfs-confirm-msg');
+    const okBtn  = document.getElementById('kfs-confirm-ok');
+    const cancelBtn = document.getElementById('kfs-confirm-cancel');
+    if (!modal) { resolve(window.confirm(msg || title)); return; }
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl)   msgEl.innerHTML     = msg;
+    if (okBtn)   okBtn.textContent   = okLabel;
+    modal.classList.add('open');
+    function cleanup(result) {
+      modal.classList.remove('open');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    const onOk     = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+window.kfsConfirm = kfsConfirm;
+
+// ── UNSAVED CHANGES GUARD ─────────────────────────────────────────────────────
+// Usage: const discard = await kfsUnsavedGuard()
+function kfsUnsavedGuard() {
+  return new Promise(resolve => {
+    const modal   = document.getElementById('kfs-unsaved-modal');
+    const stay    = document.getElementById('kfs-unsaved-stay');
+    const discard = document.getElementById('kfs-unsaved-discard');
+    if (!modal) { resolve(true); return; }
+    modal.classList.add('open');
+    function cleanup(result) {
+      modal.classList.remove('open');
+      stay.removeEventListener('click', onStay);
+      discard.removeEventListener('click', onDiscard);
+      resolve(result);
+    }
+    const onStay    = () => cleanup(false);
+    const onDiscard = () => cleanup(true);
+    stay.addEventListener('click', onStay);
+    discard.addEventListener('click', onDiscard);
+  });
+}
+window.kfsUnsavedGuard = kfsUnsavedGuard;
+
+// ── INLINE EDIT HELPER ────────────────────────────────────────────────────────
+// makeInlineEditable(cell, { onSave(newVal) })
+// Call from the row-render helpers — just wrap the display cell.
+function makeInlineEditable(cell, { onSave, type='text', validate } = {}) {
+  cell.classList.add('inline-editable');
+  cell.title = 'Click to edit';
+  cell.addEventListener('click', function startEdit(e) {
+    if (cell.querySelector('.inline-edit-input')) return; // already editing
+    const originalText = cell.textContent.trim();
+    cell.removeEventListener('click', startEdit);
+    const input = document.createElement('input');
+    input.className = 'inline-edit-input';
+    input.type  = type;
+    input.value = originalText;
+    cell.textContent = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+    async function commit() {
+      const newVal = input.value.trim();
+      if (newVal === originalText) { cell.textContent = originalText; cell.addEventListener('click', startEdit); return; }
+      if (validate && !validate(newVal)) { input.classList.add('error'); input.focus(); return; }
+      cell.textContent = newVal + ' …';
+      try {
+        await onSave(newVal);
+        cell.textContent = newVal;
+      } catch(err) {
+        cell.textContent = originalText;
+        console.error('[inline-edit] save failed', err);
+      }
+      cell.addEventListener('click', startEdit);
+    }
+    input.addEventListener('blur',  commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { cell.textContent = originalText; cell.addEventListener('click', startEdit); }
+    });
+  });
+}
+window.makeInlineEditable = makeInlineEditable;
+
+// Attaches inline-edit to the relevant cells in a rendered tbody
+function _attachInlineEdits(section, tbody) {
+  if (!tbody) return;
+  if (section === 'blogs') {
+    tbody.querySelectorAll('tr[data-id]').forEach(row => {
+      const id = row.dataset.id;
+      // Col index 2 = title (0=checkbox, 1=cover, 2=title)
+      const titleCell = row.cells[2];
+      if (titleCell) {
+        makeInlineEditable(titleCell, {
+          onSave: async (val) => {
+            const fd = new FormData();
+            fd.append('title', val);
+            const res = await fetch('/api/admin/blogs/'+id, { method:'PUT', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
+            if (!res.ok) throw new Error('save failed');
+            window._allBlogsCache = null;
+          }
+        });
+      }
+    });
+  }
+  if (section === 'events') {
+    tbody.querySelectorAll('tr[data-id]').forEach(row => {
+      const id = row.dataset.id;
+      // Col 0=title, col 1=date, col 3=location
+      const titleCell = row.cells[0];
+      const dateCell  = row.cells[1];
+      if (titleCell) {
+        makeInlineEditable(titleCell, {
+          onSave: async (val) => {
+            const fd = new FormData(); fd.append('title', val);
+            const res = await fetch('/api/admin/events/'+id, { method:'PUT', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
+            if (!res.ok) throw new Error('save failed');
+          }
+        });
+      }
+      if (dateCell) {
+        makeInlineEditable(dateCell, {
+          type: 'date',
+          onSave: async (val) => {
+            const fd = new FormData(); fd.append('event_date', val);
+            const res = await fetch('/api/admin/events/'+id, { method:'PUT', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
+            if (!res.ok) throw new Error('save failed');
+          }
+        });
+      }
+    });
+  }
+}
+
 function showAdminPanel() {
   currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
   currentAdminName = localStorage.getItem('kfs_admin_name') || '';
@@ -1851,8 +2046,21 @@ function showAdminPanel() {
 
   const nameEl = document.getElementById('sidebar-admin-name');
   const roleEl = document.getElementById('sidebar-admin-role');
+  const lastEl = document.getElementById('sidebar-last-login');
   if (nameEl) nameEl.textContent = currentAdminName || 'Admin';
   if (roleEl) roleEl.textContent = currentAdminRole === 'master' ? 'Master' : 'Admin';
+  if (lastEl) {
+    const raw = localStorage.getItem('kfs_last_login');
+    if (raw) {
+      try {
+        const d = new Date(raw);
+        const fmt = d.toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', hour12:true });
+        lastEl.textContent = 'Last login: ' + fmt;
+      } catch { lastEl.textContent = ''; }
+    } else {
+      lastEl.textContent = '';
+    }
+  }
 
   // Show/hide each sidebar item based on permissions
   document.querySelectorAll('.admin-sidebar-item[data-section]').forEach(el => {
@@ -1868,8 +2076,8 @@ function showAdminPanel() {
     }
   });
 
-  // Navigate to first allowed section (excluding always-visible non-content sections)
-  const firstAllowed = ALL_SECTIONS.filter(s => s !== 'change-password').find(s => hasPermission(s)) || 'blogs';
+  // Navigate to dashboard (if permitted) or first allowed section
+  const firstAllowed = hasPermission('dashboard') ? 'dashboard' : (ALL_SECTIONS.filter(s => s !== 'change-password').find(s => hasPermission(s)) || 'blogs');
   loadAdminData(firstAllowed);
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   const secEl = document.getElementById('section-'+firstAllowed);
@@ -1890,6 +2098,7 @@ function showAdminSection(name) {
 async function loadAdminData(name) {
   if (name==='themes') { loadThemes(); return; }
   if (name==='two-factor') { tfa_initSection(); return; }
+  if (name==='dashboard') { loadDashboard(); return; }
   if (name==='blogs') {
     const [blogs, analytics] = await Promise.all([
       apiFetch('/api/admin/blogs'),
@@ -1923,16 +2132,18 @@ async function loadAdminData(name) {
       <td style="color:var(--grey)">${b.created_at?new Date(b.created_at).toLocaleDateString():''}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editBlog(${bJson})">Edit<\/button>
+        <button class="btn-sm" onclick="toggleBlogPublished('${b.id}',${b.published})" title="${b.published?'Unpublish':'Publish'}" style="${b.published?'background:rgba(245,158,11,.12);color:#f59e0b;border-color:rgba(245,158,11,.25)':'background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25)'}">${b.published?'Unpublish':'Publish'}<\/button>
         <button class="btn-sm danger" onclick="deleteBlog('${b.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
+    _attachInlineEdits('blogs', tbody);
   }
   else if (name==='events') {
     const events = await apiFetch('/api/events');
     const tbody = document.getElementById('admin-events-tbody');
     if (events === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
     if (!events.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No events yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = events.map(e=>{ const eJson=JSON.stringify(e).replace(/"/g,'&quot;'); return `<tr>
+    tbody.innerHTML = events.map(e=>{ const eJson=JSON.stringify(e).replace(/"/g,'&quot;'); return `<tr data-id="${e.id}">
       <td style="font-weight:500">${e.title}<\/td>
       <td style="color:var(--grey)">${e.event_date||'—'}<\/td>
       <td><span class="tag ${e.is_upcoming?'upcoming':''}">${e.is_upcoming?'Upcoming':'Past'}<\/span><\/td>
@@ -1943,6 +2154,7 @@ async function loadAdminData(name) {
         <button class="btn-sm danger" onclick="deleteEvent('${e.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
+    _attachInlineEdits('events', tbody);
   }
   else if (name==='members') {
     const members = await apiFetch('/api/members');
@@ -2121,7 +2333,7 @@ async function loadAdminData(name) {
         : '';
       const actions = a.role === 'master'
         ? `<span style="color:var(--grey);font-size:12px">Protected<\/span>`
-        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"\/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"\/><\/svg> Permissions<\/button>${twoFaDisableBtn}<button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove<\/button>`;
+        : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"\/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"\/><\/svg> Permissions<\/button>${twoFaDisableBtn}<button class="admin-action-btn" onclick="openResetPasswordModal('${a.id}','${a.name.replace(/'/g,"\\'")}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"\/><path d="M7 11V7a5 5 0 0 1 10 0v4"\/><\/svg> Reset PW<\/button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove<\/button>`;
       return `<tr>
         <td style="font-weight:500">${a.name}<\/td>
         <td style="color:var(--grey);font-family:monospace;font-size:13px">${a.username}<\/td>
@@ -2155,7 +2367,17 @@ async function loadAdminData(name) {
 }
 
 function openBlogModal(blog=null) {
+  window._blogModalDirty = false;
   document.getElementById('blog-modal').classList.add('open');
+  // Mark dirty when user edits any field
+  setTimeout(() => {
+    const modal = document.getElementById('blog-modal');
+    if (modal && !modal._dirtyListenerAdded) {
+      modal._dirtyListenerAdded = true;
+      modal.addEventListener('input', () => { window._blogModalDirty = true; });
+      modal.addEventListener('change', () => { window._blogModalDirty = true; });
+    }
+  }, 50);
   document.getElementById('blog-modal-title').textContent = blog ? 'Edit Post' : 'New Blog Post';
   document.getElementById('blog-edit-id').value = blog?.id||'';
   document.getElementById('blog-title').value = blog?.title||'';
@@ -2183,7 +2405,14 @@ function openBlogModal(blog=null) {
   _populateBlogTagDropdown();
 }
 function editBlog(blog) { openBlogModal(blog); }
-function closeBlogModal() { document.getElementById('blog-modal').classList.remove('open'); }
+async function closeBlogModal() {
+  if (window._blogModalDirty) {
+    const discard = await kfsUnsavedGuard();
+    if (!discard) return;
+  }
+  window._blogModalDirty = false;
+  document.getElementById('blog-modal').classList.remove('open');
+}
 
 function _populateBlogTagDropdown() {
   const sel = document.getElementById('blog-section-type');
@@ -2351,6 +2580,7 @@ async function saveBlog() {
     if (!res.ok) { alert('Error saving post'); return; }
     const saved = await res.json();
     window._allBlogsCache = null;
+    window._blogModalDirty = false;
     closeBlogModal();
     // Instant DOM update
     const tbody = document.getElementById('admin-blogs-tbody');
@@ -2380,8 +2610,50 @@ async function saveBlog() {
   }
 }
 
+async function toggleBlogPublished(id, currentlyPublished) {
+  const newState = !currentlyPublished;
+  const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
+  // Optimistic UI — flip badge and button immediately
+  const badge = row?.querySelector('td:nth-child(4) .tag');
+  const toggleBtn = row?.querySelectorAll('.action-btns .btn-sm')?.[1];
+  if (badge) {
+    badge.className = `tag ${newState ? 'upcoming' : ''}`;
+    badge.textContent = newState ? 'Published' : 'Draft';
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = newState ? 'Unpublish' : 'Publish';
+    toggleBtn.style.cssText = newState
+      ? 'background:rgba(245,158,11,.12);color:#f59e0b;border-color:rgba(245,158,11,.25)'
+      : 'background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25)';
+    toggleBtn.setAttribute('onclick', `toggleBlogPublished('${id}',${newState})`);
+  }
+  // The blog PUT route uses multer, so send as FormData even for just the published field
+  const fd = new FormData();
+  fd.append('published', String(newState));
+  const result = await apiFetch(`/api/admin/blogs/${id}`, 'PUT', fd);
+  if (!result) {
+    // Revert on failure
+    if (badge) {
+      badge.className = `tag ${currentlyPublished ? 'upcoming' : ''}`;
+      badge.textContent = currentlyPublished ? 'Published' : 'Draft';
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = currentlyPublished ? 'Unpublish' : 'Publish';
+      toggleBtn.style.cssText = currentlyPublished
+        ? 'background:rgba(245,158,11,.12);color:#f59e0b;border-color:rgba(245,158,11,.25)'
+        : 'background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25)';
+      toggleBtn.setAttribute('onclick', `toggleBlogPublished('${id}',${currentlyPublished})`);
+    }
+    showError('Failed to update publish status.');
+  }
+  window._allBlogsCache = null;
+}
+
 async function deleteBlog(id) {
-  if (!confirm('Delete this post?')) return;
+  const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
+  const title = row ? row.querySelector('td:nth-child(3)')?.textContent?.trim() : 'this post';
+  const ok = await kfsConfirm({ title: `Delete post?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Post' });
+  if (!ok) return;
   await apiFetch('/api/admin/blogs/'+id,'DELETE');
   window._allBlogsCache = null;
   const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
@@ -2458,7 +2730,10 @@ async function saveEvent() {
 }
 
 async function deleteEvent(id) {
-  if (!confirm('Delete this event?')) return;
+  const row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
+  const title = row ? row.querySelector('td:nth-child(1)')?.textContent?.trim() : 'this event';
+  const ok = await kfsConfirm({ title: `Delete event?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Event' });
+  if (!ok) return;
   await apiFetch('/api/admin/events/'+id,'DELETE');
   // Instant DOM removal
   const row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
@@ -2543,7 +2818,10 @@ async function saveMember() {
 }
 
 async function deleteMember(id) {
-  if (!confirm('Delete this member?')) return;
+  const row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
+  const name = row ? row.querySelector('td:nth-child(3)')?.textContent?.trim() : 'this member';
+  const ok = await kfsConfirm({ title: `Remove member?`, msg: `<strong style="color:var(--white)">"${name}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Remove Member' });
+  if (!ok) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
   const row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
   if (row) {
@@ -2600,7 +2878,16 @@ function initGenreTagInput(initialTags = []) {
 }
 
 function openMovieModal(m=null) {
+  window._movieModalDirty = false;
   document.getElementById('movie-modal').classList.add('open');
+  setTimeout(() => {
+    const modal = document.getElementById('movie-modal');
+    if (modal && !modal._dirtyListenerAdded) {
+      modal._dirtyListenerAdded = true;
+      modal.addEventListener('input',  () => { window._movieModalDirty = true; });
+      modal.addEventListener('change', () => { window._movieModalDirty = true; });
+    }
+  }, 50);
   document.getElementById('movie-modal-title').textContent = m ? 'Edit Film' : 'Add Film';
   document.getElementById('movie-edit-id').value = m?.id||'';
   document.getElementById('movie-title').value = m?.title||'';
@@ -2632,7 +2919,14 @@ function openMovieModal(m=null) {
   }
 }
 function editMovie(m) { openMovieModal(m); }
-function closeMovieModal() { document.getElementById('movie-modal').classList.remove('open'); }
+async function closeMovieModal() {
+  if (window._movieModalDirty) {
+    const discard = await kfsUnsavedGuard();
+    if (!discard) return;
+  }
+  window._movieModalDirty = false;
+  document.getElementById('movie-modal').classList.remove('open');
+}
 
 // Auto-fetch YouTube video duration when Watch URL is pasted
 var _ytRuntimeFetchTimer = null;
@@ -2713,6 +3007,7 @@ async function saveMovie() {
     const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving film'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
+    window._movieModalDirty = false;
     closeMovieModal();
     // Instant DOM update
     const tbody = document.getElementById('admin-movies-tbody');
@@ -2742,7 +3037,10 @@ async function saveMovie() {
 }
 
 async function deleteMovie(id) {
-  if (!confirm('Delete this film?')) return;
+  const row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
+  const title = row ? row.querySelector('td:nth-child(2)')?.textContent?.trim() : 'this film';
+  const ok = await kfsConfirm({ title: `Delete film?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Film' });
+  if (!ok) return;
   await apiFetch('/api/admin/movies/'+id,'DELETE');
   const row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
   if (row) {
@@ -3987,6 +4285,30 @@ async function deleteAdmin(id, name) {
     if (typeof showToast === 'function') showToast(`Admin "${name}" removed`, 'success');
   } else {
     if (typeof showToast === 'function') showToast('Failed to remove admin', 'error');
+  }
+}
+
+function openResetPasswordModal(adminId, adminName) {
+  document.getElementById('reset-pw-admin-id').value = adminId;
+  document.getElementById('reset-pw-admin-name').textContent = adminName;
+  document.getElementById('reset-pw-input').value = '';
+  document.getElementById('reset-pw-error').textContent = '';
+  document.getElementById('reset-password-modal').classList.add('open');
+  setTimeout(() => document.getElementById('reset-pw-input').focus(), 80);
+}
+
+async function submitResetPassword() {
+  const id = document.getElementById('reset-pw-admin-id').value;
+  const pw = document.getElementById('reset-pw-input').value;
+  const errEl = document.getElementById('reset-pw-error');
+  errEl.textContent = '';
+  if (!pw) { errEl.textContent = 'Enter a new password.'; return; }
+  const res = await apiFetch(`/api/master/admins/${id}/reset-password`, 'PUT', { password: pw });
+  if (res && res.success) {
+    document.getElementById('reset-password-modal').classList.remove('open');
+    if (typeof showToast === 'function') showToast('Password reset — admin will need to log in again.', 'success');
+  } else {
+    errEl.textContent = res?.error || 'Failed to reset password.';
   }
 }
 

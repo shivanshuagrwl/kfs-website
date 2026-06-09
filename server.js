@@ -1465,6 +1465,50 @@ app.delete("/api/master/admins/:id", masterMiddleware, async (req, res) => {
 });
 
 app.put(
+  "/api/master/admins/:id/reset-password",
+  masterMiddleware,
+  async (req, res) => {
+    const { password } = req.body;
+    if (!password)
+      return res.status(400).json({ error: "New password required" });
+    const isStrong = (pw) =>
+      pw.length >= 8 &&
+      /[A-Z]/.test(pw) &&
+      /[0-9]/.test(pw) &&
+      /[^A-Za-z0-9]/.test(pw);
+    if (!isStrong(password))
+      return res.status(400).json({
+        error:
+          "Password must be ≥8 chars, include 1 uppercase, 1 digit, and 1 special character.",
+      });
+    const { data: target } = await supabase
+      .from("admins")
+      .select("role, name")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (!target) return res.status(404).json({ error: "Admin not found" });
+    if (target.role === "master")
+      return res.status(403).json({ error: "Cannot reset master password" });
+    const hash = await bcrypt.hash(password, 10);
+    const { error } = await supabase
+      .from("admins")
+      .update({ password_hash: hash })
+      .eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    // Revoke all existing refresh tokens so the admin must log in with the new password
+    await revokeAllForAdmin(req.params.id);
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "update",
+      "admin",
+      `Reset password for ${target.name} (id:${req.params.id})`,
+    ).catch((e) => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
+
+app.put(
   "/api/master/admins/:id/permissions",
   masterMiddleware,
   async (req, res) => {
