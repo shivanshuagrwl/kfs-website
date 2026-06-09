@@ -6737,9 +6737,12 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
 }
 
 async function sendTicketEmail({ event, reg, qrDataUrl }) {
-  const { data: rows } = await memCache("settings:email", 300, () =>
-    supabase.from("settings").select("key,value").in("key", ["brevo_api_key", "smtp_from_name"]),
-  );
+  // Fresh fetch every time — no cache risk with API key
+  const { data: rows } = await supabase
+    .from("settings")
+    .select("key,value")
+    .in("key", ["brevo_api_key", "smtp_from_name"]);
+
   const s = {};
   (rows || []).forEach((r) => (s[r.key] = r.value));
   if (!s.brevo_api_key) {
@@ -6758,12 +6761,15 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
   let ticketPdfBuffer;
   try {
     ticketPdfBuffer = await generateTicketPdf({ event, reg, qrDataUrl });
+    console.log(`[ticket-email] PDF generated: ${ticketPdfBuffer.length} bytes`);
   } catch (e) {
     console.error("[ticket-email] PDF generation failed:", e.message);
-    // Fall back: no PDF attachment, still send HTML email
     ticketPdfBuffer = null;
   }
 
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+
+  // Embed QR directly as base64 data URI — works in all email clients without cid: hacks
   const htmlContent = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -6773,47 +6779,42 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 <table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden">
 
   <tr><td style="background:#000;padding:24px 32px;border-bottom:1px solid #1e1e1e">
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:.05em;text-transform:uppercase">KFS</td>
-        <td align="right" style="font-size:11px;color:#555;letter-spacing:.08em;text-transform:uppercase">KIIT Film Society</td>
-      </tr>
-    </table>
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:.05em">KFS</td>
+      <td align="right" style="font-size:11px;color:#555;letter-spacing:.08em;text-transform:uppercase">KIIT Film Society</td>
+    </tr></table>
   </td></tr>
 
-  <tr><td style="padding:28px 32px 0">
-    <div style="font-size:11px;color:#555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Your Ticket</div>
-    <h1 style="margin:0 0 6px;font-size:24px;font-weight:800;color:#f5f5f5;line-height:1.2;letter-spacing:-.02em">${event.title || "Event"}</h1>
-    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:6px">&#128197; ${eventDate}</div>` : ""}
-    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:4px">&#128205; ${event.location}</div>` : ""}
+  <tr><td style="padding:28px 32px 20px">
+    <div style="font-size:11px;color:#555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Registration Confirmed</div>
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#f5f5f5;line-height:1.2">${event.title || "Event"}</h1>
+    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:6px">Date: ${eventDate}</div>` : ""}
+    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:4px">Venue: ${event.location}</div>` : ""}
   </td></tr>
 
-  <tr><td style="padding:20px 32px"><div style="border-top:1px dashed #1e1e1e"></div></td></tr>
-
-  <tr><td style="padding:0 32px 24px">
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td align="center" width="160" style="vertical-align:top">
-          <div style="background:#fff;padding:12px;border-radius:10px;display:inline-block">
-            <img src="cid:qr_ticket" alt="QR Code" width="136" height="136" style="display:block">
-          </div>
-        </td>
-        <td style="padding-left:20px;vertical-align:middle">
-          <div style="font-size:20px;font-weight:800;color:#f5f5f5;letter-spacing:-.01em;margin-bottom:4px">${reg.name}</div>
-          <div style="font-size:12px;color:#666;margin-bottom:12px">${reg.email}</div>
-          ${reg.roll_no ? `<div style="font-size:12px;color:#555;background:#1a1a1a;border:1px solid #222;display:inline-block;padding:4px 10px;border-radius:6px;letter-spacing:.05em">${reg.roll_no}</div>` : ""}
-        </td>
-      </tr>
-    </table>
+  <tr><td style="padding:0 32px 20px">
+    <div style="background:#1a1a1a;border:1px solid #222;border-radius:10px;padding:16px 20px">
+      <div style="font-size:18px;font-weight:800;color:#f5f5f5;margin-bottom:4px">${reg.name}</div>
+      <div style="font-size:12px;color:#666">${reg.email}${reg.roll_no ? " &nbsp;&middot;&nbsp; " + reg.roll_no : ""}</div>
+    </div>
   </td></tr>
 
-  <tr><td style="padding:16px 32px;background:#0d0d0d;border-top:1px solid #1a1a1a">
-    <p style="margin:0;font-size:13px;color:#555;text-align:center">
-      ${ticketPdfBuffer ? "Your ticket PDF is attached — show it at the gate." : "Show your QR code at the entry gate."}
-    </p>
+  <tr><td style="padding:0 32px 24px;text-align:center">
+    <div style="background:#fff;display:inline-block;padding:14px;border-radius:10px">
+      <img src="data:image/png;base64,${qrBase64}" alt="Entry QR Code" width="160" height="160" style="display:block">
+    </div>
+    <div style="font-size:11px;color:#555;margin-top:10px">Show this QR at the entry gate</div>
   </td></tr>
 
-  <tr><td style="padding:20px 32px;border-top:1px solid #1a1a1a">
+  ${ticketPdfBuffer ? `<tr><td style="padding:0 32px 16px;text-align:center">
+    <div style="font-size:13px;color:#666">Your full ticket PDF is also attached.</div>
+  </td></tr>` : ""}
+
+  <tr><td style="padding:16px 32px;background:#0d0d0d;border-top:1px solid #1a1a1a;text-align:center">
+    <p style="margin:0;font-size:14px;font-weight:700;color:#f5f5f5">Welcome to the event! Hope you have a great time.</p>
+  </td></tr>
+
+  <tr><td style="padding:14px 32px;border-top:1px solid #111">
     <p style="margin:0;font-size:11px;color:#333;text-align:center">
       For queries: <a href="mailto:filmsocietykiit@gmail.com" style="color:#555;text-decoration:none">filmsocietykiit@gmail.com</a>
     </p>
@@ -6825,25 +6826,17 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Event Ticket\n\n${event.title || "Event"}\n${eventDate ? `Date: ${eventDate}\n` : ""}${event.location ? `Venue: ${event.location}\n` : ""}\nRegistered: ${reg.name} (${reg.email})\n${ticketPdfBuffer ? "Ticket PDF attached — show it at the entry gate.\n" : "Show your QR at entry.\n"}\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Registration Confirmed — KFS\n\n${event.title || "Event"}\n${eventDate ? "Date: " + eventDate + "\n" : ""}${event.location ? "Venue: " + event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\n${ticketPdfBuffer ? "Your ticket PDF is attached.\n" : ""}Show the QR code at the entry gate.\n\nWelcome to the event! Hope you have a great time.\n\nFor queries: filmsocietykiit@gmail.com`;
 
-  // QR as inline image (cid:qr_ticket)
-  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
-
-  const attachments = [
-    {
-      name: "ticket-qr.png",
-      content: qrBase64,
-      contentId: "qr_ticket",
-    },
-  ];
-
+  // Attachments: PDF ticket + QR PNG
+  const attachments = [];
   if (ticketPdfBuffer) {
     attachments.push({
       name: `kfs-ticket-${(event.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
       content: ticketPdfBuffer.toString("base64"),
     });
   }
+  attachments.push({ name: "entry-qr.png", content: qrBase64 });
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -6866,8 +6859,9 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     const err = await response.text();
     throw new Error(`Brevo ticket email error ${response.status}: ${err}`);
   }
-  console.log(`[ticket-email] Ticket sent to ${reg.email} for event "${event.title}" (PDF: ${!!ticketPdfBuffer})`);
+  console.log(`[ticket-email] Sent to ${reg.email} for "${event.title}" — PDF: ${!!ticketPdfBuffer}`);
 }
+
 
 // ── PUBLIC: Register for event (creates registration + sends QR ticket email) ──
 const registrationRateLimit = rateLimit({
