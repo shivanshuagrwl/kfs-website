@@ -6776,7 +6776,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 
   const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
 
-  // Embed QR directly as base64 data URI — works in all email clients without cid: hacks
+  // Use CID inline image for QR — data: URIs are blocked by Gmail, Outlook, Apple Mail
   const htmlContent = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -6808,7 +6808,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 
   <tr><td style="padding:0 32px 24px;text-align:center">
     <div style="background:#fff;display:inline-block;padding:14px;border-radius:10px">
-      <img src="data:image/png;base64,${qrBase64}" alt="Entry QR Code" width="160" height="160" style="display:block">
+      <img src="cid:entry-qr" alt="Entry QR Code" width="160" height="160" style="display:block">
     </div>
     <div style="font-size:11px;color:#555;margin-top:10px">Show this QR at the entry gate</div>
   </td></tr>
@@ -6835,15 +6835,22 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 
   const textContent = `Registration Confirmed — KFS\n\n${event.title || "Event"}\n${eventDate ? "Date: " + eventDate + "\n" : ""}${event.location ? "Venue: " + event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\n${ticketPdfBuffer ? "Your ticket PDF is attached.\n" : ""}Show the QR code at the entry gate.\n\nWelcome to the event! Hope you have a great time.\n\nFor queries: filmsocietykiit@gmail.com`;
 
-  // Attachments: PDF ticket + QR PNG
+  // Attachments: PDF ticket (download) + QR PNG (CID inline + download fallback)
   const attachments = [];
   if (ticketPdfBuffer) {
     attachments.push({
       name: `kfs-ticket-${(event.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
       content: ticketPdfBuffer.toString("base64"),
+      content_type: "application/pdf",
     });
   }
-  attachments.push({ name: "entry-qr.png", content: qrBase64 });
+  // CID attachment: email clients use this for the inline <img src="cid:entry-qr">
+  attachments.push({
+    name: "entry-qr.png",
+    content: qrBase64,
+    content_type: "image/png",
+    cid: "entry-qr",
+  });
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
