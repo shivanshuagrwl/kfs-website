@@ -5745,7 +5745,7 @@ async function sendPaymentBill({
       {
         name:        `KFS-Receipt-${billInvoiceNo}.pdf`,
         content:     pdfBuffer.toString("base64"),
-        contentType: "application/pdf",   // Brevo requires camelCase — snake_case is silently ignored
+        contentType: "application/pdf",
       },
     ],
   };
