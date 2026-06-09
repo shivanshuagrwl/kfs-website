@@ -1036,7 +1036,7 @@ async function onQrScanned(text) {
   showResult({ status: 'loading' });
 
   const eventId = document.getElementById('event-select').value;
-  const { ok, data } = await api('POST', '/api/admin/scan-qr/lookup', { qr_token: text });
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/lookup', { qr_token: text, event_id: eventId });
 
   if (!ok || data.status === 'invalid') {
     flashBody('red');
@@ -1145,7 +1145,8 @@ async function confirmEntry() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
 
   const { ok, data } = await api('POST', '/api/admin/scan-qr/confirm', {
-    registration_id: _pendingReg.registration_id
+    registration_id: _pendingReg.registration_id,
+    event_id: document.getElementById('event-select').value,
   });
 
   if (!ok) {
@@ -1163,8 +1164,11 @@ async function confirmEntry() {
 
   vibrateDevice([80, 40, 80, 40, 120]);
 
-  // Auto-resume after 2.5s
+  // Auto-resume after 3s — clear all scan state so next scan works immediately
   setTimeout(() => {
+    _pendingReg = null;
+    _lastScanned = null;
+    _scanCooldown = false;
     resumeScanner();
   }, 3000);
 

@@ -5485,19 +5485,23 @@ async function generateReceiptPdf({
   type, displayName, displayEmail, cause, billInvoiceNo,
   typeLabel, amountRs, paymentId, orderId, dtStr,
 }) {
-  // Pre-fetch logo before opening the PDF stream
+  // Pre-fetch logo before opening the PDF stream (5s timeout)
   const LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
   const logoBuffer = await new Promise(res => {
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; res(v); } };
+    const timer = setTimeout(() => done(null), 5000);
     try {
       const https = require("https");
       const logoChunks = [];
-      https.get(LOGO_URL, resp => {
-        if (resp.statusCode !== 200) { resp.resume(); return res(null); }
+      const req = https.get(LOGO_URL, resp => {
+        if (resp.statusCode !== 200) { resp.resume(); clearTimeout(timer); return done(null); }
         resp.on("data", c => logoChunks.push(c));
-        resp.on("end",  () => res(Buffer.concat(logoChunks)));
-        resp.on("error", () => res(null));
-      }).on("error", () => res(null));
-    } catch (_) { res(null); }
+        resp.on("end",  () => { clearTimeout(timer); done(Buffer.concat(logoChunks)); });
+        resp.on("error", () => { clearTimeout(timer); done(null); });
+      });
+      req.on("error", () => { clearTimeout(timer); done(null); });
+    } catch (_) { clearTimeout(timer); done(null); }
   });
 
   return new Promise((resolve, reject) => {
@@ -6572,20 +6576,23 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
 
   const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
   const qrBuffer = Buffer.from(qrBase64, "base64");
-
-  // Fetch KFS logo
+  // Fetch KFS logo (with 5s timeout to avoid hanging)
   const LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
   const logoBuffer = await new Promise(res => {
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; res(v); } };
+    const timer = setTimeout(() => done(null), 5000);
     try {
       const https = require("https");
       const ch = [];
-      https.get(LOGO_URL, r => {
-        if (r.statusCode !== 200) { r.resume(); return res(null); }
+      const req = https.get(LOGO_URL, r => {
+        if (r.statusCode !== 200) { r.resume(); clearTimeout(timer); return done(null); }
         r.on("data", c => ch.push(c));
-        r.on("end",  () => res(Buffer.concat(ch)));
-        r.on("error", () => res(null));
-      }).on("error", () => res(null));
-    } catch (_) { res(null); }
+        r.on("end",  () => { clearTimeout(timer); done(Buffer.concat(ch)); });
+        r.on("error", () => { clearTimeout(timer); done(null); });
+      });
+      req.on("error", () => { clearTimeout(timer); done(null); });
+    } catch (_) { clearTimeout(timer); done(null); }
   });
 
   return new Promise((resolve, reject) => {
@@ -6951,7 +6958,7 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
 // ── ADMIN/SCANNER: Lookup QR (validates, does NOT mark checked-in) ─────────────
 // Used by scanner page to display person details before confirming entry
 app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
-  const { qr_token } = req.body;
+  const { qr_token, event_id } = req.body;
   if (!qr_token) return res.status(400).json({ error: "qr_token required" });
 
   const { data: reg, error } = await supabase
@@ -6962,6 +6969,14 @@ app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
 
   if (error) return res.status(500).json({ error: "DB error" });
   if (!reg) return res.status(404).json({ status: "invalid", error: "QR not recognised — not a valid KFS ticket." });
+
+  // If a specific event was selected by the scanner, validate the ticket belongs to it
+  if (event_id && String(reg.event_id) !== String(event_id)) {
+    return res.json({
+      status: "invalid",
+      error: `This ticket is for "${reg.events?.title || "a different event"}", not the selected event.`,
+    });
+  }
 
   if (reg.checked_in) {
     return res.json({
@@ -6991,7 +7006,7 @@ app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
 
 // ── ADMIN/SCANNER: Confirm entry (marks checked_in = true) ────────────────────
 app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
-  const { registration_id } = req.body;
+  const { registration_id, event_id } = req.body;
   if (!registration_id) return res.status(400).json({ error: "registration_id required" });
 
   // Re-check hasn't been scanned in the meantime (race condition)
@@ -7002,6 +7017,12 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
     .maybeSingle();
 
   if (!reg) return res.status(404).json({ error: "Registration not found" });
+
+  // Validate event matches if provided
+  if (event_id && String(reg.event_id) !== String(event_id)) {
+    return res.status(400).json({ error: "Registration does not belong to the selected event." });
+  }
+
   if (reg.checked_in) {
     return res.status(409).json({ error: "Already checked in", status: "already_used" });
   }
