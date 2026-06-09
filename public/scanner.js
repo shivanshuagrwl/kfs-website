@@ -172,6 +172,16 @@ async function loadEvents() {
 
   document.getElementById('event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
   document.getElementById('data-event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
+
+  // Auto-select the first upcoming event (or first event if none upcoming)
+  const defaultEvent = _events.find(e => e.is_upcoming) || _events[0];
+  if (defaultEvent) {
+    const id = String(defaultEvent.id);
+    document.getElementById('event-select').value = id;
+    document.getElementById('data-event-select').value = id;
+    // Update topbar label
+    document.getElementById('topbar-event').textContent = defaultEvent.title;
+  }
 }
 
 // ── TAB SWITCHING ──────────────────────────────────────────────────────────────
@@ -183,7 +193,7 @@ function switchTab(tab) {
 
   if (tab === 'data') {
     const sel = document.getElementById('data-event-select');
-    // Sync selected event
+    // Sync selected event from scanner tab if set, otherwise keep data-tab's own value
     const scanEvent = document.getElementById('event-select').value;
     if (scanEvent) sel.value = scanEvent;
     if (sel.value) loadRegistrations();

@@ -9759,7 +9759,7 @@ async function loadEventsWithRegs() {
 
   const statsMap = {};
   await Promise.allSettled(
-    events.filter(e => e.is_upcoming).map(async e => {
+    events.map(async e => {
       try {
         const s = await apiFetch(`/api/admin/events/${e.id}/registrations/stats`);
         if (s) statsMap[e.id] = s;
@@ -9884,7 +9884,10 @@ function renderModalRegs(list) {
 
 async function deleteRegFromModal(id) {
   if (!confirm('Remove this registration?')) return;
-  await apiFetch(`/api/admin/events/${_regEventId}/registrations/${id}`, 'DELETE');
+  // apiFetch returns null on error (and shows admin error banner automatically)
+  const res = await apiFetch(`/api/admin/events/${_regEventId}/registrations/${id}`, 'DELETE');
+  if (res === null) return; // apiFetch already showed the error
+  if (typeof showToast === 'function') showToast('Registration removed', 'success');
   _regsList = _regsList.filter(r => r.id !== id);
   updateRegStats();
   renderModalRegs(_regsList);
@@ -9914,24 +9917,44 @@ async function downloadRegsExportFromSection() {
   await downloadRegsExport(sel.value);
 }
 
+let _scanSectionRegs = [];
+let _scanSectionEventId = null;
+
 async function loadScanDataSection() {
   const sel = document.getElementById('scan-data-event-select');
   const content = document.getElementById('scan-data-content');
   const exportBtn = document.getElementById('scan-export-btn');
   if (!sel || !sel.value) return;
-  const eventId = sel.value;
+  _scanSectionEventId = sel.value;
   if (exportBtn) exportBtn.style.display = 'inline-flex';
   if (content) content.innerHTML = `<div style="text-align:center;padding:24px;color:var(--grey);font-size:13px">Loading…</div>`;
 
-  const data = await apiFetch(`/api/admin/events/${eventId}/registrations`);
-  const list = data || [];
+  const data = await apiFetch(`/api/admin/events/${_scanSectionEventId}/registrations`);
+  _scanSectionRegs = data || [];
   if (!content) return;
-  if (!list.length) {
+  renderScanDataSection();
+}
+
+function renderScanDataSection() {
+  const content = document.getElementById('scan-data-content');
+  if (!content) return;
+  const total   = _scanSectionRegs.length;
+  const checked = _scanSectionRegs.filter(r => r.checked_in).length;
+  const searchVal = document.getElementById('scan-search-input')?.value || '';
+
+  if (!total) {
     content.innerHTML = `<div style="text-align:center;padding:32px;color:var(--grey);font-size:13px">No registrations yet for this event.</div>`;
     return;
   }
-  const total = list.length;
-  const checked = list.filter(r => r.checked_in).length;
+
+  const filtered = searchVal
+    ? _scanSectionRegs.filter(r =>
+        (r.name||'').toLowerCase().includes(searchVal.toLowerCase()) ||
+        (r.email||'').toLowerCase().includes(searchVal.toLowerCase()) ||
+        (r.roll_no||'').toLowerCase().includes(searchVal.toLowerCase())
+      )
+    : _scanSectionRegs;
+
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
       <div style="background:#1a1a1a;border:1px solid var(--border-subtle);border-radius:10px;padding:14px;text-align:center">
@@ -9947,19 +9970,36 @@ async function loadScanDataSection() {
         <div style="font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em;margin-top:2px">Pending</div>
       </div>
     </div>
+    <input id="scan-search-input" type="text" placeholder="Search name, email, roll no…" value="${searchVal}"
+      oninput="renderScanDataSection()"
+      style="width:100%;background:#0d0d0d;border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);outline:none;margin-bottom:12px">
     <div style="display:flex;flex-direction:column;gap:6px">
-      ${list.map(r => `
+      ${filtered.length ? filtered.map(r => `
         <div style="background:#111;border:1px solid ${r.checked_in ? 'rgba(34,197,94,.2)' : 'var(--border-subtle)'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
           <div style="width:7px;height:7px;border-radius:50%;background:${r.checked_in ? '#22c55e' : '#333'};flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600">${r.name}</div>
-            <div style="font-size:11px;color:var(--grey)">${r.email}${r.roll_no ? ' · ' + r.roll_no : ''}</div>
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+            <div style="font-size:11px;color:var(--grey);margin-top:1px">${r.email}${r.roll_no ? ' · ' + r.roll_no : ''}</div>
           </div>
-          <div style="font-size:11px;${r.checked_in ? 'color:#22c55e;font-weight:600' : 'color:var(--grey)'}">${r.checked_in ? '✓ Present' : 'Pending'}</div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:11px;${r.checked_in ? 'color:#22c55e;font-weight:600' : 'color:var(--grey)'}">
+              ${r.checked_in ? ('\u2713 ' + (r.checked_in_at ? new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : 'Present')) : (r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : 'Pending')}
+            </div>
+            <button class="btn-sm danger" style="margin-top:5px;font-size:10px;padding:3px 8px" onclick="deleteScanSectionReg(${r.id})">Remove</button>
+          </div>
         </div>
-      `).join('')}
+      `).join('') : '<div style="text-align:center;padding:24px;color:var(--grey);font-size:13px">No matches</div>'}
     </div>
   `;
+}
+
+async function deleteScanSectionReg(id) {
+  if (!confirm('Remove this registration?')) return;
+  const res = await apiFetch(`/api/admin/events/${_scanSectionEventId}/registrations/${id}`, 'DELETE');
+  if (res === null) return;
+  if (typeof showToast === 'function') showToast('Registration removed', 'success');
+  _scanSectionRegs = _scanSectionRegs.filter(r => r.id !== id);
+  renderScanDataSection();
 }
 
 async function submitEventRegistration(eventId) {

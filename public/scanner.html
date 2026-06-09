@@ -146,35 +146,56 @@
 
   /* ── TOP BAR ── */
   .topbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: 10px;
+    padding: 0 16px;
+    height: 52px;
     border-bottom: 1px solid var(--border);
     background: #0a0a0a;
     position: sticky;
     top: 0;
     z-index: 10;
   }
-  .topbar .kfs-badge {
-    background: var(--text);
-    color: var(--bg);
-    font-size: 11px;
-    font-weight: 800;
-    padding: 4px 8px;
-    border-radius: 5px;
-    letter-spacing: .03em;
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
   }
-  .topbar .event-name {
-    flex: 1;
+  .topbar-brand img {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+  .topbar-brand .brand-name {
     font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: var(--text);
+  }
+  .topbar-center {
+    min-width: 0;
+    text-align: center;
+  }
+  .topbar-center .event-name {
+    font-size: 12px;
     font-weight: 600;
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
   .topbar .admin-name {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--muted);
   }
   .topbar .logout-btn {
@@ -185,8 +206,10 @@
     padding: 6px;
     display: flex;
     align-items: center;
+    border-radius: 6px;
+    transition: color .15s, background .15s;
   }
-  .topbar .logout-btn:hover { color: var(--red); }
+  .topbar .logout-btn:hover { color: var(--red); background: var(--red-dim); }
 
   /* ── TABS ── */
   .tabs {
@@ -706,8 +729,12 @@
 <div id="app">
   <!-- Top bar -->
   <div class="topbar">
-    <img src="/images/kfs-logo.png" alt="KFS" class="kfs-badge" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
-    <div class="event-name" id="topbar-event">Select event</div>
+    <div class="topbar-brand">
+      <img src="/images/kfs-logo.png" alt="KFS" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
+    </div>
+    <div class="topbar-center">
+      <div class="event-name" id="topbar-event">Select event</div>
+    </div>
     <div class="admin-name" id="topbar-admin"></div>
     <button class="logout-btn" onclick="doLogout()" title="Sign out">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

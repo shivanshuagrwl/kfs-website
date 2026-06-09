@@ -5743,8 +5743,9 @@ async function sendPaymentBill({
     textContent: bodyText,
     attachment: [
       {
-        name:    `KFS-Receipt-${billInvoiceNo}.pdf`,
-        content: pdfBuffer.toString("base64"),
+        name:        `KFS-Receipt-${billInvoiceNo}.pdf`,
+        content:     pdfBuffer.toString("base64"),
+        contentType: "application/pdf",   // Brevo requires camelCase — snake_case is silently ignored
       },
     ],
   };
@@ -6770,7 +6771,11 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     ticketPdfBuffer = await generateTicketPdf({ event, reg, qrDataUrl });
     console.log(`[ticket-email] PDF generated: ${ticketPdfBuffer.length} bytes`);
   } catch (e) {
-    console.error("[ticket-email] PDF generation failed:", e.message);
+    if (e.code === "MODULE_NOT_FOUND") {
+      console.error("[ticket-email] PDF generation failed — 'pdfkit' not installed. Run: npm install pdfkit");
+    } else {
+      console.error("[ticket-email] PDF generation failed:", e.message, "\n", e.stack);
+    }
     ticketPdfBuffer = null;
   }
 
@@ -6841,15 +6846,15 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     attachments.push({
       name: `kfs-ticket-${(event.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
       content: ticketPdfBuffer.toString("base64"),
-      content_type: "application/pdf",
+      contentType: "application/pdf",   // Brevo requires camelCase — snake_case is silently ignored
     });
   }
   // CID attachment: email clients use this for the inline <img src="cid:entry-qr">
   attachments.push({
     name: "entry-qr.png",
     content: qrBase64,
-    content_type: "image/png",
-    cid: "entry-qr",
+    contentType: "image/png",
+    contentId: "entry-qr",
   });
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
