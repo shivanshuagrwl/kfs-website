@@ -173,16 +173,14 @@ async function loadEvents() {
   document.getElementById('event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
   document.getElementById('data-event-select').innerHTML = '<option value="">— Select event —</option>' + opts;
 
-  // Auto-select first upcoming event (fallback: first event in list)
+  // Auto-select first upcoming event, fallback to first in list
   const defaultEvent = _events.find(e => e.is_upcoming) || _events[0];
   if (defaultEvent) {
     const id = String(defaultEvent.id);
     document.getElementById('event-select').value = id;
     document.getElementById('data-event-select').value = id;
-    // Update topbar label exactly as onEventChange() does
-    document.getElementById('topbar-event').textContent = defaultEvent.title;
-    // Pre-load registrations so data tab is populated on first switch
-    loadRegistrations();
+    onEventChange();      // updates topbar label
+    loadRegistrations();  // pre-loads data tab
   }
 }
 
