@@ -509,10 +509,19 @@ function setRefreshCookie(res, raw) {
     maxAge:   7 * 24 * 60 * 60 * 1000,
     path:     "/api/admin/refresh",
   });
+  // Non-httpOnly sentinel — lets the scanner page skip the refresh call
+  // when there is clearly no session (avoids a noisy 401 on every page load).
+  res.cookie("kfs_session", "1", {
+    httpOnly: false,
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge:   7 * 24 * 60 * 60 * 1000,
+  });
 }
 
 function clearRefreshCookie(res) {
   res.clearCookie("kfs_refresh", { path: "/api/admin/refresh" });
+  res.clearCookie("kfs_session");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6743,12 +6752,10 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       })
     : null;
 
-  // QR as base64 for CID attachment (proper inline CID, not data: URI)
-  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
-
   // ── Apple-style HTML ticket email ─────────────────────────────────────────
   // No PDF — all info embedded in a beautiful dark HTML card.
-  // QR is sent as a CID-attached PNG so Gmail/Outlook/Apple Mail all render it.
+  // QR is embedded as a data: URI directly in the <img src> because Brevo
+  // strips/ignores contentId/disposition on attachments, breaking cid: refs.
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6808,7 +6815,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
           <!-- QR code -->
           <td align="center" style="width:160px;vertical-align:top">
             <div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;line-height:0">
-              <img src="cid:entry-qr" alt="Entry QR Code" width="136" height="136" style="display:block;border-radius:4px">
+              <img src="${qrDataUrl}" alt="Entry QR Code" width="136" height="136" style="display:block;border-radius:4px">
             </div>
             <div style="font-size:10px;color:#636366;margin-top:8px;letter-spacing:.06em;text-transform:uppercase">Scan at entry</div>
           </td>
@@ -6842,18 +6849,6 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 
   const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nShow the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
-  // CID inline QR attachment — disposition:inline tells Brevo/Gmail/Outlook to
-  // embed it in the email body via <img src="cid:entry-qr">, not show as download.
-  const attachments = [
-    {
-      name:        "entry-qr.png",
-      content:     qrBase64,
-      contentType: "image/png",
-      contentId:   "entry-qr",
-      disposition: "inline",
-    },
-  ];
-
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -6867,7 +6862,6 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
       textContent,
       htmlContent,
-      attachment: attachments,
     }),
   });
 
@@ -7066,27 +7060,58 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
 
   // If event_registrations is empty, fall back to form_responses so events
   // registered via the form builder still show up in the scanner data tab.
+  // NOTE: form_responses stores answers as a JSON string in the `answers` column.
   if ((data || []).length === 0) {
     const { data: formData, error: formErr } = await supabase
       .from("form_responses")
-      .select("id, created_at, response_data")
+      .select("id, created_at, answers")
       .eq("event_id", req.params.id)
       .order("created_at", { ascending: false });
 
     if (!formErr && (formData || []).length > 0) {
+      // Also pull questions so we can map by question label (not just key name)
+      const { data: form } = await supabase
+        .from("event_forms")
+        .select("questions")
+        .eq("event_id", req.params.id)
+        .maybeSingle();
+      let questions = [];
+      try { questions = JSON.parse(form?.questions || "[]"); } catch (_) {}
+
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
       // Shape form_responses to match event_registrations schema
       const shaped = formData.map((r) => {
-        const d = r.response_data || {};
-        const name  = d.name  || d.Name  || d.full_name  || d["Full Name"]  || "—";
-        const email = d.email || d.Email || d.email_address || d["Email"] || "";
-        const roll_no = d.roll_no || d["Roll No"] || d.roll || d["Roll Number"] || null;
-        const phone   = d.phone   || d.Phone   || d.mobile || d.Mobile || null;
+        let d = {};
+        try { d = JSON.parse(r.answers || "{}"); } catch (_) {}
+
+        // Try to resolve fields via question labels first, then fall back to key guessing
+        const emailQ = questions.find(q => q.type === "email") ||
+                       questions.find(q => ["text","textarea"].includes(q.type) && /e[\s-]?mail/i.test(q.label || ""));
+        const nameQ  = questions.find(q => ["text","textarea"].includes(q.type) && /\bname\b/i.test(q.label || ""));
+        const rollQ  = questions.find(q => ["text","textarea"].includes(q.type) && /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""));
+        const phoneQ = questions.find(q => ["text","textarea"].includes(q.type) && /phone|mobile/i.test(q.label || ""));
+
+        let email = emailQ ? (d[emailQ.id] || "").trim() : null;
+        // Tier 2 fallback: scan all values for an email-shaped string
+        if (!email) {
+          for (const val of Object.values(d)) {
+            if (typeof val === "string" && EMAIL_RE.test(val.trim())) { email = val.trim(); break; }
+          }
+        }
+        // Tier 3 fallback: common key names
+        if (!email) email = d.email || d.Email || d.email_address || d["Email Address"] || "";
+
+        const name    = (nameQ  ? d[nameQ.id]  : null) || d.name  || d.Name  || d.full_name  || d["Full Name"]  || email || "—";
+        const roll_no = (rollQ  ? d[rollQ.id]  : null) || d.roll_no || d["Roll No"] || d.roll || d["Roll Number"] || null;
+        const phone   = (phoneQ ? d[phoneQ.id] : null) || d.phone   || d.Phone   || d.mobile || d.Mobile || null;
+
         return {
           id:            r.id,
-          name,
-          email,
-          phone,
-          roll_no,
+          name:          (typeof name === "string" ? name.trim() : null) || "—",
+          email:         (typeof email === "string" ? email.trim().toLowerCase() : "") || "",
+          phone:         phone || null,
+          roll_no:       roll_no || null,
           checked_in:    false,
           checked_in_at: null,
           checked_in_by: null,

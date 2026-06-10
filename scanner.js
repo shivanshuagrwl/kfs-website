@@ -646,8 +646,12 @@ function vibrateDevice(pattern) {
   if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
-// Try to auto-login on page load via refresh cookie
+// Try to auto-login on page load via refresh cookie.
+// kfs_session is a non-httpOnly sentinel set alongside the httpOnly kfs_refresh
+// cookie — if it's absent there is no session and we skip the call entirely,
+// avoiding a noisy 401 in the network tab on every unauthenticated page load.
 (async function autoLogin() {
+  if (!document.cookie.split(';').some(c => c.trim().startsWith('kfs_session='))) return;
   try {
     const r = await fetch('/api/admin/refresh', {
       method: 'POST', credentials: 'include',
