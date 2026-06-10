@@ -136,8 +136,8 @@ async function doLogin() {
 async function doLogout() {
   try { await api('POST', '/api/admin/logout', {}); } catch {}
   _token = null;
-  _scanning = false;
   if (_scanner) { try { await _scanner.stop(); } catch {} _scanner = null; }
+  _scanning = false;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('l-pass').value = '';
@@ -208,8 +208,10 @@ function onEventChange() {
   const sel = document.getElementById('event-select');
   const ev = _events.find(e => String(e.id) === String(sel.value));
   document.getElementById('topbar-event').textContent = ev ? ev.title : 'Select event';
-  // Reset result card
+  // Reset result card and scan state — including cooldown so the first scan of
+  // the newly selected event is never silently dropped.
   hideResult();
+  _scanCooldown = false;
 }
 
 // ── SCANNER ────────────────────────────────────────────────────────────────────
@@ -223,9 +225,13 @@ async function startCamera() {
 
   _scanner = new Html5Qrcode('qr-reader');
   try {
+    // qrbox: clamp to 80% of the smaller viewport dimension so it never
+    // exceeds the video element on narrow phones (Html5QrCode throws if it does).
+    // aspectRatio omitted — forcing 1:1 breaks camera init on many Android devices.
+    const boxSize = Math.min(Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.72), 280);
     await _scanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1.0 },
+      { fps: 12, qrbox: { width: boxSize, height: boxSize } },
       onQrScanned,
       () => {}
     );
@@ -233,6 +239,8 @@ async function startCamera() {
   } catch (e) {
     console.error('Camera error:', e);
     toast('Camera not accessible — check permissions');
+    // Null out the dead instance so the next tap creates a fresh one cleanly.
+    _scanner = null;
     document.getElementById('start-scan-btn').style.display = 'flex';
     document.getElementById('qr-reader-wrap').style.display = 'none';
     document.getElementById('scan-hint').style.display = 'none';
@@ -241,8 +249,14 @@ async function startCamera() {
 
 let _scanCooldown = false;
 
-async function onQrScanned(text) {
+async function onQrScanned(rawText) {
   if (_scanCooldown) return;
+
+  // Normalise before dedup and before sending — trim whitespace some libraries append,
+  // lowercase so UUID case differences don't cause double-fires or lookup mismatches.
+  const text = String(rawText).trim().toLowerCase();
+  if (!text) return;
+
   if (text === _lastScanned) return; // same QR, ignore repeat
   _lastScanned = text;
   _scanCooldown = true;
@@ -252,9 +266,21 @@ async function onQrScanned(text) {
   showResult({ status: 'loading' });
 
   const eventId = document.getElementById('event-select').value;
-  const { ok, data } = await api('POST', '/api/admin/scan-qr/lookup', { qr_token: text, event_id: eventId });
+  const { ok, status, data } = await api('POST', '/api/admin/scan-qr/lookup', { qr_token: text, event_id: eventId });
 
-  if (!ok || data.status === 'invalid') {
+  // 404 → invalid QR; 500/network → show a distinct error, not "Invalid QR"
+  if (!ok) {
+    flashBody('red');
+    vibrateDevice([100, 50, 100]);
+    if (status === 404 || data?.status === 'invalid') {
+      showResult({ status: 'invalid', error: data?.error || 'Invalid QR code — not a KFS ticket.' });
+    } else {
+      showResult({ status: 'invalid', error: `Server error (${status}) — try again.` });
+    }
+    return;
+  }
+
+  if (data.status === 'invalid') {
     flashBody('red');
     vibrateDevice([100, 50, 100]);
     showResult({ status: 'invalid', error: data?.error || 'Invalid QR code — not a KFS ticket.' });

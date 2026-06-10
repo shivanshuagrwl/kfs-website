@@ -6753,107 +6753,155 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     : null;
 
   // ── Apple-style HTML ticket email ─────────────────────────────────────────
-  // QR is sent as a PNG attachment named "entry-qr.png".
-  // Brevo silently strips data: URI images so we cannot inline the QR in <img src>.
-  // CID inline images also don't work reliably across Gmail/Outlook via Brevo.
-  // Sending as a named attachment is the only approach that works everywhere.
-  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+  // Brevo does NOT support contentId/disposition for CID inline images.
+  // The QR must be embedded directly as a data: URI in the <img src> attribute.
+  // No PDF attachments — ticket is email-only.
+  // qrDataUrl is already a data:image/png;base64,... string from QRCode.toDataURL().
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
 <title>Your KFS Ticket</title>
 </head>
-<body style="margin:0;padding:0;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000;padding:32px 16px 48px">
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px 56px">
 <tr><td align="center">
 
-  <!-- Outer card -->
-  <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;border-radius:20px;overflow:hidden;border:1px solid #1c1c1e;background:#1c1c1e">
+  <!-- ── Outer card ── -->
+  <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%">
 
-    <!-- ── Header strip ── -->
-    <tr><td style="background:linear-gradient(135deg,#1a1a1a 0%,#111 100%);padding:20px 28px;border-bottom:1px solid #2c2c2e">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <!-- Logo row -->
+    <tr><td align="center" style="padding-bottom:24px">
+      <table role="presentation" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="width:36px;vertical-align:middle">
-            <div style="width:36px;height:36px;background:#fff;border-radius:9px;text-align:center;line-height:36px;font-size:11px;font-weight:900;color:#000;letter-spacing:-.5px">KFS</div>
-          </td>
-          <td style="padding-left:12px;vertical-align:middle">
-            <div style="font-size:13px;font-weight:700;color:#f5f5f7;letter-spacing:-.01em">KIIT Film Society</div>
-            <div style="font-size:11px;color:#636366;margin-top:1px">Your entry ticket</div>
-          </td>
-          <td align="right" style="vertical-align:middle">
-            <div style="display:inline-block;background:rgba(52,199,89,.15);border:1px solid rgba(52,199,89,.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:#34c759;letter-spacing:.02em">CONFIRMED</div>
+          <td style="background:#fff;border-radius:12px;width:40px;height:40px;text-align:center;vertical-align:middle;font-size:12px;font-weight:900;color:#000;letter-spacing:-.5px;line-height:40px">KFS</td>
+          <td style="padding-left:10px;vertical-align:middle">
+            <div style="font-size:14px;font-weight:700;color:#f5f5f7;letter-spacing:-.01em">KIIT Film Society</div>
+            <div style="font-size:11px;color:#636366;margin-top:1px">Event Entry Ticket</div>
           </td>
         </tr>
       </table>
     </td></tr>
 
-    <!-- ── Event info ── -->
-    <tr><td style="padding:28px 28px 0">
-      <div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Event</div>
-      <div style="font-size:26px;font-weight:800;color:#f5f5f7;line-height:1.1;letter-spacing:-.02em">${event.title || "Event"}</div>
-      ${eventDate ? `<div style="margin-top:10px;font-size:13px;color:#aeaeb2">${eventDate}</div>` : ""}
-      ${event.location ? `<div style="margin-top:4px;font-size:13px;color:#636366">${event.location}</div>` : ""}
-    </td></tr>
+    <!-- Main ticket card -->
+    <tr><td style="background:#1c1c1e;border-radius:20px;overflow:hidden;border:1px solid #2c2c2e">
 
-    <!-- ── Divider (perforated line) ── -->
-    <tr><td style="padding:24px 0 0">
+      <!-- ── Accent bar ── -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="background:linear-gradient(90deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);height:6px;font-size:0;line-height:0">&nbsp;</td></tr>
+      </table>
+
+      <!-- ── Event header ── -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:28px 32px 24px">
+          <div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">You're in ✓</div>
+          <div style="font-size:28px;font-weight:800;color:#f5f5f7;line-height:1.15;letter-spacing:-.03em">${(event.title || "Event").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+          ${eventDate ? `<div style="margin-top:12px;font-size:14px;color:#aeaeb2;font-weight:500">${eventDate}</div>` : ""}
+          ${event.location ? `<div style="margin-top:4px;font-size:13px;color:#636366">${event.location.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
+          <!-- CONFIRMED badge -->
+          <div style="margin-top:16px">
+            <span style="display:inline-block;background:rgba(52,199,89,.15);border:1px solid rgba(52,199,89,.35);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700;color:#34c759;letter-spacing:.06em;text-transform:uppercase">● Confirmed</span>
+          </div>
+        </td></tr>
+      </table>
+
+      <!-- ── Perforated tear line ── -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td width="24" style="background:#000;border-radius:0 24px 24px 0"></td>
-          <td style="border-top:1px dashed #3a3a3c;height:1px;padding:0"></td>
-          <td width="24" style="background:#000;border-radius:24px 0 0 24px"></td>
+          <td width="20" style="background:#0a0a0a;border-radius:0 20px 20px 0;font-size:0;line-height:0">&nbsp;</td>
+          <td style="border-top:2px dashed #3a3a3c;height:0;font-size:0;line-height:0;padding:0">&nbsp;</td>
+          <td width="20" style="background:#0a0a0a;border-radius:20px 0 0 20px;font-size:0;line-height:0">&nbsp;</td>
         </tr>
       </table>
-    </td></tr>
 
-    <!-- ── QR notice + attendee ── -->
-    <tr><td style="padding:24px 28px">
+      <!-- ── QR + Attendee section ── -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <!-- QR attachment notice -->
-          <td align="center" style="width:160px;vertical-align:top">
-            <div style="background:#2c2c2e;border:1px dashed #3a3a3c;padding:16px 12px;border-radius:14px;display:inline-block;line-height:1.4;text-align:center">
-              <div style="font-size:28px;margin-bottom:6px">📎</div>
-              <div style="font-size:11px;font-weight:600;color:#f5f5f7;letter-spacing:.02em">QR Code</div>
-              <div style="font-size:10px;color:#636366;margin-top:3px">See attachment<br>entry-qr.png</div>
-            </div>
-            <div style="font-size:10px;color:#636366;margin-top:8px;letter-spacing:.06em;text-transform:uppercase">Show at entry</div>
-          </td>
-          <!-- Attendee details -->
-          <td style="padding-left:24px;vertical-align:middle">
-            <div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Attendee</div>
-            <div style="font-size:20px;font-weight:800;color:#f5f5f7;letter-spacing:-.01em;line-height:1.2">${reg.name}</div>
-            <div style="font-size:12px;color:#636366;margin-top:6px;word-break:break-word">${reg.email}</div>
-            ${reg.roll_no ? `<div style="margin-top:10px;background:#2c2c2e;border-radius:8px;padding:8px 12px;display:inline-block"><div style="font-size:9px;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">Roll No</div><div style="font-size:13px;font-weight:700;color:#f5f5f7;letter-spacing:.03em">${reg.roll_no}</div></div>` : ""}
-            ${eventDateShort ? `<div style="margin-top:10px;background:#2c2c2e;border-radius:8px;padding:8px 12px;display:inline-block"><div style="font-size:9px;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">Date</div><div style="font-size:13px;font-weight:700;color:#f5f5f7">${eventDateShort}</div></div>` : ""}
-          </td>
-        </tr>
-      </table>
-    </td></tr>
+        <tr><td style="padding:28px 32px 32px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
 
-    <!-- ── Footer ── -->
-    <tr><td style="background:#111;border-top:1px solid #2c2c2e;padding:18px 28px;text-align:center">
-      <div style="font-size:13px;font-weight:600;color:#f5f5f7;margin-bottom:4px">See you there! 🎬</div>
-      <div style="font-size:11px;color:#48484a">Questions? <a href="mailto:filmsocietykiit@gmail.com" style="color:#636366;text-decoration:none">filmsocietykiit@gmail.com</a></div>
+              <!-- QR code — embedded inline as base64 PNG, no attachment needed -->
+              <td align="center" style="width:148px;vertical-align:top">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr><td style="background:#fff;border-radius:14px;padding:10px;display:inline-block">
+                    <img src="${qrDataUrl}" width="128" height="128" alt="Entry QR Code" style="display:block;width:128px;height:128px;border:none;outline:none" />
+                  </td></tr>
+                </table>
+                <div style="margin-top:10px;font-size:10px;font-weight:600;color:#636366;letter-spacing:.08em;text-transform:uppercase;text-align:center">Scan at entry</div>
+              </td>
+
+              <!-- Divider -->
+              <td width="1" style="border-left:1px dashed #3a3a3c;padding:0 20px;font-size:0;line-height:0">&nbsp;</td>
+
+              <!-- Attendee details -->
+              <td style="padding-left:24px;vertical-align:middle">
+                <div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px">Attendee</div>
+                <div style="font-size:22px;font-weight:800;color:#f5f5f7;letter-spacing:-.02em;line-height:1.2">${reg.name.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+                <div style="font-size:12px;color:#636366;margin-top:6px;word-break:break-all">${reg.email.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+
+                ${reg.roll_no ? `
+                <!-- Roll No pill -->
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px">
+                  <tr><td style="background:#2c2c2e;border-radius:9px;padding:8px 14px">
+                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Roll No</div>
+                    <div style="font-size:14px;font-weight:700;color:#f5f5f7;letter-spacing:.04em">${reg.roll_no.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+                  </td></tr>
+                </table>` : ""}
+
+                ${eventDateShort ? `
+                <!-- Date pill -->
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px">
+                  <tr><td style="background:#2c2c2e;border-radius:9px;padding:8px 14px">
+                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Date</div>
+                    <div style="font-size:14px;font-weight:700;color:#f5f5f7">${eventDateShort}</div>
+                  </td></tr>
+                </table>` : ""}
+              </td>
+
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+
+      <!-- ── Footer strip ── -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="background:#111;border-top:1px solid #2c2c2e;padding:18px 32px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="font-size:13px;font-weight:600;color:#f5f5f7">See you there! 🎬</td>
+              <td align="right" style="font-size:11px;color:#48484a">
+                <a href="mailto:filmsocietykiit@gmail.com" style="color:#636366;text-decoration:none">filmsocietykiit@gmail.com</a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+
+    </td></tr>
+    <!-- End main ticket card -->
+
+    <!-- Fine print -->
+    <tr><td align="center" style="padding-top:20px">
+      <div style="font-size:11px;color:#3a3a3c;text-align:center;line-height:1.6">
+        This ticket is personal and non-transferable.<br>
+        Do not share your QR code with others.
+      </div>
     </td></tr>
 
   </table>
-
-  <!-- Note below card -->
-  <div style="margin-top:20px;font-size:11px;color:#3a3a3c;text-align:center">This ticket is personal and non-transferable.</div>
+  <!-- End outer card -->
 
 </td></tr>
 </table>
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR code is attached as entry-qr.png — show it at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nShow your QR code (in this email) at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
+  // No attachment — QR is embedded directly in the HTML as a data: URI.
+  // Brevo does not support contentId or disposition; inline CID images are silently stripped.
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -6867,12 +6915,6 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
       textContent,
       htmlContent,
-      attachment: [
-        {
-          name: "entry-qr.png",
-          content: qrBase64,
-        },
-      ],
     }),
   });
 
@@ -6943,14 +6985,16 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
     return res.status(500).json({ error: "Registration failed. Please try again." });
   }
 
-  // 5. Generate QR image (encode only the token — clean and small)
+  // 5. Generate QR image — encode the token as-is (lowercase UUID from crypto.randomUUID()).
+  // width 400 + margin 3 ensures the QR is readable on both phone screens and email clients.
+  // errorCorrectionLevel "M" gives a denser but highly scan-compatible code vs "H".
   let qrDataUrl;
   try {
-    qrDataUrl = await QRCode.toDataURL(qrToken, {
-      width: 300,
-      margin: 2,
+    qrDataUrl = await QRCode.toDataURL(qrToken.toLowerCase(), {
+      width: 400,
+      margin: 3,
       color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "H",
+      errorCorrectionLevel: "M",
     });
   } catch (e) {
     console.error("[register] QR generation failed:", e.message);
@@ -6974,8 +7018,20 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
 // ── ADMIN/SCANNER: Lookup QR (validates, does NOT mark checked-in) ─────────────
 // Used by scanner page to display person details before confirming entry
 app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
-  const { qr_token, event_id } = req.body;
-  if (!qr_token) return res.status(400).json({ error: "qr_token required" });
+  const { qr_token: rawToken, event_id } = req.body;
+  if (!rawToken) return res.status(400).json({ error: "qr_token required" });
+
+  // Normalise: trim whitespace/newlines some QR scanner libs append; lowercase for UUID match.
+  // crypto.randomUUID() produces lowercase; some device cameras return uppercase hex.
+  const qr_token = String(rawToken).trim().toLowerCase();
+
+  if (!qr_token) return res.status(400).json({ status: "invalid", error: "Empty QR code." });
+
+  // Reject anything that doesn't look like a UUID so the DB lookup is never wasted.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  if (!UUID_RE.test(qr_token)) {
+    return res.status(404).json({ status: "invalid", error: "Invalid QR code — not a KFS ticket." });
+  }
 
   const { data: reg, error } = await supabase
     .from("event_registrations")
@@ -7213,7 +7269,7 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, as
 
 // ── ADMIN: Get registration stats for an event (for event list view) ──────────
 // Counts event_registrations first; if 0, falls back to form_responses count
-// so events that registered via form builder (not the QR system) still show a count.
+// (form_responses stores submitted answers in the `answers` column as JSON string).
 app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req, res) => {
   const eventId = parseInt(req.params.id, 10);
   if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
@@ -7228,14 +7284,15 @@ app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req,
   let total = (data || []).length;
   const checkedIn = (data || []).filter((r) => r.checked_in).length;
 
-  // If no QR registrations exist, count form_responses so admins can see
-  // how many people submitted the event's registration form
+  // If no QR registrations exist, count form_responses (answers column) so admins
+  // can see how many people submitted the event's registration form.
+  // Use .select("id") (not head:true) to ensure the service-role key always counts correctly.
   if (total === 0) {
-    const { count: formCount } = await supabase
+    const { data: formRows, error: formErr } = await supabase
       .from("form_responses")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .eq("event_id", eventId);
-    total = formCount || 0;
+    if (!formErr) total = (formRows || []).length;
   }
 
   res.json({ total, checked_in: checkedIn, pending: total - checkedIn });
