@@ -6898,10 +6898,37 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nShow your QR code (in this email) at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR code is embedded in this email AND attached as a PDF ticket.\nShow either at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
-  // No attachment — QR is embedded directly in the HTML as a data: URI.
-  // Brevo does not support contentId or disposition; inline CID images are silently stripped.
+  // ── Generate PDF ticket attachment ─────────────────────────────────────────
+  let pdfAttachment = null;
+  try {
+    console.log(`[ticket-email] Generating PDF for ${reg.email}...`);
+    const pdfBuffer = await generateTicketPdf({ event, reg, qrDataUrl });
+    pdfAttachment = {
+      name: `KFS-Ticket-${(event.title || "event").replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}.pdf`,
+      content: pdfBuffer.toString("base64"),
+    };
+    console.log(`[ticket-email] PDF generated (${pdfBuffer.length} bytes) for ${reg.email}`);
+  } catch (pdfErr) {
+    // Non-fatal: email still sends, just without PDF attachment
+    console.error(`[ticket-email] PDF generation failed for ${reg.email}:`, pdfErr.message);
+  }
+
+  const brevoPayload = {
+    sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
+    to: [{ email: reg.email, name: reg.name }],
+    subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
+    textContent,
+    htmlContent,
+  };
+  if (pdfAttachment) {
+    brevoPayload.attachment = [pdfAttachment];
+    console.log(`[ticket-email] Attaching PDF: ${pdfAttachment.name}`);
+  } else {
+    console.warn(`[ticket-email] Sending without PDF attachment (generation failed)`);
+  }
+
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -6909,20 +6936,14 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       "api-key": s.brevo_api_key,
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
-      to: [{ email: reg.email, name: reg.name }],
-      subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
-      textContent,
-      htmlContent,
-    }),
+    body: JSON.stringify(brevoPayload),
   });
 
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`Brevo ticket email error ${response.status}: ${err}`);
   }
-  console.log(`[ticket-email] Sent to ${reg.email} for "${event.title}"`);
+  console.log(`[ticket-email] ✓ Sent to ${reg.email} for "${event.title}" (PDF: ${pdfAttachment ? "attached" : "inline-only"})`);
 }
 
 
@@ -7001,12 +7022,13 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
     return res.status(500).json({ error: "Could not generate ticket QR." });
   }
 
-  // 6. Send ticket email (non-blocking — don't fail registration if email fails)
-  sendTicketEmail({ event, reg, qrDataUrl }).catch((e) =>
-    console.error("[register] ticket email failed:", e.message)
-  );
+  // 6. Send ticket email with PDF attachment (non-blocking — never fail the registration)
+  console.log(`[register] Dispatching ticket email+PDF to ${reg.email} for event "${event.title}" reg_id=${reg.id}`);
+  sendTicketEmail({ event, reg, qrDataUrl }).catch((e) => {
+    console.error(`[register] ✗ ticket email FAILED for ${reg.email}:`, e.message);
+  });
 
-  console.log(`[register] ${reg.name} (${reg.email}) registered for event ${eventId}`);
+  console.log(`[register] ✓ ${reg.name} (${reg.email}) registered event_id=${eventId} reg_id=${reg.id} qr_token=${qrToken}`);
   res.json({
     success: true,
     message: "Registered! Check your email for the QR ticket.",
@@ -7027,11 +7049,17 @@ app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
 
   if (!qr_token) return res.status(400).json({ status: "invalid", error: "Empty QR code." });
 
-  // Reject anything that doesn't look like a UUID so the DB lookup is never wasted.
+  // Validate token format — accept standard UUID (v4) format only.
+  // We normalise to lowercase above so only need to check lowercase hex.
+  // Reject URLs, plain text, or anything obviously not a KFS token.
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   if (!UUID_RE.test(qr_token)) {
+    console.warn(`[scan-lookup] Rejected non-UUID token: "${qr_token.slice(0, 40)}..." from admin=${req.admin?.username}`);
     return res.status(404).json({ status: "invalid", error: "Invalid QR code — not a KFS ticket." });
   }
+  console.log(`[scan-lookup] Valid UUID format: ${qr_token}`);
+
+  console.log(`[scan-lookup] qr_token=${qr_token} event_id=${event_id} admin=${req.admin?.username}`);
 
   const { data: reg, error } = await supabase
     .from("event_registrations")
@@ -7039,8 +7067,15 @@ app.post("/api/admin/scan-qr/lookup", authMiddleware, async (req, res) => {
     .eq("qr_token", qr_token)
     .maybeSingle();
 
-  if (error) return res.status(500).json({ error: "DB error" });
-  if (!reg) return res.status(404).json({ status: "invalid", error: "QR not recognised — not a valid KFS ticket." });
+  if (error) {
+    console.error(`[scan-lookup] DB error for qr_token=${qr_token}:`, error.message, error.code);
+    return res.status(500).json({ error: "DB error", detail: error.message });
+  }
+  if (!reg) {
+    console.warn(`[scan-lookup] QR not found in DB: ${qr_token}`);
+    return res.status(404).json({ status: "invalid", error: "QR not recognised — not a valid KFS ticket." });
+  }
+  console.log(`[scan-lookup] Found reg_id=${reg.id} name="${reg.name}" event_id=${reg.event_id} checked_in=${reg.checked_in}`);
 
   // If a specific event was selected by the scanner, validate the ticket belongs to it
   if (event_id && String(reg.event_id) !== String(event_id)) {
@@ -7099,6 +7134,8 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
     return res.status(409).json({ error: "Already checked in", status: "already_used" });
   }
 
+  console.log(`[scan-confirm] Marking reg_id=${registration_id} checked_in for event_id=${event_id} by ${req.admin?.username}`);
+
   const { error: updateErr } = await supabase
     .from("event_registrations")
     .update({
@@ -7108,11 +7145,14 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
     })
     .eq("id", registration_id);
 
-  if (updateErr) return res.status(500).json({ error: "Failed to mark entry" });
+  if (updateErr) {
+    console.error(`[scan-confirm] DB update failed for reg_id=${registration_id}:`, updateErr.message, updateErr.code);
+    return res.status(500).json({ error: "Failed to mark entry", detail: updateErr.message });
+  }
 
   logActivity(req.admin.id, req.admin.name, "scan", "event_registration", `${reg.name} — event ${reg.event_id}`).catch(() => {});
 
-  console.log(`[scan] ✓ ${reg.name} checked in by ${req.admin.username} for event ${reg.event_id}`);
+  console.log(`[scan-confirm] ✓ ${reg.name} (id=${registration_id}) checked in by ${req.admin.username} for event ${reg.event_id}`);
   res.json({ success: true, name: reg.name });
 });
 
@@ -7121,13 +7161,19 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
   const eventId = parseInt(req.params.id, 10);
   if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
 
+  console.log(`[registrations-api] Fetching registrations for event_id=${eventId} (admin=${req.admin?.username})`);
+
   const { data, error } = await supabase
     .from("event_registrations")
     .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
 
-  if (error) return res.status(500).json({ error: "Internal server error" });
+  if (error) {
+    console.error(`[registrations-api] DB error for event_id=${eventId}:`, error.message, error.code);
+    return res.status(500).json({ error: "Internal server error", detail: error.message });
+  }
+  console.log(`[registrations-api] event_registrations count=${(data||[]).length} for event_id=${eventId}`);
 
   // If event_registrations is empty, fall back to form_responses so events
   // registered via the form builder still show up in the scanner data tab.
@@ -7139,6 +7185,8 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
+    console.log(`[registrations-api] event_registrations empty — checking form_responses for event_id=${eventId}`);
+    console.log(`[registrations-api] form_responses count=${(formData||[]).length} for event_id=${eventId} (formErr=${formErr?.message||null})`);
     if (!formErr && (formData || []).length > 0) {
       // Also pull questions so we can map by question label (not just key name)
       const { data: form } = await supabase
@@ -7190,10 +7238,14 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
           _source:       "form_responses",
         };
       });
+      console.log(`[registrations-api] Returning ${shaped.length} shaped form_responses for event_id=${eventId}`);
       return res.json(shaped);
     }
+    // No registrations in either table
+    console.warn(`[registrations-api] No registrations found in event_registrations OR form_responses for event_id=${eventId}`);
   }
 
+  console.log(`[registrations-api] Returning ${(data||[]).length} event_registrations for event_id=${eventId}`);
   res.json(data || []);
 });
 
@@ -7389,6 +7441,54 @@ app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"
   }
 
   res.json({ success: true, total: (responses || []).length, inserted, skipped });
+});
+
+// ── ADMIN: Debug endpoint — what's actually in the DB for an event ──────────────
+// Use this to diagnose why registrations aren't showing. Returns counts from
+// both event_registrations and form_responses tables.
+app.get("/api/admin/events/:id/registrations/debug", authMiddleware, async (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
+  const [erResult, frResult, evResult] = await Promise.all([
+    supabase.from("event_registrations")
+      .select("id, name, email, qr_token, checked_in, created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false }),
+    supabase.from("form_responses")
+      .select("id, created_at, answers")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false }),
+    supabase.from("events").select("id, title, event_date").eq("id", eventId).maybeSingle(),
+  ]);
+
+  console.log(`[debug] event_id=${eventId} event_registrations=${(erResult.data||[]).length} form_responses=${(frResult.data||[]).length}`);
+
+  res.json({
+    event: evResult.data || null,
+    event_registrations: {
+      count: (erResult.data || []).length,
+      error: erResult.error?.message || null,
+      rows: (erResult.data || []).map(r => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        has_qr_token: !!r.qr_token,
+        qr_token_preview: r.qr_token ? r.qr_token.slice(0, 8) + "..." : null,
+        checked_in: r.checked_in,
+        created_at: r.created_at,
+      })),
+    },
+    form_responses: {
+      count: (frResult.data || []).length,
+      error: frResult.error?.message || null,
+      sample: (frResult.data || []).slice(0, 3).map(r => ({
+        id: r.id,
+        created_at: r.created_at,
+        answers_keys: (() => { try { return Object.keys(JSON.parse(r.answers || "{}")); } catch { return []; } })(),
+      })),
+    },
+  });
 });
 
 // ── SCANNER: Fresh events list (no cache, uses service-role key) ──────────────
