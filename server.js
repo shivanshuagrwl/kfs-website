@@ -6883,7 +6883,8 @@ const registrationRateLimit = rateLimit({
 
 app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
   const { name, email, phone, roll_no } = req.body;
-  const eventId = req.params.id;
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
 
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
@@ -7050,10 +7051,13 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
 
 // ── ADMIN: Get all registrations for an event ─────────────────────────────────
 app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
   const { data, error } = await supabase
     .from("event_registrations")
     .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
-    .eq("event_id", req.params.id)
+    .eq("event_id", eventId)
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: "Internal server error" });
@@ -7065,7 +7069,7 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
     const { data: formData, error: formErr } = await supabase
       .from("form_responses")
       .select("id, created_at, answers")
-      .eq("event_id", req.params.id)
+      .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
     if (!formErr && (formData || []).length > 0) {
@@ -7073,7 +7077,7 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
       const { data: form } = await supabase
         .from("event_forms")
         .select("questions")
-        .eq("event_id", req.params.id)
+        .eq("event_id", eventId)
         .maybeSingle();
       let questions = [];
       try { questions = JSON.parse(form?.questions || "[]"); } catch (_) {}
@@ -7128,16 +7132,19 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
 
 // ── ADMIN: Export registrations as XLSX ───────────────────────────────────────
 app.get("/api/admin/events/:id/registrations/export", authMiddleware, async (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
   const { data: ev } = await supabase
     .from("events")
     .select("title")
-    .eq("id", req.params.id)
+    .eq("id", eventId)
     .maybeSingle();
 
   const { data: regs, error } = await supabase
     .from("event_registrations")
     .select("name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
-    .eq("event_id", req.params.id)
+    .eq("event_id", eventId)
     .order("created_at");
 
   if (error) return res.status(500).json({ error: "Internal server error" });
@@ -7175,16 +7182,20 @@ app.get("/api/admin/events/:id/registrations/export", authMiddleware, async (req
 
 // ── ADMIN: Delete a single registration ───────────────────────────────────────
 app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, async (req, res) => {
+  const eventId = parseInt(req.params.eventId, 10);
+  const regId   = parseInt(req.params.regId, 10);
+  if (isNaN(eventId) || isNaN(regId)) return res.status(400).json({ error: "Invalid ID" });
+
   const { data: reg } = await supabase
     .from("event_registrations")
     .select("name, event_id")
-    .eq("id", req.params.regId)
-    .eq("event_id", req.params.eventId)
+    .eq("id", regId)
+    .eq("event_id", eventId)
     .maybeSingle();
 
   if (!reg) return res.status(404).json({ error: "Registration not found" });
 
-  await supabase.from("event_registrations").delete().eq("id", req.params.regId);
+  await supabase.from("event_registrations").delete().eq("id", regId);
   logActivity(req.admin.id, req.admin.name, "delete", "event_registration", reg.name).catch(() => {});
   res.json({ success: true });
 });
@@ -7193,10 +7204,13 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, as
 // Counts event_registrations first; if 0, falls back to form_responses count
 // so events that registered via form builder (not the QR system) still show a count.
 app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
   const { data, error } = await supabase
     .from("event_registrations")
     .select("id, checked_in")
-    .eq("event_id", req.params.id);
+    .eq("event_id", eventId);
 
   if (error) return res.status(500).json({ error: "Internal server error" });
 
@@ -7209,7 +7223,7 @@ app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req,
     const { count: formCount } = await supabase
       .from("form_responses")
       .select("id", { count: "exact", head: true })
-      .eq("event_id", req.params.id);
+      .eq("event_id", eventId);
     total = formCount || 0;
   }
 
@@ -7237,7 +7251,8 @@ app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
 // One-time utility: copies form submitters into event_registrations so they
 // appear in the scanner and can be checked in via QR.
 app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"), async (req, res) => {
-  const eventId = req.params.id;
+  const eventId = parseInt(req.params.id, 10);
+  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
 
   // 1. Fetch the event's form
   const { data: form } = await supabase
