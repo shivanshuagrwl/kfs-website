@@ -6753,9 +6753,12 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     : null;
 
   // ── Apple-style HTML ticket email ─────────────────────────────────────────
-  // No PDF — all info embedded in a beautiful dark HTML card.
-  // QR is embedded as a data: URI directly in the <img src> because Brevo
-  // strips/ignores contentId/disposition on attachments, breaking cid: refs.
+  // QR is sent as a PNG attachment named "entry-qr.png".
+  // Brevo silently strips data: URI images so we cannot inline the QR in <img src>.
+  // CID inline images also don't work reliably across Gmail/Outlook via Brevo.
+  // Sending as a named attachment is the only approach that works everywhere.
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6808,16 +6811,18 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       </table>
     </td></tr>
 
-    <!-- ── QR + attendee ── -->
+    <!-- ── QR notice + attendee ── -->
     <tr><td style="padding:24px 28px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <!-- QR code -->
+          <!-- QR attachment notice -->
           <td align="center" style="width:160px;vertical-align:top">
-            <div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;line-height:0">
-              <img src="${qrDataUrl}" alt="Entry QR Code" width="136" height="136" style="display:block;border-radius:4px">
+            <div style="background:#2c2c2e;border:1px dashed #3a3a3c;padding:16px 12px;border-radius:14px;display:inline-block;line-height:1.4;text-align:center">
+              <div style="font-size:28px;margin-bottom:6px">📎</div>
+              <div style="font-size:11px;font-weight:600;color:#f5f5f7;letter-spacing:.02em">QR Code</div>
+              <div style="font-size:10px;color:#636366;margin-top:3px">See attachment<br>entry-qr.png</div>
             </div>
-            <div style="font-size:10px;color:#636366;margin-top:8px;letter-spacing:.06em;text-transform:uppercase">Scan at entry</div>
+            <div style="font-size:10px;color:#636366;margin-top:8px;letter-spacing:.06em;text-transform:uppercase">Show at entry</div>
           </td>
           <!-- Attendee details -->
           <td style="padding-left:24px;vertical-align:middle">
@@ -6847,7 +6852,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nShow the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR code is attached as entry-qr.png — show it at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -6862,6 +6867,12 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
       textContent,
       htmlContent,
+      attachment: [
+        {
+          name: "entry-qr.png",
+          content: qrBase64,
+        },
+      ],
     }),
   });
 
