@@ -6731,105 +6731,128 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
   }
 
   const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
+
   const eventDate = event.event_date
     ? new Date(event.event_date).toLocaleDateString("en-IN", {
         weekday: "long", day: "numeric", month: "long", year: "numeric",
       })
     : null;
+  const eventDateShort = event.event_date
+    ? new Date(event.event_date).toLocaleDateString("en-IN", {
+        day: "numeric", month: "short", year: "numeric",
+      })
+    : null;
 
-  // Generate PDF ticket
-  let ticketPdfBuffer;
-  try {
-    ticketPdfBuffer = await generateTicketPdf({ event, reg, qrDataUrl });
-    console.log(`[ticket-email] PDF generated: ${ticketPdfBuffer.length} bytes`);
-  } catch (e) {
-    if (e.code === "MODULE_NOT_FOUND") {
-      console.error("[ticket-email] PDF generation failed — 'pdfkit' not installed. Run: npm install pdfkit");
-    } else {
-      console.error("[ticket-email] PDF generation failed:", e.message, "\n", e.stack);
-    }
-    ticketPdfBuffer = null;
-  }
-
+  // QR as base64 for CID attachment (proper inline CID, not data: URI)
   const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
 
-  // Use CID inline image for QR — data: URIs are blocked by Gmail, Outlook, Apple Mail
+  // ── Apple-style HTML ticket email ─────────────────────────────────────────
+  // No PDF — all info embedded in a beautiful dark HTML card.
+  // QR is sent as a CID-attached PNG so Gmail/Outlook/Apple Mail all render it.
   const htmlContent = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px">
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Your KFS Ticket</title>
+</head>
+<body style="margin:0;padding:0;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000;padding:32px 16px 48px">
 <tr><td align="center">
-<table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden">
 
-  <tr><td style="background:#000;padding:24px 32px;border-bottom:1px solid #1e1e1e">
-    <table width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td style="font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:.05em">KFS</td>
-      <td align="right" style="font-size:11px;color:#555;letter-spacing:.08em;text-transform:uppercase">KIIT Film Society</td>
-    </tr></table>
-  </td></tr>
+  <!-- Outer card -->
+  <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;border-radius:20px;overflow:hidden;border:1px solid #1c1c1e;background:#1c1c1e">
 
-  <tr><td style="padding:28px 32px 20px">
-    <div style="font-size:11px;color:#555;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Registration Confirmed</div>
-    <h1 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#f5f5f5;line-height:1.2">${event.title || "Event"}</h1>
-    ${eventDate ? `<div style="font-size:13px;color:#888;margin-top:6px">Date: ${eventDate}</div>` : ""}
-    ${event.location ? `<div style="font-size:13px;color:#888;margin-top:4px">Venue: ${event.location}</div>` : ""}
-  </td></tr>
+    <!-- ── Header strip ── -->
+    <tr><td style="background:linear-gradient(135deg,#1a1a1a 0%,#111 100%);padding:20px 28px;border-bottom:1px solid #2c2c2e">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="width:36px;vertical-align:middle">
+            <div style="width:36px;height:36px;background:#fff;border-radius:9px;text-align:center;line-height:36px;font-size:11px;font-weight:900;color:#000;letter-spacing:-.5px">KFS</div>
+          </td>
+          <td style="padding-left:12px;vertical-align:middle">
+            <div style="font-size:13px;font-weight:700;color:#f5f5f7;letter-spacing:-.01em">KIIT Film Society</div>
+            <div style="font-size:11px;color:#636366;margin-top:1px">Your entry ticket</div>
+          </td>
+          <td align="right" style="vertical-align:middle">
+            <div style="display:inline-block;background:rgba(52,199,89,.15);border:1px solid rgba(52,199,89,.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;color:#34c759;letter-spacing:.02em">CONFIRMED</div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
 
-  <tr><td style="padding:0 32px 20px">
-    <div style="background:#1a1a1a;border:1px solid #222;border-radius:10px;padding:16px 20px">
-      <div style="font-size:18px;font-weight:800;color:#f5f5f5;margin-bottom:4px">${reg.name}</div>
-      <div style="font-size:12px;color:#666">${reg.email}${reg.roll_no ? " &nbsp;&middot;&nbsp; " + reg.roll_no : ""}</div>
-    </div>
-  </td></tr>
+    <!-- ── Event info ── -->
+    <tr><td style="padding:28px 28px 0">
+      <div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Event</div>
+      <div style="font-size:26px;font-weight:800;color:#f5f5f7;line-height:1.1;letter-spacing:-.02em">${event.title || "Event"}</div>
+      ${eventDate ? `<div style="margin-top:10px;font-size:13px;color:#aeaeb2">${eventDate}</div>` : ""}
+      ${event.location ? `<div style="margin-top:4px;font-size:13px;color:#636366">${event.location}</div>` : ""}
+    </td></tr>
 
-  <tr><td style="padding:0 32px 24px;text-align:center">
-    <div style="background:#fff;display:inline-block;padding:14px;border-radius:10px">
-      <img src="cid:entry-qr" alt="Entry QR Code" width="160" height="160" style="display:block">
-    </div>
-    <div style="font-size:11px;color:#555;margin-top:10px">Show this QR at the entry gate</div>
-  </td></tr>
+    <!-- ── Divider (perforated line) ── -->
+    <tr><td style="padding:24px 0 0">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="24" style="background:#000;border-radius:0 24px 24px 0"></td>
+          <td style="border-top:1px dashed #3a3a3c;height:1px;padding:0"></td>
+          <td width="24" style="background:#000;border-radius:24px 0 0 24px"></td>
+        </tr>
+      </table>
+    </td></tr>
 
-  ${ticketPdfBuffer ? `<tr><td style="padding:0 32px 16px;text-align:center">
-    <div style="font-size:13px;color:#666">Your full ticket PDF is also attached.</div>
-  </td></tr>` : ""}
+    <!-- ── QR + attendee ── -->
+    <tr><td style="padding:24px 28px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <!-- QR code -->
+          <td align="center" style="width:160px;vertical-align:top">
+            <div style="background:#fff;padding:12px;border-radius:14px;display:inline-block;line-height:0">
+              <img src="cid:entry-qr" alt="Entry QR Code" width="136" height="136" style="display:block;border-radius:4px">
+            </div>
+            <div style="font-size:10px;color:#636366;margin-top:8px;letter-spacing:.06em;text-transform:uppercase">Scan at entry</div>
+          </td>
+          <!-- Attendee details -->
+          <td style="padding-left:24px;vertical-align:middle">
+            <div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Attendee</div>
+            <div style="font-size:20px;font-weight:800;color:#f5f5f7;letter-spacing:-.01em;line-height:1.2">${reg.name}</div>
+            <div style="font-size:12px;color:#636366;margin-top:6px;word-break:break-word">${reg.email}</div>
+            ${reg.roll_no ? `<div style="margin-top:10px;background:#2c2c2e;border-radius:8px;padding:8px 12px;display:inline-block"><div style="font-size:9px;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">Roll No</div><div style="font-size:13px;font-weight:700;color:#f5f5f7;letter-spacing:.03em">${reg.roll_no}</div></div>` : ""}
+            ${eventDateShort ? `<div style="margin-top:10px;background:#2c2c2e;border-radius:8px;padding:8px 12px;display:inline-block"><div style="font-size:9px;color:#636366;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">Date</div><div style="font-size:13px;font-weight:700;color:#f5f5f7">${eventDateShort}</div></div>` : ""}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
 
-  <tr><td style="padding:16px 32px;background:#0d0d0d;border-top:1px solid #1a1a1a;text-align:center">
-    <p style="margin:0;font-size:14px;font-weight:700;color:#f5f5f5">Welcome to the event! Hope you have a great time.</p>
-  </td></tr>
+    <!-- ── Footer ── -->
+    <tr><td style="background:#111;border-top:1px solid #2c2c2e;padding:18px 28px;text-align:center">
+      <div style="font-size:13px;font-weight:600;color:#f5f5f7;margin-bottom:4px">See you there! 🎬</div>
+      <div style="font-size:11px;color:#48484a">Questions? <a href="mailto:filmsocietykiit@gmail.com" style="color:#636366;text-decoration:none">filmsocietykiit@gmail.com</a></div>
+    </td></tr>
 
-  <tr><td style="padding:14px 32px;border-top:1px solid #111">
-    <p style="margin:0;font-size:11px;color:#333;text-align:center">
-      For queries: <a href="mailto:filmsocietykiit@gmail.com" style="color:#555;text-decoration:none">filmsocietykiit@gmail.com</a>
-    </p>
-  </td></tr>
+  </table>
 
-</table>
+  <!-- Note below card -->
+  <div style="margin-top:20px;font-size:11px;color:#3a3a3c;text-align:center">This ticket is personal and non-transferable.</div>
+
 </td></tr>
 </table>
 </body>
 </html>`;
 
-  const textContent = `Registration Confirmed — KFS\n\n${event.title || "Event"}\n${eventDate ? "Date: " + eventDate + "\n" : ""}${event.location ? "Venue: " + event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\n${ticketPdfBuffer ? "Your ticket PDF is attached.\n" : ""}Show the QR code at the entry gate.\n\nWelcome to the event! Hope you have a great time.\n\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nShow the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
-  // Attachments: PDF ticket (download) + QR PNG (CID inline + download fallback)
-  const attachments = [];
-  if (ticketPdfBuffer) {
-    attachments.push({
-      name: `kfs-ticket-${(event.title || "event").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
-      content: ticketPdfBuffer.toString("base64"),
-      contentType: "application/pdf",   // Brevo requires camelCase — snake_case is silently ignored
-    });
-  }
-  // CID attachment: email clients use this for the inline <img src="cid:entry-qr">
-  // disposition "inline" is required — without it Gmail treats it as a regular attachment and hides it
-  attachments.push({
-    name:        "entry-qr.png",
-    content:     qrBase64,
-    contentType: "image/png",
-    contentId:   "entry-qr",
-    disposition: "inline",
-  });
+  // CID inline QR attachment — disposition:inline tells Brevo/Gmail/Outlook to
+  // embed it in the email body via <img src="cid:entry-qr">, not show as download.
+  const attachments = [
+    {
+      name:        "entry-qr.png",
+      content:     qrBase64,
+      contentType: "image/png",
+      contentId:   "entry-qr",
+      disposition: "inline",
+    },
+  ];
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -6841,7 +6864,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     body: JSON.stringify({
       sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
       to: [{ email: reg.email, name: reg.name }],
-      subject: `Your ticket for ${event.title || "the event"} — KFS`,
+      subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
       textContent,
       htmlContent,
       attachment: attachments,
@@ -6852,7 +6875,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     const err = await response.text();
     throw new Error(`Brevo ticket email error ${response.status}: ${err}`);
   }
-  console.log(`[ticket-email] Sent to ${reg.email} for "${event.title}" — PDF: ${!!ticketPdfBuffer}`);
+  console.log(`[ticket-email] Sent to ${reg.email} for "${event.title}"`);
 }
 
 
@@ -7032,7 +7055,7 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
 });
 
 // ── ADMIN: Get all registrations for an event ─────────────────────────────────
-app.get("/api/admin/events/:id/registrations", requireSection("events"), async (req, res) => {
+app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) => {
   const { data, error } = await supabase
     .from("event_registrations")
     .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
@@ -7040,11 +7063,46 @@ app.get("/api/admin/events/:id/registrations", requireSection("events"), async (
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: "Internal server error" });
+
+  // If event_registrations is empty, fall back to form_responses so events
+  // registered via the form builder still show up in the scanner data tab.
+  if ((data || []).length === 0) {
+    const { data: formData, error: formErr } = await supabase
+      .from("form_responses")
+      .select("id, created_at, response_data")
+      .eq("event_id", req.params.id)
+      .order("created_at", { ascending: false });
+
+    if (!formErr && (formData || []).length > 0) {
+      // Shape form_responses to match event_registrations schema
+      const shaped = formData.map((r) => {
+        const d = r.response_data || {};
+        const name  = d.name  || d.Name  || d.full_name  || d["Full Name"]  || "—";
+        const email = d.email || d.Email || d.email_address || d["Email"] || "";
+        const roll_no = d.roll_no || d["Roll No"] || d.roll || d["Roll Number"] || null;
+        const phone   = d.phone   || d.Phone   || d.mobile || d.Mobile || null;
+        return {
+          id:            r.id,
+          name,
+          email,
+          phone,
+          roll_no,
+          checked_in:    false,
+          checked_in_at: null,
+          checked_in_by: null,
+          created_at:    r.created_at,
+          _source:       "form_responses",
+        };
+      });
+      return res.json(shaped);
+    }
+  }
+
   res.json(data || []);
 });
 
 // ── ADMIN: Export registrations as XLSX ───────────────────────────────────────
-app.get("/api/admin/events/:id/registrations/export", requireSection("events"), async (req, res) => {
+app.get("/api/admin/events/:id/registrations/export", authMiddleware, async (req, res) => {
   const { data: ev } = await supabase
     .from("events")
     .select("title")
@@ -7091,7 +7149,7 @@ app.get("/api/admin/events/:id/registrations/export", requireSection("events"), 
 });
 
 // ── ADMIN: Delete a single registration ───────────────────────────────────────
-app.delete("/api/admin/events/:eventId/registrations/:regId", requireSection("events"), async (req, res) => {
+app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, async (req, res) => {
   const { data: reg } = await supabase
     .from("event_registrations")
     .select("name, event_id")
@@ -7109,7 +7167,7 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", requireSection("ev
 // ── ADMIN: Get registration stats for an event (for event list view) ──────────
 // Counts event_registrations first; if 0, falls back to form_responses count
 // so events that registered via form builder (not the QR system) still show a count.
-app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), async (req, res) => {
+app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req, res) => {
   const { data, error } = await supabase
     .from("event_registrations")
     .select("id, checked_in")
@@ -7148,14 +7206,7 @@ app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
   res.json((data || []).map(m => ({ ...m, genre: typeof m.genre === 'string' ? m.genre.replace(/[{}"]/g,'').split(',').filter(Boolean) : (m.genre || []) })));
 });
 
-// ── SCANNER PAGE ──────────────────────────────────────────────────────────────
-app.get("/scanner", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "scanner.html"));
-});
-app.get("/scanner.js", (req, res) => {
-  res.setHeader("Content-Type", "application/javascript");
-  res.sendFile(path.join(__dirname, "public", "scanner.js"));
-});
+// (scanner routes moved above catch-all — see bottom of file)
 
 // ── ADMIN: Backfill form_responses → event_registrations ─────────────────────
 // One-time utility: copies form submitters into event_registrations so they
@@ -7230,6 +7281,27 @@ app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"
   }
 
   res.json({ success: true, total: (responses || []).length, inserted, skipped });
+});
+
+// ── SCANNER: Fresh events list (no cache, uses service-role key) ──────────────
+// Used by scanner.js instead of /api/events so it always gets up-to-date data
+// and works even if supabasePublic has RLS blocking anon reads.
+app.get("/api/admin/scanner/events", authMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, title, event_date, location, is_upcoming")
+    .order("event_date", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// ── SCANNER PAGE — must be above the catch-all ────────────────────────────────
+app.get("/scanner", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "scanner.html"));
+});
+app.get("/scanner.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.sendFile(path.join(__dirname, "public", "scanner.js"));
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────

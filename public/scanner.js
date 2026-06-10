@@ -156,8 +156,9 @@ async function bootApp() {
 }
 
 async function loadEvents() {
-  const { ok, data } = await api('GET', '/api/events');
-  if (!ok) return;
+  // Use admin endpoint: no cache, uses service-role key, works regardless of RLS
+  const { ok, data } = await api('GET', '/api/admin/scanner/events');
+  if (!ok) { toast('Failed to load events'); return; }
 
   // Only upcoming or recent events
   _events = (data || []).sort((a, b) => {
