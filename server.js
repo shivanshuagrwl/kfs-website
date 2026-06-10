@@ -3443,13 +3443,12 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   if (insertErr) return res.status(500).json({ error: "Internal server error" });
 
-  // 7. Send confirmation email (non-blocking — never fail the response)
+  // 7. Send ticket email with QR + PDF (non-blocking — never fail the response)
   try {
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // Tier 1: question explicitly typed as 'email'
     let emailQ = questions.find((q) => q.type === "email");
-
     // Tier 2: any text/textarea question whose label mentions email
     if (!emailQ)
       emailQ = questions.find(
@@ -3457,7 +3456,6 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           ["text", "textarea"].includes(q.type) &&
           /e[\s-]?mail/i.test(q.label || ""),
       );
-
     // Tier 3: scan every answer value for something that looks like an email
     let toEmail = emailQ ? (finalAnswers[emailQ.id] || "").trim() : null;
     if (!toEmail) {
@@ -3475,22 +3473,63 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
         ["text", "textarea"].includes(q.type) &&
         /\bname\b/i.test(q.label || ""),
     );
-    const toName = nameQ ? (finalAnswers[nameQ.id] || "").trim() : null;
+    const toName = (nameQ ? (finalAnswers[nameQ.id] || "").trim() : null) || toEmail;
+
+    // Phone: prefer a question labelled 'phone' or 'mobile'
+    const phoneQ = questions.find(
+      (q) =>
+        ["text", "textarea"].includes(q.type) &&
+        /phone|mobile/i.test(q.label || ""),
+    );
+    const toPhone = phoneQ ? (finalAnswers[phoneQ.id] || "").trim() : null;
+
+    // Roll number
+    const rollQ = questions.find(
+      (q) =>
+        ["text", "textarea"].includes(q.type) &&
+        /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""),
+    );
+    const toRoll = rollQ ? (finalAnswers[rollQ.id] || "").trim() : null;
 
     if (toEmail) {
-      // Fetch event details for the email
+      // Fetch event details
       const { data: ev } = await supabasePublic
         .from("events")
-        .select("title,event_date,location")
+        .select("id,title,event_date,location,is_upcoming")
         .eq("id", req.params.id)
         .maybeSingle();
-      sendConfirmationEmail({
-        toEmail,
-        toName,
-        eventTitle: ev?.title || "",
-        eventDate: ev?.event_date || null,
-        eventVenue: ev?.location || null,
-      }).catch((e) => console.error("[email] send failed:", e.message));
+
+      if (ev) {
+        // Create an event_registrations row so the QR token exists for scanning
+        const qrToken = crypto.randomUUID();
+        const { data: reg } = await supabase
+          .from("event_registrations")
+          .upsert(
+            [{
+              event_id: ev.id,
+              name:     toName || toEmail,
+              email:    toEmail.toLowerCase(),
+              phone:    toPhone || null,
+              roll_no:  toRoll  || null,
+              qr_token: qrToken,
+            }],
+            { onConflict: "event_id,email", ignoreDuplicates: false },
+          )
+          .select()
+          .single();
+
+        const regRow = reg || { name: toName || toEmail, email: toEmail, roll_no: toRoll, qr_token: qrToken };
+
+        // Generate QR image
+        const qrDataUrl = await QRCode.toDataURL(regRow.qr_token, {
+          width: 300, margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+          errorCorrectionLevel: "H",
+        });
+
+        sendTicketEmail({ event: ev, reg: regRow, qrDataUrl })
+          .catch((e) => console.error("[email] ticket send failed:", e.message));
+      }
     }
   } catch (e) {
     console.error("[email] pre-send error:", e.message);
