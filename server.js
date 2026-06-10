@@ -3443,12 +3443,13 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   if (insertErr) return res.status(500).json({ error: "Internal server error" });
 
-  // 7. Send ticket email with QR + PDF (non-blocking — never fail the response)
+  // 7. Send confirmation email (non-blocking — never fail the response)
   try {
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // Tier 1: question explicitly typed as 'email'
     let emailQ = questions.find((q) => q.type === "email");
+
     // Tier 2: any text/textarea question whose label mentions email
     if (!emailQ)
       emailQ = questions.find(
@@ -3456,6 +3457,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           ["text", "textarea"].includes(q.type) &&
           /e[\s-]?mail/i.test(q.label || ""),
       );
+
     // Tier 3: scan every answer value for something that looks like an email
     let toEmail = emailQ ? (finalAnswers[emailQ.id] || "").trim() : null;
     if (!toEmail) {
@@ -3473,63 +3475,22 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
         ["text", "textarea"].includes(q.type) &&
         /\bname\b/i.test(q.label || ""),
     );
-    const toName = (nameQ ? (finalAnswers[nameQ.id] || "").trim() : null) || toEmail;
-
-    // Phone: prefer a question labelled 'phone' or 'mobile'
-    const phoneQ = questions.find(
-      (q) =>
-        ["text", "textarea"].includes(q.type) &&
-        /phone|mobile/i.test(q.label || ""),
-    );
-    const toPhone = phoneQ ? (finalAnswers[phoneQ.id] || "").trim() : null;
-
-    // Roll number
-    const rollQ = questions.find(
-      (q) =>
-        ["text", "textarea"].includes(q.type) &&
-        /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""),
-    );
-    const toRoll = rollQ ? (finalAnswers[rollQ.id] || "").trim() : null;
+    const toName = nameQ ? (finalAnswers[nameQ.id] || "").trim() : null;
 
     if (toEmail) {
-      // Fetch event details
+      // Fetch event details for the email
       const { data: ev } = await supabasePublic
         .from("events")
-        .select("id,title,event_date,location,is_upcoming")
+        .select("title,event_date,location")
         .eq("id", req.params.id)
         .maybeSingle();
-
-      if (ev) {
-        // Create an event_registrations row so the QR token exists for scanning
-        const qrToken = crypto.randomUUID();
-        const { data: reg } = await supabase
-          .from("event_registrations")
-          .upsert(
-            [{
-              event_id: ev.id,
-              name:     toName || toEmail,
-              email:    toEmail.toLowerCase(),
-              phone:    toPhone || null,
-              roll_no:  toRoll  || null,
-              qr_token: qrToken,
-            }],
-            { onConflict: "event_id,email", ignoreDuplicates: false },
-          )
-          .select()
-          .single();
-
-        const regRow = reg || { name: toName || toEmail, email: toEmail, roll_no: toRoll, qr_token: qrToken };
-
-        // Generate QR image
-        const qrDataUrl = await QRCode.toDataURL(regRow.qr_token, {
-          width: 300, margin: 2,
-          color: { dark: "#000000", light: "#ffffff" },
-          errorCorrectionLevel: "H",
-        });
-
-        sendTicketEmail({ event: ev, reg: regRow, qrDataUrl })
-          .catch((e) => console.error("[email] ticket send failed:", e.message));
-      }
+      sendConfirmationEmail({
+        toEmail,
+        toName,
+        eventTitle: ev?.title || "",
+        eventDate: ev?.event_date || null,
+        eventVenue: ev?.location || null,
+      }).catch((e) => console.error("[email] send failed:", e.message));
     }
   } catch (e) {
     console.error("[email] pre-send error:", e.message);
@@ -5782,9 +5743,8 @@ async function sendPaymentBill({
     textContent: bodyText,
     attachment: [
       {
-        name:        `KFS-Receipt-${billInvoiceNo}.pdf`,
-        content:     pdfBuffer.toString("base64"),
-        contentType: "application/pdf",
+        name:    `KFS-Receipt-${billInvoiceNo}.pdf`,
+        content: pdfBuffer.toString("base64"),
       },
     ],
   };
@@ -6616,7 +6576,8 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
 
   const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
   const qrBuffer = Buffer.from(qrBase64, "base64");
-  // Fetch KFS logo (with 5s timeout to avoid hanging)
+
+  // Fetch KFS logo (5s timeout)
   const LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
   const logoBuffer = await new Promise(res => {
     let settled = false;
@@ -6627,7 +6588,7 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
       const ch = [];
       const req = https.get(LOGO_URL, r => {
         if (r.statusCode !== 200) { r.resume(); clearTimeout(timer); return done(null); }
-        r.on("data", c => ch.push(c));
+        r.on("data", chunk => ch.push(chunk));
         r.on("end",  () => { clearTimeout(timer); done(Buffer.concat(ch)); });
         r.on("error", () => { clearTimeout(timer); done(null); });
       });
@@ -6636,153 +6597,125 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
   });
 
   return new Promise((resolve, reject) => {
-    // A5-ish portrait — close to reference proportions
-    const W = 480, H = 680;
-    const doc = new PDFDocument({
-      size: [W, H], margin: 0,
-      info: { Title: `KFS Ticket — ${event.title || "Event"}` }
-    });
+    // Apple Wallet-inspired proportions — tall portrait card
+    const W = 440, H = 720;
+    const doc = new PDFDocument({ size: [W, H], margin: 0, info: { Title: `KFS Ticket — ${event.title || "Event"}` } });
     const chunks = [];
-    doc.on("data",  c => chunks.push(c));
+    doc.on("data",  ch => chunks.push(ch));
     doc.on("end",   () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const CX = W / 2;       // horizontal center
-    const PAD = 40;
+    const PAD = 36;
+    const CX  = W / 2;
 
-    // ── Full black background ─────────────────────────────────────────
-    doc.rect(0, 0, W, H).fill("#000000");
+    // ── Background: pure white ────────────────────────────────────────────────
+    doc.rect(0, 0, W, H).fill("#ffffff");
 
-    // ── HEADER: logo circle + "KIIT FILM SOCIETY" ────────────────────
-    const logoSize = 52;
-    const headerY  = 28;
+    // ── Header bar: deep black pill/strip at top ──────────────────────────────
+    const headerH = 88;
+    doc.rect(0, 0, W, headerH).fill("#0a0a0a");
 
-    // Logo circle
+    // Logo — small circle top-left inside header
+    const logoR = 18;
+    const logoX = PAD + logoR;
+    const logoY = headerH / 2;
     if (logoBuffer) {
       try {
-        doc.save()
-          .circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2)
-          .clip();
-        doc.image(logoBuffer, PAD, headerY, { width: logoSize, height: logoSize });
+        doc.save().circle(logoX, logoY, logoR).clip();
+        doc.image(logoBuffer, logoX - logoR, logoY - logoR, { width: logoR * 2, height: logoR * 2 });
         doc.restore();
-        // Circle stroke
-        doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2)
-          .lineWidth(1.5).stroke("#ffffff");
       } catch (_) {
-        // Fallback: white circle with "KFS"
-        doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2).fill("#111");
-        doc.fillColor("#fff").fontSize(14).font("Helvetica-Bold")
-          .text("KFS", PAD, headerY + 18, { width: logoSize, align: "center" });
+        doc.circle(logoX, logoY, logoR).fill("#222");
+        doc.fillColor("#fff").fontSize(9).font("Helvetica-Bold")
+          .text("KFS", logoX - logoR, logoY - 6, { width: logoR * 2, align: "center" });
       }
     } else {
-      doc.circle(PAD + logoSize / 2, headerY + logoSize / 2, logoSize / 2).fill("#111");
-      doc.fillColor("#fff").fontSize(14).font("Helvetica-Bold")
-        .text("KFS", PAD, headerY + 18, { width: logoSize, align: "center" });
+      doc.circle(logoX, logoY, logoR).fill("#222");
+      doc.fillColor("#fff").fontSize(9).font("Helvetica-Bold")
+        .text("KFS", logoX - logoR, logoY - 6, { width: logoR * 2, align: "center" });
     }
 
-    // "KIIT FILM SOCIETY" — large bold white, vertically centred with logo
-    doc.fillColor("#ffffff")
-      .fontSize(26).font("Helvetica-Bold")
-      .text("KIIT FILM SOCIETY", PAD + logoSize + 16, headerY + (logoSize - 26) / 2 + 2, {
-        lineBreak: false,
-        characterSpacing: 0.5,
-      });
+    // "KIIT FILM SOCIETY" right of logo
+    doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold")
+      .text("KIIT FILM SOCIETY", logoX + logoR + 10, logoY - 7, { characterSpacing: 1.5 });
+    // Right-side: "ENTRY TICKET" label
+    doc.fillColor("#888888").fontSize(8).font("Helvetica")
+      .text("ENTRY TICKET", 0, logoY - 4, { width: W - PAD, align: "right" });
 
-    // ── EVENT NAME ────────────────────────────────────────────────────
-    let y = headerY + logoSize + 44;
+    // ── Event name ────────────────────────────────────────────────────────────
+    let y = headerH + 32;
+    doc.fillColor("#0a0a0a").fontSize(34).font("Helvetica-Bold")
+      .text(event.title || "Event", PAD, y, { width: W - PAD * 2, align: "left", lineGap: 2 });
 
-    doc.fillColor("#ffffff")
-      .fontSize(46).font("Helvetica-Bold")
-      .text(event.title || "Event", PAD, y, {
-        width: W - 2 * PAD,
-        align: "center",
-        lineGap: 4,
-      });
+    const titleH = doc.heightOfString(event.title || "Event", { width: W - PAD * 2, fontSize: 34, lineGap: 2 });
+    y += titleH + 12;
 
-    const titleH = doc.heightOfString(event.title || "Event", {
-      width: W - 2 * PAD, fontSize: 46, lineGap: 4,
-    });
-    y += titleH + 18;
-
-    // ── DATE , TIME  /  Venue ─────────────────────────────────────────
+    // ── Date & venue chips ────────────────────────────────────────────────────
     const eventDate = event.event_date
-      ? new Date(event.event_date).toLocaleDateString("en-IN", {
-          day: "numeric", month: "long", year: "numeric",
-        })
+      ? new Date(event.event_date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
       : null;
 
-    const dateVenueLine = [eventDate, event.location].filter(Boolean).join("   ·   ");
-    if (dateVenueLine) {
-      doc.fillColor("#ffffff")
-        .fontSize(13).font("Helvetica-Bold")
-        .text(dateVenueLine, PAD, y, { width: W - 2 * PAD, align: "center" });
-      y += 22;
+    if (eventDate || event.location) {
+      doc.fillColor("#555555").fontSize(11).font("Helvetica")
+        .text([eventDate, event.location].filter(Boolean).join("   ·   "), PAD, y, { width: W - PAD * 2 });
+      y += 18;
     }
 
-    // ── QR CODE (large, centered, white box) ──────────────────────────
-    y += 24;
-    const qrSize   = 170;
-    const qrPad    = 14;
-    const boxSize  = qrSize + qrPad * 2;
-    const boxX     = CX - boxSize / 2;
+    // ── Thin divider ──────────────────────────────────────────────────────────
+    y += 20;
+    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.5).stroke("#e0e0e0");
+    y += 20;
 
-    doc.rect(boxX, y, boxSize, boxSize).fill("#ffffff");
+    // ── QR code — centered, with subtle shadow-like light grey box ───────────
+    const qrSize  = 168;
+    const qrPad   = 16;
+    const boxW    = qrSize + qrPad * 2;
+    const boxH    = qrSize + qrPad * 2;
+    const boxX    = CX - boxW / 2;
+
+    // Light grey card behind QR
+    doc.roundedRect(boxX - 2, y - 2, boxW + 4, boxH + 4, 12).fill("#f2f2f2");
+    doc.rect(boxX, y, boxW, boxH).fill("#ffffff");
     try {
       doc.image(qrBuffer, boxX + qrPad, y + qrPad, { width: qrSize, height: qrSize });
     } catch (_) {}
 
-    y += boxSize + 32;
+    y += boxH + 8;
+    doc.fillColor("#aaaaaa").fontSize(9).font("Helvetica")
+      .text("SHOW AT ENTRY", 0, y, { width: W, align: "center", characterSpacing: 1.2 });
+    y += 22;
 
-    // ── PERSON NAME ───────────────────────────────────────────────────
-    doc.fillColor("#ffffff")
-      .fontSize(38).font("Helvetica-Bold")
-      .text((reg.name || "").toUpperCase(), PAD, y, {
-        width: W - 2 * PAD,
-        align: "center",
-        lineGap: 2,
-      });
+    // ── Second divider ────────────────────────────────────────────────────────
+    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.5).stroke("#e0e0e0");
+    y += 20;
 
-    const nameH = doc.heightOfString((reg.name || "").toUpperCase(), {
-      width: W - 2 * PAD, fontSize: 38, lineGap: 2,
-    });
-    y += nameH + 10;
+    // ── Attendee name + email ─────────────────────────────────────────────────
+    doc.fillColor("#0a0a0a").fontSize(22).font("Helvetica-Bold")
+      .text((reg.name || "").toUpperCase(), PAD, y, { width: W - PAD * 2, align: "left" });
 
-    // ── Mail id ───────────────────────────────────────────────────────
-    doc.fillColor("#ffffff")
-      .fontSize(12).font("Helvetica-Bold")
-      .text(reg.email, PAD, y, { width: W - 2 * PAD, align: "center" });
-    y += 18;
+    const nameH2 = doc.heightOfString((reg.name || "").toUpperCase(), { width: W - PAD * 2, fontSize: 22 });
+    y += nameH2 + 6;
 
-    // Roll no (subtle, if present)
+    doc.fillColor("#777777").fontSize(10).font("Helvetica")
+      .text(reg.email || "", PAD, y, { width: W - PAD * 2 });
+    y += 16;
+
     if (reg.roll_no) {
-      doc.fillColor("#aaaaaa")
-        .fontSize(11).font("Helvetica")
-        .text(reg.roll_no, PAD, y, { width: W - 2 * PAD, align: "center" });
-      y += 16;
+      doc.fillColor("#aaaaaa").fontSize(9).font("Helvetica")
+        .text(reg.roll_no, PAD, y, { width: W - PAD * 2 });
+      y += 14;
     }
 
-    // ── Welcome text ──────────────────────────────────────────────────
-    y += 16;
-    doc.fillColor("#ffffff")
-      .fontSize(14).font("Helvetica-Bold")
-      .text("Welcome to the event!!", PAD, y, { width: W - 2 * PAD, align: "center" });
-    y += 20;
-    doc.fillColor("#ffffff")
-      .fontSize(14).font("Helvetica-Bold")
-      .text("hope you have a great time", PAD, y, { width: W - 2 * PAD, align: "center" });
-
-    // ── Footer ────────────────────────────────────────────────────────
-    doc.fillColor("#666666")
-      .fontSize(9).font("Helvetica")
-      .text(
-        "For details or queries contact us at filmsocietykiit@gmail.com",
-        PAD, H - 24, { width: W - 2 * PAD, align: "center" }
-      );
+    // ── Footer strip ──────────────────────────────────────────────────────────
+    const footerH = 36;
+    doc.rect(0, H - footerH, W, footerH).fill("#f7f7f7");
+    doc.moveTo(0, H - footerH).lineTo(W, H - footerH).lineWidth(0.5).stroke("#e8e8e8");
+    doc.fillColor("#aaaaaa").fontSize(8).font("Helvetica")
+      .text("kiitfilmsociety.in   ·   filmsocietykiit@gmail.com", 0, H - footerH + 12, { width: W, align: "center" });
 
     doc.end();
   });
 }
-
 async function sendTicketEmail({ event, reg, qrDataUrl }) {
   // Fresh fetch every time — no cache risk with API key
   const { data: rows } = await supabase
@@ -6889,11 +6822,13 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     });
   }
   // CID attachment: email clients use this for the inline <img src="cid:entry-qr">
+  // disposition "inline" is required — without it Gmail treats it as a regular attachment and hides it
   attachments.push({
-    name: "entry-qr.png",
-    content: qrBase64,
+    name:        "entry-qr.png",
+    content:     qrBase64,
     contentType: "image/png",
-    contentId: "entry-qr",
+    contentId:   "entry-qr",
+    disposition: "inline",
   });
 
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -7205,6 +7140,81 @@ app.get("/scanner", (req, res) => {
 app.get("/scanner.js", (req, res) => {
   res.setHeader("Content-Type", "application/javascript");
   res.sendFile(path.join(__dirname, "public", "scanner.js"));
+});
+
+// ── ADMIN: Backfill form_responses → event_registrations ─────────────────────
+// One-time utility: copies form submitters into event_registrations so they
+// appear in the scanner and can be checked in via QR.
+app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"), async (req, res) => {
+  const eventId = req.params.id;
+
+  // 1. Fetch the event's form
+  const { data: form } = await supabase
+    .from("event_forms")
+    .select("id,questions")
+    .eq("event_id", eventId)
+    .maybeSingle();
+
+  if (!form) return res.status(404).json({ error: "No form found for this event" });
+
+  let questions = [];
+  try { questions = JSON.parse(form.questions || "[]"); } catch (_) {}
+
+  // 2. Fetch all responses
+  const { data: responses, error } = await supabase
+    .from("form_responses")
+    .select("id,answers,submitted_at")
+    .eq("event_id", eventId);
+
+  if (error) return res.status(500).json({ error: "DB error fetching responses" });
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  let inserted = 0, skipped = 0;
+
+  for (const resp of (responses || [])) {
+    let answers = {};
+    try { answers = JSON.parse(resp.answers || "{}"); } catch (_) {}
+
+    // Extract email
+    let emailQ = questions.find(q => q.type === "email");
+    if (!emailQ) emailQ = questions.find(q => ["text","textarea"].includes(q.type) && /e[\s-]?mail/i.test(q.label || ""));
+    let email = emailQ ? (answers[emailQ.id] || "").trim() : null;
+    if (!email) {
+      for (const val of Object.values(answers)) {
+        if (typeof val === "string" && EMAIL_RE.test(val.trim())) { email = val.trim(); break; }
+      }
+    }
+    if (!email) { skipped++; continue; }
+
+    // Extract name
+    const nameQ = questions.find(q => ["text","textarea"].includes(q.type) && /name/i.test(q.label || ""));
+    const name = (nameQ ? (answers[nameQ.id] || "").trim() : null) || email;
+
+    // Extract phone
+    const phoneQ = questions.find(q => ["text","textarea"].includes(q.type) && /phone|mobile/i.test(q.label || ""));
+    const phone = phoneQ ? (answers[phoneQ.id] || "").trim() || null : null;
+
+    // Extract roll no
+    const rollQ = questions.find(q => ["text","textarea"].includes(q.type) && /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""));
+    const roll_no = rollQ ? (answers[rollQ.id] || "").trim().toUpperCase() || null : null;
+
+    // Upsert (skip if already registered by email)
+    const { error: upsertErr } = await supabase
+      .from("event_registrations")
+      .upsert([{
+        event_id: eventId,
+        name,
+        email:    email.toLowerCase(),
+        phone,
+        roll_no,
+        qr_token: crypto.randomUUID(),
+        created_at: resp.submitted_at,
+      }], { onConflict: "event_id,email", ignoreDuplicates: true });
+
+    if (upsertErr) { skipped++; } else { inserted++; }
+  }
+
+  res.json({ success: true, total: (responses || []).length, inserted, skipped });
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
