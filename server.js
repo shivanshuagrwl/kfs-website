@@ -6597,121 +6597,121 @@ async function generateTicketPdf({ event, reg, qrDataUrl }) {
   });
 
   return new Promise((resolve, reject) => {
-    // Apple Wallet-inspired proportions — tall portrait card
-    const W = 440, H = 720;
+    // Slim portrait card — Apple Wallet proportions
+    const W = 400, H = 680;
     const doc = new PDFDocument({ size: [W, H], margin: 0, info: { Title: `KFS Ticket — ${event.title || "Event"}` } });
     const chunks = [];
     doc.on("data",  ch => chunks.push(ch));
     doc.on("end",   () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const PAD = 36;
+    const PAD = 32;
     const CX  = W / 2;
 
-    // ── Background: pure white ────────────────────────────────────────────────
-    doc.rect(0, 0, W, H).fill("#ffffff");
+    // ── Full black background ─────────────────────────────────────────────────
+    doc.rect(0, 0, W, H).fill("#0a0a0a");
 
-    // ── Header bar: deep black pill/strip at top ──────────────────────────────
-    const headerH = 88;
-    doc.rect(0, 0, W, headerH).fill("#0a0a0a");
-
-    // Logo — small circle top-left inside header
-    const logoR = 18;
+    // ── Header: logo + org name ───────────────────────────────────────────────
+    let y = 36;
+    const logoR = 16;
     const logoX = PAD + logoR;
-    const logoY = headerH / 2;
+    const logoY = y + logoR;
     if (logoBuffer) {
       try {
         doc.save().circle(logoX, logoY, logoR).clip();
         doc.image(logoBuffer, logoX - logoR, logoY - logoR, { width: logoR * 2, height: logoR * 2 });
         doc.restore();
       } catch (_) {
-        doc.circle(logoX, logoY, logoR).fill("#222");
-        doc.fillColor("#fff").fontSize(9).font("Helvetica-Bold")
-          .text("KFS", logoX - logoR, logoY - 6, { width: logoR * 2, align: "center" });
+        doc.circle(logoX, logoY, logoR).fill("#1a1a1a");
+        doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold")
+          .text("KFS", logoX - logoR, logoY - 5, { width: logoR * 2, align: "center" });
       }
     } else {
-      doc.circle(logoX, logoY, logoR).fill("#222");
-      doc.fillColor("#fff").fontSize(9).font("Helvetica-Bold")
-        .text("KFS", logoX - logoR, logoY - 6, { width: logoR * 2, align: "center" });
+      doc.circle(logoX, logoY, logoR).fill("#1a1a1a");
+      doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold")
+        .text("KFS", logoX - logoR, logoY - 5, { width: logoR * 2, align: "center" });
     }
-
-    // "KIIT FILM SOCIETY" right of logo
     doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold")
-      .text("KIIT FILM SOCIETY", logoX + logoR + 10, logoY - 7, { characterSpacing: 1.5 });
-    // Right-side: "ENTRY TICKET" label
-    doc.fillColor("#888888").fontSize(8).font("Helvetica")
-      .text("ENTRY TICKET", 0, logoY - 4, { width: W - PAD, align: "right" });
+      .text("KIIT FILM SOCIETY", logoX + logoR + 10, logoY - 7, { characterSpacing: 1.2 });
 
-    // ── Event name ────────────────────────────────────────────────────────────
-    let y = headerH + 32;
-    doc.fillColor("#0a0a0a").fontSize(34).font("Helvetica-Bold")
-      .text(event.title || "Event", PAD, y, { width: W - PAD * 2, align: "left", lineGap: 2 });
+    // ── Thin white rule ────────────────────────────────────────────────────────
+    y = logoY + logoR + 28;
+    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.4).strokeColor("#1e1e1e").stroke();
+    y += 28;
 
-    const titleH = doc.heightOfString(event.title || "Event", { width: W - PAD * 2, fontSize: 34, lineGap: 2 });
-    y += titleH + 12;
+    // ── Event title — large, white, centered ──────────────────────────────────
+    doc.fillColor("#ffffff").fontSize(30).font("Helvetica-Bold")
+      .text(event.title || "Event", PAD, y, { width: W - PAD * 2, align: "center", lineGap: 3 });
 
-    // ── Date & venue chips ────────────────────────────────────────────────────
+    const titleH = doc.heightOfString(event.title || "Event", { width: W - PAD * 2, fontSize: 30, lineGap: 3 });
+    y += titleH + 14;
+
+    // ── Date · Venue — small grey, centered ───────────────────────────────────
     const eventDate = event.event_date
-      ? new Date(event.event_date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+      ? new Date(event.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
       : null;
-
-    if (eventDate || event.location) {
-      doc.fillColor("#555555").fontSize(11).font("Helvetica")
-        .text([eventDate, event.location].filter(Boolean).join("   ·   "), PAD, y, { width: W - PAD * 2 });
-      y += 18;
+    const metaLine = [eventDate, event.location].filter(Boolean).join("   ·   ");
+    if (metaLine) {
+      doc.fillColor("#888888").fontSize(10).font("Helvetica")
+        .text(metaLine, PAD, y, { width: W - PAD * 2, align: "center", characterSpacing: 0.3 });
+      y += 22;
     }
 
-    // ── Thin divider ──────────────────────────────────────────────────────────
-    y += 20;
-    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.5).stroke("#e0e0e0");
-    y += 20;
+    // ── Thin rule ─────────────────────────────────────────────────────────────
+    y += 18;
+    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.4).strokeColor("#1e1e1e").stroke();
+    y += 28;
 
-    // ── QR code — centered, with subtle shadow-like light grey box ───────────
-    const qrSize  = 168;
-    const qrPad   = 16;
-    const boxW    = qrSize + qrPad * 2;
-    const boxH    = qrSize + qrPad * 2;
-    const boxX    = CX - boxW / 2;
+    // ── QR code — white card, centered, large ─────────────────────────────────
+    const qrSize = 180;
+    const qrPad  = 16;
+    const boxSide = qrSize + qrPad * 2;
+    const boxX = CX - boxSide / 2;
 
-    // Light grey card behind QR
-    doc.roundedRect(boxX - 2, y - 2, boxW + 4, boxH + 4, 12).fill("#f2f2f2");
-    doc.rect(boxX, y, boxW, boxH).fill("#ffffff");
+    // White rounded container
+    doc.roundedRect(boxX, y, boxSide, boxSide, 12).fill("#ffffff");
     try {
       doc.image(qrBuffer, boxX + qrPad, y + qrPad, { width: qrSize, height: qrSize });
     } catch (_) {}
 
-    y += boxH + 8;
-    doc.fillColor("#aaaaaa").fontSize(9).font("Helvetica")
-      .text("SHOW AT ENTRY", 0, y, { width: W, align: "center", characterSpacing: 1.2 });
-    y += 22;
+    y += boxSide + 12;
 
-    // ── Second divider ────────────────────────────────────────────────────────
-    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.5).stroke("#e0e0e0");
-    y += 20;
+    // "SHOW AT ENTRY GATE" label
+    doc.fillColor("#444444").fontSize(8).font("Helvetica")
+      .text("SHOW AT ENTRY GATE", 0, y, { width: W, align: "center", characterSpacing: 1.4 });
+    y += 28;
 
-    // ── Attendee name + email ─────────────────────────────────────────────────
-    doc.fillColor("#0a0a0a").fontSize(22).font("Helvetica-Bold")
-      .text((reg.name || "").toUpperCase(), PAD, y, { width: W - PAD * 2, align: "left" });
+    // ── Thin rule ─────────────────────────────────────────────────────────────
+    doc.moveTo(PAD, y).lineTo(W - PAD, y).lineWidth(0.4).strokeColor("#1e1e1e").stroke();
+    y += 24;
 
-    const nameH2 = doc.heightOfString((reg.name || "").toUpperCase(), { width: W - PAD * 2, fontSize: 22 });
-    y += nameH2 + 6;
+    // ── Attendee name — centered, white, bold ─────────────────────────────────
+    doc.fillColor("#ffffff").fontSize(20).font("Helvetica-Bold")
+      .text((reg.name || "").toUpperCase(), PAD, y, { width: W - PAD * 2, align: "center", characterSpacing: 1.0 });
 
-    doc.fillColor("#777777").fontSize(10).font("Helvetica")
-      .text(reg.email || "", PAD, y, { width: W - PAD * 2 });
+    const nameH = doc.heightOfString((reg.name || "").toUpperCase(), { width: W - PAD * 2, fontSize: 20 });
+    y += nameH + 8;
+
+    // Email
+    doc.fillColor("#555555").fontSize(9).font("Helvetica")
+      .text(reg.email || "", PAD, y, { width: W - PAD * 2, align: "center" });
     y += 16;
 
+    // Roll no (if any)
     if (reg.roll_no) {
-      doc.fillColor("#aaaaaa").fontSize(9).font("Helvetica")
-        .text(reg.roll_no, PAD, y, { width: W - PAD * 2 });
+      doc.fillColor("#444444").fontSize(8).font("Helvetica")
+        .text(reg.roll_no.toUpperCase(), PAD, y, { width: W - PAD * 2, align: "center", characterSpacing: 0.5 });
       y += 14;
     }
 
-    // ── Footer strip ──────────────────────────────────────────────────────────
-    const footerH = 36;
-    doc.rect(0, H - footerH, W, footerH).fill("#f7f7f7");
-    doc.moveTo(0, H - footerH).lineTo(W, H - footerH).lineWidth(0.5).stroke("#e8e8e8");
-    doc.fillColor("#aaaaaa").fontSize(8).font("Helvetica")
-      .text("kiitfilmsociety.in   ·   filmsocietykiit@gmail.com", 0, H - footerH + 12, { width: W, align: "center" });
+    // ── Welcome line ──────────────────────────────────────────────────────────
+    y += 10;
+    doc.fillColor("#555555").fontSize(9).font("Helvetica-Oblique")
+      .text("Welcome to the event!! Hope you have a great time.", PAD, y, { width: W - PAD * 2, align: "center" });
+
+    // ── Bottom contact line ───────────────────────────────────────────────────
+    doc.fillColor("#2a2a2a").fontSize(7.5).font("Helvetica")
+      .text("For details or queries contact us at filmsocietykiit@gmail.com", PAD, H - 24, { width: W - PAD * 2, align: "center" });
 
     doc.end();
   });
@@ -6938,6 +6938,7 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
     success: true,
     message: "Registered! Check your email for the QR ticket.",
     id: reg.id,
+    qr_data_url: qrDataUrl,  // send QR to client so success screen can display it immediately
   });
 });
 
@@ -7106,6 +7107,8 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", requireSection("ev
 });
 
 // ── ADMIN: Get registration stats for an event (for event list view) ──────────
+// Counts event_registrations first; if 0, falls back to form_responses count
+// so events that registered via form builder (not the QR system) still show a count.
 app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), async (req, res) => {
   const { data, error } = await supabase
     .from("event_registrations")
@@ -7113,8 +7116,20 @@ app.get("/api/admin/events/:id/registrations/stats", requireSection("events"), a
     .eq("event_id", req.params.id);
 
   if (error) return res.status(500).json({ error: "Internal server error" });
-  const total = (data || []).length;
+
+  let total = (data || []).length;
   const checkedIn = (data || []).filter((r) => r.checked_in).length;
+
+  // If no QR registrations exist, count form_responses so admins can see
+  // how many people submitted the event's registration form
+  if (total === 0) {
+    const { count: formCount } = await supabase
+      .from("form_responses")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", req.params.id);
+    total = formCount || 0;
+  }
+
   res.json({ total, checked_in: checkedIn, pending: total - checkedIn });
 });
 
