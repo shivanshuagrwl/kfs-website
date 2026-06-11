@@ -2014,7 +2014,7 @@ app.get("/api/members", async (req, res) => {
     const { data } = await supabasePublic
       .from("members")
       .select(
-        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past",
+        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,website,custom_links",
       )
       .order("sort_order", { ascending: true });
     return data || [];
@@ -2026,7 +2026,7 @@ app.get("/api/members", async (req, res) => {
 app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   const { data, error } = await supabase
     .from("members")
-    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,website,custom_links")
     .order("sort_order", { ascending: true });
   if (error) return res.status(500).json({ error: "Internal server error" });
   res.json(data || []);
