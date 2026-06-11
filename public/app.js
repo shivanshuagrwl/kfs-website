@@ -2171,6 +2171,7 @@ async function loadAdminData(name) {
       <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
+        <button class="btn-sm" onclick="openCreateMemberAccount('${m.id}','${m.name}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
@@ -2362,6 +2363,9 @@ async function loadAdminData(name) {
   else if (name==='collaborate') { loadAdminCollaborate(); }
   else if (name==='comments') { loadAdminComments(); }
   else if (name==='broadcast') { loadBroadcastHistory(); previewBroadcastRecipients(); }
+  else if (name==='member-portal') { loadMemberAccounts(); }
+  else if (name==='member-profile-changes') { loadMemberProfileChanges('pending'); }
+  else if (name==='member-movie-submissions') { loadMemberMovieSubmissions('pending'); }
 }
 
 function openBlogModal(blog=null) {
@@ -10052,3 +10056,211 @@ async function submitEventRegistration(eventId) {
 // ══════════════════════════════════════════════════════════════════════════════
 // END QR REGISTRATION SYSTEM
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MEMBER PORTAL — Admin Functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Member Accounts ──────────────────────────────────────────────────────────
+
+async function loadMemberAccounts() {
+  const tbody = document.getElementById('admin-member-accounts-tbody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
+  const members = await apiFetch('/api/admin/members');
+  if (!members || !members.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members found.</td></tr>`;
+    return;
+  }
+  // Fetch account status for each member in parallel
+  const accounts = await Promise.all(
+    members.map(m => apiFetch(`/api/admin/members/${m.id}/account`).catch(() => null))
+  );
+  tbody.innerHTML = members.map((m, i) => {
+    const acc = accounts[i];
+    const hasAccount = acc && acc.username;
+    const status = hasAccount ? acc.account_status : '—';
+    const statusTag = hasAccount
+      ? `<span class="tag ${status === 'active' ? 'upcoming' : ''}">${status}</span>`
+      : `<span style="color:var(--grey);font-size:12px">No account</span>`;
+    const twoFA = hasAccount ? (acc.totp_enabled ? '✓' : '✗') : '—';
+    const lastLogin = hasAccount && acc.last_login
+      ? new Date(acc.last_login).toLocaleDateString('en-IN')
+      : '—';
+    const actionBtns = hasAccount
+      ? `<div class="action-btns">
+          <button class="btn-sm" onclick="toggleMemberAccountStatus('${m.id}','${acc.account_status}')">${acc.account_status === 'active' ? 'Disable' : 'Enable'}</button>
+          <button class="btn-sm" onclick="resetMemberPassword('${m.id}')">Reset PW</button>
+          <button class="btn-sm danger" onclick="forceMember2FAReset('${m.id}')">Clear 2FA</button>
+        </div>`
+      : `<div class="action-btns">
+          <button class="btn-sm" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533" onclick="openCreateMemberAccount('${m.id}','${m.name}')">Create Account</button>
+        </div>`;
+    return `<tr>
+      <td style="font-weight:500">${m.name}</td>
+      <td style="color:var(--grey);font-size:12px">${hasAccount ? acc.username : '—'}</td>
+      <td>${statusTag}</td>
+      <td style="text-align:center;color:${hasAccount && acc.totp_enabled ? '#4ade80' : '#f87171'}">${twoFA}</td>
+      <td style="color:var(--grey);font-size:12px">${lastLogin}</td>
+      <td>${actionBtns}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openCreateMemberAccount(memberId, memberName) {
+  showConfirmModal(
+    `Create portal account for <strong>${memberName}</strong>?<br><br>A username and temporary password will be generated automatically.`,
+    async () => {
+      const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, { method: 'POST' });
+      if (!res) return;
+      const send = await showConfirmModal(
+        `Account created!<br><br><strong>Username:</strong> ${res.username}<br><strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${res.tempPassword}</code><br><br>Send credentials to member via email?`,
+        async () => {
+          await apiFetch(`/api/admin/members/${memberId}/send-credentials`, { method: 'POST' });
+          showToast('Credentials emailed to member');
+        },
+        null,
+        'Send Email',
+        'Skip'
+      );
+      loadMemberAccounts();
+    }
+  );
+}
+
+async function toggleMemberAccountStatus(memberId, currentStatus) {
+  const action = currentStatus === 'active' ? 'disable' : 'enable';
+  showConfirmModal(`${action.charAt(0).toUpperCase() + action.slice(1)} this member's portal account?`, async () => {
+    await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, { method: 'POST' });
+    loadMemberAccounts();
+  });
+}
+
+async function resetMemberPassword(memberId) {
+  showConfirmModal('Force a password reset for this member? They will be required to set a new password on next login.', async () => {
+    const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, { method: 'POST' });
+    if (res) showToast('Password reset — member must change password on next login');
+    loadMemberAccounts();
+  });
+}
+
+async function forceMember2FAReset(memberId) {
+  showConfirmModal('Clear 2FA for this member? They will be required to set up 2FA again on next login.', async () => {
+    await apiFetch(`/api/admin/members/${memberId}/account/force-2fa-reset`, { method: 'POST' });
+    showToast('2FA cleared');
+    loadMemberAccounts();
+  });
+}
+
+// ── Profile Changes ──────────────────────────────────────────────────────────
+
+async function loadMemberProfileChanges(status = 'pending') {
+  const tbody = document.getElementById('admin-member-profile-changes-tbody');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
+
+  // Update filter button styles
+  ['pending','approved','rejected'].forEach(s => {
+    const btn = document.getElementById(`mp-filter-${s}`);
+    if (!btn) return;
+    if (s === status) {
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px';
+    } else {
+      btn.className = 'btn';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+    }
+  });
+
+  const data = await apiFetch(`/api/admin/member-profile-changes?status=${status}`);
+  if (!data || !data.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No ${status} profile changes.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const changes = r.new_values ? Object.keys(r.new_values).join(', ') : '—';
+    const date = new Date(r.created_at).toLocaleDateString('en-IN');
+    const actions = status === 'pending'
+      ? `<div class="action-btns">
+          <button class="btn-sm" style="background:rgba(74,222,128,.1);color:#4ade80;border-color:#4ade8033" onclick="reviewMemberProfileChange(${r.id},'approved')">Approve</button>
+          <button class="btn-sm" onclick="reviewMemberProfileChange(${r.id},'changes_requested')">Request Changes</button>
+          <button class="btn-sm danger" onclick="reviewMemberProfileChange(${r.id},'rejected')">Reject</button>
+        </div>`
+      : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
+    return `<tr>
+      <td style="font-weight:500">${r.member_name || r.member_id}</td>
+      <td style="color:var(--grey);font-size:12px">${date}</td>
+      <td style="font-size:12px;color:var(--grey)">${changes}</td>
+      <td><span class="tag ${r.status === 'approved' ? 'upcoming' : ''}">${r.status}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function reviewMemberProfileChange(changeId, decision) {
+  let notes = '';
+  if (decision === 'rejected' || decision === 'changes_requested') {
+    notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
+  }
+  await apiFetch(`/api/admin/member-profile-changes/${changeId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision, notes })
+  });
+  loadMemberProfileChanges('pending');
+}
+
+// ── Movie Submissions ────────────────────────────────────────────────────────
+
+async function loadMemberMovieSubmissions(status = 'pending') {
+  const tbody = document.getElementById('admin-member-movie-submissions-tbody');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
+
+  // Update filter button styles
+  ['pending','approved','rejected'].forEach(s => {
+    const btn = document.getElementById(`ms-filter-${s}`);
+    if (!btn) return;
+    if (s === status) {
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px';
+    } else {
+      btn.className = 'btn';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+    }
+  });
+
+  const data = await apiFetch(`/api/admin/member-movie-submissions?status=${status}`);
+  if (!data || !data.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No ${status} movie submissions.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const title = r.movie_data?.title || '—';
+    const date = new Date(r.created_at).toLocaleDateString('en-IN');
+    const actions = status === 'pending'
+      ? `<div class="action-btns">
+          <button class="btn-sm" style="background:rgba(74,222,128,.1);color:#4ade80;border-color:#4ade8033" onclick="reviewMemberMovieSubmission(${r.id},'approved')">Approve</button>
+          <button class="btn-sm" onclick="reviewMemberMovieSubmission(${r.id},'changes_requested')">Request Changes</button>
+          <button class="btn-sm danger" onclick="reviewMemberMovieSubmission(${r.id},'rejected')">Reject</button>
+        </div>`
+      : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
+    return `<tr>
+      <td style="font-weight:500">${r.member_name || r.member_id}</td>
+      <td style="font-weight:500">${title}</td>
+      <td style="color:var(--grey);font-size:12px">${date}</td>
+      <td><span class="tag ${r.status === 'approved' ? 'upcoming' : ''}">${r.status}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function reviewMemberMovieSubmission(submissionId, decision) {
+  let notes = '';
+  if (decision === 'rejected' || decision === 'changes_requested') {
+    notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
+  }
+  await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision, notes })
+  });
+  loadMemberMovieSubmissions('pending');
+}
