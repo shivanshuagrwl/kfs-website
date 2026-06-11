@@ -7660,6 +7660,1056 @@ app.get("/api/admin/scanner/events", authMiddleware, async (req, res) => {
   res.json(data || []);
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// KFS Member Portal — Server Routes
+// Add this block to server.js BEFORE the catch-all app.get("*", ...) route.
+//
+// Depends on the following already existing in server.js (all present in v1.17.9+):
+//   supabase, supabasePublic, bcrypt, jwt, crypto, speakeasy, QRCode,
+//   upload, uploadImage, compressImage,
+//   signAccessToken (reused pattern — member version defined below),
+//   rateLimit, cookieParser, csrfProtect,
+//   logActivity (admin logger — member logger is separate below),
+//   memInvalidate
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-1 — Member JWT helpers (parallel to admin, separate secret namespace)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MEMBER_JWT_SECRET = process.env.MEMBER_JWT_SECRET || process.env.JWT_SECRET + "_member";
+// NOTE: Set MEMBER_JWT_SECRET as its own env var in Render for proper isolation.
+
+function signMemberAccessToken(payload) {
+  const jti = crypto.randomBytes(16).toString("hex");
+  return jwt.sign({ ...payload, jti, _type: "member" }, MEMBER_JWT_SECRET, { expiresIn: "15m" });
+}
+
+async function issueMemberRefreshToken(accountId) {
+  const raw  = crypto.randomBytes(40).toString("hex");
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+  const exp  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const { data: token, error } = await supabase.from("member_refresh_tokens").insert([{
+    account_id: accountId,
+    token_hash: hash,
+    expires_at: exp.toISOString(),
+  }]).select().single();
+  if (error) throw new Error("Could not store member refresh token: " + error.message);
+  // Track session
+  return { raw, tokenId: token.id };
+}
+
+function setMemberRefreshCookie(res, raw) {
+  res.cookie("kfs_member_refresh", raw, {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge:   7 * 24 * 60 * 60 * 1000,
+    path:     "/api/member/refresh",
+  });
+  res.cookie("kfs_member_session", "1", {
+    httpOnly: false,
+    secure:   process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge:   7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearMemberRefreshCookie(res) {
+  res.clearCookie("kfs_member_refresh", { path: "/api/member/refresh" });
+  res.clearCookie("kfs_member_session");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-2 — Member JWT revocation (in-memory Set, loaded at boot)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _revokedMemberJtis = new Set();
+
+async function loadRevokedMemberTokens() {
+  const { data } = await supabase
+    .from("member_revoked_tokens")
+    .select("jti")
+    .gt("expires_at", new Date().toISOString());
+  (data || []).forEach(r => _revokedMemberJtis.add(r.jti));
+  console.log(`[member-auth] Loaded ${_revokedMemberJtis.size} revoked member JTIs from DB`);
+}
+
+async function revokeMemberToken(jti, expiresAt) {
+  _revokedMemberJtis.add(jti);
+  try {
+    await supabase.from("member_revoked_tokens").upsert([{
+      jti,
+      expires_at: new Date(expiresAt * 1000).toISOString(),
+    }]);
+  } catch (e) {
+    console.error("[member-auth] revoke persist failed:", e.message);
+  }
+}
+
+async function revokeAllMemberRefreshTokens(accountId) {
+  await supabase
+    .from("member_refresh_tokens")
+    .update({ used: true })
+    .eq("account_id", accountId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-3 — Member auth middleware
+// ─────────────────────────────────────────────────────────────────────────────
+
+function memberAuthMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token" });
+  try {
+    const decoded = jwt.verify(token, MEMBER_JWT_SECRET, { algorithms: ["HS256"] });
+    if (decoded._type !== "member") return res.status(401).json({ error: "Invalid token type" });
+    if (decoded.jti && _revokedMemberJtis.has(decoded.jti)) {
+      return res.status(401).json({ error: "Token revoked" });
+    }
+    req.member = decoded; // { id (account_id), memberId, username }
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-4 — Member activity logger
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function logMemberActivity(accountId, memberId, action, metadata, ipAddress) {
+  try {
+    await supabase.from("member_activity").insert([{
+      account_id: accountId || null,
+      member_id:  memberId  || null,
+      action,
+      metadata:   metadata  || null,
+      ip_address: ipAddress || null,
+    }]);
+  } catch (e) {
+    console.error("[member-activity]", e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-5 — Member login lockout (mirrors admin lockout pattern)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MEMBER_LOGIN_ATTEMPTS = new Map();
+
+function checkMemberLockout(username) {
+  const entry = MEMBER_LOGIN_ATTEMPTS.get(username);
+  if (!entry) return null;
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+    const timeStr = secsLeft < 120 ? `${secsLeft} second(s)` :
+                    secsLeft < 7200 ? `${Math.ceil(secsLeft/60)} minute(s)` :
+                    `${Math.ceil(secsLeft/3600)} hour(s)`;
+    return `Account locked. Try again in ${timeStr}.`;
+  }
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+    MEMBER_LOGIN_ATTEMPTS.delete(username);
+  }
+  return null;
+}
+
+function recordMemberLoginFailure(username) {
+  const entry = MEMBER_LOGIN_ATTEMPTS.get(username) || { count: 0, lockedUntil: null };
+  entry.count += 1;
+  const TIERS = [
+    { after: 5,  durationMs: 5  * 60 * 1000 },
+    { after: 10, durationMs: 60 * 60 * 1000 },
+    { after: 15, durationMs: 24 * 60 * 60 * 1000 },
+  ];
+  for (let i = TIERS.length - 1; i >= 0; i--) {
+    if (entry.count >= TIERS[i].after) {
+      entry.lockedUntil = Date.now() + TIERS[i].durationMs;
+      break;
+    }
+  }
+  MEMBER_LOGIN_ATTEMPTS.set(username, entry);
+}
+
+function clearMemberLoginFailures(username) {
+  MEMBER_LOGIN_ATTEMPTS.delete(username);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-6 — Username generation helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function normaliseName(name) {
+  return (name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+async function generateMemberUsername(name, rollNo) {
+  const parts = normaliseName(name).split(" ");
+  const first = parts[0] || "member";
+  const last  = parts.slice(1).join("") || null;
+
+  // Priority 1: firstname.lastname
+  if (last) {
+    const candidate1 = `${first}.${last}`;
+    const { data: exists1 } = await supabase
+      .from("member_accounts").select("id").eq("username", candidate1).maybeSingle();
+    if (!exists1) return candidate1;
+  }
+
+  // Priority 2: firstname_rollno
+  if (rollNo) {
+    const rollPart = rollNo.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const candidate2 = `${first}_${rollPart}`;
+    const { data: exists2 } = await supabase
+      .from("member_accounts").select("id").eq("username", candidate2).maybeSingle();
+    if (!exists2) return candidate2;
+  }
+
+  // Priority 3: firstname.lastname_randomsuffix
+  for (let i = 0; i < 10; i++) {
+    const suffix = Math.floor(100 + Math.random() * 900).toString();
+    const candidate3 = last ? `${first}.${last}_${suffix}` : `${first}_${suffix}`;
+    const { data: exists3 } = await supabase
+      .from("member_accounts").select("id").eq("username", candidate3).maybeSingle();
+    if (!exists3) return candidate3;
+  }
+
+  // Fallback: timestamp-based
+  return `${first}_${Date.now()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-7 — Password complexity check (mirrors admin pattern)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isStrongMemberPassword(pw) {
+  return pw.length >= 8 &&
+    /[A-Z]/.test(pw) &&
+    /[0-9]/.test(pw) &&
+    /[^A-Za-z0-9]/.test(pw);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-8 — Member credential email (Brevo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function sendMemberCredentialsEmail({ toEmail, toName, username, tempPassword }) {
+  const { data: rows } = await supabase
+    .from("settings")
+    .select("key,value")
+    .in("key", ["brevo_api_key", "smtp_from_name"]);
+  const s = {};
+  (rows || []).forEach(r => (s[r.key] = r.value));
+  if (!s.brevo_api_key) {
+    console.warn("[member-email] Brevo API key not configured — skipping credentials email");
+    return;
+  }
+
+  const fromName    = s.smtp_from_name || "KFS — KIIT Film Society";
+  const loginUrl    = "https://kiitfilmsociety.in/membersaccess";
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;max-width:560px">
+  <tr><td style="background:#0a0a0a;padding:28px 36px;border-bottom:1px solid #1e1e1e">
+    <span style="font-size:18px;font-weight:700;color:#f5f5f5;letter-spacing:-.02em">KFS — KIIT Film Society</span>
+  </td></tr>
+  <tr><td style="padding:32px 36px">
+    <div style="background:#f5f5f5;color:#0a0a0a;display:inline-block;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:24px">Member Portal Access</div>
+    <h2 style="font-size:22px;font-weight:700;color:#f5f5f5;margin:0 0 8px;letter-spacing:-.02em">Welcome, ${toName}!</h2>
+    <p style="font-size:15px;color:#aaa;margin:0 0 24px">Your KFS member account has been created. Use the credentials below to log in for the first time.</p>
+    <div style="background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;padding:20px 24px;margin-bottom:24px">
+      <div style="margin-bottom:12px"><span style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.08em">Username</span><br><span style="font-size:16px;font-weight:600;color:#f5f5f5;font-family:monospace">${username}</span></div>
+      <div><span style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.08em">Temporary Password</span><br><span style="font-size:16px;font-weight:600;color:#f5f5f5;font-family:monospace">${tempPassword}</span></div>
+    </div>
+    <p style="font-size:13px;color:#888;margin:0 0 20px">You'll be asked to change your password and set up 2-factor authentication on your first login.</p>
+    <a href="${loginUrl}" style="display:inline-block;background:#f5f5f5;color:#0a0a0a;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700">Log In Now →</a>
+  </td></tr>
+  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    <p style="font-size:12px;color:#444;margin:0">This is an automated message from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Do not reply.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": s.brevo_api_key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
+      to: [{ email: toEmail, name: toName || toEmail }],
+      subject: `Your KFS Member Portal credentials`,
+      textContent: `Welcome, ${toName}!\n\nUsername: ${username}\nTemporary Password: ${tempPassword}\nLogin URL: ${loginUrl}\n\nYou'll be asked to change your password and enable 2FA on first login.`,
+      htmlContent,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Brevo API error ${response.status}: ${err}`);
+  }
+  console.log(`[member-email] Credentials sent to ${toEmail} (${username})`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-9 — CSRF protection for /api/member (mirrors admin pattern)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function csrfProtectMember(req, res, next) {
+  if (req.path.startsWith("/login") || req.path.startsWith("/refresh")) return next();
+  return csrfProtect(req, res, next);
+}
+app.use("/api/member", csrfProtectMember);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-10 — Member portal page route
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/membersaccess", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html")); // SPA catch-all handles it
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-11 — Member Auth Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/member/login
+app.post(
+  "/api/member/login",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many login attempts. Try again later." } }),
+  async (req, res) => {
+    const { username, password, totp_code } = req.body;
+    if (!username || !password)
+      return res.status(400).json({ error: "Username and password required" });
+
+    const normalised = username.trim().toLowerCase();
+
+    const lockMsg = checkMemberLockout(normalised);
+    if (lockMsg) return res.status(429).json({ error: lockMsg });
+
+    const { data: account } = await supabase
+      .from("member_accounts")
+      .select("*, members(id, name, role, batch, domain, photo)")
+      .eq("username", normalised)
+      .maybeSingle();
+
+    if (!account) {
+      recordMemberLoginFailure(normalised);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    if (account.account_status === "disabled") {
+      return res.status(403).json({ error: "Account disabled. Contact admin." });
+    }
+
+    const valid = await bcrypt.compare(password, account.password_hash);
+    if (!valid) {
+      recordMemberLoginFailure(normalised);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // 2FA check
+    if (account.totp_enabled) {
+      if (!totp_code) return res.status(200).json({ require_totp: true });
+      const verified = speakeasy.totp.verify({
+        secret: account.totp_secret, encoding: "base32",
+        token: totp_code.replace(/\s/g, ""), window: 1,
+      });
+      if (!verified) {
+        recordMemberLoginFailure(normalised);
+        return res.status(401).json({ error: "Invalid 2FA code" });
+      }
+    }
+
+    clearMemberLoginFailures(normalised);
+
+    // Update last_login
+    await supabase.from("member_accounts")
+      .update({ last_login: new Date().toISOString(), login_failures: 0, locked_until: null })
+      .eq("id", account.id);
+
+    const ip = req.ip || req.socket?.remoteAddress;
+    await logMemberActivity(account.id, account.member_id, "login", { ip, ua: req.headers["user-agent"] }, ip);
+
+    const accessToken = signMemberAccessToken({
+      id: account.id,
+      memberId: account.member_id,
+      username: account.username,
+      must_change_password: account.must_change_password,
+      totp_enabled: account.totp_enabled,
+    });
+
+    const { raw } = await issueMemberRefreshToken(account.id);
+    setMemberRefreshCookie(res, raw);
+
+    res.json({
+      token: accessToken,
+      must_change_password: account.must_change_password,
+      totp_enabled: account.totp_enabled,
+      member: account.members,
+    });
+  },
+);
+
+// POST /api/member/refresh
+app.post("/api/member/refresh", async (req, res) => {
+  const raw = req.cookies?.kfs_member_refresh;
+  if (!raw) return res.status(401).json({ error: "No refresh token" });
+
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+  const { data: stored } = await supabase
+    .from("member_refresh_tokens")
+    .select("*")
+    .eq("token_hash", hash)
+    .maybeSingle();
+
+  if (!stored) return res.status(401).json({ error: "Invalid refresh token" });
+
+  if (stored.used) {
+    await revokeAllMemberRefreshTokens(stored.account_id);
+    clearMemberRefreshCookie(res);
+    return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
+  }
+
+  if (new Date(stored.expires_at) < new Date()) {
+    clearMemberRefreshCookie(res);
+    return res.status(401).json({ error: "Refresh token expired" });
+  }
+
+  await supabase.from("member_refresh_tokens").update({ used: true }).eq("id", stored.id);
+
+  const { data: account } = await supabase
+    .from("member_accounts")
+    .select("id, member_id, username, must_change_password, totp_enabled, account_status")
+    .eq("id", stored.account_id)
+    .maybeSingle();
+
+  if (!account || account.account_status === "disabled") {
+    clearMemberRefreshCookie(res);
+    return res.status(401).json({ error: "Account not found or disabled" });
+  }
+
+  const accessToken = signMemberAccessToken({
+    id: account.id,
+    memberId: account.member_id,
+    username: account.username,
+    must_change_password: account.must_change_password,
+    totp_enabled: account.totp_enabled,
+  });
+
+  const { raw: newRaw } = await issueMemberRefreshToken(account.id);
+  setMemberRefreshCookie(res, newRaw);
+
+  res.json({ token: accessToken });
+});
+
+// POST /api/member/logout
+app.post("/api/member/logout", memberAuthMiddleware, async (req, res) => {
+  const { jti, exp } = req.member;
+  if (jti) await revokeMemberToken(jti, exp);
+  await revokeAllMemberRefreshTokens(req.member.id);
+  clearMemberRefreshCookie(res);
+  await logMemberActivity(req.member.id, req.member.memberId, "logout", null, req.ip);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-12 — First-login: Change Password (mandatory)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post("/api/member/change-password", memberAuthMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: "Both passwords required" });
+  if (!isStrongMemberPassword(newPassword))
+    return res.status(400).json({ error: "Password must be ≥8 chars, include 1 uppercase, 1 number, 1 special character." });
+
+  const { data: account } = await supabase
+    .from("member_accounts").select("password_hash").eq("id", req.member.id).maybeSingle();
+  if (!account) return res.status(404).json({ error: "Account not found" });
+
+  const valid = await bcrypt.compare(currentPassword, account.password_hash);
+  if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  await supabase.from("member_accounts")
+    .update({ password_hash: hash, must_change_password: false })
+    .eq("id", req.member.id);
+
+  await logMemberActivity(req.member.id, req.member.memberId, "password_change", null, req.ip);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-13 — 2FA setup & verification
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/2fa/setup — generate secret + QR
+app.get("/api/member/2fa/setup", memberAuthMiddleware, async (req, res) => {
+  const secret = speakeasy.generateSecret({ name: `KFS:${req.member.username}`, length: 20 });
+  // Store temp secret in account row (confirmed on verify)
+  await supabase.from("member_accounts")
+    .update({ totp_secret: secret.base32 })
+    .eq("id", req.member.id);
+
+  const qrDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+  res.json({ secret: secret.base32, qr: qrDataUrl });
+});
+
+// POST /api/member/2fa/verify — confirm & activate
+app.post("/api/member/2fa/verify", memberAuthMiddleware, async (req, res) => {
+  const { totp_code } = req.body;
+  if (!totp_code) return res.status(400).json({ error: "TOTP code required" });
+
+  const { data: account } = await supabase
+    .from("member_accounts").select("totp_secret").eq("id", req.member.id).maybeSingle();
+  if (!account?.totp_secret) return res.status(400).json({ error: "No pending 2FA setup" });
+
+  const verified = speakeasy.totp.verify({
+    secret: account.totp_secret, encoding: "base32",
+    token: totp_code.replace(/\s/g, ""), window: 1,
+  });
+  if (!verified) return res.status(401).json({ error: "Invalid TOTP code" });
+
+  await supabase.from("member_accounts")
+    .update({ totp_enabled: true })
+    .eq("id", req.member.id);
+
+  await logMemberActivity(req.member.id, req.member.memberId, "2fa_setup", null, req.ip);
+  res.json({ success: true });
+});
+
+// POST /api/member/2fa/disable
+app.post("/api/member/2fa/disable", memberAuthMiddleware, async (req, res) => {
+  const { password, totp_code } = req.body;
+  const { data: account } = await supabase
+    .from("member_accounts").select("password_hash, totp_secret").eq("id", req.member.id).maybeSingle();
+  if (!account) return res.status(404).json({ error: "Not found" });
+
+  const validPw = await bcrypt.compare(password || "", account.password_hash);
+  if (!validPw) return res.status(401).json({ error: "Password incorrect" });
+
+  if (account.totp_secret) {
+    const validTotp = speakeasy.totp.verify({
+      secret: account.totp_secret, encoding: "base32",
+      token: (totp_code || "").replace(/\s/g, ""), window: 1,
+    });
+    if (!validTotp) return res.status(401).json({ error: "Invalid TOTP code" });
+  }
+
+  await supabase.from("member_accounts")
+    .update({ totp_enabled: false, totp_secret: null })
+    .eq("id", req.member.id);
+
+  await logMemberActivity(req.member.id, req.member.memberId, "2fa_disable", null, req.ip);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-14 — Member Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/profile
+app.get("/api/member/profile", memberAuthMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("members")
+    .select("id,name,roll_no,mobile,batch,bio,domain,role,photo,special_tag,sort_order,is_past,instagram,linkedin,github,website,custom_links,email,updated_at")
+    .eq("id", req.member.memberId)
+    .maybeSingle();
+  if (error || !data) return res.status(404).json({ error: "Member not found" });
+  res.json(data);
+});
+
+// PUT /api/member/profile — creates a pending change request
+app.put(
+  "/api/member/profile",
+  memberAuthMiddleware,
+  upload.single("photo"),
+  async (req, res) => {
+    const { name, roll_no, mobile, batch, bio, domain, role,
+            instagram, linkedin, github, website, custom_links } = req.body;
+
+    const { data: current } = await supabase
+      .from("members").select("*").eq("id", req.member.memberId).maybeSingle();
+    if (!current) return res.status(404).json({ error: "Member not found" });
+
+    const newValues = {};
+    if (name      !== undefined) newValues.name      = name.trim();
+    if (roll_no   !== undefined) newValues.roll_no   = roll_no;
+    if (mobile    !== undefined) newValues.mobile    = mobile;
+    if (batch     !== undefined) newValues.batch     = batch;
+    if (bio       !== undefined) newValues.bio       = bio;
+    if (domain    !== undefined) newValues.domain    = domain;
+    if (role      !== undefined) newValues.role      = role;
+    if (instagram !== undefined) newValues.instagram = instagram;
+    if (linkedin  !== undefined) newValues.linkedin  = linkedin;
+    if (github    !== undefined) newValues.github    = github;
+    if (website   !== undefined) newValues.website   = website;
+    if (custom_links !== undefined) {
+      try { newValues.custom_links = JSON.parse(custom_links); } catch { newValues.custom_links = []; }
+    }
+    if (req.file) newValues.photo = await uploadImage(req.file, "members");
+
+    // Check if approval workflow is required (setting key: member_profile_approval)
+    const { data: setting } = await supabase
+      .from("settings").select("value").eq("key", "member_profile_approval").maybeSingle();
+    const requiresApproval = setting?.value !== "immediate";
+
+    if (requiresApproval) {
+      // Store as pending change
+      const oldValues = Object.fromEntries(Object.keys(newValues).map(k => [k, current[k]]));
+      const { data: change, error: changeErr } = await supabase
+        .from("member_profile_changes")
+        .insert([{ member_id: req.member.memberId, old_values: oldValues, new_values: newValues }])
+        .select().single();
+      if (changeErr) return res.status(500).json({ error: "Internal server error" });
+      await logMemberActivity(req.member.id, req.member.memberId, "profile_update_requested", { changeId: change.id }, req.ip);
+      res.json({ success: true, pending: true, message: "Profile update submitted for review." });
+    } else {
+      // Apply immediately
+      const { error: updateErr } = await supabase
+        .from("members").update({ ...newValues, updated_at: new Date().toISOString() }).eq("id", req.member.memberId);
+      if (updateErr) return res.status(500).json({ error: "Internal server error" });
+      memInvalidate("members:list");
+      await logMemberActivity(req.member.id, req.member.memberId, "profile_updated", null, req.ip);
+      res.json({ success: true, pending: false });
+    }
+  },
+);
+
+// GET /api/member/profile/pending-changes
+app.get("/api/member/profile/pending-changes", memberAuthMiddleware, async (req, res) => {
+  const { data } = await supabase
+    .from("member_profile_changes")
+    .select("id,new_values,status,admin_notes,created_at")
+    .eq("member_id", req.member.memberId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  res.json(data || []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-15 — Member Sessions
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/member/sessions", memberAuthMiddleware, async (req, res) => {
+  const { data } = await supabase
+    .from("member_refresh_tokens")
+    .select("id, created_at, expires_at, used")
+    .eq("account_id", req.member.id)
+    .eq("used", false)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+app.delete("/api/member/sessions/all", memberAuthMiddleware, async (req, res) => {
+  await revokeAllMemberRefreshTokens(req.member.id);
+  const { jti, exp } = req.member;
+  if (jti) await revokeMemberToken(jti, exp);
+  clearMemberRefreshCookie(res);
+  await logMemberActivity(req.member.id, req.member.memberId, "session_revoke_all", null, req.ip);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-16 — Member Activity Feed
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/member/activity", memberAuthMiddleware, async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit = Math.min(50, parseInt(req.query.limit) || 20);
+  const { data } = await supabase
+    .from("member_activity")
+    .select("id,action,metadata,ip_address,created_at")
+    .eq("account_id", req.member.id)
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  res.json(data || []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-17 — Member Movie Submissions
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/movies — list my submissions
+app.get("/api/member/movies", memberAuthMiddleware, async (req, res) => {
+  const { data } = await supabase
+    .from("member_movie_submissions")
+    .select("id, movie_data, status, reviewer_notes, created_at, updated_at, published_movie_id")
+    .eq("member_id", req.member.memberId)
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+// POST /api/member/movies — submit a new movie
+app.post(
+  "/api/member/movies",
+  memberAuthMiddleware,
+  upload.single("poster"),
+  async (req, res) => {
+    const {
+      title, description, trailer_url, watch_url, runtime, language, genre,
+      director, producer, executive_producer, writer, dop, video_editor,
+      sound_design, music_director, actors, support_crew, additional_credits,
+    } = req.body;
+
+    if (!title || !title.trim())
+      return res.status(400).json({ error: "Title is required" });
+    if (trailer_url && !/^https:\/\//i.test(trailer_url))
+      return res.status(400).json({ error: "trailer_url must start with https://" });
+    if (watch_url && !/^https:\/\//i.test(watch_url))
+      return res.status(400).json({ error: "watch_url must start with https://" });
+
+    let genreVal = null;
+    if (genre) {
+      try { const p = JSON.parse(genre); genreVal = Array.isArray(p) ? p : [genre]; }
+      catch { genreVal = [genre]; }
+    }
+
+    const posterUrl = req.file ? await uploadImage(req.file, "member-movies") : null;
+
+    const movieData = {
+      title: title.trim(), description: description || null,
+      trailer_url: trailer_url || null, watch_url: watch_url || null,
+      runtime: runtime ? parseInt(runtime, 10) : null, language: language || null,
+      genre: genreVal,
+      director: director || null, producer: producer || null,
+      executive_producer: executive_producer || null, writer: writer || null,
+      dop: dop || null, video_editor: video_editor || null,
+      sound_design: sound_design || null, music_director: music_director || null,
+      actors: actors || null, support_crew: support_crew || null,
+      additional_credits: additional_credits || null,
+      poster_image: posterUrl,
+    };
+
+    const { data, error } = await supabase
+      .from("member_movie_submissions")
+      .insert([{ member_id: req.member.memberId, account_id: req.member.id, movie_data: movieData }])
+      .select().single();
+    if (error) return res.status(500).json({ error: "Internal server error" });
+
+    await logMemberActivity(req.member.id, req.member.memberId, "movie_submit", { submissionId: data.id, title }, req.ip);
+    // Notify admins (non-blocking)
+    logActivity("system", "System", "review_requested", "movie_submission", `"${title}" by ${req.member.username}`).catch(() => {});
+    res.json(data);
+  },
+);
+
+// PUT /api/member/movies/:id — edit a submission (only if pending or changes_requested)
+app.put(
+  "/api/member/movies/:id",
+  memberAuthMiddleware,
+  upload.single("poster"),
+  async (req, res) => {
+    const { data: sub } = await supabase
+      .from("member_movie_submissions")
+      .select("*").eq("id", req.params.id).eq("member_id", req.member.memberId).maybeSingle();
+    if (!sub) return res.status(404).json({ error: "Submission not found" });
+    if (!["pending", "changes_requested"].includes(sub.status))
+      return res.status(403).json({ error: "Only pending or changes-requested submissions can be edited" });
+
+    const updated = { ...sub.movie_data };
+    const fields = ["title","description","trailer_url","watch_url","runtime","language","genre",
+                    "director","producer","executive_producer","writer","dop","video_editor",
+                    "sound_design","music_director","actors","support_crew","additional_credits"];
+    fields.forEach(f => { if (req.body[f] !== undefined) updated[f] = req.body[f]; });
+    if (req.file) updated.poster_image = await uploadImage(req.file, "member-movies");
+
+    await supabase.from("member_movie_submissions")
+      .update({ movie_data: updated, status: "pending", updated_at: new Date().toISOString() })
+      .eq("id", sub.id);
+
+    await logMemberActivity(req.member.id, req.member.memberId, "movie_resubmit", { submissionId: sub.id }, req.ip);
+    res.json({ success: true });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-18 — Admin: Create Member Account (extends existing POST /api/admin/members)
+// Place this route AFTER the existing /api/admin/members route or merge the logic in.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/admin/members/:id/create-account — auto-create linked member_account
+app.post("/api/admin/members/:id/create-account", requireSection("members"), async (req, res) => {
+  const memberId = req.params.id;
+  const { data: member } = await supabase
+    .from("members").select("id, name, roll_no, email").eq("id", memberId).maybeSingle();
+  if (!member) return res.status(404).json({ error: "Member not found" });
+
+  // Check if account already exists
+  const { data: existing } = await supabase
+    .from("member_accounts").select("id, username").eq("member_id", memberId).maybeSingle();
+  if (existing) return res.status(409).json({ error: "Account already exists", username: existing.username });
+
+  const username  = await generateMemberUsername(member.name, member.roll_no);
+  const tempPw    = "Kfs@2026";
+  const hash      = await bcrypt.hash(tempPw, 10);
+
+  const { data: account, error } = await supabase
+    .from("member_accounts")
+    .insert([{ member_id: memberId, username, password_hash: hash, must_change_password: true }])
+    .select().single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  logActivity(req.admin.id, req.admin.name, "create", "member_account", username).catch(() => {});
+  res.json({ success: true, username, tempPassword: tempPw, accountId: account.id, email: member.email || null });
+});
+
+// POST /api/admin/members/:id/send-credentials — email credentials to member
+app.post("/api/admin/members/:id/send-credentials", requireSection("members"), async (req, res) => {
+  const memberId = req.params.id;
+  const { data: member } = await supabase
+    .from("members").select("id, name, email").eq("id", memberId).maybeSingle();
+  if (!member?.email) return res.status(400).json({ error: "Member has no email address on file" });
+
+  const { data: account } = await supabase
+    .from("member_accounts").select("username").eq("member_id", memberId).maybeSingle();
+  if (!account) return res.status(404).json({ error: "No account exists for this member — create one first" });
+
+  const { customPassword } = req.body;
+  // Admin can optionally supply a reset temp password; otherwise just resend username + login URL
+  if (customPassword) {
+    if (!isStrongMemberPassword(customPassword))
+      return res.status(400).json({ error: "Password must be ≥8 chars, 1 uppercase, 1 number, 1 special character" });
+    const hash = await bcrypt.hash(customPassword, 10);
+    await supabase.from("member_accounts")
+      .update({ password_hash: hash, must_change_password: true }).eq("member_id", memberId);
+  }
+
+  await sendMemberCredentialsEmail({
+    toEmail: member.email,
+    toName: member.name,
+    username: account.username,
+    tempPassword: customPassword || "Kfs@2026",
+  });
+
+  logActivity(req.admin.id, req.admin.name, "email_sent", "member_account", account.username).catch(() => {});
+  res.json({ success: true });
+});
+
+// GET /api/admin/members/:id/account — view account info
+app.get("/api/admin/members/:id/account", requireSection("members"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("member_accounts")
+    .select("id, username, must_change_password, totp_enabled, account_status, last_login, login_failures, locked_until, created_at")
+    .eq("member_id", req.params.id)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || null);
+});
+
+// POST /api/admin/members/:id/account/reset-password
+app.post("/api/admin/members/:id/account/reset-password", requireSection("members"), async (req, res) => {
+  const { data: account } = await supabase
+    .from("member_accounts").select("id").eq("member_id", req.params.id).maybeSingle();
+  if (!account) return res.status(404).json({ error: "No account found" });
+
+  const tempPw = "Kfs@2026";
+  const hash   = await bcrypt.hash(tempPw, 10);
+  await supabase.from("member_accounts")
+    .update({ password_hash: hash, must_change_password: true, login_failures: 0, locked_until: null })
+    .eq("id", account.id);
+
+  logActivity(req.admin.id, req.admin.name, "reset_password", "member_account", req.params.id).catch(() => {});
+  res.json({ success: true, tempPassword: tempPw });
+});
+
+// POST /api/admin/members/:id/account/toggle-status — disable/enable
+app.post("/api/admin/members/:id/account/toggle-status", requireSection("members"), async (req, res) => {
+  const { status } = req.body; // "active" | "disabled"
+  if (!["active", "disabled"].includes(status))
+    return res.status(400).json({ error: "status must be 'active' or 'disabled'" });
+  const { error } = await supabase.from("member_accounts")
+    .update({ account_status: status }).eq("member_id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, status === "disabled" ? "disable" : "enable", "member_account", req.params.id).catch(() => {});
+  res.json({ success: true });
+});
+
+// POST /api/admin/members/:id/account/force-2fa-reset
+app.post("/api/admin/members/:id/account/force-2fa-reset", requireSection("members"), async (req, res) => {
+  const { error } = await supabase.from("member_accounts")
+    .update({ totp_enabled: false, totp_secret: null }).eq("member_id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "force_2fa_reset", "member_account", req.params.id).catch(() => {});
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-19 — Admin: Profile Change Moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/member-profile-changes?status=pending
+app.get("/api/admin/member-profile-changes", requireSection("members"), async (req, res) => {
+  const status = req.query.status || "pending";
+  const { data } = await supabase
+    .from("member_profile_changes")
+    .select("id, member_id, old_values, new_values, status, admin_notes, reviewed_by, reviewed_at, created_at, members(name, photo)")
+    .eq("status", status)
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+// POST /api/admin/member-profile-changes/:id/review
+app.post("/api/admin/member-profile-changes/:id/review", requireSection("members"), async (req, res) => {
+  const { action, notes } = req.body; // action: approve | reject | request_changes
+  if (!["approve", "reject", "request_changes"].includes(action))
+    return res.status(400).json({ error: "action must be approve | reject | request_changes" });
+
+  const { data: change } = await supabase
+    .from("member_profile_changes").select("*").eq("id", req.params.id).maybeSingle();
+  if (!change) return res.status(404).json({ error: "Change request not found" });
+
+  const statusMap = { approve: "approved", reject: "rejected", request_changes: "changes_requested" };
+  await supabase.from("member_profile_changes").update({
+    status: statusMap[action],
+    admin_notes: notes || null,
+    reviewed_by: req.admin.username,
+    reviewed_at: new Date().toISOString(),
+  }).eq("id", req.params.id);
+
+  if (action === "approve") {
+    await supabase.from("members")
+      .update({ ...change.new_values, updated_at: new Date().toISOString() })
+      .eq("id", change.member_id);
+    memInvalidate("members:list");
+  }
+
+  logActivity(req.admin.id, req.admin.name, action, "member_profile_change", String(req.params.id)).catch(() => {});
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-20 — Admin: Movie Submission Moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/member-movie-submissions?status=pending
+app.get("/api/admin/member-movie-submissions", requireSection("movies"), async (req, res) => {
+  const status = req.query.status || "pending";
+  const { data } = await supabase
+    .from("member_movie_submissions")
+    .select("id, member_id, account_id, movie_data, status, reviewer_notes, reviewed_by, reviewed_at, created_at, updated_at, members(name, photo)")
+    .eq("status", status)
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+// POST /api/admin/member-movie-submissions/:id/review
+app.post(
+  "/api/admin/member-movie-submissions/:id/review",
+  requireSection("movies"),
+  async (req, res) => {
+    const { action, notes } = req.body; // approve | reject | request_changes
+    if (!["approve", "reject", "request_changes"].includes(action))
+      return res.status(400).json({ error: "action must be approve | reject | request_changes" });
+
+    const { data: sub } = await supabase
+      .from("member_movie_submissions").select("*").eq("id", req.params.id).maybeSingle();
+    if (!sub) return res.status(404).json({ error: "Submission not found" });
+
+    const statusMap = { approve: "approved", reject: "rejected", request_changes: "changes_requested" };
+
+    let publishedMovieId = sub.published_movie_id;
+
+    if (action === "approve") {
+      // Publish to movies table
+      const md = sub.movie_data;
+      let genreVal = null;
+      if (md.genre) genreVal = Array.isArray(md.genre) ? JSON.stringify(md.genre) : md.genre;
+
+      const { data: newMovie, error: movieErr } = await supabase.from("movies").insert([{
+        title:          md.title,
+        description:    md.description    || null,
+        director:       md.director       || null,
+        producer:       md.producer       || null,
+        dop:            md.dop            || null,
+        screenwriter:   md.writer         || null,
+        video_editor:   md.video_editor   || null,
+        sound_design:   md.sound_design   || null,
+        actors:         md.actors         || null,
+        support_crew:   md.support_crew   || null,
+        poster_image:   md.poster_image   || null,
+        trailer_url:    md.trailer_url    || null,
+        watch_url:      md.watch_url      || null,
+        runtime:        md.runtime        || null,
+        language:       md.language       || null,
+        genre:          genreVal,
+      }]).select().single();
+
+      if (movieErr) return res.status(500).json({ error: "Failed to publish movie: " + movieErr.message });
+      publishedMovieId = newMovie.id;
+      memInvalidate("movies:list", "movies:genre:");
+      logActivity(req.admin.id, req.admin.name, "create", "movie", md.title).catch(() => {});
+    }
+
+    await supabase.from("member_movie_submissions").update({
+      status: statusMap[action],
+      reviewer_notes: notes || null,
+      reviewed_by: req.admin.username,
+      reviewed_at: new Date().toISOString(),
+      published_movie_id: publishedMovieId || null,
+    }).eq("id", sub.id);
+
+    logActivity(req.admin.id, req.admin.name, action, "movie_submission", sub.movie_data?.title || sub.id).catch(() => {});
+    res.json({ success: true, publishedMovieId: publishedMovieId || null });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-21 — Admin: Member Activity & Monitoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/admin/members/:id/activity", requireSection("members"), async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit = Math.min(100, parseInt(req.query.limit) || 30);
+  const { data } = await supabase
+    .from("member_activity")
+    .select("id, action, metadata, ip_address, created_at")
+    .eq("member_id", req.params.id)
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  res.json(data || []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-22 — initMemberDB (call inside existing app.listen callback)
+// ─────────────────────────────────────────────────────────────────────────────
+// Add this call inside the existing app.listen() callback, alongside initDB():
+//   await initMemberDB();
+
+async function initMemberDB() {
+  try {
+    const { error } = await supabase
+      .from("member_accounts")
+      .select("id", { count: "exact", head: true })
+      .limit(1);
+    if (error) {
+      console.warn("[initMemberDB] member_accounts table not found — run member_portal_migration.sql in Supabase");
+    } else {
+      await loadRevokedMemberTokens();
+      console.log("[initMemberDB] Member portal tables OK");
+    }
+  } catch (e) {
+    console.error("[initMemberDB] error:", e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export helpers for use in app.listen callback (add to bottom of server.js)
+// ─────────────────────────────────────────────────────────────────────────────
+// In your app.listen block, add:
+//   await initMemberDB();
+
+
 // ── SCANNER PAGE — must be above the catch-all ────────────────────────────────
 app.get("/scanner", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "scanner.html"));
@@ -7733,6 +8783,7 @@ process.on('uncaughtException', (err) => {
 app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
   await initDB();
+  await initMemberDB();   // ← member portal init
   await loadRevokedTokens();
   await loadActiveLockouts();
   console.log("DB initialized");
