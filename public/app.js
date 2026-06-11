@@ -2815,6 +2815,20 @@ async function saveMember() {
     } else {
       tbody.insertAdjacentHTML('afterbegin', newRow);
       tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+      // Show credentials modal if auto-account was created
+      if (saved._account) {
+        const acc = saved._account;
+        showConfirmModal(
+          `Member added! Portal account auto-created.<br><br><strong>Username:</strong> ${acc.username}<br><strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${acc.tempPassword}</code><br><br>Send credentials to member via email?`,
+          async () => {
+            await apiFetch(`/api/admin/members/${saved.id}/send-credentials`, { method: 'POST' });
+            showToast('Credentials emailed to member');
+          },
+          null,
+          'Send Email',
+          'Skip'
+        );
+      }
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save Member'; }
@@ -10186,7 +10200,7 @@ async function loadMemberProfileChanges(status = 'pending') {
         </div>`
       : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
     return `<tr>
-      <td style="font-weight:500">${r.member_name || r.member_id}</td>
+      <td style="font-weight:500">${r.members?.name || r.member_id}</td>
       <td style="color:var(--grey);font-size:12px">${date}</td>
       <td style="font-size:12px;color:var(--grey)">${changes}</td>
       <td><span class="tag ${r.status === 'approved' ? 'upcoming' : ''}">${r.status}</span></td>
@@ -10200,10 +10214,13 @@ async function reviewMemberProfileChange(changeId, decision) {
   if (decision === 'rejected' || decision === 'changes_requested') {
     notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
   }
+  // Map frontend decision values to server-expected action values
+  const actionMap = { 'approved': 'approve', 'rejected': 'reject', 'changes_requested': 'request_changes' };
+  const action = actionMap[decision] || decision;
   await apiFetch(`/api/admin/member-profile-changes/${changeId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decision, notes })
+    body: JSON.stringify({ action, notes })
   });
   loadMemberProfileChanges('pending');
 }
@@ -10243,7 +10260,7 @@ async function loadMemberMovieSubmissions(status = 'pending') {
         </div>`
       : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
     return `<tr>
-      <td style="font-weight:500">${r.member_name || r.member_id}</td>
+      <td style="font-weight:500">${r.members?.name || r.member_id}</td>
       <td style="font-weight:500">${title}</td>
       <td style="color:var(--grey);font-size:12px">${date}</td>
       <td><span class="tag ${r.status === 'approved' ? 'upcoming' : ''}">${r.status}</span></td>
@@ -10257,10 +10274,13 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   if (decision === 'rejected' || decision === 'changes_requested') {
     notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
   }
+  // Map frontend decision values to server-expected action values
+  const actionMap = { 'approved': 'approve', 'rejected': 'reject', 'changes_requested': 'request_changes' };
+  const action = actionMap[decision] || decision;
   await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decision, notes })
+    body: JSON.stringify({ action, notes })
   });
   loadMemberMovieSubmissions('pending');
 }

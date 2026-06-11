@@ -2074,7 +2074,28 @@ app.post(
     if (error) return res.status(500).json({ error: "Internal server error" });
     memInvalidate("members:list");
     logActivity(req.admin.id, req.admin.name, "create", "member", name).catch(e => console.error("[activity]", e.message));
-    res.json(data);
+
+    // ── Auto-create member_account after insert ───────────────────────────────
+    let accountInfo = null;
+    try {
+      const username = await generateMemberUsername(data.name, data.roll_no || null);
+      const tempPw   = "Kfs@2026";
+      const hash     = await bcrypt.hash(tempPw, 10);
+      const { data: account, error: accErr } = await supabase
+        .from("member_accounts")
+        .insert([{ member_id: data.id, username, password_hash: hash, must_change_password: true }])
+        .select().single();
+      if (!accErr) {
+        accountInfo = { username, tempPassword: tempPw, accountId: account.id };
+        logActivity(req.admin.id, req.admin.name, "create", "member_account", username).catch(() => {});
+      } else {
+        console.warn("[member insert] auto-account creation failed:", accErr.message);
+      }
+    } catch (e) {
+      console.warn("[member insert] auto-account creation error:", e.message);
+    }
+
+    res.json({ ...data, _account: accountInfo });
   },
 );
 
