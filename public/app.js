@@ -1927,6 +1927,56 @@ function kfsConfirm({ title='Delete item?', msg='', okLabel='Delete' } = {}) {
 }
 window.kfsConfirm = kfsConfirm;
 
+// ── CONFIRM MODAL (member portal actions) ─────────────────────────────────────
+// showConfirmModal(msg, onConfirm, onCancel?, okLabel?, cancelLabel?)
+// Returns a Promise that resolves to true (confirmed) or false (cancelled).
+// Reuses the kfs-confirm-modal DOM but with a neutral (non-red) OK button
+// so it suits confirmation dialogs that aren't destructive deletes.
+function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelLabel = 'Cancel') {
+  return new Promise(resolve => {
+    const modal     = document.getElementById('kfs-confirm-modal');
+    const titleEl   = document.getElementById('kfs-confirm-title');
+    const msgEl     = document.getElementById('kfs-confirm-msg');
+    const okBtn     = document.getElementById('kfs-confirm-ok');
+    const cancelBtn = document.getElementById('kfs-confirm-cancel');
+    if (!modal) {
+      // Fallback if modal doesn't exist
+      const confirmed = window.confirm(msg);
+      if (confirmed && onConfirm) onConfirm();
+      else if (!confirmed && onCancel) onCancel();
+      resolve(confirmed);
+      return;
+    }
+    // Use the msg as the body; clear the title (it's shown in msg for these dialogs)
+    if (titleEl) titleEl.textContent = '';
+    if (msgEl)   msgEl.innerHTML = msg;
+    if (okBtn) {
+      okBtn.textContent = okLabel;
+      // Neutral blue style for non-destructive confirmations
+      okBtn.style.background = 'var(--accent, #6366f1)';
+    }
+    if (cancelBtn) cancelBtn.textContent = cancelLabel;
+    modal.classList.add('open');
+    function cleanup(confirmed) {
+      modal.classList.remove('open');
+      // Restore defaults for next kfsConfirm (destructive) call
+      if (okBtn) { okBtn.textContent = 'Delete'; okBtn.style.background = '#f85149'; }
+      if (cancelBtn) cancelBtn.textContent = 'Cancel';
+      if (titleEl) titleEl.textContent = 'Are you sure?';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel_);
+      if (confirmed && onConfirm) onConfirm();
+      else if (!confirmed && onCancel) onCancel();
+      resolve(confirmed);
+    }
+    const onOk      = () => cleanup(true);
+    const onCancel_ = () => cleanup(false);
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel_);
+  });
+}
+window.showConfirmModal = showConfirmModal;
+
 // ── UNSAVED CHANGES GUARD ─────────────────────────────────────────────────────
 // Usage: const discard = await kfsUnsavedGuard()
 function kfsUnsavedGuard() {
