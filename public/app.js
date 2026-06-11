@@ -1929,9 +1929,7 @@ window.kfsConfirm = kfsConfirm;
 
 // ── CONFIRM MODAL (member portal actions) ─────────────────────────────────────
 // showConfirmModal(msg, onConfirm, onCancel?, okLabel?, cancelLabel?)
-// Returns a Promise that resolves to true (confirmed) or false (cancelled).
-// Reuses the kfs-confirm-modal DOM but with a neutral (non-red) OK button
-// so it suits confirmation dialogs that aren't destructive deletes.
+// Reuses kfs-confirm-modal DOM with a neutral OK button for non-destructive confirms.
 function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelLabel = 'Cancel') {
   return new Promise(resolve => {
     const modal     = document.getElementById('kfs-confirm-modal');
@@ -1940,39 +1938,32 @@ function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelL
     const okBtn     = document.getElementById('kfs-confirm-ok');
     const cancelBtn = document.getElementById('kfs-confirm-cancel');
     if (!modal) {
-      // Fallback if modal doesn't exist
       const confirmed = window.confirm(msg);
       if (confirmed && onConfirm) onConfirm();
       else if (!confirmed && onCancel) onCancel();
       resolve(confirmed);
       return;
     }
-    // Use the msg as the body; clear the title (it's shown in msg for these dialogs)
     if (titleEl) titleEl.textContent = '';
     if (msgEl)   msgEl.innerHTML = msg;
-    if (okBtn) {
-      okBtn.textContent = okLabel;
-      // Neutral blue style for non-destructive confirmations
-      okBtn.style.background = 'var(--accent, #6366f1)';
-    }
+    if (okBtn)   { okBtn.textContent = okLabel; okBtn.style.background = 'var(--accent,#6366f1)'; }
     if (cancelBtn) cancelBtn.textContent = cancelLabel;
     modal.classList.add('open');
     function cleanup(confirmed) {
       modal.classList.remove('open');
-      // Restore defaults for next kfsConfirm (destructive) call
-      if (okBtn) { okBtn.textContent = 'Delete'; okBtn.style.background = '#f85149'; }
+      if (okBtn)    { okBtn.textContent = 'Delete'; okBtn.style.background = '#f85149'; }
       if (cancelBtn) cancelBtn.textContent = 'Cancel';
-      if (titleEl) titleEl.textContent = 'Are you sure?';
+      if (titleEl)  titleEl.textContent = 'Are you sure?';
       okBtn.removeEventListener('click', onOk);
-      cancelBtn.removeEventListener('click', onCancel_);
+      cancelBtn.removeEventListener('click', onNo);
       if (confirmed && onConfirm) onConfirm();
       else if (!confirmed && onCancel) onCancel();
       resolve(confirmed);
     }
-    const onOk      = () => cleanup(true);
-    const onCancel_ = () => cleanup(false);
+    const onOk = () => cleanup(true);
+    const onNo = () => cleanup(false);
     okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', onCancel_);
+    cancelBtn.addEventListener('click', onNo);
   });
 }
 window.showConfirmModal = showConfirmModal;
@@ -2865,20 +2856,6 @@ async function saveMember() {
     } else {
       tbody.insertAdjacentHTML('afterbegin', newRow);
       tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
-      // Show credentials modal if auto-account was created
-      if (saved._account) {
-        const acc = saved._account;
-        showConfirmModal(
-          `Member added! Portal account auto-created.<br><br><strong>Username:</strong> ${acc.username}<br><strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${acc.tempPassword}</code><br><br>Send credentials to member via email?`,
-          async () => {
-            await apiFetch(`/api/admin/members/${saved.id}/send-credentials`, { method: 'POST' });
-            showToast('Credentials emailed to member');
-          },
-          null,
-          'Send Email',
-          'Skip'
-        );
-      }
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save Member'; }
@@ -10174,12 +10151,12 @@ function openCreateMemberAccount(memberId, memberName) {
   showConfirmModal(
     `Create portal account for <strong>${memberName}</strong>?<br><br>A username and temporary password will be generated automatically.`,
     async () => {
-      const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, { method: 'POST' });
+      const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
       if (!res) return;
       const send = await showConfirmModal(
         `Account created!<br><br><strong>Username:</strong> ${res.username}<br><strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${res.tempPassword}</code><br><br>Send credentials to member via email?`,
         async () => {
-          await apiFetch(`/api/admin/members/${memberId}/send-credentials`, { method: 'POST' });
+          await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST');
           showToast('Credentials emailed to member');
         },
         null,
@@ -10194,14 +10171,14 @@ function openCreateMemberAccount(memberId, memberName) {
 async function toggleMemberAccountStatus(memberId, currentStatus) {
   const action = currentStatus === 'active' ? 'disable' : 'enable';
   showConfirmModal(`${action.charAt(0).toUpperCase() + action.slice(1)} this member's portal account?`, async () => {
-    await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, { method: 'POST' });
+    await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, 'POST');
     loadMemberAccounts();
   });
 }
 
 async function resetMemberPassword(memberId) {
   showConfirmModal('Force a password reset for this member? They will be required to set a new password on next login.', async () => {
-    const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, { method: 'POST' });
+    const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
     if (res) showToast('Password reset — member must change password on next login');
     loadMemberAccounts();
   });
@@ -10209,7 +10186,7 @@ async function resetMemberPassword(memberId) {
 
 async function forceMember2FAReset(memberId) {
   showConfirmModal('Clear 2FA for this member? They will be required to set up 2FA again on next login.', async () => {
-    await apiFetch(`/api/admin/members/${memberId}/account/force-2fa-reset`, { method: 'POST' });
+    await apiFetch(`/api/admin/members/${memberId}/account/force-2fa-reset`, 'POST');
     showToast('2FA cleared');
     loadMemberAccounts();
   });
@@ -10264,14 +10241,9 @@ async function reviewMemberProfileChange(changeId, decision) {
   if (decision === 'rejected' || decision === 'changes_requested') {
     notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
   }
-  // Map frontend decision values to server-expected action values
-  const actionMap = { 'approved': 'approve', 'rejected': 'reject', 'changes_requested': 'request_changes' };
+  const actionMap = { approved: 'approve', rejected: 'reject', changes_requested: 'request_changes' };
   const action = actionMap[decision] || decision;
-  await apiFetch(`/api/admin/member-profile-changes/${changeId}/review`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, notes })
-  });
+  await apiFetch(`/api/admin/member-profile-changes/${changeId}/review`, 'POST', { action, notes });
   loadMemberProfileChanges('pending');
 }
 
@@ -10324,13 +10296,8 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   if (decision === 'rejected' || decision === 'changes_requested') {
     notes = prompt(decision === 'rejected' ? 'Reason for rejection (optional):' : 'What changes are needed?') || '';
   }
-  // Map frontend decision values to server-expected action values
-  const actionMap = { 'approved': 'approve', 'rejected': 'reject', 'changes_requested': 'request_changes' };
+  const actionMap = { approved: 'approve', rejected: 'reject', changes_requested: 'request_changes' };
   const action = actionMap[decision] || decision;
-  await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, notes })
-  });
+  await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
   loadMemberMovieSubmissions('pending');
 }
