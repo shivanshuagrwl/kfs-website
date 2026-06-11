@@ -8238,8 +8238,9 @@ app.put(
   memberAuthMiddleware,
   upload.single("photo"),
   async (req, res) => {
-    const { name, roll_no, mobile, batch, bio, domain, role,
+    const { name, roll_no, mobile, batch, bio,
             instagram, linkedin, github, website, custom_links } = req.body;
+    // NOTE: 'domain' and 'role' are intentionally excluded — admin-only fields.
 
     const { data: current } = await supabase
       .from("members").select("*").eq("id", req.member.memberId).maybeSingle();
@@ -8251,8 +8252,6 @@ app.put(
     if (mobile    !== undefined) newValues.mobile    = mobile;
     if (batch     !== undefined) newValues.batch     = batch;
     if (bio       !== undefined) newValues.bio       = bio;
-    if (domain    !== undefined) newValues.domain    = domain;
-    if (role      !== undefined) newValues.role      = role;
     if (instagram !== undefined) newValues.instagram = instagram;
     if (linkedin  !== undefined) newValues.linkedin  = linkedin;
     if (github    !== undefined) newValues.github    = github;
@@ -8713,6 +8712,128 @@ async function initMemberDB() {
 // In your app.listen block, add:
 //   await initMemberDB();
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-23 — Member: My Works (public films where member appears)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/member/works", memberAuthMiddleware, async (req, res) => {
+  try {
+    const { data: memberRow } = await supabase
+      .from("members").select("id, name").eq("id", req.member.memberId).maybeSingle();
+    if (!memberRow) return res.json([]);
+
+    const { data: movies } = await supabase
+      .from("movies")
+      .select("id, title, release_year, poster_image, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew");
+
+    const crewFields = ["director","producer","dop","screenwriter","video_editor","sound_design","management","graphic_design","actors","support_crew"];
+    const roleLabels = { director:"Director", producer:"Producer", dop:"DOP", screenwriter:"Script Writer", video_editor:"Editor", sound_design:"Sound Design", management:"Management", graphic_design:"Graphic Design", actors:"Actor", support_crew:"Crew" };
+    const memberId = String(memberRow.id);
+    const memberName = memberRow.name.trim().toLowerCase();
+
+    const works = [];
+    (movies || []).forEach(m => {
+      let roleLabel = "";
+      crewFields.forEach(f => {
+        if (roleLabel) return;
+        const val = m[f] || "";
+        val.split(";;").map(s => s.trim()).filter(Boolean).forEach(part => {
+          if (roleLabel) return;
+          const pipes = part.split("||");
+          const name = pipes[0].trim().toLowerCase();
+          const id   = pipes[1] ? pipes[1].trim() : null;
+          if (id === memberId || name === memberName) {
+            roleLabel = roleLabels[f] || f;
+          }
+        });
+        // also handle comma-separated legacy format
+        if (!roleLabel) {
+          val.split(",").map(s => s.trim().toLowerCase()).filter(Boolean).forEach(name => {
+            if (roleLabel) return;
+            if (name === memberName) roleLabel = roleLabels[f] || f;
+          });
+        }
+      });
+      if (roleLabel) works.push({ id: m.id, title: m.title, release_year: m.release_year, poster_image: m.poster_image, role: roleLabel });
+    });
+
+    works.sort((a, b) => (b.release_year || 0) - (a.release_year || 0));
+    res.json(works);
+  } catch (e) {
+    console.error("[works]", e.message);
+    res.json([]);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-24 — Member: Work Edit Requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post("/api/member/work-edit-request", memberAuthMiddleware, async (req, res) => {
+  const { movie_id, movie_title, description } = req.body;
+  if (!movie_id || !description || !description.trim())
+    return res.status(400).json({ error: "movie_id and description are required" });
+
+  const { data: memberRow } = await supabase
+    .from("members").select("id, name").eq("id", req.member.memberId).maybeSingle();
+
+  const { data, error } = await supabase
+    .from("member_work_edit_requests")
+    .insert([{
+      member_id:   req.member.memberId,
+      account_id:  req.member.id,
+      movie_id:    movie_id,
+      movie_title: movie_title || null,
+      description: description.trim(),
+      status:      "pending",
+    }])
+    .select().single();
+
+  if (error) {
+    // Table may not exist yet — return graceful error
+    if (error.code === "42P01") return res.status(503).json({ error: "work_edit_requests table not yet created — run migration" });
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  await logMemberActivity(req.member.id, req.member.memberId, "work_edit_requested", { requestId: data.id, movie_title }, req.ip);
+  res.json({ success: true, id: data.id });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-25 — Admin: Work Edit Request Moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/admin/work-edit-requests", requireSection("members"), async (req, res) => {
+  const status = req.query.status || "pending";
+  const { data } = await supabase
+    .from("member_work_edit_requests")
+    .select("*, members(id, name)")
+    .eq("status", status)
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+app.post("/api/admin/work-edit-requests/:id/review", requireSection("members"), async (req, res) => {
+  const { action, notes } = req.body; // action: approve | reject
+  if (!["approve","reject"].includes(action))
+    return res.status(400).json({ error: "Invalid action" });
+
+  const { data: req_ } = await supabase
+    .from("member_work_edit_requests").select("*").eq("id", req.params.id).maybeSingle();
+  if (!req_) return res.status(404).json({ error: "Request not found" });
+
+  const statusMap = { approve: "approved", reject: "rejected" };
+  await supabase.from("member_work_edit_requests").update({
+    status:      statusMap[action],
+    admin_notes: notes || null,
+    reviewed_by: req.admin.username,
+    reviewed_at: new Date().toISOString(),
+  }).eq("id", req_.id);
+
+  logActivity(req.admin.id, req.admin.name, action, "work_edit_request", req_.movie_title || req_.movie_id).catch(() => {});
+  res.json({ success: true });
+});
 
 // ── SCANNER PAGE — must be above the catch-all ────────────────────────────────
 app.get("/scanner", (req, res) => {

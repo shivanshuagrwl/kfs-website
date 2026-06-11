@@ -215,6 +215,78 @@
     /* Spinner */
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--faint); border-top-color: var(--text); border-radius: 50%; animation: spin .6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Portal Member Picker ──────────────────────────────────────────────── */
+    .portal-mpick { position: relative; }
+    .portal-mpicker-input {
+      width: 100%; padding: 10px 14px; background: #1a1a1a; border: 1px solid var(--border);
+      color: var(--text); font-family: inherit; font-size: 14px; border-radius: 8px; outline: none; box-sizing: border-box;
+      transition: border-color .15s;
+    }
+    .portal-mpicker-input:focus { border-color: #444; }
+    .portal-mpicker-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #1a1a1a; border: 1px solid #444; border-radius: 10px;
+      z-index: 300; max-height: 200px; overflow-y: auto; scrollbar-width: none;
+    }
+    .portal-mpicker-dropdown::-webkit-scrollbar { display: none; }
+    .portal-mpicker-opt {
+      padding: 9px 14px; cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; gap: 10px; transition: background .12s;
+    }
+    .portal-mpicker-opt:hover { background: #222; }
+    .portal-mpicker-opt img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .portal-mpicker-avatar {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--faint);
+      display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;
+    }
+    .portal-mpicker-opt-name { font-weight: 500; color: #eee; flex: 1; }
+    .portal-mpicker-opt-role { font-size: 11px; color: var(--muted); }
+    .portal-mpicker-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .portal-mpicker-tag {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px;
+      background: #1e1e1e; border: 1px solid #333; border-radius: 20px;
+      font-size: 12px; color: #ddd;
+    }
+    .portal-mpicker-tag img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+    .portal-mpicker-tag-avatar {
+      width: 20px; height: 20px; border-radius: 50%; background: var(--faint);
+      display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
+    }
+    .portal-mpicker-tag-remove { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; padding: 0 2px; }
+    .portal-mpicker-tag-remove:hover { color: var(--text); }
+
+    /* ── Works panel ───────────────────────────────────────────────────────── */
+    .works-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
+    .work-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; transition: border-color .15s;
+    }
+    .work-card:hover { border-color: #444; }
+    .work-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--faint); display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    .work-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .work-info { padding: 10px 12px; }
+    .work-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+    .work-role { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .work-year { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .btn-edit-request {
+      width: 100%; margin-top: 8px; padding: 6px 0; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: transparent; border: 1px solid var(--border); color: var(--muted); transition: all .15s;
+    }
+    .btn-edit-request:hover { border-color: #555; color: var(--text); }
+
+    /* ── Work edit request modal ───────────────────────────────────────────── */
+    #work-edit-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 9999;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    #work-edit-modal-overlay.open { display: flex; }
+    .work-edit-modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      width: 100%; max-width: 480px; padding: 32px;
+    }
+    .work-edit-modal-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: -.02em; }
+    .work-edit-modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
   </style>
 </head>
 <body>
@@ -309,6 +381,7 @@
   <div class="mobile-nav" id="mobile-nav">
     <div class="nav-item active" data-panel="profile"><span class="nav-icon">👤</span> Profile</div>
     <div class="nav-item" data-panel="movies"><span class="nav-icon">🎬</span> My Movies</div>
+    <div class="nav-item" data-panel="works"><span class="nav-icon">🎞️</span> My Works</div>
     <div class="nav-item" data-panel="security"><span class="nav-icon">🔒</span> Security</div>
     <div class="nav-item" data-panel="activity"><span class="nav-icon">📋</span> Activity</div>
   </div>
@@ -320,6 +393,7 @@
       <nav id="sidebar-nav">
         <div class="nav-item active" data-panel="profile"><span class="nav-icon">👤</span> Profile</div>
         <div class="nav-item" data-panel="movies"><span class="nav-icon">🎬</span> My Movies</div>
+        <div class="nav-item" data-panel="works"><span class="nav-icon">🎞️</span> My Works</div>
         <div class="nav-item" data-panel="security"><span class="nav-icon">🔒</span> Security</div>
         <div class="nav-item" data-panel="activity"><span class="nav-icon">📋</span> Activity</div>
       </nav>
@@ -376,12 +450,12 @@
               <input id="pf-batch" type="text" placeholder="e.g. 2022–2026" />
             </div>
             <div class="form-group">
-              <label>Domain / Role</label>
-              <input id="pf-domain" type="text" placeholder="e.g. Cinematography" />
+              <label>Domain / Role <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(set by admin)</span></label>
+              <input id="pf-domain" type="text" readonly style="opacity:.5;cursor:not-allowed" title="Contact an admin to update your domain" />
             </div>
             <div class="form-group">
-              <label>Role Title</label>
-              <input id="pf-role" type="text" placeholder="e.g. Director of Photography" />
+              <label>Role Title <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(set by admin)</span></label>
+              <input id="pf-role" type="text" readonly style="opacity:.5;cursor:not-allowed" title="Contact an admin to update your role title" />
             </div>
             <div class="form-group col-span-2">
               <label>Bio</label>
@@ -468,16 +542,16 @@
             <hr class="divider" />
             <div class="card-title">Credits</div>
             <div class="form-grid">
-              <div class="form-group"><label>Director</label><input id="mf-director" type="text" /></div>
-              <div class="form-group"><label>Producer</label><input id="mf-producer" type="text" /></div>
-              <div class="form-group"><label>Executive Producer</label><input id="mf-exec-producer" type="text" /></div>
-              <div class="form-group"><label>Writer / Screenwriter</label><input id="mf-writer" type="text" /></div>
-              <div class="form-group"><label>Cinematographer / DOP</label><input id="mf-dop" type="text" /></div>
-              <div class="form-group"><label>Editor</label><input id="mf-editor" type="text" /></div>
-              <div class="form-group"><label>Sound Designer</label><input id="mf-sound" type="text" /></div>
-              <div class="form-group"><label>Music Director</label><input id="mf-music" type="text" /></div>
-              <div class="form-group col-span-2"><label>Actors (comma-separated)</label><input id="mf-actors" type="text" /></div>
-              <div class="form-group col-span-2"><label>Support Crew</label><input id="mf-support" type="text" /></div>
+              <div class="form-group"><label>Director</label><div class="portal-mpick" id="mfpick-director"></div></div>
+              <div class="form-group"><label>Producer</label><div class="portal-mpick" id="mfpick-producer"></div></div>
+              <div class="form-group"><label>Executive Producer</label><div class="portal-mpick" id="mfpick-exec-producer"></div></div>
+              <div class="form-group"><label>Writer / Screenwriter</label><div class="portal-mpick" id="mfpick-writer"></div></div>
+              <div class="form-group"><label>Cinematographer / DOP</label><div class="portal-mpick" id="mfpick-dop"></div></div>
+              <div class="form-group"><label>Editor</label><div class="portal-mpick" id="mfpick-editor"></div></div>
+              <div class="form-group"><label>Sound Designer</label><div class="portal-mpick" id="mfpick-sound"></div></div>
+              <div class="form-group"><label>Music Director</label><div class="portal-mpick" id="mfpick-music"></div></div>
+              <div class="form-group col-span-2"><label>Actors</label><div class="portal-mpick" id="mfpick-actors"></div></div>
+              <div class="form-group col-span-2"><label>Support Crew</label><div class="portal-mpick" id="mfpick-support"></div></div>
               <div class="form-group col-span-2"><label>Additional Credits</label><textarea id="mf-additional" rows="2"></textarea></div>
             </div>
             <hr class="divider" />
@@ -540,6 +614,13 @@
         </div>
       </div>
 
+      <!-- ── MY WORKS PANEL ──────────────────────────────────────────────── -->
+      <div class="panel" id="panel-works">
+        <div class="panel-title">My Works</div>
+        <div class="panel-sub">Films from the KFS filmography where you appear — request edits if something's wrong</div>
+        <div id="works-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
+      </div>
+
       <!-- ── ACTIVITY PANEL ────────────────────────────────────────────────── -->
       <div class="panel" id="panel-activity">
         <div class="panel-title">Activity</div>
@@ -553,6 +634,23 @@
   </div>
 </div>
 
+
+<div id="work-edit-modal-overlay">
+  <div class="work-edit-modal">
+    <div class="work-edit-modal-title">Request an Edit</div>
+    <div class="work-edit-modal-sub" id="work-edit-movie-name"></div>
+    <div class="form-group">
+      <label>Describe what needs to be changed</label>
+      <textarea id="work-edit-desc" rows="4" placeholder="e.g. My credit is misspelled — should be 'Rahul Sharma' not 'Rahul Sherma'. Also I was the DOP, not just crew."></textarea>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn-primary" id="work-edit-submit-btn" style="max-width:160px">Submit Request</button>
+      <button class="btn-sm btn-danger" id="work-edit-cancel-btn">Cancel</button>
+    </div>
+    <div id="work-edit-msg" class="ok-msg" style="display:none"></div>
+    <div id="work-edit-err" class="err-msg" style="display:none"></div>
+  </div>
+</div>
 
 <script src="/membersaccess.js" defer></script>
 

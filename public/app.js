@@ -2407,6 +2407,7 @@ async function loadAdminData(name) {
   else if (name==='member-portal') { loadMemberAccounts(); }
   else if (name==='member-profile-changes') { loadMemberProfileChanges('pending'); }
   else if (name==='member-movie-submissions') { loadMemberMovieSubmissions('pending'); }
+  else if (name==='work-edit-requests') { loadWorkEditRequests('pending'); }
 }
 
 function openBlogModal(blog=null) {
@@ -4851,6 +4852,42 @@ async function openMemberProfile(member) {
   document.getElementById('mprofile-role').textContent = [member.role, member.domain].filter(Boolean).join(' · ');
   document.getElementById('mprofile-batch').textContent = member.batch ? 'Batch of '+member.batch : '';
   document.getElementById('mprofile-bio').textContent = member.bio || '';
+
+  // ── Social Links ──────────────────────────────────────────────────────────
+  const socialsEl = document.getElementById('mprofile-socials');
+  if (socialsEl) {
+    const icons = {
+      instagram: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>`,
+      linkedin:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>`,
+      github:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>`,
+      website:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+    };
+    const labels = { instagram: 'Instagram', linkedin: 'LinkedIn', github: 'GitHub', website: 'Website' };
+    const links = [];
+    ['instagram','linkedin','github','website'].forEach(key => {
+      let val = member[key];
+      if (!val) return;
+      // Normalise bare usernames for instagram/github
+      if (key === 'instagram' && !val.startsWith('http')) val = `https://instagram.com/${val.replace('@','')}`;
+      if (key === 'github'    && !val.startsWith('http')) val = `https://github.com/${val.replace('@','')}`;
+      links.push(`<a class="mprofile-social-btn" href="${val}" target="_blank" rel="noopener noreferrer">${icons[key]} ${labels[key]}</a>`);
+    });
+    // Custom links
+    if (member.custom_links) {
+      try {
+        const cl = typeof member.custom_links === 'string' ? JSON.parse(member.custom_links) : member.custom_links;
+        (Array.isArray(cl) ? cl : []).forEach(l => {
+          if (l.url && l.label) links.push(`<a class="mprofile-social-btn" href="${l.url}" target="_blank" rel="noopener noreferrer">${icons.website} ${l.label}</a>`);
+        });
+      } catch {}
+    }
+    if (links.length) {
+      socialsEl.innerHTML = links.join('');
+      socialsEl.style.display = 'flex';
+    } else {
+      socialsEl.style.display = 'none';
+    }
+  }
   const photoWrap = document.getElementById('mprofile-photo-wrap');
   photoWrap.innerHTML = member.photo
     ? `<img class="member-profile-photo" src="${member.photo}" alt="${member.name}">`
@@ -10300,4 +10337,54 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   const action = actionMap[decision] || decision;
   await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
   loadMemberMovieSubmissions('pending');
+}
+
+// ── Work Edit Requests ────────────────────────────────────────────────────────
+
+async function loadWorkEditRequests(status = 'pending') {
+  const tbody = document.getElementById('admin-work-edit-requests-tbody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
+
+  ['pending','approved','rejected'].forEach(s => {
+    const btn = document.getElementById(`wer-filter-${s}`);
+    if (!btn) return;
+    if (s === status) {
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px';
+    } else {
+      btn.className = 'btn';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+    }
+  });
+
+  const data = await apiFetch(`/api/admin/work-edit-requests?status=${status}`);
+  if (!data || !data.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No ${status} work edit requests.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const date = new Date(r.created_at).toLocaleDateString('en-IN');
+    const desc = r.description ? (r.description.length > 80 ? r.description.slice(0,80)+'…' : r.description) : '—';
+    const actions = status === 'pending'
+      ? `<div class="action-btns">
+          <button class="btn-sm" style="background:rgba(74,222,128,.1);color:#4ade80;border-color:#4ade8033" onclick="reviewWorkEditRequest(${r.id},'approve')">Approve</button>
+          <button class="btn-sm danger" onclick="reviewWorkEditRequest(${r.id},'reject')">Reject</button>
+        </div>`
+      : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
+    return `<tr>
+      <td style="font-weight:500">${r.members?.name || r.member_id}</td>
+      <td style="font-size:13px">${r.movie_title || r.movie_id}</td>
+      <td style="font-size:12px;color:var(--grey);max-width:220px">${desc}</td>
+      <td style="color:var(--grey);font-size:12px">${date}</td>
+      <td><span class="tag ${r.status === 'approved' ? 'upcoming' : ''}">${r.status}</span></td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function reviewWorkEditRequest(requestId, action) {
+  let notes = '';
+  if (action === 'reject') notes = prompt('Reason for rejection (optional):') || '';
+  await apiFetch(`/api/admin/work-edit-requests/${requestId}/review`, 'POST', { action, notes });
+  loadWorkEditRequests('pending');
 }

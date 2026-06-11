@@ -68,6 +68,136 @@ function relTime(iso) {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
+// ── Portal Members Cache (for credit pickers) ─────────────────────────────────
+
+let _portalMembers = null;
+
+async function loadPortalMembers() {
+  if (_portalMembers) return _portalMembers;
+  try {
+    const r = await fetch('/api/members');
+    if (r.ok) _portalMembers = await r.json();
+  } catch {}
+  return _portalMembers || [];
+}
+
+function splitCrew(str) {
+  if (!str) return [];
+  // Support both ";;" and "," separators
+  const sep = str.includes(';;') ? ';;' : ',';
+  return str.split(sep).map(s => s.trim()).filter(Boolean);
+}
+
+// ── Member Picker (portal) ────────────────────────────────────────────────────
+
+class MemberPortalPicker {
+  constructor(containerId, multi = false) {
+    this.container = document.getElementById(containerId);
+    if (!this.container) return;
+    this.multi = multi;
+    this.selected = [];
+    this._render();
+  }
+  _render() {
+    this.container.innerHTML = `
+      <div style="position:relative">
+        <input class="portal-mpicker-input" placeholder="Type name or search members…" autocomplete="off" />
+        <div class="portal-mpicker-dropdown" style="display:none"></div>
+      </div>
+      <div class="portal-mpicker-tags"></div>`;
+    this._input    = this.container.querySelector('.portal-mpicker-input');
+    this._dd       = this.container.querySelector('.portal-mpicker-dropdown');
+    this._tagsEl   = this.container.querySelector('.portal-mpicker-tags');
+    this._input.addEventListener('input',   () => this._onInput());
+    this._input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); this._addFreeText(); }
+      if (e.key === 'Escape') this._hideDd();
+    });
+    this._input.addEventListener('blur', () => setTimeout(() => this._hideDd(), 150));
+    this._renderTags();
+  }
+  _onInput() {
+    const q = this._input.value.trim().toLowerCase();
+    if (!q) { this._hideDd(); return; }
+    const members = _portalMembers || [];
+    const matches = members.filter(m => m.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!matches.length) { this._hideDd(); return; }
+    this._dd.innerHTML = matches.map(m => `
+      <div class="portal-mpicker-opt" data-id="${m.id}">
+        ${m.photo
+          ? `<img src="${m.photo}" alt="" />`
+          : `<div class="portal-mpicker-avatar">${(m.name || '?')[0].toUpperCase()}</div>`}
+        <span class="portal-mpicker-opt-name">${m.name}</span>
+        <span class="portal-mpicker-opt-role">${m.role || ''}</span>
+      </div>`).join('');
+    this._dd.querySelectorAll('.portal-mpicker-opt').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const m = members.find(x => String(x.id) === el.dataset.id);
+        if (m) this._select({ id: m.id, name: m.name, photo: m.photo, role: m.role });
+      });
+    });
+    this._dd.style.display = 'block';
+  }
+  _addFreeText() {
+    const v = this._input.value.trim();
+    if (!v) return;
+    this._select({ id: null, name: v, photo: null, role: '' });
+  }
+  _select(item) {
+    if (!this.multi) this.selected = [];
+    if (!this.selected.find(s => s.name === item.name)) this.selected.push(item);
+    this._input.value = '';
+    this._hideDd();
+    this._renderTags();
+  }
+  _remove(name) {
+    this.selected = this.selected.filter(s => s.name !== name);
+    this._renderTags();
+  }
+  _renderTags() {
+    if (!this._tagsEl) return;
+    this._tagsEl.innerHTML = this.selected.map(s => `
+      <span class="portal-mpicker-tag">
+        ${s.photo
+          ? `<img src="${s.photo}" alt="" />`
+          : `<span class="portal-mpicker-tag-avatar">${(s.name || '?')[0].toUpperCase()}</span>`}
+        <span>${s.name}</span>
+        <span class="portal-mpicker-tag-remove" data-name="${s.name}">×</span>
+      </span>`).join('');
+    this._tagsEl.querySelectorAll('.portal-mpicker-tag-remove').forEach(el => {
+      el.addEventListener('click', () => this._remove(el.dataset.name));
+    });
+  }
+  _hideDd() { if (this._dd) this._dd.style.display = 'none'; }
+  getValue() {
+    return this.selected.map(s => s.id ? `${s.name}||${s.id}` : s.name).join(';;');
+  }
+  setValue(str) {
+    this.selected = [];
+    if (!str) { this._renderTags(); return; }
+    splitCrew(str).forEach(part => {
+      const pipes = part.split('||');
+      const name  = pipes[0].trim();
+      const id    = pipes[1] ? pipes[1].trim() : null;
+      const member = id && _portalMembers ? _portalMembers.find(m => String(m.id) === id) : null;
+      this.selected.push(member
+        ? { id: member.id, name: member.name, photo: member.photo, role: member.role }
+        : { id: null, name, photo: null, role: '' });
+    });
+    this._renderTags();
+  }
+}
+
+let _formPickers = {};
+
+function initMovieFormPickers() {
+  const pickerFields = ['director','producer','exec-producer','writer','dop','editor','sound','music','actors','support'];
+  pickerFields.forEach(f => {
+    _formPickers[f] = new MemberPortalPicker(`mfpick-${f}`, true);
+  });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -113,6 +243,12 @@ function wireStaticButtons() {
   on('sec-change-pw-btn',  'click', changePasswordFromSecurity);
   on('revoke-sessions-btn','click', revokeAllSessions);
 
+  // Work edit modal
+  on('work-edit-submit-btn', 'click', submitWorkEditRequest);
+  on('work-edit-cancel-btn', 'click', closeWorkEditModal);
+  const overlay = $id('work-edit-modal-overlay');
+  if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeWorkEditModal(); });
+
   // Enter key support
   document.addEventListener('keydown', handleEnterKey);
 }
@@ -137,10 +273,12 @@ function showLoginScreen() {
 async function loadDashboard() {
   $id('auth-screen').style.display = 'none';
   $id('app-screen').style.display  = 'flex';
+  loadPortalMembers(); // preload for pickers (non-blocking)
   await loadProfile();
   loadMovies();
   loadSecurity();
   loadActivity();
+  loadMyWorks();
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -302,6 +440,7 @@ function switchPanel(el) {
   if (panel === 'security') loadSecurity();
   if (panel === 'activity') loadActivity();
   if (panel === 'movies')   loadMovies();
+  if (panel === 'works')    loadMyWorks();
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -354,13 +493,12 @@ async function saveProfile() {
   hideEl('profile-msg'); hideEl('profile-err');
   try {
     const form = new FormData();
+    // NOTE: domain and role are admin-only — intentionally not sent.
     const fields = {
       name:      $id('pf-name').value,
       roll_no:   $id('pf-roll').value,
       mobile:    $id('pf-mobile').value,
       batch:     $id('pf-batch').value,
-      domain:    $id('pf-domain').value,
-      role:      $id('pf-role').value,
       bio:       $id('pf-bio').value,
       instagram: $id('pf-instagram').value,
       linkedin:  $id('pf-linkedin').value,
@@ -440,9 +578,9 @@ async function showMovieForm(id) {
   $id('movie-form-title').textContent = id ? 'Edit Submission' : 'New Submission';
   $id('movie-submit-btn').textContent = id ? 'Update Submission' : 'Submit for Review';
 
-  const clearFields = ['mf-title','mf-desc','mf-trailer','mf-watch','mf-runtime','mf-language','mf-genre',
-    'mf-director','mf-producer','mf-exec-producer','mf-writer','mf-dop','mf-editor',
-    'mf-sound','mf-music','mf-actors','mf-support','mf-additional'];
+  // Ensure members are loaded before init pickers
+  await loadPortalMembers();
+  initMovieFormPickers();
 
   if (id) {
     try {
@@ -457,21 +595,25 @@ async function showMovieForm(id) {
         $id('mf-runtime').value     = md.runtime || '';
         $id('mf-language').value    = md.language || '';
         $id('mf-genre').value       = Array.isArray(md.genre) ? md.genre.join(', ') : (md.genre || '');
-        $id('mf-director').value    = md.director || '';
-        $id('mf-producer').value    = md.producer || '';
-        $id('mf-exec-producer').value = md.executive_producer || '';
-        $id('mf-writer').value      = md.writer || '';
-        $id('mf-dop').value         = md.dop || '';
-        $id('mf-editor').value      = md.video_editor || '';
-        $id('mf-sound').value       = md.sound_design || '';
-        $id('mf-music').value       = md.music_director || '';
-        $id('mf-actors').value      = md.actors || '';
-        $id('mf-support').value     = md.support_crew || '';
         $id('mf-additional').value  = md.additional_credits || '';
+        // Fill pickers
+        _formPickers['director']?.setValue(md.director || '');
+        _formPickers['producer']?.setValue(md.producer || '');
+        _formPickers['exec-producer']?.setValue(md.executive_producer || '');
+        _formPickers['writer']?.setValue(md.writer || '');
+        _formPickers['dop']?.setValue(md.dop || '');
+        _formPickers['editor']?.setValue(md.video_editor || '');
+        _formPickers['sound']?.setValue(md.sound_design || '');
+        _formPickers['music']?.setValue(md.music_director || '');
+        _formPickers['actors']?.setValue(md.actors || '');
+        _formPickers['support']?.setValue(md.support_crew || '');
       }
     } catch (_) {}
   } else {
-    clearFields.forEach(fid => { const el = $id(fid); if (el) el.value = ''; });
+    ['mf-title','mf-desc','mf-trailer','mf-watch','mf-runtime','mf-language','mf-genre','mf-additional']
+      .forEach(fid => { const el = $id(fid); if (el) el.value = ''; });
+    // Clear all pickers
+    Object.values(_formPickers).forEach(p => { if (p) { p.selected = []; p._renderTags?.(); } });
   }
 
   $id('movie-form').style.display    = 'block';
@@ -499,16 +641,16 @@ async function submitMovie() {
     form.append('runtime',            $id('mf-runtime').value);
     form.append('language',           $id('mf-language').value);
     form.append('genre',              JSON.stringify(genreRaw));
-    form.append('director',           $id('mf-director').value);
-    form.append('producer',           $id('mf-producer').value);
-    form.append('executive_producer', $id('mf-exec-producer').value);
-    form.append('writer',             $id('mf-writer').value);
-    form.append('dop',                $id('mf-dop').value);
-    form.append('video_editor',       $id('mf-editor').value);
-    form.append('sound_design',       $id('mf-sound').value);
-    form.append('music_director',     $id('mf-music').value);
-    form.append('actors',             $id('mf-actors').value);
-    form.append('support_crew',       $id('mf-support').value);
+    form.append('director',           _formPickers['director']?.getValue()      || '');
+    form.append('producer',           _formPickers['producer']?.getValue()      || '');
+    form.append('executive_producer', _formPickers['exec-producer']?.getValue() || '');
+    form.append('writer',             _formPickers['writer']?.getValue()        || '');
+    form.append('dop',                _formPickers['dop']?.getValue()           || '');
+    form.append('video_editor',       _formPickers['editor']?.getValue()        || '');
+    form.append('sound_design',       _formPickers['sound']?.getValue()         || '');
+    form.append('music_director',     _formPickers['music']?.getValue()         || '');
+    form.append('actors',             _formPickers['actors']?.getValue()        || '');
+    form.append('support_crew',       _formPickers['support']?.getValue()       || '');
     form.append('additional_credits', $id('mf-additional').value);
     const posterFile = $id('mf-poster').files[0];
     if (posterFile) form.append('poster', posterFile);
@@ -668,6 +810,83 @@ async function revokeAllSessions() {
   }
 }
 
+// ── My Works ──────────────────────────────────────────────────────────────────
+
+let _pendingEditMovieId = null;
+let _pendingEditMovieTitle = null;
+
+async function loadMyWorks() {
+  const list = $id('works-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try {
+    const works = await api('GET', '/api/member/works');
+    if (!works.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px">No films found in the KFS filmography for your profile yet.</div>';
+      return;
+    }
+    list.innerHTML = `
+      <div class="works-grid">
+        ${works.map(w => `
+          <div class="work-card">
+            <div class="work-poster">
+              ${w.poster_image
+                ? `<img src="${w.poster_image}" alt="${w.title}" />`
+                : '🎬'}
+            </div>
+            <div class="work-info">
+              <div class="work-title" title="${w.title}">${w.title}</div>
+              <div class="work-role">${w.role}</div>
+              ${w.release_year ? `<div class="work-year">${w.release_year}</div>` : ''}
+              <button class="btn-edit-request" data-movie-id="${w.id}" data-movie-title="${w.title.replace(/"/g,'&quot;')}">✏ Request Edit</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    list.querySelectorAll('.btn-edit-request').forEach(btn => {
+      btn.addEventListener('click', () => openWorkEditModal(btn.dataset.movieId, btn.dataset.movieTitle));
+    });
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+  }
+}
+
+function openWorkEditModal(movieId, movieTitle) {
+  _pendingEditMovieId    = movieId;
+  _pendingEditMovieTitle = movieTitle;
+  const overlay = $id('work-edit-modal-overlay');
+  setText('work-edit-movie-name', movieTitle || 'this film');
+  const desc = $id('work-edit-desc'); if (desc) desc.value = '';
+  hideEl('work-edit-msg'); hideEl('work-edit-err');
+  overlay.classList.add('open');
+}
+
+function closeWorkEditModal() {
+  $id('work-edit-modal-overlay')?.classList.remove('open');
+  _pendingEditMovieId = null; _pendingEditMovieTitle = null;
+}
+
+async function submitWorkEditRequest() {
+  const desc = $id('work-edit-desc')?.value?.trim();
+  if (!desc) { showMsg('work-edit-err', 'Please describe what needs to change', false); return; }
+  const btn = $id('work-edit-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  hideEl('work-edit-msg'); hideEl('work-edit-err');
+  try {
+    await api('POST', '/api/member/work-edit-request', {
+      movie_id:    _pendingEditMovieId,
+      movie_title: _pendingEditMovieTitle,
+      description: desc,
+    });
+    showMsg('work-edit-msg', 'Edit request submitted! Admin will review it shortly.');
+    setTimeout(() => closeWorkEditModal(), 2000);
+  } catch (e) {
+    showMsg('work-edit-err', e.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Request';
+  }
+}
+
 // ── Activity ──────────────────────────────────────────────────────────────────
 
 async function loadActivity() {
@@ -689,6 +908,7 @@ async function loadActivity() {
       '2fa_setup':              '🛡️ 2FA enabled',
       '2fa_disable':            '⚠️ 2FA disabled',
       session_revoke_all:       '🚫 All sessions revoked',
+      work_edit_requested:      '✏️ Work edit request submitted',
     };
     list.innerHTML = items.map(a => `
       <div class="activity-item">
