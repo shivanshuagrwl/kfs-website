@@ -585,7 +585,8 @@ async function getCsrf() {
 }
 
 async function api(method, path, body, isForm = false) {
-  const headers = { Authorization: `Bearer ${_token}` };
+  const headers = {};
+  if (_token) headers['Authorization'] = `Bearer ${_token}`;
   if (!isForm) headers['Content-Type'] = 'application/json';
   if (['POST','PUT','DELETE','PATCH'].includes(method.toUpperCase())) {
     headers['x-csrf-token'] = await getCsrf();
@@ -627,6 +628,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 function showLoginScreen() {
   $id('auth-screen').style.display = 'flex';
   $id('app-screen').style.display = 'none';
+  showStep('login');
+  // Clear fields so re-login after logout starts fresh
+  const u = $id('login-username'); if (u) u.value = '';
+  const p = $id('login-password'); if (p) p.value = '';
+  hideEl('login-err');
 }
 
 async function loadDashboard() {
@@ -657,18 +663,26 @@ async function handleLogin() {
       body: JSON.stringify({ username, password }),
       credentials: 'include',
     });
-    const d = await r.json();
+    const d = await r.json().catch(() => null);
+    if (!d) { showMsg('login-err', 'Server error — please try again', false); return; }
     if (!r.ok) { showMsg('login-err', d.error || 'Login failed', false); return; }
     if (d.require_totp) {
       _pendingUsername = username; _pendingPassword = password;
       showStep('totp'); return;
     }
     _token = d.token; _member = d.member;
-    if (d.must_change_password) { showStep('change-pw'); return; }
-    if (!d.totp_enabled) { await initiate2FASetup(); return; }
+    if (d.must_change_password) {
+      showStep('change-pw');
+      return;
+    }
+    if (!d.totp_enabled) {
+      btn.textContent = 'Setting up 2FA…';
+      await initiate2FASetup();
+      return;
+    }
     await loadDashboard();
   } catch (e) {
-    showMsg('login-err', e.message, false);
+    showMsg('login-err', e.message || 'Could not connect to server', false);
   } finally {
     btn.disabled = false; btn.textContent = 'Sign in';
   }
@@ -1148,10 +1162,14 @@ async function loadActivity() {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if ($id('step-login').style.display !== 'none' && !$id('step-login').style.display) handleLogin();
-  else if ($id('step-totp')?.style.display !== 'none') submitTotp();
-  else if ($id('step-change-pw')?.style.display === 'block') handleChangePw();
-  else if ($id('step-2fa-setup')?.style.display === 'block') verify2FASetup();
+  const loginStep   = $id('step-login');
+  const totpStep    = $id('step-totp');
+  const changePwStep = $id('step-change-pw');
+  const setup2FAStep = $id('step-2fa-setup');
+  if (loginStep   && loginStep.style.display   !== 'none') handleLogin();
+  else if (totpStep    && totpStep.style.display    !== 'none') submitTotp();
+  else if (changePwStep && changePwStep.style.display === 'block') handleChangePw();
+  else if (setup2FAStep && setup2FAStep.style.display === 'block') verify2FASetup();
 });
 </script>
 </body>
