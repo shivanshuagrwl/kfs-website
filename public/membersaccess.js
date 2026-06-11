@@ -68,7 +68,49 @@ function relTime(iso) {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-// ── Portal Members Cache (for credit pickers) ─────────────────────────────────
+// ── Social URL helpers ────────────────────────────────────────────────────────
+
+/**
+ * Validate a URL is safe (http/https only, no javascript:, data: etc.)
+ * Returns cleaned URL string or empty string if invalid.
+ */
+function sanitizeSocialUrl(raw) {
+  if (!raw) return '';
+  const val = raw.trim();
+  if (!val) return '';
+  try {
+    const u = new URL(val);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+    return u.href;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Validate a bare username (no spaces, no special chars other than . - _)
+ * Returns sanitized username or empty string.
+ */
+function sanitizeUsername(raw) {
+  if (!raw) return '';
+  // Strip leading @ if present, remove whitespace, allow only safe chars
+  return raw.trim().replace(/^@+/, '').replace(/[^\w.\-]/g, '').slice(0, 100);
+}
+
+/**
+ * Validate all social fields. Returns { valid: bool, errors: string[] }.
+ */
+function validateSocialLinks(fields) {
+  const errors = [];
+  const urlFields = ['linkedin', 'youtube', 'website'];
+  urlFields.forEach(k => {
+    const v = fields[k];
+    if (v && sanitizeSocialUrl(v) === '') {
+      errors.push(`${k.charAt(0).toUpperCase() + k.slice(1)} must be a valid https:// URL.`);
+    }
+  });
+  return { valid: errors.length === 0, errors };
+}
 
 let _portalMembers = null;
 
@@ -466,8 +508,8 @@ async function loadProfile() {
 }
 
 function fillProfile(d) {
-  const fields = ['name','roll_no','mobile','batch','domain','role','bio','instagram','linkedin','github','website'];
-  const ids    = ['pf-name','pf-roll','pf-mobile','pf-batch','pf-domain','pf-role','pf-bio','pf-instagram','pf-linkedin','pf-github','pf-website'];
+  const fields = ['name','roll_no','mobile','batch','domain','role','bio','instagram','linkedin','github','twitter','youtube','website'];
+  const ids    = ['pf-name','pf-roll','pf-mobile','pf-batch','pf-domain','pf-role','pf-bio','pf-instagram','pf-linkedin','pf-github','pf-twitter','pf-youtube','pf-website'];
   fields.forEach((f, i) => {
     const el = $id(ids[i]); if (el) el.value = d[f] || '';
   });
@@ -490,7 +532,20 @@ function previewPhoto(input) {
 async function saveProfile() {
   const btn = $id('profile-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
-  hideEl('profile-msg'); hideEl('profile-err');
+  hideEl('profile-msg'); hideEl('profile-err'); hideEl('social-link-err');
+
+  // Client-side social URL validation
+  const rawLinkedin = $id('pf-linkedin').value.trim();
+  const rawYoutube  = $id('pf-youtube').value.trim();
+  const rawWebsite  = $id('pf-website').value.trim();
+  const socialValidation = validateSocialLinks({ linkedin: rawLinkedin, youtube: rawYoutube, website: rawWebsite });
+  if (!socialValidation.valid) {
+    const errEl = $id('social-link-err');
+    if (errEl) { errEl.textContent = socialValidation.errors.join(' '); errEl.style.display = 'block'; }
+    btn.disabled = false; btn.textContent = 'Save Changes';
+    return;
+  }
+
   try {
     const form = new FormData();
     // NOTE: domain and role are admin-only — intentionally not sent.
@@ -500,10 +555,12 @@ async function saveProfile() {
       mobile:    $id('pf-mobile').value,
       batch:     $id('pf-batch').value,
       bio:       $id('pf-bio').value,
-      instagram: $id('pf-instagram').value,
-      linkedin:  $id('pf-linkedin').value,
-      github:    $id('pf-github').value,
-      website:   $id('pf-website').value,
+      instagram: sanitizeUsername($id('pf-instagram').value),
+      linkedin:  sanitizeSocialUrl(rawLinkedin),
+      github:    sanitizeUsername($id('pf-github').value),
+      twitter:   sanitizeUsername($id('pf-twitter').value),
+      youtube:   sanitizeSocialUrl(rawYoutube),
+      website:   sanitizeSocialUrl(rawWebsite),
     };
     Object.entries(fields).forEach(([k, v]) => form.append(k, v));
     const photoFile = $id('profile-photo-input').files[0];
@@ -547,7 +604,7 @@ async function loadMovies() {
         ? `<button class="btn-sm movie-edit-btn" style="margin-top:10px;background:#1a1a1a;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:12px" data-id="${s.id}">Edit</button>` : '';
       const poster  = md.poster_image
         ? `<img class="movie-poster" src="${md.poster_image}" />`
-        : `<div class="movie-poster" style="display:flex;align-items:center;justify-content:center;font-size:20px">🎬</div>`;
+        : `<div class="movie-poster" style="display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`;
       return `
         <div class="movie-card">
           ${poster}
@@ -898,17 +955,17 @@ async function loadActivity() {
       return;
     }
     const labelMap = {
-      login:                    '🔑 Signed in',
-      logout:                   '👋 Signed out',
-      password_change:          '🔒 Changed password',
-      profile_update_requested: '📝 Profile update submitted',
-      profile_updated:          '✅ Profile updated',
-      movie_submit:             '🎬 Movie submitted',
-      movie_resubmit:           '🔄 Movie resubmitted',
-      '2fa_setup':              '🛡️ 2FA enabled',
-      '2fa_disable':            '⚠️ 2FA disabled',
-      session_revoke_all:       '🚫 All sessions revoked',
-      work_edit_requested:      '✏️ Work edit request submitted',
+      login:                    'Signed in',
+      logout:                   'Signed out',
+      password_change:          'Changed password',
+      profile_update_requested: 'Profile update submitted',
+      profile_updated:          'Profile updated',
+      movie_submit:             'Movie submitted',
+      movie_resubmit:           'Movie resubmitted',
+      '2fa_setup':              '2FA enabled',
+      '2fa_disable':            '2FA disabled',
+      session_revoke_all:       'All sessions revoked',
+      work_edit_requested:      'Work edit request submitted',
     };
     list.innerHTML = items.map(a => `
       <div class="activity-item">

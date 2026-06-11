@@ -2014,7 +2014,7 @@ app.get("/api/members", async (req, res) => {
     const { data } = await supabasePublic
       .from("members")
       .select(
-        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,website,custom_links",
+        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
       )
       .order("sort_order", { ascending: true });
     return data || [];
@@ -8225,7 +8225,7 @@ app.post("/api/member/2fa/disable", memberAuthMiddleware, async (req, res) => {
 app.get("/api/member/profile", memberAuthMiddleware, async (req, res) => {
   const { data, error } = await supabase
     .from("members")
-    .select("id,name,roll_no,mobile,batch,bio,domain,role,photo,special_tag,sort_order,is_past,instagram,linkedin,github,website,custom_links,email,updated_at")
+    .select("id,name,roll_no,mobile,batch,bio,domain,role,photo,special_tag,sort_order,is_past,instagram,linkedin,github,twitter,youtube,website,custom_links,email,updated_at")
     .eq("id", req.member.memberId)
     .maybeSingle();
   if (error || !data) return res.status(404).json({ error: "Member not found" });
@@ -8239,8 +8239,30 @@ app.put(
   upload.single("photo"),
   async (req, res) => {
     const { name, roll_no, mobile, batch, bio,
-            instagram, linkedin, github, website, custom_links } = req.body;
+            instagram, linkedin, github, twitter, youtube, website, custom_links } = req.body;
     // NOTE: 'domain' and 'role' are intentionally excluded — admin-only fields.
+
+    // ── Server-side URL sanitizer: only allow http/https, reject javascript:/data: etc. ──
+    function sanitizeSocialUrl(raw) {
+      if (!raw && raw !== '') return undefined;
+      const v = String(raw).trim();
+      if (!v) return '';
+      try {
+        const u = new URL(v);
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+        // Prevent SSRF to internal/private IPs in URLs
+        const host = u.hostname.toLowerCase();
+        if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(host)) return '';
+        return u.href.slice(0, 500);
+      } catch { return ''; }
+    }
+    // Bare username sanitizer — strips @ prefix, allows only safe chars
+    function sanitizeUsername(raw) {
+      if (!raw && raw !== '') return undefined;
+      const v = String(raw).trim();
+      if (!v) return '';
+      return v.replace(/^@+/, '').replace(/[^\w.\-]/g, '').slice(0, 100);
+    }
 
     const { data: current } = await supabase
       .from("members").select("*").eq("id", req.member.memberId).maybeSingle();
@@ -8252,10 +8274,12 @@ app.put(
     if (mobile    !== undefined) newValues.mobile    = mobile;
     if (batch     !== undefined) newValues.batch     = batch;
     if (bio       !== undefined) newValues.bio       = bio;
-    if (instagram !== undefined) newValues.instagram = instagram;
-    if (linkedin  !== undefined) newValues.linkedin  = linkedin;
-    if (github    !== undefined) newValues.github    = github;
-    if (website   !== undefined) newValues.website   = website;
+    if (instagram !== undefined) newValues.instagram = sanitizeUsername(instagram);
+    if (linkedin  !== undefined) newValues.linkedin  = sanitizeSocialUrl(linkedin);
+    if (github    !== undefined) newValues.github    = sanitizeUsername(github);
+    if (twitter   !== undefined) newValues.twitter   = sanitizeUsername(twitter);
+    if (youtube   !== undefined) newValues.youtube   = sanitizeSocialUrl(youtube);
+    if (website   !== undefined) newValues.website   = sanitizeSocialUrl(website);
     if (custom_links !== undefined) {
       try { newValues.custom_links = JSON.parse(custom_links); } catch { newValues.custom_links = []; }
     }
