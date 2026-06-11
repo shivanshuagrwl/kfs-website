@@ -3490,16 +3490,88 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
       // Fetch event details for the email
       const { data: ev } = await supabasePublic
         .from("events")
-        .select("title,event_date,location")
+        .select("id,title,event_date,location,is_upcoming")
         .eq("id", req.params.id)
         .maybeSingle();
-      sendConfirmationEmail({
-        toEmail,
-        toName,
-        eventTitle: ev?.title || "",
-        eventDate: ev?.event_date || null,
-        eventVenue: ev?.location || null,
-      }).catch((e) => console.error("[email] send failed:", e.message));
+
+      // ── Create event_registrations row + send QR ticket ──────────────────
+      // This ensures form-based registrants appear in the scanner and receive
+      // a QR ticket email — not just a plain confirmation.
+      if (ev && toEmail) {
+        (async () => {
+          try {
+            const EMAIL_NORM = toEmail.toLowerCase().trim();
+            // Check if already in event_registrations (avoid duplicate on re-submit)
+            const { data: existing } = await supabase
+              .from("event_registrations")
+              .select("id, qr_token")
+              .eq("event_id", ev.id)
+              .eq("email", EMAIL_NORM)
+              .maybeSingle();
+
+            let reg = existing;
+            let qrDataUrl;
+
+            if (!reg) {
+              // Generate QR token
+              const qrToken = crypto.randomUUID();
+              const QRCode = require("qrcode");
+              qrDataUrl = await QRCode.toDataURL(qrToken, {
+                width: 400, margin: 3,
+                color: { dark: "#000000", light: "#ffffff" },
+                errorCorrectionLevel: "M",
+              });
+              const { data: inserted, error: insErr } = await supabase
+                .from("event_registrations")
+                .insert([{
+                  event_id: ev.id,
+                  name:     (toName || toEmail).trim(),
+                  email:    EMAIL_NORM,
+                  qr_token: qrToken,
+                  created_at: new Date().toISOString(),
+                }])
+                .select()
+                .single();
+              if (insErr) {
+                console.error("[form-submit] event_registrations insert failed:", insErr.message);
+                // Fall back to plain confirmation email
+                sendConfirmationEmail({ toEmail, toName, eventTitle: ev.title || "", eventDate: ev.event_date || null, eventVenue: ev.location || null })
+                  .catch(e => console.error("[email] confirmation fallback failed:", e.message));
+                return;
+              }
+              reg = inserted;
+              console.log(`[form-submit] Created event_registrations row reg_id=${reg.id} for form response`);
+            } else {
+              // Already registered — regenerate QR from existing token
+              const QRCode = require("qrcode");
+              qrDataUrl = await QRCode.toDataURL(reg.qr_token, {
+                width: 400, margin: 3,
+                color: { dark: "#000000", light: "#ffffff" },
+                errorCorrectionLevel: "M",
+              });
+              console.log(`[form-submit] event_registrations row already exists reg_id=${reg.id} — resending ticket`);
+            }
+
+            // Send QR ticket email
+            sendTicketEmail({ event: ev, reg, qrDataUrl })
+              .catch(e => console.error("[form-submit] ticket email failed:", e.message));
+          } catch (e) {
+            console.error("[form-submit] registration+ticket flow error:", e.message);
+            // Fallback: send plain confirmation
+            sendConfirmationEmail({ toEmail, toName, eventTitle: ev?.title || "", eventDate: ev?.event_date || null, eventVenue: ev?.location || null })
+              .catch(err => console.error("[email] send failed:", err.message));
+          }
+        })();
+      } else {
+        // No event details or no email — send plain confirmation at minimum
+        sendConfirmationEmail({
+          toEmail,
+          toName,
+          eventTitle: ev?.title || "",
+          eventDate: ev?.event_date || null,
+          eventVenue: ev?.location || null,
+        }).catch((e) => console.error("[email] send failed:", e.message));
+      }
     }
   } catch (e) {
     console.error("[email] pre-send error:", e.message);
@@ -6570,6 +6642,38 @@ app.get("/api/admin/lockout-status", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── QR Ticket PDF generator ────────────────────────────────────────────────────
+// ── Helper: upload QR code buffer to Cloudinary and return a hosted URL ──────
+// Gmail, Outlook, Apple Mail, Yahoo ALL block data: URIs in <img src>.
+// We must host the QR at a real URL for it to render in email HTML.
+// The PDF attachment still uses the raw buffer (fine — it's a file, not email HTML).
+async function uploadQrToCloudinary(qrDataUrl) {
+  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+  const qrBuffer = Buffer.from(qrBase64, "base64");
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "kfs-media/qr-codes",
+          resource_type: "image",
+          format: "png",
+          // No transformation — QR must stay pixel-perfect
+          quality: 100,
+        },
+        (error, result) => {
+          if (error) reject(new Error("Cloudinary QR upload: " + error.message));
+          else resolve(result);
+        }
+      );
+      uploadStream.end(qrBuffer);
+    });
+    console.log(`[qr-upload] ✓ QR hosted at ${result.secure_url}`);
+    return result.secure_url;
+  } catch (e) {
+    console.error("[qr-upload] Cloudinary QR upload failed:", e.message);
+    return null; // caller falls back to hiding the inline QR
+  }
+}
+
 // Layout mirrors the KFS reference ticket:
 //   • Full black bg
 //   • Top: logo (circle-clipped) + "KIIT FILM SOCIETY" bold header
@@ -6752,11 +6856,21 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       })
     : null;
 
+  // ── Upload QR to Cloudinary so email clients can display it ───────────────
+  // CRITICAL: Gmail, Outlook, Apple Mail, Yahoo all BLOCK data: URIs in <img src>.
+  // We upload the QR to Cloudinary and use the hosted URL in the email HTML.
+  // The PDF attachment uses the raw buffer (separate path, works fine).
+  console.log(`[ticket-email] Uploading QR to Cloudinary for ${reg.email}...`);
+  const qrHostedUrl = await uploadQrToCloudinary(qrDataUrl);
+  if (!qrHostedUrl) {
+    console.warn(`[ticket-email] QR upload failed — email will show fallback message instead of QR image`);
+  } else {
+    console.log(`[ticket-email] QR hosted at: ${qrHostedUrl}`);
+  }
+
   // ── Apple-style HTML ticket email ─────────────────────────────────────────
-  // Brevo does NOT support contentId/disposition for CID inline images.
-  // The QR must be embedded directly as a data: URI in the <img src> attribute.
-  // No PDF attachments — ticket is email-only.
-  // qrDataUrl is already a data:image/png;base64,... string from QRCode.toDataURL().
+  // QR image uses Cloudinary-hosted URL (not a data: URI — blocked by all major email clients).
+  // PDF ticket is attached as a file — attendees can save/screenshot it.
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
@@ -6822,11 +6936,14 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
 
-              <!-- QR code — embedded inline as base64 PNG, no attachment needed -->
+              <!-- QR code — Cloudinary-hosted URL (data: URIs are blocked by Gmail/Outlook/Apple Mail) -->
               <td align="center" style="width:148px;vertical-align:top">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr><td style="background:#fff;border-radius:14px;padding:10px;display:inline-block">
-                    <img src="${qrDataUrl}" width="128" height="128" alt="Entry QR Code" style="display:block;width:128px;height:128px;border:none;outline:none" />
+                    ${qrHostedUrl
+                      ? `<img src="${qrHostedUrl}" width="128" height="128" alt="Entry QR Code" style="display:block;width:128px;height:128px;border:none;outline:none" />`
+                      : `<div style="width:128px;height:128px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:#636366;font-family:Helvetica,Arial,sans-serif;line-height:1.4">QR code in<br>PDF attachment</div>`
+                    }
                   </td></tr>
                 </table>
                 <div style="margin-top:10px;font-size:10px;font-weight:600;color:#636366;letter-spacing:.08em;text-transform:uppercase;text-align:center">Scan at entry</div>
@@ -6898,7 +7015,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR code is embedded in this email AND attached as a PDF ticket.\nShow either at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR ticket is attached to this email as a PDF.\nOpen the PDF attachment and show the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
   // ── Generate PDF ticket attachment ─────────────────────────────────────────
   let pdfAttachment = null;
@@ -6908,6 +7025,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
     pdfAttachment = {
       name: `KFS-Ticket-${(event.title || "event").replace(/[^a-zA-Z0-9]/g, "-").slice(0, 40)}.pdf`,
       content: pdfBuffer.toString("base64"),
+      type: "application/pdf",   // Required: Brevo needs explicit MIME type for non-image attachments
     };
     console.log(`[ticket-email] PDF generated (${pdfBuffer.length} bytes) for ${reg.email}`);
   } catch (pdfErr) {
@@ -6957,8 +7075,14 @@ const registrationRateLimit = rateLimit({
 
 app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
   const { name, email, phone, roll_no } = req.body;
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const rawId = req.params.id;
+  // Support both integer IDs (bigint/serial) and UUID IDs
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isUuid = UUID_PATTERN.test(rawId);
+  const parsedInt = parseInt(rawId, 10);
+  const eventId = isUuid ? rawId : (!isNaN(parsedInt) ? parsedInt : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
+  console.log(`[register] event_id="${rawId}" parsed="${eventId}" (${isUuid ? "uuid" : "integer"})`);
 
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
@@ -7158,8 +7282,12 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
 
 // ── ADMIN: Get all registrations for an event ─────────────────────────────────
 app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const _rawId = req.params.id || req.params.eventId;
+  const _UUID_P = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const _isUuid = _UUID_P.test(_rawId);
+  const _pi = parseInt(_rawId, 10);
+  const eventId = _isUuid ? _rawId : (!isNaN(_pi) ? _pi : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
 
   console.log(`[registrations-api] Fetching registrations for event_id=${eventId} (admin=${req.admin?.username})`);
 
@@ -7251,8 +7379,12 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
 
 // ── ADMIN: Export registrations as XLSX ───────────────────────────────────────
 app.get("/api/admin/events/:id/registrations/export", authMiddleware, async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const _rawId = req.params.id || req.params.eventId;
+  const _UUID_P = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const _isUuid = _UUID_P.test(_rawId);
+  const _pi = parseInt(_rawId, 10);
+  const eventId = _isUuid ? _rawId : (!isNaN(_pi) ? _pi : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
 
   const { data: ev } = await supabase
     .from("events")
@@ -7301,9 +7433,12 @@ app.get("/api/admin/events/:id/registrations/export", authMiddleware, async (req
 
 // ── ADMIN: Delete a single registration ───────────────────────────────────────
 app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, async (req, res) => {
-  const eventId = parseInt(req.params.eventId, 10);
-  const regId   = parseInt(req.params.regId, 10);
-  if (isNaN(eventId) || isNaN(regId)) return res.status(400).json({ error: "Invalid ID" });
+  const _rawEId = req.params.eventId;
+  const _rawRId = req.params.regId;
+  const _UUID_P2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const eventId = _UUID_P2.test(_rawEId) ? _rawEId : (!isNaN(parseInt(_rawEId,10)) ? parseInt(_rawEId,10) : null);
+  const regId   = _UUID_P2.test(_rawRId) ? _rawRId : (!isNaN(parseInt(_rawRId,10)) ? parseInt(_rawRId,10) : null);
+  if (!eventId || !regId) return res.status(400).json({ error: "Invalid ID" });
 
   const { data: reg } = await supabase
     .from("event_registrations")
@@ -7323,8 +7458,12 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, as
 // Counts event_registrations first; if 0, falls back to form_responses count
 // (form_responses stores submitted answers in the `answers` column as JSON string).
 app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const _rawId = req.params.id || req.params.eventId;
+  const _UUID_P = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const _isUuid = _UUID_P.test(_rawId);
+  const _pi = parseInt(_rawId, 10);
+  const eventId = _isUuid ? _rawId : (!isNaN(_pi) ? _pi : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
 
   const { data, error } = await supabase
     .from("event_registrations")
@@ -7371,8 +7510,12 @@ app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
 // One-time utility: copies form submitters into event_registrations so they
 // appear in the scanner and can be checked in via QR.
 app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"), async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const _rawId = req.params.id || req.params.eventId;
+  const _UUID_P = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const _isUuid = _UUID_P.test(_rawId);
+  const _pi = parseInt(_rawId, 10);
+  const eventId = _isUuid ? _rawId : (!isNaN(_pi) ? _pi : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
 
   // 1. Fetch the event's form
   const { data: form } = await supabase
@@ -7447,8 +7590,12 @@ app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"
 // Use this to diagnose why registrations aren't showing. Returns counts from
 // both event_registrations and form_responses tables.
 app.get("/api/admin/events/:id/registrations/debug", authMiddleware, async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+  const _rawId = req.params.id || req.params.eventId;
+  const _UUID_P = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const _isUuid = _UUID_P.test(_rawId);
+  const _pi = parseInt(_rawId, 10);
+  const eventId = _isUuid ? _rawId : (!isNaN(_pi) ? _pi : null);
+  if (!eventId) return res.status(400).json({ error: "Invalid event ID" });
 
   const [erResult, frResult, evResult] = await Promise.all([
     supabase.from("event_registrations")

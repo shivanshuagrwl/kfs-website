@@ -678,7 +678,7 @@ function renderRegsList(regs) {
         <div class="reg-name">${esc(r.name)}</div>
         <div class="reg-email">${esc(r.email)}${r.roll_no ? ' · ' + esc(r.roll_no) : ''}</div>
       </div>
-      <div class="reg-meta ${r.checked_in ? 'present' : ''}">
+      <div class="reg-time ${r.checked_in ? 'present' : ''}">
         ${r.checked_in
           ? (r.checked_in_at ? new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : '✓')
           : (r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : '')
