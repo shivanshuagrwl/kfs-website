@@ -7995,7 +7995,7 @@ app.use("/api/member", csrfProtectMember);
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.get("/membersaccess", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html")); // SPA catch-all handles it
+  res.sendFile(path.join(__dirname, "public", "membersaccess.html"));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
