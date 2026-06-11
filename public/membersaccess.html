@@ -235,7 +235,7 @@
         <label>Password</label>
         <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" />
       </div>
-      <button class="btn-primary" id="login-btn" onclick="handleLogin()">Sign in</button>
+      <button class="btn-primary" id="login-btn">Sign in</button>
       <div id="login-err" class="err-msg" style="display:none"></div>
     </div>
 
@@ -248,9 +248,9 @@
         <label>TOTP Code</label>
         <input id="totp-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
       </div>
-      <button class="btn-primary" id="totp-btn" onclick="submitTotp()">Verify</button>
+      <button class="btn-primary" id="totp-btn">Verify</button>
       <div id="totp-err" class="err-msg" style="display:none"></div>
-      <button class="btn-ghost" onclick="backToLogin()">← Back</button>
+      <button class="btn-ghost" id="back-to-login-btn">← Back</button>
     </div>
 
     <!-- Step: Change Password (forced on first login) -->
@@ -274,7 +274,7 @@
         <label>Confirm New Password</label>
         <input id="cp-confirm" type="password" placeholder="••••••••" />
       </div>
-      <button class="btn-primary" id="cp-btn" onclick="handleChangePw()">Set Password</button>
+      <button class="btn-primary" id="cp-btn">Set Password</button>
       <div id="cp-err" class="err-msg" style="display:none"></div>
     </div>
 
@@ -292,7 +292,7 @@
         <label>Enter the 6-digit code to confirm</label>
         <input id="setup-totp-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" />
       </div>
-      <button class="btn-primary" id="setup-totp-btn" onclick="verify2FASetup()">Enable 2FA & Continue</button>
+      <button class="btn-primary" id="setup-totp-btn">Enable 2FA & Continue</button>
       <div id="setup-totp-err" class="err-msg" style="display:none"></div>
     </div>
   </div>
@@ -303,14 +303,14 @@
   <!-- Mobile topbar -->
   <div class="mobile-topbar">
     <span style="font-size:15px;font-weight:700">KFS <span style="color:var(--muted);font-weight:400">Portal</span></span>
-    <button class="btn-ghost" onclick="logoutMember()" style="margin:0">Sign out</button>
+    <button class="btn-ghost" id="mobile-logout-btn" style="margin:0">Sign out</button>
   </div>
   <!-- Mobile nav -->
   <div class="mobile-nav" id="mobile-nav">
-    <div class="nav-item active" data-panel="profile"   onclick="switchPanel(this)"><span class="nav-icon">👤</span> Profile</div>
-    <div class="nav-item"       data-panel="movies"     onclick="switchPanel(this)"><span class="nav-icon">🎬</span> My Movies</div>
-    <div class="nav-item"       data-panel="security"   onclick="switchPanel(this)"><span class="nav-icon">🔒</span> Security</div>
-    <div class="nav-item"       data-panel="activity"   onclick="switchPanel(this)"><span class="nav-icon">📋</span> Activity</div>
+    <div class="nav-item active" data-panel="profile"><span class="nav-icon">👤</span> Profile</div>
+    <div class="nav-item" data-panel="movies"><span class="nav-icon">🎬</span> My Movies</div>
+    <div class="nav-item" data-panel="security"><span class="nav-icon">🔒</span> Security</div>
+    <div class="nav-item" data-panel="activity"><span class="nav-icon">📋</span> Activity</div>
   </div>
 
   <div class="layout">
@@ -318,10 +318,10 @@
     <aside class="sidebar">
       <div class="sidebar-logo">KFS <span>Portal</span></div>
       <nav id="sidebar-nav">
-        <div class="nav-item active" data-panel="profile"   onclick="switchPanel(this)"><span class="nav-icon">👤</span> Profile</div>
-        <div class="nav-item"       data-panel="movies"     onclick="switchPanel(this)"><span class="nav-icon">🎬</span> My Movies</div>
-        <div class="nav-item"       data-panel="security"   onclick="switchPanel(this)"><span class="nav-icon">🔒</span> Security</div>
-        <div class="nav-item"       data-panel="activity"   onclick="switchPanel(this)"><span class="nav-icon">📋</span> Activity</div>
+        <div class="nav-item active" data-panel="profile"><span class="nav-icon">👤</span> Profile</div>
+        <div class="nav-item" data-panel="movies"><span class="nav-icon">🎬</span> My Movies</div>
+        <div class="nav-item" data-panel="security"><span class="nav-icon">🔒</span> Security</div>
+        <div class="nav-item" data-panel="activity"><span class="nav-icon">📋</span> Activity</div>
       </nav>
       <div class="sidebar-footer">
         <div class="member-chip" id="member-chip">
@@ -331,7 +331,7 @@
             <div class="member-chip-role" id="sidebar-role">—</div>
           </div>
         </div>
-        <button class="btn-ghost" style="width:100%;text-align:left;padding:8px 12px" onclick="logoutMember()">Sign out</button>
+        <button class="btn-ghost" style="width:100%;text-align:left;padding:8px 12px" id="sidebar-logout-btn">Sign out</button>
       </div>
     </aside>
 
@@ -352,7 +352,7 @@
           <div class="avatar-wrap">
             <div class="avatar-lg" id="profile-photo-preview">👤</div>
             <label class="avatar-edit-btn" for="profile-photo-input" title="Change photo">✎</label>
-            <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewPhoto(this)" />
+            <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
           </div>
         </div>
 
@@ -418,7 +418,7 @@
           </div>
         </div>
 
-        <button class="btn-primary" id="profile-save-btn" onclick="saveProfile()" style="max-width:200px">Save Changes</button>
+        <button class="btn-primary" id="profile-save-btn" style="max-width:200px">Save Changes</button>
         <div id="profile-msg" class="ok-msg" style="display:none"></div>
         <div id="profile-err" class="err-msg" style="display:none"></div>
       </div>
@@ -428,7 +428,7 @@
         <div class="panel-title">My Movies</div>
         <div class="panel-sub">Submit film projects for admin review and publication on /films</div>
 
-        <button class="btn-primary" id="new-movie-btn" onclick="showMovieForm(null)" style="max-width:200px;margin-bottom:24px">+ Submit Movie</button>
+        <button class="btn-primary" id="new-movie-btn" style="max-width:200px;margin-bottom:24px">+ Submit Movie</button>
 
         <div id="movie-form" style="display:none">
           <div class="card">
@@ -487,8 +487,8 @@
               <input type="file" id="mf-poster" accept="image/jpeg,image/png,image/webp" />
             </div>
             <div style="display:flex;gap:12px;margin-top:8px">
-              <button class="btn-primary" id="movie-submit-btn" onclick="submitMovie()" style="max-width:180px">Submit for Review</button>
-              <button class="btn-sm btn-danger" onclick="hideMovieForm()">Cancel</button>
+              <button class="btn-primary" id="movie-submit-btn" style="max-width:180px">Submit for Review</button>
+              <button class="btn-sm btn-danger" id="cancel-movie-btn">Cancel</button>
             </div>
             <div id="movie-form-err" class="err-msg" style="display:none"></div>
             <div id="movie-form-ok"  class="ok-msg"  style="display:none"></div>
@@ -520,7 +520,7 @@
               <input id="sec-confirm-pw" type="password" placeholder="••••••••" />
             </div>
           </div>
-          <button class="btn-primary" onclick="changePasswordFromSecurity()" style="max-width:200px">Update Password</button>
+          <button class="btn-primary" id="sec-change-pw-btn" style="max-width:200px">Update Password</button>
           <div id="sec-pw-msg" class="ok-msg" style="display:none"></div>
           <div id="sec-pw-err" class="err-msg" style="display:none"></div>
         </div>
@@ -535,7 +535,7 @@
         <div class="card">
           <div class="card-title">Active Sessions</div>
           <div id="sessions-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
-          <button class="btn-sm btn-danger" style="margin-top:16px" onclick="revokeAllSessions()">Revoke All Sessions</button>
+          <button class="btn-sm btn-danger" style="margin-top:16px" id="revoke-sessions-btn">Revoke All Sessions</button>
           <div id="sessions-msg" class="ok-msg" style="display:none"></div>
         </div>
       </div>
@@ -553,624 +553,8 @@
   </div>
 </div>
 
-<script>
-// ═══════════════════════════════════════════════════════════════════════════════
-// KFS Member Portal — JavaScript
-// ═══════════════════════════════════════════════════════════════════════════════
 
-const API = '';  // same-origin
-let _token      = null;
-let _member     = null;
-let _csrfToken  = null;
+<script src="/membersaccess.js" defer></script>
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function $id(id) { return document.getElementById(id); }
-
-function showEl(id) { const el = $id(id); if (el) el.style.display = ''; }
-function hideEl(id) { const el = $id(id); if (el) el.style.display = 'none'; }
-function setText(id, txt) { const el = $id(id); if (el) el.textContent = txt; }
-function showMsg(id, msg, ok = true) {
-  const el = $id(id); if (!el) return;
-  el.textContent = msg;
-  el.className = ok ? 'ok-msg' : 'err-msg';
-  el.style.display = 'block';
-  if (ok) setTimeout(() => { el.style.display = 'none'; }, 4000);
-}
-
-async function getCsrf() {
-  if (_csrfToken) return _csrfToken;
-  const r = await fetch('/api/csrf-token'); const d = await r.json();
-  _csrfToken = d.csrf_token; return _csrfToken;
-}
-
-async function api(method, path, body, isForm = false) {
-  const headers = {};
-  if (_token) headers['Authorization'] = `Bearer ${_token}`;
-  if (!isForm) headers['Content-Type'] = 'application/json';
-  if (['POST','PUT','DELETE','PATCH'].includes(method.toUpperCase())) {
-    headers['x-csrf-token'] = await getCsrf();
-  }
-  const opts = { method, headers };
-  if (body) opts.body = isForm ? body : JSON.stringify(body);
-  const r = await fetch(API + path, opts);
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'Request failed');
-  return d;
-}
-
-async function refreshToken() {
-  const r = await fetch('/api/member/refresh', { method: 'POST', credentials: 'include' });
-  const d = await r.json().catch(() => ({}));
-  if (r.ok && d.token) { _token = d.token; return true; }
-  return false;
-}
-
-function relTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-  return `${Math.floor(diff/86400000)}d ago`;
-}
-
-// ── Boot ──────────────────────────────────────────────────────────────────────
-
-window.addEventListener('DOMContentLoaded', async () => {
-  // Try to restore session
-  if (document.cookie.includes('kfs_member_session=1')) {
-    const ok = await refreshToken();
-    if (ok) { await loadDashboard(); return; }
-  }
-  showLoginScreen();
-});
-
-function showLoginScreen() {
-  $id('auth-screen').style.display = 'flex';
-  $id('app-screen').style.display = 'none';
-  showStep('login');
-  // Clear fields so re-login after logout starts fresh
-  const u = $id('login-username'); if (u) u.value = '';
-  const p = $id('login-password'); if (p) p.value = '';
-  hideEl('login-err');
-}
-
-async function loadDashboard() {
-  $id('auth-screen').style.display = 'none';
-  $id('app-screen').style.display = 'flex';
-  await loadProfile();
-  loadMovies();
-  loadSecurity();
-  loadActivity();
-}
-
-// ── Login ─────────────────────────────────────────────────────────────────────
-
-let _pendingUsername = null, _pendingPassword = null;
-
-async function handleLogin() {
-  const username = $id('login-username').value.trim();
-  const password = $id('login-password').value;
-  if (!username || !password) { showMsg('login-err', 'Username and password required', false); return; }
-  const btn = $id('login-btn');
-  btn.disabled = true; btn.textContent = 'Signing in…';
-  hideEl('login-err');
-  try {
-    const csrfH = await getCsrf();
-    const r = await fetch('/api/member/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
-      body: JSON.stringify({ username, password }),
-      credentials: 'include',
-    });
-    const d = await r.json().catch(() => null);
-    if (!d) { showMsg('login-err', 'Server error — please try again', false); return; }
-    if (!r.ok) { showMsg('login-err', d.error || 'Login failed', false); return; }
-    if (d.require_totp) {
-      _pendingUsername = username; _pendingPassword = password;
-      showStep('totp'); return;
-    }
-    _token = d.token; _member = d.member;
-    if (d.must_change_password) {
-      showStep('change-pw');
-      return;
-    }
-    if (!d.totp_enabled) {
-      btn.textContent = 'Setting up 2FA…';
-      await initiate2FASetup();
-      return;
-    }
-    await loadDashboard();
-  } catch (e) {
-    showMsg('login-err', e.message || 'Could not connect to server', false);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Sign in';
-  }
-}
-
-async function submitTotp() {
-  const code = $id('totp-input').value.trim();
-  if (!code) return;
-  const btn = $id('totp-btn'); btn.disabled = true; btn.textContent = 'Verifying…';
-  try {
-    const csrfH = await getCsrf();
-    const r = await fetch('/api/member/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
-      body: JSON.stringify({ username: _pendingUsername, password: _pendingPassword, totp_code: code }),
-      credentials: 'include',
-    });
-    const d = await r.json();
-    if (!r.ok) { showMsg('totp-err', d.error || 'Invalid code', false); return; }
-    _token = d.token; _member = d.member;
-    if (d.must_change_password) { showStep('change-pw'); return; }
-    await loadDashboard();
-  } catch (e) {
-    showMsg('totp-err', e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Verify';
-  }
-}
-
-function backToLogin() { showStep('login'); }
-
-function showStep(step) {
-  ['login','totp','change-pw','2fa-setup'].forEach(s => {
-    const el = $id(`step-${s}`);
-    if (el) el.style.display = s === step ? 'block' : 'none';
-  });
-}
-
-// ── Change Password (forced) ──────────────────────────────────────────────────
-
-async function handleChangePw() {
-  const cur = $id('cp-current').value;
-  const nw  = $id('cp-new').value;
-  const cf  = $id('cp-confirm').value;
-  if (nw !== cf) { showMsg('cp-err', 'Passwords do not match', false); return; }
-  const btn = $id('cp-btn'); btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    await api('POST', '/api/member/change-password', { currentPassword: cur, newPassword: nw });
-    // Re-fetch token with updated flags
-    await refreshToken();
-    // Proceed to 2FA setup
-    await initiate2FASetup();
-  } catch (e) {
-    showMsg('cp-err', e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Set Password';
-  }
-}
-
-// ── 2FA Setup (forced) ───────────────────────────────────────────────────────
-
-async function initiate2FASetup() {
-  showStep('2fa-setup');
-  $id('qr-box').innerHTML = '<div class="spinner"></div>';
-  try {
-    const d = await api('GET', '/api/member/2fa/setup');
-    $id('qr-box').innerHTML = `
-      <img src="${d.qr}" width="180" height="180" alt="QR Code" />
-      <div class="qr-secret">Manual entry: <strong>${d.secret}</strong></div>
-    `;
-  } catch (e) {
-    $id('qr-box').innerHTML = `<span style="color:var(--danger)">Failed to load QR: ${e.message}</span>`;
-  }
-}
-
-async function verify2FASetup() {
-  const code = $id('setup-totp-input').value.trim();
-  if (!code) return;
-  const btn = $id('setup-totp-btn'); btn.disabled = true; btn.textContent = 'Verifying…';
-  try {
-    await api('POST', '/api/member/2fa/verify', { totp_code: code });
-    await refreshToken();
-    await loadDashboard();
-  } catch (e) {
-    showMsg('setup-totp-err', e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Enable 2FA & Continue';
-  }
-}
-
-// ── Logout ────────────────────────────────────────────────────────────────────
-
-async function logoutMember() {
-  try { await api('POST', '/api/member/logout'); } catch {}
-  _token = null; _member = null; _csrfToken = null;
-  showLoginScreen();
-  showStep('login');
-}
-
-// ── Panel switching ───────────────────────────────────────────────────────────
-
-function switchPanel(el) {
-  const panel = el.dataset.panel;
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.nav-item[data-panel="' + panel + '"]').forEach(n => n.classList.add('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  $id('panel-' + panel)?.classList.add('active');
-  if (panel === 'security') loadSecurity();
-  if (panel === 'activity') loadActivity();
-  if (panel === 'movies')   loadMovies();
-}
-
-// ── Profile ───────────────────────────────────────────────────────────────────
-
-let _profileData = null;
-
-async function loadProfile() {
-  try {
-    const d = await api('GET', '/api/member/profile');
-    _profileData = d;
-    fillProfile(d);
-    // Sidebar
-    setText('sidebar-name', d.name || '—');
-    setText('sidebar-role', d.role || d.domain || '—');
-    const av = $id('sidebar-avatar');
-    if (d.photo) {
-      av.innerHTML = `<img src="${d.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />`;
-    } else {
-      av.textContent = (d.name || '?')[0].toUpperCase();
-    }
-    // Check pending
-    const changes = await api('GET', '/api/member/profile/pending-changes');
-    const hasPending = changes.some(c => c.status === 'pending');
-    $id('profile-pending-banner').style.display = hasPending ? 'block' : 'none';
-  } catch (e) {
-    console.error('loadProfile:', e);
-  }
-}
-
-function fillProfile(d) {
-  const fields = ['name','roll_no','mobile','batch','domain','role','bio','instagram','linkedin','github','website'];
-  const ids    = ['pf-name','pf-roll','pf-mobile','pf-batch','pf-domain','pf-role','pf-bio','pf-instagram','pf-linkedin','pf-github','pf-website'];
-  fields.forEach((f, i) => {
-    const el = $id(ids[i]); if (el) el.value = d[f] || '';
-  });
-  const ph = $id('profile-photo-preview');
-  if (d.photo) {
-    ph.innerHTML = `<img src="${d.photo}" style="width:80px;height:80px;border-radius:50%;object-fit:cover" />`;
-  } else {
-    ph.textContent = (d.name || '?')[0].toUpperCase();
-    ph.style.fontSize = '28px'; ph.style.display = 'flex'; ph.style.alignItems = 'center'; ph.style.justifyContent = 'center';
-    ph.style.width = '80px'; ph.style.height = '80px'; ph.style.borderRadius = '50%'; ph.style.background = 'var(--faint)';
-  }
-}
-
-function previewPhoto(input) {
-  if (!input.files[0]) return;
-  const url = URL.createObjectURL(input.files[0]);
-  $id('profile-photo-preview').innerHTML = `<img src="${url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover" />`;
-}
-
-async function saveProfile() {
-  const btn = $id('profile-save-btn'); btn.disabled = true; btn.textContent = 'Saving…';
-  hideEl('profile-msg'); hideEl('profile-err');
-  try {
-    const form = new FormData();
-    const fields = {
-      name: $id('pf-name').value, roll_no: $id('pf-roll').value,
-      mobile: $id('pf-mobile').value, batch: $id('pf-batch').value,
-      domain: $id('pf-domain').value, role: $id('pf-role').value,
-      bio: $id('pf-bio').value, instagram: $id('pf-instagram').value,
-      linkedin: $id('pf-linkedin').value, github: $id('pf-github').value,
-      website: $id('pf-website').value,
-    };
-    Object.entries(fields).forEach(([k,v]) => form.append(k, v));
-    const photoFile = $id('profile-photo-input').files[0];
-    if (photoFile) form.append('photo', photoFile);
-
-    const csrf = await getCsrf();
-    const r = await fetch('/api/member/profile', {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${_token}`, 'x-csrf-token': csrf },
-      body: form,
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Failed to save');
-    showMsg('profile-msg', d.pending ? 'Update submitted — pending admin review.' : 'Profile saved!');
-    await loadProfile();
-  } catch (e) {
-    showMsg('profile-err', e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save Changes';
-  }
-}
-
-// ── Movies ────────────────────────────────────────────────────────────────────
-
-async function loadMovies() {
-  try {
-    const subs = await api('GET', '/api/member/movies');
-    const list = $id('movies-list');
-    if (!subs.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">No submissions yet. Click "Submit Movie" to get started.</div>'; return; }
-    list.innerHTML = subs.map(s => {
-      const md = s.movie_data;
-      const statusBadge = s.status === 'pending' ? 'badge-pending' :
-                          s.status === 'approved' ? 'badge-approved' :
-                          s.status === 'rejected' ? 'badge-rejected' : 'badge-changes';
-      const statusLabel = s.status === 'changes_requested' ? 'Changes Requested' : s.status.charAt(0).toUpperCase() + s.status.slice(1);
-      const notes = s.reviewer_notes ? `<div class="movie-notes">📝 Admin feedback: ${s.reviewer_notes}</div>` : '';
-      const editBtn = ['pending','changes_requested'].includes(s.status) ?
-        `<button class="btn-sm" style="margin-top:10px;background:#1a1a1a;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:12px" onclick="showMovieForm('${s.id}')">Edit</button>` : '';
-      const poster = md.poster_image ? `<img class="movie-poster" src="${md.poster_image}" />` : `<div class="movie-poster" style="display:flex;align-items:center;justify-content:center;font-size:20px">🎬</div>`;
-      return `
-        <div class="movie-card">
-          ${poster}
-          <div class="movie-info">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-              <div class="movie-title">${md.title || 'Untitled'}</div>
-              <span class="badge ${statusBadge}">${statusLabel}</span>
-            </div>
-            <div class="movie-meta">${md.language || ''} ${md.genre ? '· ' + (Array.isArray(md.genre) ? md.genre.join(', ') : md.genre) : ''} ${md.runtime ? '· ' + md.runtime + ' min' : ''}</div>
-            <div class="movie-meta" style="margin-top:4px">Submitted ${relTime(s.created_at)}</div>
-            ${notes}${editBtn}
-          </div>
-        </div>`;
-    }).join('');
-  } catch (e) {
-    console.error('loadMovies:', e);
-  }
-}
-
-let _editMovieData = null;
-
-async function showMovieForm(id) {
-  hideEl('movie-form-err'); hideEl('movie-form-ok');
-  $id('movie-edit-id').value = id || '';
-  $id('movie-form-title').textContent = id ? 'Edit Submission' : 'New Submission';
-  $id('movie-submit-btn').textContent = id ? 'Update Submission' : 'Submit for Review';
-  if (id) {
-    try {
-      const subs = await api('GET', '/api/member/movies');
-      const sub = subs.find(s => String(s.id) === String(id));
-      if (sub) {
-        const md = sub.movie_data;
-        $id('mf-title').value = md.title || '';
-        $id('mf-desc').value = md.description || '';
-        $id('mf-trailer').value = md.trailer_url || '';
-        $id('mf-watch').value = md.watch_url || '';
-        $id('mf-runtime').value = md.runtime || '';
-        $id('mf-language').value = md.language || '';
-        $id('mf-genre').value = Array.isArray(md.genre) ? md.genre.join(', ') : (md.genre || '');
-        $id('mf-director').value = md.director || '';
-        $id('mf-producer').value = md.producer || '';
-        $id('mf-exec-producer').value = md.executive_producer || '';
-        $id('mf-writer').value = md.writer || '';
-        $id('mf-dop').value = md.dop || '';
-        $id('mf-editor').value = md.video_editor || '';
-        $id('mf-sound').value = md.sound_design || '';
-        $id('mf-music').value = md.music_director || '';
-        $id('mf-actors').value = md.actors || '';
-        $id('mf-support').value = md.support_crew || '';
-        $id('mf-additional').value = md.additional_credits || '';
-      }
-    } catch {}
-  } else {
-    ['mf-title','mf-desc','mf-trailer','mf-watch','mf-runtime','mf-language','mf-genre',
-     'mf-director','mf-producer','mf-exec-producer','mf-writer','mf-dop','mf-editor',
-     'mf-sound','mf-music','mf-actors','mf-support','mf-additional']
-      .forEach(id => { const el = $id(id); if (el) el.value = ''; });
-  }
-  $id('movie-form').style.display = 'block';
-  $id('new-movie-btn').style.display = 'none';
-  $id('movie-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function hideMovieForm() {
-  $id('movie-form').style.display = 'none';
-  $id('new-movie-btn').style.display = '';
-}
-
-async function submitMovie() {
-  const editId = $id('movie-edit-id').value;
-  const btn = $id('movie-submit-btn'); btn.disabled = true; btn.textContent = 'Submitting…';
-  hideEl('movie-form-err'); hideEl('movie-form-ok');
-  try {
-    const form = new FormData();
-    const genreRaw = $id('mf-genre').value.split(',').map(s => s.trim()).filter(Boolean);
-    form.append('title', $id('mf-title').value);
-    form.append('description', $id('mf-desc').value);
-    form.append('trailer_url', $id('mf-trailer').value);
-    form.append('watch_url', $id('mf-watch').value);
-    form.append('runtime', $id('mf-runtime').value);
-    form.append('language', $id('mf-language').value);
-    form.append('genre', JSON.stringify(genreRaw));
-    form.append('director', $id('mf-director').value);
-    form.append('producer', $id('mf-producer').value);
-    form.append('executive_producer', $id('mf-exec-producer').value);
-    form.append('writer', $id('mf-writer').value);
-    form.append('dop', $id('mf-dop').value);
-    form.append('video_editor', $id('mf-editor').value);
-    form.append('sound_design', $id('mf-sound').value);
-    form.append('music_director', $id('mf-music').value);
-    form.append('actors', $id('mf-actors').value);
-    form.append('support_crew', $id('mf-support').value);
-    form.append('additional_credits', $id('mf-additional').value);
-    const posterFile = $id('mf-poster').files[0];
-    if (posterFile) form.append('poster', posterFile);
-
-    const csrf = await getCsrf();
-    const method = editId ? 'PUT' : 'POST';
-    const endpoint = editId ? `/api/member/movies/${editId}` : '/api/member/movies';
-    const r = await fetch(endpoint, {
-      method,
-      headers: { Authorization: `Bearer ${_token}`, 'x-csrf-token': csrf },
-      body: form,
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Submission failed');
-    showMsg('movie-form-ok', editId ? 'Submission updated!' : 'Movie submitted for review!');
-    setTimeout(() => { hideMovieForm(); loadMovies(); }, 1500);
-  } catch (e) {
-    showMsg('movie-form-err', e.message, false);
-  } finally {
-    btn.disabled = false; btn.textContent = editId ? 'Update Submission' : 'Submit for Review';
-  }
-}
-
-// ── Security ──────────────────────────────────────────────────────────────────
-
-async function loadSecurity() {
-  loadSessions();
-  load2FAStatus();
-}
-
-async function changePasswordFromSecurity() {
-  const cur = $id('sec-cur-pw').value;
-  const nw  = $id('sec-new-pw').value;
-  const cf  = $id('sec-confirm-pw').value;
-  if (nw !== cf) { showMsg('sec-pw-err', 'Passwords do not match', false); return; }
-  try {
-    await api('POST', '/api/member/change-password', { currentPassword: cur, newPassword: nw });
-    showMsg('sec-pw-msg', 'Password updated successfully!');
-    $id('sec-cur-pw').value = $id('sec-new-pw').value = $id('sec-confirm-pw').value = '';
-  } catch (e) { showMsg('sec-pw-err', e.message, false); }
-}
-
-async function load2FAStatus() {
-  const card = $id('twofa-status');
-  try {
-    // We read totp_enabled from the current JWT
-    const payload = JSON.parse(atob(_token.split('.')[1]));
-    if (payload.totp_enabled) {
-      card.innerHTML = `
-        <div style="font-size:13px;color:var(--success);margin-bottom:16px">✓ Two-factor authentication is enabled</div>
-        <button class="btn-sm btn-danger" onclick="show2FADisable()">Disable 2FA</button>
-        <div id="twofa-disable-form" style="display:none;margin-top:16px">
-          <div class="form-group" style="max-width:280px">
-            <label>Password</label><input id="twofa-dis-pw" type="password" />
-          </div>
-          <div class="form-group" style="max-width:200px">
-            <label>TOTP Code</label><input id="twofa-dis-code" type="text" maxlength="6" />
-          </div>
-          <button class="btn-primary" onclick="disable2FA()" style="max-width:160px">Confirm Disable</button>
-          <div id="twofa-dis-err" class="err-msg" style="display:none"></div>
-        </div>`;
-    } else {
-      card.innerHTML = `
-        <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Two-factor authentication is not enabled</div>
-        <button class="btn-primary" onclick="startSetup2FA()" style="max-width:180px">Enable 2FA</button>
-        <div id="twofa-setup-inline" style="display:none;margin-top:20px"></div>`;
-    }
-  } catch {}
-}
-
-function show2FADisable() {
-  $id('twofa-disable-form').style.display = $id('twofa-disable-form').style.display === 'none' ? 'block' : 'none';
-}
-
-async function disable2FA() {
-  const pw   = $id('twofa-dis-pw').value;
-  const code = $id('twofa-dis-code').value;
-  try {
-    await api('POST', '/api/member/2fa/disable', { password: pw, totp_code: code });
-    await refreshToken();
-    load2FAStatus();
-  } catch (e) { showMsg('twofa-dis-err', e.message, false); }
-}
-
-async function startSetup2FA() {
-  const container = $id('twofa-setup-inline');
-  container.style.display = 'block';
-  container.innerHTML = '<div class="spinner"></div>';
-  try {
-    const d = await api('GET', '/api/member/2fa/setup');
-    container.innerHTML = `
-      <div class="qr-box" style="padding:0;margin-bottom:16px">
-        <img src="${d.qr}" width="160" height="160" alt="QR" style="border-radius:8px" />
-        <div class="qr-secret">Manual: <strong>${d.secret}</strong></div>
-      </div>
-      <div class="form-group" style="max-width:200px">
-        <label>Enter code to confirm</label>
-        <input id="inline-totp" type="text" maxlength="6" inputmode="numeric" />
-      </div>
-      <button class="btn-primary" onclick="confirmInline2FA()" style="max-width:160px">Activate 2FA</button>
-      <div id="inline-totp-err" class="err-msg" style="display:none"></div>`;
-  } catch (e) { container.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`; }
-}
-
-async function confirmInline2FA() {
-  const code = $id('inline-totp').value.trim();
-  try {
-    await api('POST', '/api/member/2fa/verify', { totp_code: code });
-    await refreshToken();
-    load2FAStatus();
-  } catch (e) { showMsg('inline-totp-err', e.message, false); }
-}
-
-async function loadSessions() {
-  const list = $id('sessions-list');
-  try {
-    const sessions = await api('GET', '/api/member/sessions');
-    if (!sessions.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">No active sessions</div>'; return; }
-    list.innerHTML = sessions.map(s => `
-      <div class="session-item">
-        <div>
-          <div style="font-size:13px;font-weight:600">Session</div>
-          <div style="font-size:11px;color:var(--muted)">Created ${relTime(s.created_at)} · Expires ${new Date(s.expires_at).toLocaleDateString()}</div>
-        </div>
-        <span class="badge badge-approved">Active</span>
-      </div>`).join('');
-  } catch (e) {
-    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
-  }
-}
-
-async function revokeAllSessions() {
-  try {
-    await api('DELETE', '/api/member/sessions/all');
-    showMsg('sessions-msg', 'All sessions revoked. You will be signed out.');
-    setTimeout(() => logoutMember(), 1500);
-  } catch (e) { console.error(e); }
-}
-
-// ── Activity ──────────────────────────────────────────────────────────────────
-
-async function loadActivity() {
-  const list = $id('activity-list');
-  try {
-    const items = await api('GET', '/api/member/activity?limit=30');
-    if (!items.length) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">No activity yet</div>'; return; }
-    const labelMap = {
-      login:                   '🔑 Signed in',
-      logout:                  '👋 Signed out',
-      password_change:         '🔒 Changed password',
-      profile_update_requested:'📝 Profile update submitted',
-      profile_updated:         '✅ Profile updated',
-      movie_submit:            '🎬 Movie submitted',
-      movie_resubmit:          '🔄 Movie resubmitted',
-      '2fa_setup':             '🛡️ 2FA enabled',
-      '2fa_disable':           '⚠️ 2FA disabled',
-      session_revoke_all:      '🚫 All sessions revoked',
-    };
-    list.innerHTML = items.map(a => `
-      <div class="activity-item">
-        <div class="activity-dot"></div>
-        <div>
-          <div class="activity-text">${labelMap[a.action] || a.action}</div>
-          <div class="activity-time">${relTime(a.created_at)} · IP: ${a.ip_address || 'unknown'}</div>
-        </div>
-      </div>`).join('');
-  } catch (e) {
-    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
-  }
-}
-
-// ── Enter key support ─────────────────────────────────────────────────────────
-
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const loginStep   = $id('step-login');
-  const totpStep    = $id('step-totp');
-  const changePwStep = $id('step-change-pw');
-  const setup2FAStep = $id('step-2fa-setup');
-  if (loginStep   && loginStep.style.display   !== 'none') handleLogin();
-  else if (totpStep    && totpStep.style.display    !== 'none') submitTotp();
-  else if (changePwStep && changePwStep.style.display === 'block') handleChangePw();
-  else if (setup2FAStep && setup2FAStep.style.display === 'block') verify2FASetup();
-});
-</script>
 </body>
 </html>
