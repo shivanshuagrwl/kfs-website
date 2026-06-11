@@ -2155,7 +2155,7 @@ async function loadAdminData(name) {
     loadEventsWithRegs();
   }
   else if (name==='members') {
-    const members = await apiFetch('/api/members');
+    const members = await apiFetch('/api/admin/members');
     const tbody = document.getElementById('admin-members-tbody');
     const searchEl = document.getElementById('member-admin-search');
     if (searchEl) searchEl.value = '';
@@ -2648,7 +2648,7 @@ async function toggleBlogPublished(id, currentlyPublished) {
 }
 
 async function deleteBlog(id) {
-  const row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
+  let row = document.querySelector(`#admin-blogs-tbody tr[data-id="${id}"]`);
   const title = row ? row.querySelector('td:nth-child(3)')?.textContent?.trim() : 'this post';
   const ok = await kfsConfirm({ title: `Delete post?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Post' });
   if (!ok) return;
@@ -2707,9 +2707,11 @@ async function saveEvent() {
       <td style="color:var(--grey)">${saved.event_date||'—'}</td>
       <td><span class="tag ${saved.is_upcoming?'upcoming':''}">${saved.is_upcoming?'Upcoming':'Past'}</span></td>
       <td style="color:var(--grey)">${saved.location||'—'}</td>
+      <td></td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editEvent(${eJson})">Edit</button>
         <button class="btn-sm" style="background:rgba(88,166,255,.12);color:#58a6ff;border-color:rgba(88,166,255,.25)" onclick="openFormBuilder('${saved.id}','${saved.title.replace(/'/g,'\\x27')}')">Form</button>
+        <button class="btn-sm" style="background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.25)" onclick="openEventRegistrations('${saved.id}')">Regs</button>
         <button class="btn-sm danger" onclick="deleteEvent('${saved.id}')">Delete</button>
       </div></td>
     </tr>`;
@@ -2728,7 +2730,7 @@ async function saveEvent() {
 }
 
 async function deleteEvent(id) {
-  const row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
+  let row = document.querySelector(`#admin-events-tbody tr[data-id="${id}"]`);
   const title = row ? row.querySelector('td:nth-child(1)')?.textContent?.trim() : 'this event';
   const ok = await kfsConfirm({ title: `Delete event?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Event' });
   if (!ok) return;
@@ -2816,7 +2818,7 @@ async function saveMember() {
 }
 
 async function deleteMember(id) {
-  const row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
+  let row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
   const name = row ? row.querySelector('td:nth-child(3)')?.textContent?.trim() : 'this member';
   const ok = await kfsConfirm({ title: `Remove member?`, msg: `<strong style="color:var(--white)">"${name}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Remove Member' });
   if (!ok) return;
@@ -3035,7 +3037,7 @@ async function saveMovie() {
 }
 
 async function deleteMovie(id) {
-  const row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
+  let row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
   const title = row ? row.querySelector('td:nth-child(2)')?.textContent?.trim() : 'this film';
   const ok = await kfsConfirm({ title: `Delete film?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Film' });
   if (!ok) return;

@@ -2022,6 +2022,16 @@ app.get("/api/members", async (req, res) => {
   res.json(data);
 });
 
+// Admin GET — bypasses memCache so panel always shows fresh data after add/edit/delete
+app.get("/api/admin/members", requireSection("members"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("members")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+    .order("sort_order", { ascending: true });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
 app.post(
   "/api/admin/members",
   requireSection("members"),
