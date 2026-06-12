@@ -8766,37 +8766,26 @@ async function initMemberDB() {
       .select("instagram,github,linkedin,twitter,youtube,website,custom_links,roll_no,mobile,email,updated_at")
       .limit(1);
     if (colErr) {
-      console.warn(
-        "[initMemberDB] members table is missing social/portal columns. Run this SQL in Supabase:
-
-" +
-        "  ALTER TABLE members
-" +
-        "    ADD COLUMN IF NOT EXISTS roll_no       TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS mobile        TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS email         TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS instagram     TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS linkedin      TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS github        TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS twitter       TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS youtube       TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS website       TEXT,
-" +
-        "    ADD COLUMN IF NOT EXISTS custom_links  JSONB DEFAULT '[]',
-" +
-        "    ADD COLUMN IF NOT EXISTS updated_at    TIMESTAMPTZ DEFAULT NOW();
-
-" +
-        "  (Error: " + colErr.message + ")"
-      );
+      const lines = [
+        "[initMemberDB] members table is missing social/portal columns.",
+        "Run this SQL in Supabase SQL Editor:",
+        "",
+        "  ALTER TABLE members",
+        "    ADD COLUMN IF NOT EXISTS roll_no      TEXT,",
+        "    ADD COLUMN IF NOT EXISTS mobile       TEXT,",
+        "    ADD COLUMN IF NOT EXISTS email        TEXT,",
+        "    ADD COLUMN IF NOT EXISTS instagram    TEXT,",
+        "    ADD COLUMN IF NOT EXISTS linkedin     TEXT,",
+        "    ADD COLUMN IF NOT EXISTS github       TEXT,",
+        "    ADD COLUMN IF NOT EXISTS twitter      TEXT,",
+        "    ADD COLUMN IF NOT EXISTS youtube      TEXT,",
+        "    ADD COLUMN IF NOT EXISTS website      TEXT,",
+        "    ADD COLUMN IF NOT EXISTS custom_links JSONB DEFAULT '[]',",
+        "    ADD COLUMN IF NOT EXISTS updated_at   TIMESTAMPTZ DEFAULT NOW();",
+        "",
+        "Error was: " + colErr.message,
+      ];
+      console.warn(lines.join("\n"));
     } else {
       console.log("[initMemberDB] members table columns OK");
     }
