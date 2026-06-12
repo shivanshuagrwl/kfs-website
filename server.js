@@ -2068,6 +2068,68 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   res.json(data || []);
 });
 
+// GET /api/admin/members/export — Download all member data as Excel (no passwords/2FA)
+app.get("/api/admin/members/export", requireSection("members"), async (req, res) => {
+  const { data: members, error: mErr } = await supabase
+    .from("members")
+    .select("id,name,roll_no,mobile,email,batch,domain,role,bio,special_tag,sort_order,is_past,instagram,linkedin,github,twitter,youtube,website,custom_links")
+    .order("sort_order", { ascending: true });
+  if (mErr) return res.status(500).json({ error: "Internal server error" });
+
+  const { data: accounts } = await supabase
+    .from("member_accounts")
+    .select("member_id,username,account_status,totp_enabled,last_login,created_at");
+
+  const accountMap = {};
+  (accounts || []).forEach(a => { accountMap[a.member_id] = a; });
+
+  const XLSX = require("xlsx");
+  const rows = (members || []).map(m => {
+    const acc = accountMap[m.id];
+    return {
+      "Name":          m.name || "",
+      "Roll No":       m.roll_no || "",
+      "Email":         m.email || "",
+      "Mobile":        m.mobile || "",
+      "Batch":         m.batch || "",
+      "Domain":        m.domain || "",
+      "Role/Title":    m.role || "",
+      "Bio":           m.bio || "",
+      "Type":          m.is_past ? "Alumni" : "Current",
+      "Special Tag":   m.special_tag || "",
+      "Sort Order":    m.sort_order ?? "",
+      "Instagram":     m.instagram || "",
+      "LinkedIn":      m.linkedin || "",
+      "GitHub":        m.github || "",
+      "Twitter":       m.twitter || "",
+      "YouTube":       m.youtube || "",
+      "Website":       m.website || "",
+      "Custom Links":  m.custom_links ? JSON.stringify(m.custom_links) : "",
+      "Portal Username":    acc?.username || "No account",
+      "Portal Status":      acc?.account_status || "—",
+      "2FA Enabled":        acc ? (acc.totp_enabled ? "Yes" : "No") : "—",
+      "Last Login":         acc?.last_login ? new Date(acc.last_login).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—",
+      "Account Created":    acc?.created_at ? new Date(acc.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—",
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Note": "No members found" }]);
+  if (rows.length) {
+    const keys = Object.keys(rows[0]);
+    ws["!cols"] = keys.map(k => ({
+      wch: Math.max(k.length, ...rows.map(r => String(r[k] || "").length)) + 2,
+    }));
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Members");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Disposition", `attachment; filename="kfs-members-${date}.xlsx"`);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.send(buf);
+});
+
 app.post(
   "/api/admin/members",
   requireSection("members"),
@@ -8532,13 +8594,16 @@ app.post("/api/admin/members/:id/send-credentials", requireSection("members"), a
   const memberId = req.params.id;
   const { data: member } = await supabase
     .from("members").select("id, name, email").eq("id", memberId).maybeSingle();
-  if (!member?.email) return res.status(400).json({ error: "Member has no email address on file" });
+  if (!member) return res.status(404).json({ error: "Member not found" });
 
   const { data: account } = await supabase
     .from("member_accounts").select("username").eq("member_id", memberId).maybeSingle();
   if (!account) return res.status(404).json({ error: "No account exists for this member — create one first" });
 
-  const { customPassword } = req.body;
+  // toEmail: admin can supply an address; fall back to member's saved email
+  const { customPassword, toEmail } = req.body;
+  const recipientEmail = (toEmail && toEmail.trim()) ? toEmail.trim() : member.email;
+  if (!recipientEmail) return res.status(400).json({ error: "No email address provided. Supply one in the request or save one on the member profile." });
   // Admin can optionally supply a reset temp password; otherwise just resend username + login URL
   if (customPassword) {
     if (!isStrongMemberPassword(customPassword))
@@ -8549,7 +8614,7 @@ app.post("/api/admin/members/:id/send-credentials", requireSection("members"), a
   }
 
   await sendMemberCredentialsEmail({
-    toEmail: member.email,
+    toEmail: recipientEmail,
     toName: member.name,
     username: account.username,
     tempPassword: customPassword || "Kfs@2026",

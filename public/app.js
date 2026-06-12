@@ -10209,19 +10209,71 @@ function openCreateMemberAccount(memberId, memberName) {
     async () => {
       const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
       if (!res) return;
-      const send = await showConfirmModal(
-        `Account created!<br><br><strong>Username:</strong> ${res.username}<br><strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${res.tempPassword}</code><br><br>Send credentials to member via email?`,
-        async () => {
-          await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST');
-          showToast('Credentials emailed to member');
-        },
-        null,
-        'Send Email',
-        'Skip'
-      );
       loadMemberAccounts();
+
+      // Show account details and ask whether to send email
+      const confirmed = await showConfirmModal(
+        `Account created!<br><br>` +
+        `<strong>Username:</strong> ${res.username}<br>` +
+        `<strong>Temp Password:</strong> <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px">${res.tempPassword}</code>` +
+        `<br><br>Send credentials to member via email?`,
+        null, null, 'Send Email', 'Skip'
+      );
+      if (!confirmed) return;
+
+      // Ask for the email address to send to
+      const prefill = res.email || '';
+      const emailToSend = await new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999';
+        overlay.innerHTML = `
+          <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:28px 32px;width:420px;max-width:90vw">
+            <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:#f0f0f0">Send credentials to</p>
+            <p style="margin:0 0 18px;font-size:13px;color:#888">Enter the email address to send the login details to.</p>
+            <input id="send-creds-email-input" type="email" placeholder="member@example.com"
+              value="${prefill}"
+              style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;font-size:14px;color:#f0f0f0;outline:none;margin-bottom:16px">
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button id="send-creds-cancel" style="background:transparent;border:1px solid #2a2a2a;color:#888;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px">Cancel</button>
+              <button id="send-creds-ok" style="background:#6366f1;border:none;color:#fff;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:500">Send</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+        const input = overlay.querySelector('#send-creds-email-input');
+        const okBtn = overlay.querySelector('#send-creds-ok');
+        const cancelBtn = overlay.querySelector('#send-creds-cancel');
+        // Focus and select prefilled value
+        setTimeout(() => { input.focus(); input.select(); }, 50);
+        const done = (val) => { document.body.removeChild(overlay); resolve(val); };
+        okBtn.onclick = () => { const v = input.value.trim(); if (v) done(v); else input.focus(); };
+        cancelBtn.onclick = () => done(null);
+        input.onkeydown = (e) => { if (e.key === 'Enter') okBtn.click(); if (e.key === 'Escape') cancelBtn.click(); };
+      });
+
+      if (!emailToSend) return;
+      const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', { toEmail: emailToSend });
+      if (sent) showToast(`Credentials sent to ${emailToSend}`);
     }
   );
+}
+
+async function exportMemberData() {
+  try {
+    const r = await fetch('/api/admin/members/export', {
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'x-csrf-token': _csrfToken || '' },
+    });
+    if (!r.ok) { showAdminError('Export failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().slice(0, 10);
+    a.download = `kfs-members-${date}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    showAdminError('Export failed');
+  }
 }
 
 async function toggleMemberAccountStatus(memberId, currentStatus) {
