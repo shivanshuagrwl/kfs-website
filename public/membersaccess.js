@@ -599,7 +599,7 @@ async function loadMovies() {
       const md = s.movie_data;
       const statusBadge = { pending:'badge-pending', approved:'badge-approved', rejected:'badge-rejected' }[s.status] || 'badge-changes';
       const statusLabel = s.status === 'changes_requested' ? 'Changes Requested' : s.status.charAt(0).toUpperCase() + s.status.slice(1);
-      const notes   = s.reviewer_notes ? `<div class="movie-notes">📝 Admin feedback: ${s.reviewer_notes}</div>` : '';
+      const notes   = s.reviewer_notes ? `<div class="movie-notes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Admin feedback: ${s.reviewer_notes}</div>` : '';
       const editBtn = ['pending','changes_requested'].includes(s.status)
         ? `<button class="btn-sm movie-edit-btn" style="margin-top:10px;background:#1a1a1a;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:12px" data-id="${s.id}">Edit</button>` : '';
       const poster  = md.poster_image
@@ -761,7 +761,7 @@ async function load2FAStatus() {
     const payload = JSON.parse(atob(_token.split('.')[1]));
     if (payload.totp_enabled) {
       card.innerHTML = `
-        <div style="font-size:13px;color:var(--success);margin-bottom:16px">✓ Two-factor authentication is enabled</div>
+        <div style="font-size:13px;color:var(--success);margin-bottom:16px;display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Two-factor authentication is enabled</div>
         <button class="btn-sm btn-danger" id="twofa-disable-toggle-btn">Disable 2FA</button>
         <div id="twofa-disable-form" style="display:none;margin-top:16px">
           <div class="form-group" style="max-width:280px">
@@ -889,13 +889,13 @@ async function loadMyWorks() {
             <div class="work-poster">
               ${w.poster_image
                 ? `<img src="${w.poster_image}" alt="${w.title}" />`
-                : '🎬'}
+                : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>`}
             </div>
             <div class="work-info">
               <div class="work-title" title="${w.title}">${w.title}</div>
               <div class="work-role">${w.role}</div>
               ${w.release_year ? `<div class="work-year">${w.release_year}</div>` : ''}
-              <button class="btn-edit-request" data-movie-id="${w.id}" data-movie-title="${w.title.replace(/"/g,'&quot;')}">✏ Request Edit</button>
+              <button class="btn-edit-request" data-movie-id="${w.id}" data-movie-title="${w.title.replace(/"/g,'&quot;')}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Request Edit</button>
             </div>
           </div>`).join('')}
       </div>`;

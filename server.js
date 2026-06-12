@@ -6,7 +6,7 @@ const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
 const crypto = require("crypto");
-const fs = require("fs"); // 👈 ADD THIS LINE
+const fs = require("fs"); // ADD THIS LINE
 const { createClient } = require("@supabase/supabase-js");
 const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
@@ -115,8 +115,8 @@ async function sendConfirmationEmail({
     ${
       dateLine || venueLine
         ? `<div style="margin:24px 0;padding:16px 20px;background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;font-size:13px;color:#888">
-      ${eventDate ? `<div style="margin-bottom:6px">📅 <span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span></div>` : ""}
-      ${eventVenue ? `<div>📍 <span style="color:#f5f5f5">${eventVenue}</span></div>` : ""}
+      ${eventDate ? `<div style="margin-bottom:6px;display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span></div>` : ""}
+      ${eventVenue ? `<div style="display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span style="color:#f5f5f5">${eventVenue}</span></div>` : ""}
     </div>`
         : ""
     }
@@ -2026,7 +2026,7 @@ app.get("/api/members", async (req, res) => {
 app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   const { data, error } = await supabase
     .from("members")
-    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,website,custom_links")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links")
     .order("sort_order", { ascending: true });
   if (error) return res.status(500).json({ error: "Internal server error" });
   res.json(data || []);
@@ -3795,14 +3795,14 @@ app.get("/og/event/:id", async (req, res) => {
       badge: e.is_upcoming ? "UPCOMING EVENT" : "EVENT",
       title: e.title || "Event",
       lines: [
-        { text: dateStr ? "📅  " + dateStr : null, color: "#aaaaaa", size: 22 },
+        { text: dateStr ? dateStr : null, color: "#aaaaaa", size: 22 },
         {
-          text: e.event_time ? "🕐  " + e.event_time : null,
+          text: e.event_time ? e.event_time : null,
           color: "#aaaaaa",
           size: 20,
         },
         {
-          text: e.venue || e.location ? "📍  " + (e.venue || e.location) : null,
+          text: e.venue || e.location ? (e.venue || e.location) : null,
           color: "#888888",
           size: 18,
         },
@@ -6997,7 +6997,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
         <tr><td style="background:#111;border-top:1px solid #2c2c2e;padding:18px 32px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="font-size:13px;font-weight:600;color:#f5f5f7">See you there! 🎬</td>
+              <td style="font-size:13px;font-weight:600;color:#f5f5f7">See you there!</td>
               <td align="right" style="font-size:11px;color:#48484a">
                 <a href="mailto:filmsocietykiit@gmail.com" style="color:#636366;text-decoration:none">filmsocietykiit@gmail.com</a>
               </td>
@@ -7046,7 +7046,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
   const brevoPayload = {
     sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
     to: [{ email: reg.email, name: reg.name }],
-    subject: `🎬 Your ticket for ${event.title || "the event"} — KFS`,
+    subject: `Your ticket for ${event.title || "the event"} — KFS`,
     textContent,
     htmlContent,
   };

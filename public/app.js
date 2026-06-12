@@ -405,7 +405,7 @@ async function loadHomeData() {
   if (achievements && achievements.length) {
     ag.innerHTML = achievements.map(a=>{ const aJson=JSON.stringify(a).replace(/"/g,'&quot;'); return `
       <div class="achievement-card">
-        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : (a.icon||'🏆')}<\/div>
+        <div class="achievement-icon">${a.image ? `<img src="${a.image}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : (a.icon||`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="6" x2="12" y2="21"/><path d="M20 4H4l2 10h12z"/><path d="M5 4V2h14v2"/></svg>`)}<\/div>
         <div class="achievement-title">${a.title}<\/div>
         <div class="achievement-year">${a.year||''}<\/div>
         <div class="achievement-desc">${a.description||''}<\/div>
@@ -3362,11 +3362,11 @@ async function saveNoShortsEgg() {
       }
     } else {
       const err = await res.json().catch(() => ({}));
-      if (msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ Save failed: ' + (err.error || res.status); }
+      if (msg) { msg.style.color='#e74c3c'; msg.textContent = 'Save failed: ' + (err.error || res.status); }
       else alert('Save failed: ' + (err.error || res.status));
     }
   } catch(e) {
-    if (msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ Save failed: ' + e.message; }
+    if (msg) { msg.style.color='#e74c3c'; msg.textContent = 'Save failed: ' + e.message; }
     else alert('Save failed: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save No Shorts Easter Egg'; }
@@ -3378,9 +3378,9 @@ async function changePassword() {
   const np   = document.getElementById('new-password').value;
   const cp   = document.getElementById('confirm-password').value;
   const msg  = document.getElementById('change-pw-msg');
-  if (!curr) { if(msg) msg.textContent = '❌ Please enter your current password'; else alert('Please enter your current password'); return; }
-  if (np !== cp) { if(msg) msg.textContent = '❌ Passwords do not match'; else alert('Passwords do not match'); return; }
-  if (np.length < 8) { if(msg) msg.textContent = '❌ Password must be at least 8 characters'; else alert('Password must be at least 8 characters'); return; }
+  if (!curr) { if(msg) msg.textContent = 'Please enter your current password'; else alert('Please enter your current password'); return; }
+  if (np !== cp) { if(msg) msg.textContent = 'Passwords do not match'; else alert('Passwords do not match'); return; }
+  if (np.length < 8) { if(msg) msg.textContent = 'Password must be at least 8 characters'; else alert('Password must be at least 8 characters'); return; }
   const res = await fetch('/api/admin/change-password',{method:'POST', credentials:'include',
     headers:{'Authorization':'Bearer '+adminToken,'Content-Type':'application/json','x-csrf-token': _csrfToken || ''},
     body:JSON.stringify({currentPassword:curr, newPassword:np})});
@@ -3392,7 +3392,7 @@ async function changePassword() {
     else alert('Password changed!');
   } else {
     const err = await res.json().catch(()=>({}));
-    if(msg) { msg.style.color='#e74c3c'; msg.textContent = '❌ ' + (err.error || 'Failed to change password'); }
+    if(msg) { msg.style.color='#e74c3c'; msg.textContent = (err.error || 'Failed to change password'); }
     else alert('Failed: ' + (err.error || 'Unknown error'));
   }
 }
@@ -3607,7 +3607,7 @@ function renderCustomEggsUI() {
   list.innerHTML = eggs.map((e, i) => `
     <div class="cegg-item">
       <span class="cegg-kw">"${e.keyword}"</span>
-      <span class="cegg-text">${e.heading||''}${e.subtext ? ' — '+e.subtext : ''}${e.image_url ? '<span class="cegg-has-img"> 🖼</span>' : ''}</span>
+      <span class="cegg-text">${e.heading||''}${e.subtext ? ' — '+e.subtext : ''}${e.image_url ? '<span class="cegg-has-img" style="margin-left:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span>' : ''}</span>
       <button class="cegg-del" onclick="deleteCustomEgg(${i})" title="Delete">×</button>
     </div>
   `).join('');
@@ -4616,7 +4616,7 @@ async function loadSearchData() {
   if (settings) {
     window._eggShortsHeading  = settings.easter_egg_shorts_heading  || 'No Shorts.';
     window._eggShortsSub      = settings.easter_egg_shorts_sub      || 'we only make films that last';
-    window._eggNoShortsFallback = settings.easter_egg_noshorts_fallback || "that's the spirit 🎬";
+    window._eggNoShortsFallback = settings.easter_egg_noshorts_fallback || "that's the spirit";
   }
   // Load custom search easter eggs
   try {
@@ -5040,7 +5040,7 @@ function doSearch(q) {
   // ── EASTER EGG: "no shorts" → reveal the image ───────────────────────
   if (q === 'no shorts') {
     const imgUrl = window._easterEggImg || '';
-    const fallback = window._eggNoShortsFallback || "that's the spirit 🎬";
+    const fallback = window._eggNoShortsFallback || "that's the spirit";
     const h = window._eggShortsHeading || 'No Shorts.';
     const s = window._eggShortsSub || 'we only make films that last';
     out.innerHTML = imgUrl
@@ -5850,7 +5850,7 @@ async function sheetBackfill(btn) {
   try {
     const res = await apiFetch('/api/admin/donation/sheet-backfill', 'POST');
     if (res && res.success) {
-      alert(`✅ Sync complete!\n\nSynced: ${res.synced}\nFailed: ${res.failed}\nTotal: ${res.total}\n\nOpen Google Sheet to see all records.`);
+      alert(`Sync complete!\n\nSynced: ${res.synced}\nFailed: ${res.failed}\nTotal: ${res.total}\n\nOpen Google Sheet to see all records.`);
     } else {
       alert('Sync failed: ' + (res?.error || 'Unknown error'));
     }
@@ -5869,7 +5869,7 @@ async function testDonationEmail(btn) {
   try {
     const res = await apiFetch('/api/admin/donation/test-email', 'POST', { email });
     if (res && res.success) {
-      alert(`✅ Test email sent to ${email}!\nCheck your inbox (and spam folder).\nMessageId: ${res.messageId || '—'}`);
+      alert(`Test email sent to ${email}!\nCheck your inbox (and spam folder).\nMessageId: ${res.messageId || '—'}`);
     } else {
       alert('Failed: ' + (res?.error || 'Unknown error — check server logs for [bill] lines'));
     }
@@ -6008,7 +6008,7 @@ async function runMemberImport() {
     // ── Client-side duplicate check (also catches dupes within the same sheet) ──
     if (existingNames.has(name.trim().toLowerCase())) {
       skipped++;
-      statusEl.innerHTML = '<span style="color:#ff9800">⚠ Duplicate</span>';
+      statusEl.innerHTML = '<span style="color:#ff9800">Duplicate</span>';
       continue;
     }
 
@@ -6034,7 +6034,7 @@ async function runMemberImport() {
         const json = await res.json().catch(() => ({}));
         if (res.status === 409) {
           skipped++;
-          statusEl.innerHTML = '<span style="color:#ff9800">⚠ Duplicate</span>';
+          statusEl.innerHTML = '<span style="color:#ff9800">Duplicate</span>';
         } else {
           fail++;
           statusEl.innerHTML = `<span style="color:#f44" title="${json.error || ''}">Error</span>`;
@@ -7761,7 +7761,7 @@ function renderWrappedBlogHighlightsList() {
       <div style="display:flex;align-items:center;gap:12px">
         ${bh.image_url
           ? `<img class="wrapped-admin-highlight-thumb" src="${bh.image_url.replace(/"/g,'&quot;')}" alt="" onerror="this.style.display='none'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0">`
-          : `<div style="width:64px;height:64px;border-radius:8px;background:var(--card);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:20px;flex-shrink:0">📸</div>`}
+          : `<div style="width:64px;height:64px;border-radius:8px;background:var(--card);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--grey);flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:4px">Card ${i+1}</div>
           <div style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${bh.headline || '(no headline yet)'}</div>
@@ -9482,7 +9482,7 @@ async function submitDonation() {
       const banner = document.createElement('div');
       banner.id = 'don-test-mode-banner';
       banner.style.cssText = 'background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin-bottom:12px;text-align:center;letter-spacing:.04em';
-      banner.textContent = '⚠️ TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
+      banner.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
       const submitBtn = document.getElementById('don-submit-btn');
       if (submitBtn && submitBtn.parentNode) submitBtn.parentNode.insertBefore(banner, submitBtn);
     }
@@ -9840,7 +9840,7 @@ async function loadScannerSection() {
       return new Date(b.event_date || 0) - new Date(a.event_date || 0);
     });
     const opts = sorted.map(e =>
-      `<option value="${e.id}">${e.is_upcoming ? '🟢' : '⚫'} ${e.title}${e.event_date ? ' — ' + new Date(e.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</option>`
+      `<option value="${e.id}">${e.is_upcoming ? '▶' : '●'} ${e.title}${e.event_date ? ' — ' + new Date(e.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</option>`
     ).join('');
     if (scanEvSel) scanEvSel.innerHTML = '<option value="">— Select event —</option>' + opts;
     if (dataEvSel) dataEvSel.innerHTML = '<option value="">— Select event —</option>' + opts;
