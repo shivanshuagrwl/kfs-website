@@ -10471,11 +10471,24 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   }
   const actionMap = { approved: 'approve', rejected: 'reject', changes_requested: 'request_changes' };
   const action = actionMap[decision] || decision;
-  await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
+  const result = await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
   loadMemberMovieSubmissions('pending');
-  // If approved, also refresh the Films table so the new film is visible and editable
+  // If approved, navigate to Films section and highlight the new film row
   if (action === 'approve') {
-    loadAdminData('movies');
+    const publishedId = result?.publishedMovieId;
+    showAdminSection('movies');
+    await loadAdminData('movies');
+    if (publishedId) {
+      setTimeout(() => {
+        const row = document.querySelector(`#admin-movies-tbody tr[data-id="${publishedId}"]`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.style.outline = '2px solid #4ade80';
+          row.style.background = 'rgba(74,222,128,0.06)';
+          setTimeout(() => { row.style.outline = ''; row.style.background = ''; }, 3000);
+        }
+      }, 300);
+    }
   }
 }
 
