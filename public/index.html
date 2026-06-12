@@ -4530,6 +4530,7 @@ KFS — KIIT Film Society"></textarea>
       <div class="admin-header">
         <div><h2>Member Accounts</h2><p>Manage member portal accounts, passwords and 2FA</p></div>
         <div style="display:flex;gap:8px">
+          <button onclick="sendTestCredentialsEmail()" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#818cf8">✉ Test Email</button>
           <button onclick="exportMemberData()" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:#58a6ff">↓ Export Excel</button>
           <button onclick="loadMemberAccounts()" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">Refresh</button>
         </div>
@@ -5184,7 +5185,7 @@ KFS — KIIT Film Society"></textarea>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button id="kfs-confirm-cancel" style="padding:9px 18px;border-radius:9px;border:1px solid var(--border);background:none;color:var(--white);font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
-      <button id="kfs-confirm-ok" style="padding:9px 18px;border-radius:9px;border:none;background:var(--accent,#6366f1);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Confirm</button>
+      <button id="kfs-confirm-ok" style="padding:9px 18px;border-radius:9px;border:none;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;min-width:90px">Confirm</button>
     </div>
   </div>
 </div>

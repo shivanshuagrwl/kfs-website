@@ -1964,7 +1964,7 @@ function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelL
     function cleanup(confirmed) {
       modal.classList.remove('open');
       // Reset to default (indigo/info) state
-      if (okBtn)   { okBtn.textContent = 'Confirm'; okBtn.style.background = 'var(--accent,#6366f1)'; okBtn.style.color = '#fff'; }
+      if (okBtn)   { okBtn.textContent = 'Confirm'; okBtn.style.background = '#6366f1'; okBtn.style.color = '#fff'; }
       if (cancelBtn) cancelBtn.textContent = 'Cancel';
       if (titleEl)  titleEl.textContent = 'Are you sure?';
       if (iconEl)  {
@@ -10268,10 +10268,56 @@ function openCreateMemberAccount(memberId, memberName) {
       });
 
       if (!emailToSend) return;
-      const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', { toEmail: emailToSend });
+      const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', { toEmail: emailToSend, customPassword: res.tempPassword });
       if (sent) showToast(`Credentials sent to ${emailToSend}`);
     }
   );
+}
+
+async function sendTestCredentialsEmail() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999';
+  overlay.innerHTML = `
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:28px 32px;width:420px;max-width:90vw">
+      <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:#f0f0f0">Send Test Credentials Email</p>
+      <p style="margin:0 0 18px;font-size:13px;color:#888">Sends a sample credentials email so you can verify your Brevo setup is working.</p>
+      <input id="test-creds-email-input" type="email" placeholder="your@email.com"
+        style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;font-size:14px;color:#f0f0f0;outline:none;margin-bottom:16px">
+      <div id="test-creds-msg" style="font-size:12px;margin-bottom:12px;min-height:16px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="test-creds-cancel" style="background:transparent;border:1px solid #2a2a2a;color:#888;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px">Cancel</button>
+        <button id="test-creds-send" style="background:#6366f1;border:none;color:#fff;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:500">Send Test</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input   = overlay.querySelector('#test-creds-email-input');
+  const sendBtn = overlay.querySelector('#test-creds-send');
+  const cancelBtn = overlay.querySelector('#test-creds-cancel');
+  const msgEl   = overlay.querySelector('#test-creds-msg');
+  setTimeout(() => input.focus(), 50);
+  const close = () => document.body.removeChild(overlay);
+  cancelBtn.onclick = close;
+  input.onkeydown = (e) => { if (e.key === 'Escape') close(); if (e.key === 'Enter') sendBtn.click(); };
+  sendBtn.onclick = async () => {
+    const email = input.value.trim();
+    if (!email || !email.includes('@')) { input.focus(); return; }
+    sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+    msgEl.style.color = '#888'; msgEl.textContent = '';
+    try {
+      const res = await apiFetch('/api/admin/members/test-credentials-email', 'POST', { toEmail: email });
+      if (res && res.success) {
+        msgEl.style.color = '#4ade80'; msgEl.textContent = '✓ Test email sent! Check your inbox.';
+        sendBtn.textContent = 'Sent ✓';
+        setTimeout(close, 2500);
+      } else {
+        msgEl.style.color = '#f87171'; msgEl.textContent = res?.error || 'Failed to send';
+        sendBtn.disabled = false; sendBtn.textContent = 'Send Test';
+      }
+    } catch (e) {
+      msgEl.style.color = '#f87171'; msgEl.textContent = 'Error: ' + e.message;
+      sendBtn.disabled = false; sendBtn.textContent = 'Send Test';
+    }
+  };
 }
 
 async function exportMemberData() {

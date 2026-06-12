@@ -8003,8 +8003,9 @@ async function sendMemberCredentialsEmail({ toEmail, toName, username, tempPassw
   const s = {};
   (rows || []).forEach(r => (s[r.key] = r.value));
   if (!s.brevo_api_key) {
-    console.warn("[member-email] Brevo API key not configured — skipping credentials email");
-    return;
+    const msg = "[member-email] Brevo API key not configured — cannot send credentials email";
+    console.warn(msg);
+    throw new Error("Brevo API key not configured. Please add it in Admin → Settings → Email.");
   }
 
   const fromName    = s.smtp_from_name || "KFS — KIIT Film Society";
@@ -8613,15 +8614,40 @@ app.post("/api/admin/members/:id/send-credentials", requireSection("members"), a
       .update({ password_hash: hash, must_change_password: true }).eq("member_id", memberId);
   }
 
-  await sendMemberCredentialsEmail({
-    toEmail: recipientEmail,
-    toName: member.name,
-    username: account.username,
-    tempPassword: customPassword || "Kfs@2026",
-  });
+  try {
+    await sendMemberCredentialsEmail({
+      toEmail: recipientEmail,
+      toName: member.name,
+      username: account.username,
+      tempPassword: customPassword || "Kfs@2026",
+    });
+  } catch (emailErr) {
+    console.error("[send-credentials] Email send failed:", emailErr.message);
+    return res.status(500).json({ error: "Failed to send email: " + emailErr.message });
+  }
 
   logActivity(req.admin.id, req.admin.name, "email_sent", "member_account", account.username).catch(() => {});
   res.json({ success: true });
+});
+
+// POST /api/admin/members/test-credentials-email — send a test credentials email
+app.post("/api/admin/members/test-credentials-email", requireSection("members"), async (req, res) => {
+  const { toEmail } = req.body;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!toEmail || !EMAIL_RE.test(toEmail.trim()))
+    return res.status(400).json({ error: "Valid email address required" });
+  try {
+    await sendMemberCredentialsEmail({
+      toEmail: toEmail.trim(),
+      toName: "Test Member",
+      username: "testmember.2025",
+      tempPassword: "Kfs@2026",
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[test-credentials-email]", err.message);
+    res.status(500).json({ error: "Email send failed: " + err.message });
+  }
 });
 
 // GET /api/admin/members/:id/account — view account info
