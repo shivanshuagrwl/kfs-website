@@ -234,10 +234,54 @@ class MemberPortalPicker {
 let _formPickers = {};
 
 function initMovieFormPickers() {
-  const pickerFields = ['director','producer','exec-producer','writer','dop','editor','sound','music','actors','support'];
+  const pickerFields = ['director','producer','dop','writer','editor','sound','management','gd','actors','support'];
   pickerFields.forEach(f => {
     _formPickers[f] = new MemberPortalPicker(`mfpick-${f}`, true);
   });
+}
+
+// ── Genre tag-input helpers ───────────────────────────────────────────────────
+
+function renderMfGenreTags(tags) {
+  const wrap  = $id('mf-genre-wrap');
+  const input = $id('mf-genre-input');
+  if (!wrap || !input) return;
+  wrap.querySelectorAll('.mf-tag-chip').forEach(c => c.remove());
+  tags.forEach((tag, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'mf-tag-chip';
+    chip.innerHTML = `${tag}<button type="button" aria-label="Remove ${tag}">×</button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+      const cur = JSON.parse($id('mf-genre').value || '[]');
+      cur.splice(i, 1);
+      $id('mf-genre').value = JSON.stringify(cur);
+      renderMfGenreTags(cur);
+    });
+    wrap.insertBefore(chip, input);
+  });
+}
+
+function addMfGenreTag(raw) {
+  raw.split(/[,،]+/).map(s => s.trim()).filter(Boolean).forEach(tag => {
+    const cur = JSON.parse($id('mf-genre').value || '[]');
+    if (!cur.includes(tag)) { cur.push(tag); $id('mf-genre').value = JSON.stringify(cur); renderMfGenreTags(cur); }
+  });
+}
+
+function initMfGenreInput() {
+  const wrap  = $id('mf-genre-wrap');
+  const input = $id('mf-genre-input');
+  if (!wrap || !input) return;
+  wrap.addEventListener('click', () => input.focus());
+  input.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
+      e.preventDefault(); addMfGenreTag(input.value); input.value = '';
+    } else if (e.key === 'Backspace' && !input.value) {
+      const cur = JSON.parse($id('mf-genre').value || '[]');
+      if (cur.length) { cur.pop(); $id('mf-genre').value = JSON.stringify(cur); renderMfGenreTags(cur); }
+    }
+  });
+  input.addEventListener('blur', () => { if (input.value.trim()) { addMfGenreTag(input.value); input.value = ''; } });
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -650,6 +694,7 @@ async function showMovieForm(id) {
   // Ensure members are loaded before init pickers
   await loadPortalMembers();
   initMovieFormPickers();
+  initMfGenreInput();
 
   if (id) {
     try {
@@ -663,24 +708,31 @@ async function showMovieForm(id) {
         $id('mf-watch').value       = md.watch_url || '';
         $id('mf-runtime').value     = md.runtime || '';
         $id('mf-language').value    = md.language || '';
-        $id('mf-genre').value       = Array.isArray(md.genre) ? md.genre.join(', ') : (md.genre || '');
-        $id('mf-additional').value  = md.additional_credits || '';
+        $id('mf-year').value        = md.release_year || '';
+        $id('mf-spotify').value     = md.spotify_url || '';
+        $id('mf-apple-music').value = md.apple_music_url || '';
+        // Genre tags
+        const genres = Array.isArray(md.genre) ? md.genre : (md.genre ? String(md.genre).split(',').map(s=>s.trim()).filter(Boolean) : []);
+        $id('mf-genre').value = JSON.stringify(genres);
+        renderMfGenreTags(genres);
         // Fill pickers
         _formPickers['director']?.setValue(md.director || '');
         _formPickers['producer']?.setValue(md.producer || '');
-        _formPickers['exec-producer']?.setValue(md.executive_producer || '');
-        _formPickers['writer']?.setValue(md.writer || '');
         _formPickers['dop']?.setValue(md.dop || '');
+        _formPickers['writer']?.setValue(md.writer || '');
         _formPickers['editor']?.setValue(md.video_editor || '');
         _formPickers['sound']?.setValue(md.sound_design || '');
-        _formPickers['music']?.setValue(md.music_director || '');
+        _formPickers['management']?.setValue(md.management || '');
+        _formPickers['gd']?.setValue(md.graphic_design || '');
         _formPickers['actors']?.setValue(md.actors || '');
         _formPickers['support']?.setValue(md.support_crew || '');
       }
     } catch (_) {}
   } else {
-    ['mf-title','mf-desc','mf-trailer','mf-watch','mf-runtime','mf-language','mf-genre','mf-additional']
+    ['mf-title','mf-desc','mf-trailer','mf-watch','mf-runtime','mf-language','mf-year','mf-spotify','mf-apple-music']
       .forEach(fid => { const el = $id(fid); if (el) el.value = ''; });
+    $id('mf-genre').value = '[]';
+    renderMfGenreTags([]);
     // Clear all pickers
     Object.values(_formPickers).forEach(p => { if (p) { p.selected = []; p._renderTags?.(); } });
   }
@@ -702,25 +754,27 @@ async function submitMovie() {
   hideEl('movie-form-err'); hideEl('movie-form-ok');
   try {
     const form       = new FormData();
-    const genreRaw   = $id('mf-genre').value.split(',').map(s => s.trim()).filter(Boolean);
-    form.append('title',              $id('mf-title').value);
-    form.append('description',        $id('mf-desc').value);
-    form.append('trailer_url',        $id('mf-trailer').value);
-    form.append('watch_url',          $id('mf-watch').value);
-    form.append('runtime',            $id('mf-runtime').value);
-    form.append('language',           $id('mf-language').value);
-    form.append('genre',              JSON.stringify(genreRaw));
-    form.append('director',           _formPickers['director']?.getValue()      || '');
-    form.append('producer',           _formPickers['producer']?.getValue()      || '');
-    form.append('executive_producer', _formPickers['exec-producer']?.getValue() || '');
-    form.append('writer',             _formPickers['writer']?.getValue()        || '');
-    form.append('dop',                _formPickers['dop']?.getValue()           || '');
-    form.append('video_editor',       _formPickers['editor']?.getValue()        || '');
-    form.append('sound_design',       _formPickers['sound']?.getValue()         || '');
-    form.append('music_director',     _formPickers['music']?.getValue()         || '');
-    form.append('actors',             _formPickers['actors']?.getValue()        || '');
-    form.append('support_crew',       _formPickers['support']?.getValue()       || '');
-    form.append('additional_credits', $id('mf-additional').value);
+    const genreRaw   = JSON.parse($id('mf-genre').value || '[]');
+    form.append('title',           $id('mf-title').value);
+    form.append('release_year',    $id('mf-year').value);
+    form.append('description',     $id('mf-desc').value);
+    form.append('trailer_url',     $id('mf-trailer').value);
+    form.append('watch_url',       $id('mf-watch').value);
+    form.append('runtime',         $id('mf-runtime').value);
+    form.append('language',        $id('mf-language').value);
+    form.append('genre',           JSON.stringify(genreRaw));
+    form.append('spotify_url',     $id('mf-spotify').value);
+    form.append('apple_music_url', $id('mf-apple-music').value);
+    form.append('director',        _formPickers['director']?.getValue()    || '');
+    form.append('producer',        _formPickers['producer']?.getValue()    || '');
+    form.append('dop',             _formPickers['dop']?.getValue()         || '');
+    form.append('writer',          _formPickers['writer']?.getValue()      || '');
+    form.append('video_editor',    _formPickers['editor']?.getValue()      || '');
+    form.append('sound_design',    _formPickers['sound']?.getValue()       || '');
+    form.append('management',      _formPickers['management']?.getValue()  || '');
+    form.append('graphic_design',  _formPickers['gd']?.getValue()          || '');
+    form.append('actors',          _formPickers['actors']?.getValue()      || '');
+    form.append('support_crew',    _formPickers['support']?.getValue()     || '');
     const posterFile = $id('mf-poster').files[0];
     if (posterFile) form.append('poster', posterFile);
 
