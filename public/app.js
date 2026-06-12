@@ -2606,7 +2606,7 @@ loadCustomTags();
 
 async function saveBlog() {
   const id = document.getElementById('blog-edit-id').value;
-  const btn = document.querySelector('button[onclick="saveBlog()"]');
+  const btn = document.querySelector('button[data-action="saveBlog"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('blog-title').value);
@@ -2728,7 +2728,7 @@ function closeEventModal() { document.getElementById('event-modal').classList.re
 
 async function saveEvent() {
   const id = document.getElementById('event-edit-id').value;
-  const btn = document.querySelector('#event-modal .btn-success') || document.querySelector('#event-modal button[onclick="saveEvent()"]');
+  const btn = document.querySelector('#event-modal .btn-success') || document.querySelector('#event-modal button[data-action="saveEvent"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('event-title').value);
@@ -2816,7 +2816,7 @@ function closeMemberModal() { document.getElementById('member-modal').classList.
 
 async function saveMember() {
   const id = document.getElementById('member-edit-id').value;
-  const btn = document.querySelector('#member-modal button[onclick="saveMember()"]');
+  const btn = document.querySelector('#member-modal button[data-action="saveMember"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('name', document.getElementById('member-name').value);
@@ -3012,7 +3012,7 @@ function tryAutoFetchYTRuntime(url) {
 
 async function saveMovie() {
   const id = document.getElementById('movie-edit-id').value;
-  const btn = document.querySelector('#movie-modal button[onclick="saveMovie()"]');
+  const btn = document.querySelector('#movie-modal button[data-action="saveMovie"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('title', document.getElementById('movie-title').value);
@@ -3114,7 +3114,7 @@ function closeTestimonialModal() { document.getElementById('testimonial-modal').
 
 async function saveTestimonial() {
   const id = document.getElementById('testimonial-edit-id').value;
-  const btn = document.querySelector('button[onclick="saveTestimonial()"]');
+  const btn = document.querySelector('button[data-action="saveTestimonial"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('name', document.getElementById('testimonial-name').value);
@@ -3177,7 +3177,7 @@ function closeAchievementModal() { document.getElementById('achievement-modal').
 
 async function saveAchievement() {
   const id = document.getElementById('achievement-edit-id').value;
-  const btn = document.querySelector('button[onclick="saveAchievement()"]');
+  const btn = document.querySelector('button[data-action="saveAchievement"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const body = {
     title: document.getElementById('achievement-title').value,
@@ -3277,7 +3277,7 @@ async function saveSettings() {
 }
 
 async function saveEmailSettings() {
-  const btn = document.querySelector('[onclick="saveEmailSettings()"]');
+  const btn = document.querySelector('[data-action="saveEmailSettings"]');
   const msg = document.getElementById('email-settings-msg');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   try {
@@ -3305,7 +3305,7 @@ async function saveEmailSettings() {
 }
 
 async function sendTestEmail() {
-  const btn = document.querySelector('[onclick="sendTestEmail()"]');
+  const btn = document.querySelector('[data-action="sendTestEmail"]');
   const msg = document.getElementById('email-settings-msg');
   const to = prompt('Send test confirmation email to which address?');
   if (!to || !to.includes('@')) return;
@@ -3330,7 +3330,7 @@ async function sendTestEmail() {
 }
 
 async function saveNoShortsEgg() {
-  const btn = document.querySelector('[onclick="saveNoShortsEgg()"]');
+  const btn = document.querySelector('[data-action="saveNoShortsEgg"]');
   const msg = document.getElementById('noshorts-egg-msg');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
   try {
