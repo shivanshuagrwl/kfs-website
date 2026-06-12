@@ -1930,13 +1930,16 @@ window.kfsConfirm = kfsConfirm;
 // ── CONFIRM MODAL (member portal actions) ─────────────────────────────────────
 // showConfirmModal(msg, onConfirm, onCancel?, okLabel?, cancelLabel?)
 // Reuses kfs-confirm-modal DOM with a neutral OK button for non-destructive confirms.
-function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelLabel = 'Cancel') {
+// showConfirmModal(msg, onConfirm, onCancel?, okLabel?, cancelLabel?, okStyle?)
+// okStyle: 'danger' for red destructive actions, default is indigo accent
+function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelLabel = 'Cancel', okStyle = 'accent') {
   return new Promise(resolve => {
     const modal     = document.getElementById('kfs-confirm-modal');
     const titleEl   = document.getElementById('kfs-confirm-title');
     const msgEl     = document.getElementById('kfs-confirm-msg');
     const okBtn     = document.getElementById('kfs-confirm-ok');
     const cancelBtn = document.getElementById('kfs-confirm-cancel');
+    const iconEl    = document.getElementById('kfs-confirm-icon');
     if (!modal) {
       const confirmed = window.confirm(msg);
       if (confirmed && onConfirm) onConfirm();
@@ -1944,16 +1947,30 @@ function showConfirmModal(msg, onConfirm, onCancel, okLabel = 'Confirm', cancelL
       resolve(confirmed);
       return;
     }
+    const isDanger = okStyle === 'danger';
+    const btnBg    = isDanger ? '#f85149' : 'var(--accent,#6366f1)';
+    const iconBg   = isDanger ? 'rgba(248,81,73,.12)' : 'rgba(99,102,241,.15)';
+    const iconClr  = isDanger ? '#f85149' : '#818cf8';
+    const iconSvg  = isDanger
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${iconClr}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${iconClr}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+
     if (titleEl) titleEl.textContent = '';
     if (msgEl)   msgEl.innerHTML = msg;
-    if (okBtn)   { okBtn.textContent = okLabel; okBtn.style.background = 'var(--accent,#6366f1)'; }
+    if (okBtn)   { okBtn.textContent = okLabel; okBtn.style.background = btnBg; okBtn.style.color = '#fff'; }
     if (cancelBtn) cancelBtn.textContent = cancelLabel;
+    if (iconEl)  { iconEl.style.background = iconBg; iconEl.innerHTML = iconSvg; }
     modal.classList.add('open');
     function cleanup(confirmed) {
       modal.classList.remove('open');
-      if (okBtn)    { okBtn.textContent = 'Delete'; okBtn.style.background = '#f85149'; }
+      // Reset to default (indigo/info) state
+      if (okBtn)   { okBtn.textContent = 'Confirm'; okBtn.style.background = 'var(--accent,#6366f1)'; okBtn.style.color = '#fff'; }
       if (cancelBtn) cancelBtn.textContent = 'Cancel';
       if (titleEl)  titleEl.textContent = 'Are you sure?';
+      if (iconEl)  {
+        iconEl.style.background = 'rgba(99,102,241,.15)';
+        iconEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+      }
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onNo);
       if (confirmed && onConfirm) onConfirm();
