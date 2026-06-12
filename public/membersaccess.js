@@ -490,18 +490,30 @@ function switchPanel(el) {
 async function loadProfile() {
   try {
     const d = await api('GET', '/api/member/profile');
-    fillProfile(d);
-    setText('sidebar-name', d.name || '—');
-    setText('sidebar-role', d.role || d.domain || '—');
-    const av = $id('sidebar-avatar');
-    if (d.photo) {
-      av.innerHTML = `<img src="${d.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />`;
-    } else {
-      av.textContent = (d.name || '?')[0].toUpperCase();
-    }
     const changes  = await api('GET', '/api/member/profile/pending-changes');
     const pending  = changes.some(c => c.status === 'pending');
     $id('profile-pending-banner').style.display = pending ? 'block' : 'none';
+
+    // If there's a pending change, merge its new_values over the current profile
+    // so the member sees what they submitted rather than blank/old data
+    let displayData = { ...d };
+    if (pending) {
+      // Find the most recent pending change
+      const latestPending = changes.find(c => c.status === 'pending');
+      if (latestPending && latestPending.new_values) {
+        displayData = { ...d, ...latestPending.new_values };
+      }
+    }
+
+    fillProfile(displayData);
+    setText('sidebar-name', displayData.name || '—');
+    setText('sidebar-role', displayData.role || displayData.domain || '—');
+    const av = $id('sidebar-avatar');
+    if (displayData.photo) {
+      av.innerHTML = `<img src="${displayData.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />`;
+    } else {
+      av.textContent = (displayData.name || '?')[0].toUpperCase();
+    }
   } catch (e) {
     console.error('loadProfile:', e);
   }

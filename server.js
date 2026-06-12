@@ -2010,13 +2010,37 @@ app.delete(
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 app.get("/api/members", async (req, res) => {
   cacheFor(res, 120);
-  const data = await memCache("members:list", 600, async () => {
-    const { data } = await supabasePublic
+  const data = await memCache("members:list", 120, async () => {
+    const { data, error } = await supabasePublic
       .from("members")
       .select(
         "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
       )
       .order("sort_order", { ascending: true });
+
+    // If social/portal columns don't exist yet, fall back to base columns
+    if (error) {
+      console.warn("[members] Full select failed (missing columns?), trying base columns:", error.message);
+      const { data: base } = await supabase
+        .from("members")
+        .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+        .order("sort_order", { ascending: true });
+      return base || [];
+    }
+
+    // If anon client returned empty (likely an RLS policy blocking reads),
+    // fall back to the admin client so the public page always works
+    if (!data || data.length === 0) {
+      console.warn("[members] supabasePublic returned empty — falling back to admin client (check RLS on members table)");
+      const { data: fallback } = await supabase
+        .from("members")
+        .select(
+          "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
+        )
+        .order("sort_order", { ascending: true });
+      return fallback || [];
+    }
+
     return data || [];
   });
   res.json(data);
@@ -2024,11 +2048,23 @@ app.get("/api/members", async (req, res) => {
 
 // Admin GET — bypasses memCache so panel always shows fresh data after add/edit/delete
 app.get("/api/admin/members", requireSection("members"), async (req, res) => {
-  const { data, error } = await supabase
+  // Try full column list first; fall back to base columns if social/portal columns don't exist yet
+  let { data, error } = await supabase
     .from("members")
     .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links")
     .order("sort_order", { ascending: true });
-  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  if (error) {
+    // Likely means some columns (instagram, custom_links etc.) don't exist yet — run member portal migration
+    console.warn("[admin/members] Full select failed, falling back to base columns:", error.message);
+    const fallback = await supabase
+      .from("members")
+      .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+      .order("sort_order", { ascending: true });
+    if (fallback.error) return res.status(500).json({ error: "Internal server error" });
+    return res.json(fallback.data || []);
+  }
+
   res.json(data || []);
 });
 
@@ -8715,16 +8751,58 @@ app.get("/api/admin/members/:id/activity", requireSection("members"), async (req
 
 async function initMemberDB() {
   try {
-    const { error } = await supabase
+    const { error: accErr } = await supabase
       .from("member_accounts")
       .select("id", { count: "exact", head: true })
       .limit(1);
-    if (error) {
+    if (accErr) {
       console.warn("[initMemberDB] member_accounts table not found — run member_portal_migration.sql in Supabase");
-    } else {
-      await loadRevokedMemberTokens();
-      console.log("[initMemberDB] Member portal tables OK");
+      return;
     }
+
+    // Check whether social/portal columns exist on members table
+    const { error: colErr } = await supabase
+      .from("members")
+      .select("instagram,github,linkedin,twitter,youtube,website,custom_links,roll_no,mobile,email,updated_at")
+      .limit(1);
+    if (colErr) {
+      console.warn(
+        "[initMemberDB] members table is missing social/portal columns. Run this SQL in Supabase:
+
+" +
+        "  ALTER TABLE members
+" +
+        "    ADD COLUMN IF NOT EXISTS roll_no       TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS mobile        TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS email         TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS instagram     TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS linkedin      TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS github        TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS twitter       TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS youtube       TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS website       TEXT,
+" +
+        "    ADD COLUMN IF NOT EXISTS custom_links  JSONB DEFAULT '[]',
+" +
+        "    ADD COLUMN IF NOT EXISTS updated_at    TIMESTAMPTZ DEFAULT NOW();
+
+" +
+        "  (Error: " + colErr.message + ")"
+      );
+    } else {
+      console.log("[initMemberDB] members table columns OK");
+    }
+
+    await loadRevokedMemberTokens();
+    console.log("[initMemberDB] Member portal tables OK");
   } catch (e) {
     console.error("[initMemberDB] error:", e.message);
   }
