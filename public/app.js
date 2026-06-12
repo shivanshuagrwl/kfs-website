@@ -10451,6 +10451,8 @@ async function loadMemberMovieSubmissions(status = 'pending') {
           <button class="btn-sm" onclick="reviewMemberMovieSubmission(${r.id},'changes_requested')">Request Changes</button>
           <button class="btn-sm danger" onclick="reviewMemberMovieSubmission(${r.id},'rejected')">Reject</button>
         </div>`
+      : status === 'approved' && r.published_movie_id
+      ? `<div class="action-btns"><button class="btn-sm" onclick="showAdminSection('movies');setTimeout(()=>{const row=document.querySelector('#admin-movies-tbody tr[data-id=\\'${r.published_movie_id}\\']');if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.style.outline='2px solid #4ade80';setTimeout(()=>row.style.outline='',2000);}},400)">Edit in Films →</button></div>`
       : `<span style="font-size:12px;color:var(--grey)">${r.reviewed_by || '—'}</span>`;
     return `<tr>
       <td style="font-weight:500">${r.members?.name || r.member_id}</td>
@@ -10471,6 +10473,10 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   const action = actionMap[decision] || decision;
   await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
   loadMemberMovieSubmissions('pending');
+  // If approved, also refresh the Films table so the new film is visible and editable
+  if (action === 'approve') {
+    loadAdminData('movies');
+  }
 }
 
 // ── Work Edit Requests ────────────────────────────────────────────────────────

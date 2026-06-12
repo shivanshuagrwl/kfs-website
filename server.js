@@ -8484,8 +8484,9 @@ app.post(
   async (req, res) => {
     const {
       title, description, trailer_url, watch_url, runtime, language, genre,
-      director, producer, executive_producer, writer, dop, video_editor,
-      sound_design, music_director, actors, support_crew, additional_credits,
+      release_year, director, producer, dop, writer, video_editor,
+      sound_design, management, graphic_design, actors, support_crew,
+      spotify_url, apple_music_url,
     } = req.body;
 
     if (!title || !title.trim())
@@ -8507,13 +8508,13 @@ app.post(
       title: title.trim(), description: description || null,
       trailer_url: trailer_url || null, watch_url: watch_url || null,
       runtime: runtime ? parseInt(runtime, 10) : null, language: language || null,
-      genre: genreVal,
+      genre: genreVal, release_year: release_year || null,
       director: director || null, producer: producer || null,
-      executive_producer: executive_producer || null, writer: writer || null,
-      dop: dop || null, video_editor: video_editor || null,
-      sound_design: sound_design || null, music_director: music_director || null,
+      dop: dop || null, writer: writer || null,
+      video_editor: video_editor || null, sound_design: sound_design || null,
+      management: management || null, graphic_design: graphic_design || null,
       actors: actors || null, support_crew: support_crew || null,
-      additional_credits: additional_credits || null,
+      spotify_url: spotify_url || null, apple_music_url: apple_music_url || null,
       poster_image: posterUrl,
     };
 
@@ -8545,8 +8546,9 @@ app.put(
 
     const updated = { ...sub.movie_data };
     const fields = ["title","description","trailer_url","watch_url","runtime","language","genre",
-                    "director","producer","executive_producer","writer","dop","video_editor",
-                    "sound_design","music_director","actors","support_crew","additional_credits"];
+                    "release_year","director","producer","dop","writer","video_editor",
+                    "sound_design","management","graphic_design","actors","support_crew",
+                    "spotify_url","apple_music_url"];
     fields.forEach(f => { if (req.body[f] !== undefined) updated[f] = req.body[f]; });
     if (req.file) updated.poster_image = await uploadImage(req.file, "member-movies");
 

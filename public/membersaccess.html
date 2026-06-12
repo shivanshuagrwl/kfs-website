@@ -158,6 +158,29 @@
     .btn-danger { background: #2a0a0a; color: var(--danger); border: 1px solid #3a1414; }
     .btn-danger:hover { background: #3a1010; }
 
+    /* Genre tag input */
+    .mf-tag-input-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      background: #1a1a1a; border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 10px; min-height: 44px; cursor: text;
+      transition: border-color .15s;
+    }
+    .mf-tag-input-wrap:focus-within { border-color: #444; }
+    .mf-tag-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px;
+      padding: 2px 8px; font-size: 12px; color: var(--text);
+    }
+    .mf-tag-chip button {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 0; font-size: 14px; line-height: 1; display: flex; align-items: center;
+    }
+    .mf-tag-chip button:hover { color: var(--text); }
+    .mf-tag-bare-input {
+      border: none; background: transparent; color: var(--text); font-size: 14px;
+      outline: none; flex: 1; min-width: 100px; padding: 0;
+    }
+
     /* QR container */
     .qr-box { text-align: center; padding: 24px; }
     .qr-box img { border-radius: 8px; }
@@ -523,56 +546,64 @@
             <div class="card-title" id="movie-form-title">New Submission</div>
             <input type="hidden" id="movie-edit-id" />
 
-            <div class="form-grid">
-              <div class="form-group col-span-2">
-                <label>Title *</label>
-                <input id="mf-title" type="text" placeholder="Film title" />
+            <div class="form-group">
+              <label>Movie Poster</label>
+              <input type="file" id="mf-poster" accept="image/*" style="border:none;padding:0;background:transparent" />
+            </div>
+            <div class="form-group">
+              <label>Title *</label>
+              <input id="mf-title" type="text" />
+            </div>
+            <div class="form-group">
+              <label>Release Year</label>
+              <input id="mf-year" type="text" placeholder="2024" />
+            </div>
+            <div style="display:flex;gap:12px">
+              <div class="form-group" style="flex:1">
+                <label>Runtime <span style="font-weight:400;color:var(--muted)">(minutes)</span></label>
+                <input id="mf-runtime" type="number" placeholder="e.g. 18" min="1" />
               </div>
-              <div class="form-group col-span-2">
-                <label>Description</label>
-                <textarea id="mf-desc" rows="3" placeholder="Short synopsis…"></textarea>
-              </div>
-              <div class="form-group">
-                <label>Trailer URL</label>
-                <input id="mf-trailer" type="url" placeholder="https://youtube.com/…" />
-              </div>
-              <div class="form-group">
-                <label>Watch URL</label>
-                <input id="mf-watch" type="url" placeholder="https://…" />
-              </div>
-              <div class="form-group">
-                <label>Runtime (mins)</label>
-                <input id="mf-runtime" type="number" placeholder="e.g. 20" />
-              </div>
-              <div class="form-group">
+              <div class="form-group" style="flex:1">
                 <label>Language</label>
                 <input id="mf-language" type="text" placeholder="e.g. Hindi, English" />
               </div>
-              <div class="form-group col-span-2">
-                <label>Genre (comma-separated)</label>
-                <input id="mf-genre" type="text" placeholder="Drama, Thriller" />
+            </div>
+            <div class="form-group">
+              <label>Genre Tags <span style="font-weight:400;color:var(--muted)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
+              <div class="mf-tag-input-wrap" id="mf-genre-wrap">
+                <input type="hidden" id="mf-genre" />
+                <input class="mf-tag-bare-input" id="mf-genre-input" placeholder="Add genre…" autocomplete="off" />
               </div>
             </div>
-            <hr class="divider" />
-            <div class="card-title">Credits</div>
-            <div class="form-grid">
-              <div class="form-group"><label>Director</label><div class="portal-mpick" id="mfpick-director"></div></div>
-              <div class="form-group"><label>Producer</label><div class="portal-mpick" id="mfpick-producer"></div></div>
-              <div class="form-group"><label>Executive Producer</label><div class="portal-mpick" id="mfpick-exec-producer"></div></div>
-              <div class="form-group"><label>Writer / Screenwriter</label><div class="portal-mpick" id="mfpick-writer"></div></div>
-              <div class="form-group"><label>Cinematographer / DOP</label><div class="portal-mpick" id="mfpick-dop"></div></div>
-              <div class="form-group"><label>Editor</label><div class="portal-mpick" id="mfpick-editor"></div></div>
-              <div class="form-group"><label>Sound Designer</label><div class="portal-mpick" id="mfpick-sound"></div></div>
-              <div class="form-group"><label>Music Director</label><div class="portal-mpick" id="mfpick-music"></div></div>
-              <div class="form-group col-span-2"><label>Actors</label><div class="portal-mpick" id="mfpick-actors"></div></div>
-              <div class="form-group col-span-2"><label>Support Crew</label><div class="portal-mpick" id="mfpick-support"></div></div>
-              <div class="form-group col-span-2"><label>Additional Credits</label><textarea id="mf-additional" rows="2"></textarea></div>
-            </div>
-            <hr class="divider" />
-            <div class="card-title">Poster</div>
             <div class="form-group">
-              <label>Poster Image (JPEG/PNG/WebP)</label>
-              <input type="file" id="mf-poster" accept="image/jpeg,image/png,image/webp" />
+              <label>Description</label>
+              <textarea id="mf-desc" rows="3" placeholder="A brief synopsis or description of the film..."></textarea>
+            </div>
+            <div class="form-group"><label>Director</label><div class="portal-mpick" id="mfpick-director"></div></div>
+            <div class="form-group"><label>Producer</label><div class="portal-mpick" id="mfpick-producer"></div></div>
+            <div class="form-group"><label>DOP (Director of Photography)</label><div class="portal-mpick" id="mfpick-dop"></div></div>
+            <div class="form-group"><label>Script Writer</label><div class="portal-mpick" id="mfpick-writer"></div></div>
+            <div class="form-group"><label>Video Editor</label><div class="portal-mpick" id="mfpick-editor"></div></div>
+            <div class="form-group"><label>Sound Design</label><div class="portal-mpick" id="mfpick-sound"></div></div>
+            <div class="form-group"><label>Management</label><div class="portal-mpick" id="mfpick-management"></div></div>
+            <div class="form-group"><label>Graphic Design</label><div class="portal-mpick" id="mfpick-gd"></div></div>
+            <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--muted)">(comma separated or pick)</span></label><div class="portal-mpick" id="mfpick-actors"></div></div>
+            <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--muted)">(comma separated or pick)</span></label><div class="portal-mpick" id="mfpick-support"></div></div>
+            <div class="form-group">
+              <label>Trailer URL <span style="font-weight:400;color:var(--muted)">(YouTube link)</span></label>
+              <input id="mf-trailer" type="text" placeholder="https://youtube.com/watch?v=... or youtu.be/..." />
+            </div>
+            <div class="form-group">
+              <label>▶ Watch Now URL <span style="font-weight:400;color:var(--muted)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label>
+              <input id="mf-watch" type="text" placeholder="https://youtube.com/watch?v=..." />
+            </div>
+            <div class="form-group">
+              <label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--muted)">(album, playlist, or track)</span></label>
+              <input id="mf-spotify" type="text" placeholder="https://open.spotify.com/album/2026" />
+            </div>
+            <div class="form-group">
+              <label>Apple Music Soundtrack URL <span style="font-weight:400;color:var(--muted)">(album, playlist, or track)</span></label>
+              <input id="mf-apple-music" type="text" placeholder="https://music.apple.com/2026/album/2026" />
             </div>
             <div style="display:flex;gap:12px;margin-top:8px">
               <button class="btn-primary" id="movie-submit-btn" style="max-width:180px">Submit for Review</button>
