@@ -2215,24 +2215,27 @@ async function loadAdminData(name) {
   else if (name==='members') {
     const members = await apiFetch('/api/admin/members');
     const tbody = document.getElementById('admin-members-tbody');
+    // Reset search + filters
     const searchEl = document.getElementById('member-admin-search');
     if (searchEl) searchEl.value = '';
     const clearBtn = document.getElementById('member-search-clear-btn');
     if (clearBtn) clearBtn.classList.remove('visible');
+    ['mf-batch','mf-role','mf-status','mf-portal'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+      if (el) el.classList.remove('active');
+    });
+    const resetBtn = document.getElementById('mf-reset-btn');
+    if (resetBtn) resetBtn.classList.remove('visible');
     if (!members || !members.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.<\/td><\/tr>`; return; }
-    tbody.innerHTML = members.map(m=>{ const mJson=JSON.stringify(m).replace(/"/g,'&quot;'); return `<tr data-id="${m.id}">
-      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"><\/td>
-      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
-      <td style="font-weight:500">${m.name}<\/td>
-      <td style="color:var(--grey)">${m.role||'—'}<\/td>
-      <td style="color:var(--grey)">${m.batch||'—'}<\/td>
-      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
-      <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
-        <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
-        <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
-      <\/div><\/td>
-    <\/tr>`; }).join('');
+    // Cache for client-side filtering
+    window._allAdminMembers = members;
+    // Populate batch dropdown with unique non-empty batches
+    const batchSel = document.getElementById('mf-batch');
+    if (batchSel) {
+      const batches = [...new Set(members.map(m => m.batch).filter(Boolean))].sort();
+      batchSel.innerHTML = `<option value="">All Batches<\/option>` + batches.map(b => `<option value="${b}">${b}<\/option>`).join('');
+    }
+    renderAdminMembersTable(members);
   }
   else if (name==='testimonials') {
     const testimonials = await apiFetch('/api/testimonials');
@@ -2854,26 +2857,21 @@ async function saveMember() {
     const saved = await res.json();
     closeMemberModal();
     localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
-    const tbody = document.getElementById('admin-members-tbody');
-    const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
-    const newRow = `<tr data-id="${saved.id}">
-      <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('members')"></td>
-      <td>${saved.photo?`<img src="${saved.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}</td>
-      <td style="font-weight:500">${saved.name}</td>
-      <td style="color:var(--grey)">${saved.role||'—'}</td>
-      <td style="color:var(--grey)">${saved.batch||'—'}</td>
-      <td><span class="tag ${saved.is_past?'':'upcoming'}">${saved.is_past?'Alumni':'Current'}</span></td>
-      <td><div class="action-btns">
-        <button class="btn-sm" onclick="editMember(${mJson})">Edit</button>
-        <button class="btn-sm danger" onclick="deleteMember('${saved.id}')">Delete</button>
-      </div></td>
-    </tr>`;
-    if (id) {
-      const existing = tbody.querySelector(`tr[data-id="${id}"]`);
-      if (existing) { existing.outerHTML = newRow; } else { loadAdminData('members'); }
+    // Update cache
+    if (window._allAdminMembers) {
+      const idx = window._allAdminMembers.findIndex(m => m.id === saved.id);
+      if (idx >= 0) window._allAdminMembers[idx] = { ...window._allAdminMembers[idx], ...saved };
+      else window._allAdminMembers.unshift(saved);
+      // Refresh batch dropdown
+      const batchSel = document.getElementById('mf-batch');
+      if (batchSel) {
+        const batches = [...new Set(window._allAdminMembers.map(m => m.batch).filter(Boolean))].sort();
+        const cur = batchSel.value;
+        batchSel.innerHTML = `<option value="">All Batches<\/option>` + batches.map(b=>`<option value="${b}" ${b===cur?'selected':''}>${b}<\/option>`).join('');
+      }
+      filterAdminMembers(); // re-render with active filters
     } else {
-      tbody.insertAdjacentHTML('afterbegin', newRow);
-      tbody.querySelectorAll('tr td[colspan]').forEach(td => td.closest('tr').remove());
+      loadAdminData('members');
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Save Member'; }
@@ -2886,16 +2884,11 @@ async function deleteMember(id) {
   const ok = await kfsConfirm({ title: `Remove member?`, msg: `<strong style="color:var(--white)">"${name}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Remove Member' });
   if (!ok) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
-  localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString());
+  // Remove from cache and re-render
+  if (window._allAdminMembers) window._allAdminMembers = window._allAdminMembers.filter(m => m.id !== id);
   row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
-  if (row) {
-    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
-    setTimeout(() => {
-      row.remove();
-      const tbody = document.getElementById('admin-members-tbody');
-      if (!tbody.querySelector('tr[data-id]')) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members yet.</td></tr>`;
-    }, 200);
-  }
+  if (row) { row.style.transition='opacity .2s'; row.style.opacity='0'; setTimeout(()=>{ row.remove(); filterAdminMembers(); }, 200); }
 }
 
 // ── GENRE TAG-PILL INPUT ──────────────────────────────────────────────────────
@@ -4191,32 +4184,195 @@ document.addEventListener('keydown', e => {
 
 // ── ADMIN MEMBER SEARCH ──────────────────────────────────────────────
 
-function filterAdminMembers(q) {
-  q = q.trim().toLowerCase();
+// ── MEMBER FILTER + SEARCH ────────────────────────────────────────────────────
+
+function renderAdminMembersTable(members) {
+  const tbody = document.getElementById('admin-members-tbody');
+  if (!tbody) return;
+  if (!members || !members.length) {
+    tbody.innerHTML = `<tr id="member-search-empty"><td colspan="7" style="text-align:center;padding:40px;color:var(--grey)">No members match your filters<\/td><\/tr>`;
+    document.getElementById('mf-result-count').textContent = '';
+    return;
+  }
+  tbody.innerHTML = members.map(m => {
+    const mJson = JSON.stringify(m).replace(/"/g,'&quot;');
+    const portalStatus = m.portal_status || 'none'; // 'active' | 'disabled' | 'none'
+    return `<tr data-id="${m.id}" data-batch="${(m.batch||'').toLowerCase()}" data-role="${(m.role||'').toLowerCase()}" data-status="${m.is_past?'alumni':'current'}" data-portal="${portalStatus}">
+      <td><input type="checkbox" class="bulk-cb" data-id="${m.id}" onchange="updateBulkBar('members')"><\/td>
+      <td>${m.photo?`<img src="${m.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}<\/td>
+      <td style="font-weight:500">${m.name}<\/td>
+      <td style="color:var(--grey)">${m.role||'—'}<\/td>
+      <td style="color:var(--grey)">${m.batch||'—'}<\/td>
+      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
+        <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
+        <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`;
+  }).join('');
+  clearBulkSelect('members');
+}
+
+function filterAdminMembers() {
+  const q        = (document.getElementById('member-admin-search')?.value || '').trim().toLowerCase();
+  const batch    = (document.getElementById('mf-batch')?.value || '').toLowerCase();
+  const role     = (document.getElementById('mf-role')?.value || '').toLowerCase();
+  const status   = document.getElementById('mf-status')?.value || '';
+  const portal   = document.getElementById('mf-portal')?.value || '';
+
+  // Update clear button visibility
   const clearBtn = document.getElementById('member-search-clear-btn');
   if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
-  // Re-read rows each time since they may have been re-rendered
-  const rows = document.querySelectorAll('#admin-members-tbody tr');
-  rows.forEach(row => {
-    const text = Array.from(row.querySelectorAll('td')).map(c => c.textContent.toLowerCase()).join(' ');
-    row.style.display = (!q || text.includes(q)) ? '' : 'none';
+
+  // Mark dropdowns as active
+  ['mf-batch','mf-role','mf-status','mf-portal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', !!el.value);
   });
-  // Show empty state if all hidden
-  const visible = Array.from(rows).filter(r => r.style.display !== 'none');
-  const tbody = document.getElementById('admin-members-tbody');
-  const existing = document.getElementById('member-search-empty');
-  if (existing) existing.remove();
-  if (rows.length > 0 && visible.length === 0) {
-    const tr = document.createElement('tr');
-    tr.id = 'member-search-empty';
-    tr.innerHTML = `<td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members match "${q}"<\/td>`;
-    tbody.appendChild(tr);
+
+  // Show/hide reset button
+  const hasFilters = q || batch || role || status || portal;
+  const resetBtn = document.getElementById('mf-reset-btn');
+  if (resetBtn) resetBtn.classList.toggle('visible', !!hasFilters);
+
+  const all = window._allAdminMembers || [];
+  if (!all.length) return;
+
+  const filtered = all.filter(m => {
+    if (q) {
+      const haystack = [m.name, m.role, m.batch, m.domain, m.bio, m.special_tag].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    if (batch && (m.batch||'').toLowerCase() !== batch) return false;
+    if (role  && (m.role||'').toLowerCase()  !== role)  return false;
+    if (status === 'current' &&  m.is_past) return false;
+    if (status === 'alumni'  && !m.is_past) return false;
+    if (portal) {
+      const ps = m.portal_status || 'none';
+      if (ps !== portal) return false;
+    }
+    return true;
+  });
+
+  renderAdminMembersTable(filtered);
+
+  // Update result count
+  const countEl = document.getElementById('mf-result-count');
+  if (countEl) {
+    countEl.textContent = hasFilters ? `${filtered.length} of ${all.length}` : '';
   }
 }
 
 function clearMemberSearch() {
   const searchEl = document.getElementById('member-admin-search');
-  if (searchEl) { searchEl.value = ''; filterAdminMembers(''); searchEl.focus(); }
+  if (searchEl) searchEl.value = '';
+  filterAdminMembers();
+  searchEl?.focus();
+}
+
+function resetMemberFilters() {
+  const searchEl = document.getElementById('member-admin-search');
+  if (searchEl) searchEl.value = '';
+  ['mf-batch','mf-role','mf-status','mf-portal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('active'); }
+  });
+  const resetBtn = document.getElementById('mf-reset-btn');
+  if (resetBtn) resetBtn.classList.remove('visible');
+  const clearBtn = document.getElementById('member-search-clear-btn');
+  if (clearBtn) clearBtn.classList.remove('visible');
+  const countEl = document.getElementById('mf-result-count');
+  if (countEl) countEl.textContent = '';
+  renderAdminMembersTable(window._allAdminMembers || []);
+}
+
+// ── BULK MEMBER ACTIONS ───────────────────────────────────────────────────────
+
+async function bulkMemberPortalAction(action) {
+  const checked = [...document.querySelectorAll('#section-members .bulk-cb:checked')];
+  if (!checked.length) return;
+  const ids = checked.map(cb => cb.dataset.id);
+  const label = action === 'enable' ? 'Enable' : 'Disable';
+  const confirmed = await showConfirmModal(
+    `${label} portal access for ${ids.length} member${ids.length>1?'s':''}?`,
+    null, null, label, 'Cancel', action === 'disable' ? 'danger' : 'accent'
+  );
+  if (!confirmed) return;
+  let done = 0, failed = 0;
+  await Promise.all(ids.map(async id => {
+    try {
+      // Fetch current status then toggle only if needed
+      const acc = await apiFetch(`/api/admin/members/${id}/account`);
+      const currentStatus = acc?.account_status;
+      const needsToggle = (action === 'enable' && currentStatus !== 'active') ||
+                          (action === 'disable' && currentStatus === 'active');
+      if (acc && needsToggle) {
+        await apiFetch(`/api/admin/members/${id}/account/toggle-status`, 'POST');
+      }
+      // Update the cached portal_status
+      const m = window._allAdminMembers?.find(x => x.id === id);
+      if (m) m.portal_status = acc ? (action === 'enable' ? 'active' : 'disabled') : 'none';
+      done++;
+    } catch { failed++; }
+  }));
+  clearBulkSelect('members');
+  filterAdminMembers();
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString());
+  if (typeof showToast === 'function') showToast(`${done} portal${done>1?'s':''} ${action}d${failed?' ('+failed+' failed)':''}`, done > 0 ? 'success' : 'error');
+}
+
+async function bulkAssignBatch() {
+  const checked = [...document.querySelectorAll('#section-members .bulk-cb:checked')];
+  if (!checked.length) return;
+  const ids = checked.map(cb => cb.dataset.id);
+
+  // Build a small inline prompt modal for the batch value
+  const existing = document.getElementById('kfs-batch-assign-modal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'kfs-batch-assign-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.innerHTML = `
+    <div style="background:#111;border:1px solid #222;border-radius:16px;padding:28px;width:340px;box-shadow:0 24px 60px rgba(0,0,0,.5)">
+      <div style="font-size:16px;font-weight:700;color:#f5f5f5;margin-bottom:6px">Assign Batch</div>
+      <div style="font-size:13px;color:#666;margin-bottom:20px">Assign a batch to ${ids.length} selected member${ids.length>1?'s':''}</div>
+      <input id="batch-assign-input" type="text" placeholder="e.g. 2024–28" style="width:100%;background:#0d0d0d;border:1px solid #2a2a2a;color:#f5f5f5;padding:10px 13px;border-radius:10px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:16px" />
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('kfs-batch-assign-modal').remove()" style="flex:1;background:transparent;border:1px solid #222;color:#888;border-radius:10px;padding:10px;font-size:13px;font-family:inherit;cursor:pointer">Cancel</button>
+        <button id="batch-assign-confirm-btn" style="flex:1;background:#f5f5f5;color:#0a0a0a;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">Assign</button>
+      </div>
+      <div id="batch-assign-err" style="font-size:12px;color:#ef4444;margin-top:10px;display:none"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input = document.getElementById('batch-assign-input');
+  input.focus();
+
+  document.getElementById('batch-assign-confirm-btn').onclick = async () => {
+    const batch = input.value.trim();
+    if (!batch) { const e=document.getElementById('batch-assign-err'); e.textContent='Please enter a batch'; e.style.display='block'; return; }
+    overlay.remove();
+    let done = 0;
+    await Promise.all(ids.map(async id => {
+      try {
+        const fd = new FormData();
+        const m = window._allAdminMembers?.find(x => x.id === id);
+        if (m) { Object.entries(m).forEach(([k,v]) => { if (v !== null && v !== undefined && k !== 'id') fd.append(k, v); }); }
+        fd.set('batch', batch);
+        await fetch(`/api/admin/members/${id}`, { method:'PUT', credentials:'include',
+          headers:{ 'Authorization':'Bearer '+adminToken, 'X-CSRF-Token':_csrfToken||'' }, body:fd });
+        // Update cache
+        const cached = window._allAdminMembers?.find(x => x.id === id);
+        if (cached) cached.batch = batch;
+        done++;
+      } catch {}
+    }));
+    clearBulkSelect('members');
+    filterAdminMembers();
+    if (typeof showToast === 'function') showToast(`Batch assigned to ${done} member${done>1?'s':''}`, 'success');
+  };
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('batch-assign-confirm-btn').click(); if (e.key === 'Escape') overlay.remove(); });
 }
 
 // ── ADMIN MANAGEMENT (master only) ───────────────────────────────────
@@ -10629,26 +10785,11 @@ async function mpmSave(memberId) {
     if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error || 'Save failed'); }
     const saved = await res.json();
     mpmShowMsg('Changes saved successfully', true);
-    // Update members table row in background
-    const tbody = document.getElementById('admin-members-tbody');
-    if (tbody) {
-      const existingRow = tbody.querySelector(`tr[data-id="${memberId}"]`);
-      if (existingRow) {
-        const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
-        existingRow.outerHTML = `<tr data-id="${saved.id}">
-          <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('members')"></td>
-          <td>${saved.photo?`<img src="${saved.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}</td>
-          <td style="font-weight:500">${saved.name}</td>
-          <td style="color:var(--grey)">${saved.role||'—'}</td>
-          <td style="color:var(--grey)">${saved.batch||'—'}</td>
-          <td><span class="tag ${saved.is_past?'':'upcoming'}">${saved.is_past?'Alumni':'Current'}</span></td>
-          <td><div class="action-btns">
-            <button class="btn-sm" onclick="editMember(${mJson})">Edit</button>
-            <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal</button>
-            <button class="btn-sm danger" onclick="deleteMember('${saved.id}')">Delete</button>
-          </div></td>
-        </tr>`;
-      }
+    // Update cache + re-render with filters
+    if (window._allAdminMembers) {
+      const idx = window._allAdminMembers.findIndex(m => m.id === memberId);
+      if (idx >= 0) window._allAdminMembers[idx] = { ...window._allAdminMembers[idx], ...saved };
+      filterAdminMembers();
     }
     // Signal member portal to refresh
     localStorage.setItem('kfs_admin_data_change', Date.now().toString());
