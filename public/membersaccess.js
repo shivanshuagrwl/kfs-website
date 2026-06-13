@@ -55,7 +55,16 @@ async function refreshToken() {
       headers: { 'x-csrf-token': csrf },
     });
     const d = await r.json().catch(() => ({}));
-    if (r.ok && d.token) { _token = d.token; return true; }
+    if (r.ok && d.token) {
+      _token = d.token;
+      localStorage.setItem('kfs-member-token', d.token);
+      if (d.member) {
+        _member = d.member;
+        localStorage.setItem('kfs-member-data', JSON.stringify(d.member));
+        window._member = d.member;
+      }
+      return true;
+    }
     return false;
   } catch { return false; }
 }
@@ -401,6 +410,10 @@ async function handleLogin() {
     }
     _token  = d.token;
     _member = d.member;
+    // Persist token + member data so index.html collab gate can read them
+    localStorage.setItem('kfs-member-token', d.token);
+    localStorage.setItem('kfs-member-data', JSON.stringify(d.member || {}));
+    window._member = d.member;
 
     if (d.must_change_password) { showStep('change-pw'); return; }
     if (!d.totp_enabled) {
@@ -434,6 +447,9 @@ async function submitTotp() {
     if (!r.ok) { showMsg('totp-err', d.error || 'Invalid code', false); return; }
     _token  = d.token;
     _member = d.member;
+    localStorage.setItem('kfs-member-token', d.token);
+    localStorage.setItem('kfs-member-data', JSON.stringify(d.member || {}));
+    window._member = d.member;
     if (d.must_change_password) { showStep('change-pw'); return; }
     await loadDashboard();
   } catch (e) {
@@ -512,6 +528,11 @@ async function verify2FASetup() {
 async function logoutMember() {
   try { await api('POST', '/api/member/logout'); } catch (_) {}
   _token = null; _member = null; _csrfToken = null;
+  localStorage.removeItem('kfs-member-token');
+  localStorage.removeItem('kfs-member-data');
+  localStorage.removeItem('kfs-member-profile');
+  window._member = null;
+  window._memberProfile = null;
   showLoginScreen();
 }
 
@@ -538,17 +559,20 @@ async function loadProfile() {
     const pending  = changes.some(c => c.status === 'pending');
     $id('profile-pending-banner').style.display = pending ? 'block' : 'none';
 
-    // If there's a pending change, merge its new_values over the current profile
-    // so the member sees what they submitted rather than blank/old data
     let displayData = { ...d };
     if (pending) {
-      // Find the most recent pending change
       const latestPending = changes.find(c => c.status === 'pending');
-      if (latestPending && latestPending.new_values) {
-        displayData = { ...d, ...latestPending.new_values };
-      }
+      if (latestPending && latestPending.new_values) displayData = { ...d, ...latestPending.new_values };
     }
 
+    window._memberProfile = d; // cache raw profile globally for collab + notifications
+    // Persist profile to localStorage so index.html collab gate can read it cross-tab
+    localStorage.setItem('kfs-member-profile', JSON.stringify(d));
+    // Ensure email/mobile are available on window._member for collab gate
+    if (!window._member) window._member = {};
+    if (d.email)  window._member.email  = d.email;
+    if (d.mobile) window._member.mobile = d.mobile;
+    if (d.name)   window._member.name   = d.name;
     fillProfile(displayData);
     setText('sidebar-name', displayData.name || '—');
     setText('sidebar-role', displayData.role || displayData.domain || '—');
@@ -1046,7 +1070,115 @@ async function loadActivity() {
   }
 }
 
-// ── Admin-change sync — refresh portal data when admin edits/deletes from same browser ──
+// ── Notifications (slide-in panel) ────────────────────────────────────────────
+
+let _notifOpen = false;
+let _notifLoading = false;
+
+// Icon per notification type
+function _notifIcon(type) {
+  const icons = {
+    movie_approved:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 2l-4 5-4-5"/></svg>`,
+    movie_rejected:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 2l-4 5-4-5"/></svg>`,
+    profile_change:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
+    event:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    announcement:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
+    default:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  };
+  return icons[type] || icons.default;
+}
+
+async function loadNotifications() {
+  if (!_token || _notifLoading) return;
+  _notifLoading = true;
+  const list = $id('notif-list');
+  if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-title" style="color:#333">Loading…</div></div>';
+  try {
+    const items = await api('GET', '/api/member/notifications');
+    const unread = items.filter(n => !n.is_read);
+    const badge = $id('notif-badge');
+    if (badge) {
+      badge.textContent = unread.length > 9 ? '9+' : unread.length;
+      badge.classList.toggle('visible', unread.length > 0);
+    }
+    if (!list) return;
+    if (!items.length) {
+      list.innerHTML = `
+        <div class="notif-empty">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div class="notif-empty-title">All caught up</div>
+          <div class="notif-empty-sub">No new notifications</div>
+        </div>`;
+      return;
+    }
+    list.innerHTML = items.map(n => `
+      <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="markNotifRead('${n.id}', this)">
+        <div class="notif-icon-bubble">${_notifIcon(n.type)}</div>
+        <div class="notif-item-content">
+          <div class="notif-item-title">${n.title}</div>
+          ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+          <div class="notif-item-time">${relTime(n.created_at)}</div>
+        </div>
+        <div class="notif-unread-pip ${n.is_read ? 'read' : ''}"></div>
+      </div>`).join('');
+  } catch(e) {
+    if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-sub">Could not load notifications</div></div>';
+  } finally { _notifLoading = false; }
+}
+
+function toggleNotifPanel() {
+  _notifOpen ? closeNotifPanel() : openNotifPanel();
+}
+
+function openNotifPanel() {
+  _notifOpen = true;
+  const panel    = $id('notif-panel');
+  const backdrop = $id('notif-panel-backdrop');
+  const btn      = $id('notif-bell-btn');
+  if (panel)    { panel.classList.add('open'); }
+  if (backdrop) { backdrop.classList.add('open'); }
+  if (btn)      { btn.classList.add('active'); }
+  loadNotifications();
+}
+
+function closeNotifPanel() {
+  _notifOpen = false;
+  const panel    = $id('notif-panel');
+  const backdrop = $id('notif-panel-backdrop');
+  const btn      = $id('notif-bell-btn');
+  if (panel)    { panel.classList.remove('open'); }
+  if (backdrop) { backdrop.classList.remove('open'); }
+  if (btn)      { btn.classList.remove('active'); }
+}
+
+async function markNotifRead(id, el) {
+  if (el) {
+    el.classList.remove('unread');
+    const pip = el.querySelector('.notif-unread-pip');
+    if (pip) pip.classList.add('read');
+  }
+  try { await api('POST', `/api/member/notifications/${id}/read`); } catch(e) {}
+  const remaining = document.querySelectorAll('#notif-list .notif-item.unread').length;
+  const badge = $id('notif-badge');
+  if (badge) { badge.textContent = remaining > 9 ? '9+' : remaining; badge.classList.toggle('visible', remaining > 0); }
+}
+
+async function markAllNotifsRead() {
+  document.querySelectorAll('#notif-list .notif-item').forEach(el => {
+    el.classList.remove('unread');
+    const pip = el.querySelector('.notif-unread-pip'); if (pip) pip.classList.add('read');
+  });
+  const badge = $id('notif-badge');
+  if (badge) { badge.textContent = ''; badge.classList.remove('visible'); }
+  try { await api('POST', '/api/member/notifications/read-all'); } catch(e) {}
+}
+
+// Close panel on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _notifOpen) closeNotifPanel();
+});
+
+// ── Admin-change sync ─────────────────────────────────────────────────────────
 // Uses both localStorage events (cross-tab) and visibilitychange (same-tab refocus)
 
 let _lastAdminChange = localStorage.getItem('kfs_admin_data_change') || '0';

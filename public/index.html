@@ -4767,9 +4767,11 @@ KFS — KIIT Film Society"></textarea>
 
     <!-- ── STEP 2: Full form (shown after email verified) ── -->
     <div id="collab-form-body" style="display:none">
-      <!-- Verified member badge -->
+      <!-- Verified member badge (KIIT email verify path) -->
       <div id="collab-verified-badge" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.2);border-radius:10px;margin-bottom:20px">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <svg id="collab-badge-check-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <!-- Lock icon — shown for portal members -->
+        <svg id="collab-badge-lock-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <span id="collab-verified-name" style="font-size:13px;font-weight:600;color:#34c759"></span>
         <span data-action="resetCollabGate" style="font-size:12px;color:var(--grey);margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Change</span>
       </div>
@@ -4799,11 +4801,17 @@ KFS — KIIT Film Society"></textarea>
       <div class="form-group"><label>Timeline</label><input id="collab-timeline" placeholder="March shoot, 2 weekend rehearsals…"></div>
       <div class="form-group"><label>Description *</label><textarea id="collab-description" style="min-height:120px" placeholder="Tell people about your project and what you're looking for…"></textarea></div>
       <div class="form-group">
-        <label>Your Name</label>
+        <label id="collab-name-label">Your Name</label>
         <div id="collab-name-picker" class="mpicker-wrap"></div>
       </div>
-      <div class="form-group"><label>Email *</label><input id="collab-email" type="email" placeholder="yourname@kiit.ac.in" readonly style="opacity:.6;cursor:not-allowed"></div>
-      <div class="form-group"><label>Phone (optional)</label><input id="collab-phone" placeholder="+91 XXXXX XXXXX"></div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input id="collab-email" type="email" placeholder="yourname@kiit.ac.in" readonly style="opacity:.6;cursor:not-allowed">
+      </div>
+      <div class="form-group">
+        <label id="collab-phone-label">Phone (optional)</label>
+        <input id="collab-phone" placeholder="+91 XXXXX XXXXX">
+      </div>
       <div class="form-group"><label>Listing Expiry Date *</label><input id="collab-date" type="date"><p style="font-size:12px;color:var(--grey);margin-top:6px">Your listing will be automatically removed after this date.</p></div>
 
       <p id="collab-error" style="color:#ff5555;font-size:13px;margin-bottom:12px"></p>

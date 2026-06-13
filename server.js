@@ -8738,6 +8738,11 @@ app.post("/api/admin/member-profile-changes/:id/review", requireSection("members
       .update({ ...change.new_values, updated_at: new Date().toISOString() })
       .eq("id", change.member_id);
     memInvalidate("members:list");
+    createMemberNotification(change.member_id, "profile", "Profile update approved", "Your profile changes have been approved and are now live.").catch(() => {});
+  } else if (action === "reject") {
+    createMemberNotification(change.member_id, "profile", "Profile update rejected", notes ? `Admin note: ${notes}` : "Your profile change request was not approved.").catch(() => {});
+  } else if (action === "request_changes") {
+    createMemberNotification(change.member_id, "profile", "Changes requested on profile update", notes ? `Admin note: ${notes}` : "The admin has requested changes to your profile update.").catch(() => {});
   }
 
   logActivity(req.admin.id, req.admin.name, action, "member_profile_change", String(req.params.id)).catch(() => {});
@@ -8821,6 +8826,17 @@ app.post(
     }).eq("id", sub.id);
 
     logActivity(req.admin.id, req.admin.name, action, "movie_submission", sub.movie_data?.title || sub.id).catch(() => {});
+
+    // Notify member
+    const movieTitle = sub.movie_data?.title || "your film submission";
+    if (action === "approve") {
+      createMemberNotification(sub.member_id, "movie", "Film submission approved 🎬", `"${movieTitle}" has been approved and published to the KFS filmography.`).catch(() => {});
+    } else if (action === "reject") {
+      createMemberNotification(sub.member_id, "movie", "Film submission not approved", notes ? `"${movieTitle}" — Admin note: ${notes}` : `"${movieTitle}" was not approved.`).catch(() => {});
+    } else if (action === "request_changes") {
+      createMemberNotification(sub.member_id, "movie", "Changes requested on film submission", notes ? `"${movieTitle}" — Admin note: ${notes}` : `The admin has requested changes to "${movieTitle}".`).catch(() => {});
+    }
+
     res.json({ success: true, publishedMovieId: publishedMovieId || null });
   },
 );
@@ -8846,6 +8862,80 @@ app.get("/api/admin/members/:id/activity", requireSection("members"), async (req
 // ─────────────────────────────────────────────────────────────────────────────
 // Add this call inside the existing app.listen() callback, alongside initDB():
 //   await initMemberDB();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-23 — Member Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function createMemberNotification(memberId, type, title, body) {
+  try {
+    await supabase.from("member_notifications").insert([{ member_id: memberId, type, title, body: body || null }]);
+  } catch (e) {
+    console.error("[createMemberNotification] failed:", e.message);
+  }
+}
+
+// GET /api/member/notifications — fetch unread + recent read (last 30)
+app.get("/api/member/notifications", memberAuthMiddleware, async (req, res) => {
+  const { data } = await supabase
+    .from("member_notifications")
+    .select("id, type, title, body, is_read, created_at")
+    .eq("member_id", req.member.memberId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  res.json(data || []);
+});
+
+// POST /api/member/notifications/:id/read
+app.post("/api/member/notifications/:id/read", memberAuthMiddleware, async (req, res) => {
+  await supabase.from("member_notifications").update({ is_read: true })
+    .eq("id", req.params.id).eq("member_id", req.member.memberId);
+  res.json({ success: true });
+});
+
+// POST /api/member/notifications/read-all
+app.post("/api/member/notifications/read-all", memberAuthMiddleware, async (req, res) => {
+  await supabase.from("member_notifications").update({ is_read: true })
+    .eq("member_id", req.member.memberId).eq("is_read", false);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-24 — Authenticated Collaborate Post (portal members)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, async (req, res) => {
+  try {
+    await cleanupExpiredCollaborations();
+    // Fetch member's own profile to get name, email, phone
+    const { data: member } = await supabase.from("members")
+      .select("name, email, mobile").eq("id", req.member.memberId).maybeSingle();
+    if (!member) return res.status(404).json({ error: "Member profile not found" });
+
+    const payload = cleanCollabPayload(req.body);
+    if (!payload.title || !payload.role || !payload.description || !payload.fulfillment_date)
+      return res.status(400).json({ error: "Title, role, description, and fulfillment date are required." });
+
+    const today = new Date().toISOString().split("T")[0];
+    if (payload.fulfillment_date < today)
+      return res.status(400).json({ error: "Fulfillment date cannot be in the past." });
+
+    const edit_token = makeEditToken();
+    const { data, error } = await supabasePublic.from("collaborate_posts").insert([{
+      ...payload,
+      contact_name:  member.name  || payload.contact_name,
+      contact_email: member.email || payload.contact_email,
+      contact_phone: member.mobile || payload.contact_phone,
+      is_kfs_member: true,
+      edit_token,
+    }]).select("id,edit_token").single();
+
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    res.json({ success: true, id: data.id, edit_token, edit_url: `/collaborate/edit/${edit_token}` });
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 async function initMemberDB() {
   try {
@@ -8889,6 +8979,28 @@ async function initMemberDB() {
     }
 
     await loadRevokedMemberTokens();
+
+    // Check member_notifications table (created via SQL migration)
+    const { error: notifErr } = await supabase.from("member_notifications").select("id", { count: "exact", head: true }).limit(1);
+    if (notifErr) {
+      console.warn(
+        "[initMemberDB] member_notifications table not found. Run this SQL:\n\n" +
+        "  CREATE TABLE IF NOT EXISTS member_notifications (\n" +
+        "    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n" +
+        "    member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,\n" +
+        "    type        TEXT NOT NULL,\n" +
+        "    title       TEXT NOT NULL,\n" +
+        "    body        TEXT,\n" +
+        "    is_read     BOOLEAN NOT NULL DEFAULT FALSE,\n" +
+        "    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()\n" +
+        "  );\n" +
+        "  CREATE INDEX IF NOT EXISTS member_notifications_member_id_idx ON member_notifications(member_id);\n" +
+        "  CREATE INDEX IF NOT EXISTS member_notifications_is_read_idx   ON member_notifications(member_id, is_read);"
+      );
+    } else {
+      console.log("[initMemberDB] member_notifications table OK");
+    }
+
     console.log("[initMemberDB] Member portal tables OK");
   } catch (e) {
     console.error("[initMemberDB] error:", e.message);

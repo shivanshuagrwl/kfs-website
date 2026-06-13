@@ -8886,13 +8886,107 @@ function openCollabForm(post) {
     }
     window._collabNamePicker.setValue(post.contact_name || '');
   } else {
-    // New post — show gate
+    // Check for portal member token — bypass gate entirely
+    const memberToken = localStorage.getItem('kfs-member-token');
+    // Profile (with email/mobile) stored by membersaccess.js on loadProfile()
+    const memberProfileLS = (() => { try { return JSON.parse(localStorage.getItem('kfs-member-profile') || 'null'); } catch { return null; } })();
+    const memberDataLS    = (() => { try { return JSON.parse(localStorage.getItem('kfs-member-data')    || 'null'); } catch { return null; } })();
+    // Prefer in-memory (same-tab), fall back to localStorage (cross-tab)
+    const memberProfile   = window._memberProfile || memberProfileLS;
+    const memberData      = window._member        || memberDataLS;
+
+    if (memberToken && (memberProfile || memberData)) {
+      // Portal member: skip gate, auto-fill locked fields
+      document.getElementById('collab-gate').style.display = 'none';
+      document.getElementById('collab-form-body').style.display = 'block';
+
+      const memberName  = memberProfile?.name  || memberData?.name  || '';
+      const memberEmail = memberProfile?.email || memberData?.email || '';
+      const memberPhone = memberProfile?.mobile || memberData?.mobile || '';
+
+      // Show member badge instead of verified badge
+      const badge = document.getElementById('collab-verified-badge');
+      if (badge) {
+        badge.style.display = 'flex';
+        badge.style.background = 'rgba(255,255,255,.03)';
+        badge.style.borderColor = 'rgba(255,255,255,.1)';
+        // Swap check → lock icon
+        const checkIcon = document.getElementById('collab-badge-check-icon');
+        const lockIcon  = document.getElementById('collab-badge-lock-icon');
+        if (checkIcon) checkIcon.style.display = 'none';
+        if (lockIcon)  lockIcon.style.display  = 'block';
+        const nameEl = document.getElementById('collab-verified-name');
+        if (nameEl) {
+          nameEl.style.color = '#e0e0e0';
+          nameEl.innerHTML = `<span style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#555;font-weight:600;display:block;margin-bottom:1px">Logged in as</span><span style="font-size:13px;font-weight:600;color:#f0f0f0">${memberName}</span>`;
+        }
+        // Hide the "Change" span — member can't change identity
+        const changeEl = badge.querySelector('[data-action="resetCollabGate"]');
+        if (changeEl) changeEl.style.display = 'none';
+      }
+      // Update labels to reflect locked/pre-filled state
+      const nameLabelEl = document.getElementById('collab-name-label');
+      if (nameLabelEl) nameLabelEl.innerHTML = 'Your Name <span style="font-size:10px;color:#555;text-transform:none;font-weight:400;letter-spacing:0">· from your portal profile</span>';
+      const phoneLabelEl = document.getElementById('collab-phone-label');
+      if (phoneLabelEl) phoneLabelEl.innerHTML = 'Phone <span style="font-size:10px;color:#555;text-transform:none;font-weight:400;letter-spacing:0">· from your portal profile</span>';
+
+      _collabVerifiedMember = { email: memberEmail, name: memberName, fromPortal: true };
+
+      // Lock name field — show locked read-only display
+      const namePickerWrap = document.getElementById('collab-name-picker');
+      if (namePickerWrap) {
+        namePickerWrap.innerHTML = `<div style="padding:10px 14px;background:#111;border:1px solid #1e1e1e;border-radius:8px;font-size:14px;color:#e0e0e0;display:flex;align-items:center;gap:8px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>${memberName}</span>
+        </div>`;
+      }
+
+      // Lock email — read-only
+      const emailEl = document.getElementById('collab-email');
+      if (emailEl) {
+        emailEl.value = memberEmail;
+        emailEl.readOnly = true;
+        emailEl.style.opacity = '.5';
+        emailEl.style.cursor = 'not-allowed';
+      }
+
+      // Lock phone — read-only (pre-filled from member profile)
+      const phoneEl = document.getElementById('collab-phone');
+      if (phoneEl) {
+        phoneEl.value = memberPhone || '';
+        if (memberPhone) {
+          phoneEl.readOnly = true;
+          phoneEl.style.opacity = '.5';
+          phoneEl.style.cursor = 'not-allowed';
+        }
+      }
+
+      // Reset other fields
+      ['collab-title','collab-role','collab-skills','collab-timeline','collab-description','collab-date'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      document.getElementById('collab-domain').value = '';
+      return;
+    }
+
+    // Non-member — show gate as normal
     document.getElementById('collab-gate').style.display = 'block';
     document.getElementById('collab-form-body').style.display = 'none';
     document.getElementById('collab-gate-error').style.display = 'none';
     document.getElementById('collab-kiit-email').value = '';
     document.getElementById('collab-gate-btn').disabled = false;
     document.getElementById('collab-gate-btn').textContent = 'Verify & Continue';
+    // Restore default labels and badge icons
+    const checkIcon = document.getElementById('collab-badge-check-icon');
+    const lockIcon  = document.getElementById('collab-badge-lock-icon');
+    if (checkIcon) checkIcon.style.display = '';
+    if (lockIcon)  lockIcon.style.display  = 'none';
+    const nameLabelEl = document.getElementById('collab-name-label');
+    if (nameLabelEl) nameLabelEl.textContent = 'Your Name';
+    const phoneLabelEl = document.getElementById('collab-phone-label');
+    if (phoneLabelEl) phoneLabelEl.textContent = 'Phone (optional)';
+    const phoneEl = document.getElementById('collab-phone');
+    if (phoneEl) { phoneEl.readOnly = false; phoneEl.style.opacity = ''; phoneEl.style.cursor = ''; }
 
     // Reset form fields
     ['collab-title','collab-role','collab-skills','collab-timeline','collab-description','collab-phone','collab-date'].forEach(id => {
@@ -8906,6 +9000,17 @@ function openCollabForm(post) {
 
 function closeCollabForm() {
   document.getElementById('collab-modal').classList.remove('open');
+  // Restore default labels on close
+  const checkIcon = document.getElementById('collab-badge-check-icon');
+  const lockIcon  = document.getElementById('collab-badge-lock-icon');
+  if (checkIcon) checkIcon.style.display = '';
+  if (lockIcon)  lockIcon.style.display  = 'none';
+  const nameLabelEl = document.getElementById('collab-name-label');
+  if (nameLabelEl) nameLabelEl.textContent = 'Your Name';
+  const phoneLabelEl = document.getElementById('collab-phone-label');
+  if (phoneLabelEl) phoneLabelEl.textContent = 'Phone (optional)';
+  const phoneEl = document.getElementById('collab-phone');
+  if (phoneEl) { phoneEl.readOnly = false; phoneEl.style.opacity = ''; phoneEl.style.cursor = ''; }
 }
 
 function collabPayload() {
@@ -8927,17 +9032,30 @@ function collabPayload() {
 
 async function saveCollabPost() {
   const token = document.getElementById('collab-token').value;
-  // Validate member picker — must select an existing KFS member
-  if (!token && window._collabNamePicker && !window._collabNamePicker.isValid()) {
+  const isPortalMember = !!(localStorage.getItem('kfs-member-token') && _collabVerifiedMember?.fromPortal);
+
+  // Validate member picker — must select an existing KFS member (skip for portal members: name is locked)
+  if (!token && !isPortalMember && window._collabNamePicker && !window._collabNamePicker.isValid()) {
     document.getElementById('collab-error').textContent = 'Please select your name from the KFS members list.';
     return;
   }
   let res, data;
   try {
-    res = await fetch(token ? '/api/collaborate/' + token : '/api/collaborate', {
-      method: token ? 'PUT' : 'POST',
+    // Portal members use the authenticated endpoint — server overwrites name/email/phone from DB
+    const url    = token ? '/api/collaborate/' + token
+                  : isPortalMember ? '/api/collaborate/member'
+                  : '/api/collaborate';
+    const method = token ? 'PUT' : 'POST';
+    const headers = { 'Content-Type': 'application/json', 'x-csrf-token': _csrfToken || '' };
+    if (isPortalMember && !token) {
+      // Authenticated portal request — send Bearer token, no CSRF needed (JWT is the auth)
+      headers['Authorization'] = `Bearer ${localStorage.getItem('kfs-member-token')}`;
+      delete headers['x-csrf-token'];
+    }
+    res = await fetch(url, {
+      method,
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      headers,
       body: JSON.stringify(collabPayload()),
     });
     data = await res.json();
