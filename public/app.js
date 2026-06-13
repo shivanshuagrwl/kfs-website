@@ -2229,7 +2229,7 @@ async function loadAdminData(name) {
       <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
-        <button class="btn-sm" onclick="openMemberPortalModal('${m.id}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
+        <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
@@ -10344,7 +10344,7 @@ async function exportMemberData() {
 
 // ── Member Portal Modal (opened from Members list "Portal" button) ────────────
 
-async function openMemberPortalModal(memberId) {
+async function openMemberPortalModal(member) {
   // Build overlay immediately with a loading state
   const existing = document.getElementById('kfs-member-portal-modal');
   if (existing) existing.remove();
@@ -10472,21 +10472,12 @@ async function openMemberPortalModal(memberId) {
   document.addEventListener('keydown', _mpmEscListener = e => { if (e.key === 'Escape') closeMemberPortalModal(); });
   document.body.appendChild(overlay);
 
-  // Fetch member + account data in parallel
-  let member = null, account = null;
+  // Fetch account data only — member data passed in directly
+  let account = null;
+  const memberId = member.id;
   try {
-    [member, account] = await Promise.all([
-      apiFetch(`/api/admin/members/${memberId}`),
-      apiFetch(`/api/admin/members/${memberId}/account`).catch(() => null),
-    ]);
-  } catch(e) {
-    document.getElementById('mpm-inner').innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444">Failed to load member data</div>`;
-    return;
-  }
-  if (!member) {
-    document.getElementById('mpm-inner').innerHTML = `<div style="padding:40px;text-align:center;color:#666">Member not found</div>`;
-    return;
-  }
+    account = await apiFetch(`/api/admin/members/${memberId}/account`);
+  } catch(e) {}
 
   const hasAccount = account && account.username;
   const accStatus  = hasAccount ? account.account_status : null;
@@ -10653,7 +10644,7 @@ async function mpmSave(memberId) {
           <td><span class="tag ${saved.is_past?'':'upcoming'}">${saved.is_past?'Alumni':'Current'}</span></td>
           <td><div class="action-btns">
             <button class="btn-sm" onclick="editMember(${mJson})">Edit</button>
-            <button class="btn-sm" onclick="openMemberPortalModal('${saved.id}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal</button>
+            <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal</button>
             <button class="btn-sm danger" onclick="deleteMember('${saved.id}')">Delete</button>
           </div></td>
         </tr>`;
