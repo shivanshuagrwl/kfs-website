@@ -1875,7 +1875,7 @@ async function loadDashboard() {
       hasPermission('events')      ? apiFetch('/api/events')                 : Promise.resolve(null),
       hasPermission('members')     ? apiFetch('/api/members')                : Promise.resolve(null),
       hasPermission('movies')      ? apiFetch('/api/admin/movies')           : Promise.resolve(null),
-      hasPermission('analytics')   ? apiFetch('/api/admin/analytics/traffic?range=24h') : Promise.resolve(null),
+      hasPermission('analytics')   ? apiFetch('/api/admin/analytics/traffic?range=7d') : Promise.resolve(null),
       hasPermission('collaborate') ? fetch('/api/collaborate').then(r=>r.json()).catch(()=>null) : Promise.resolve(null),
     ]);
     const [blogsR, eventsR, membersR, filmsR, trafficR, collabsR] = results.map(r => r.status === 'fulfilled' ? r.value : null);

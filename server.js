@@ -1781,13 +1781,24 @@ app.get("/api/blogs/:id", async (req, res) => {
   // because this code is outside the memCache fn. Uses DB increment to avoid race conditions.
   supabasePublic.rpc("increment_blog_view", { blog_id: req.params.id })
     .then(() => {})
-    .catch(() => {
-      // Fallback if RPC doesn't exist yet: raw update still better than nothing
-      supabasePublic
-        .from("blogs")
-        .update({ view_count: (data.view_count || 0) + 1 })
-        .eq("id", req.params.id)
-        .then(() => {}).catch(() => {});
+    .catch(async () => {
+      // Fallback if RPC doesn't exist yet: re-fetch the current count fresh (don't use the
+      // cached `data.view_count` — it can be up to 300s stale, causing repeated requests in
+      // that window to all add 1 to the same stale base and stomp each other's increments).
+      try {
+        const { data: fresh } = await supabasePublic
+          .from("blogs")
+          .select("view_count")
+          .eq("id", req.params.id)
+          .maybeSingle();
+        const current = fresh ? (fresh.view_count || 0) : (data.view_count || 0);
+        await supabasePublic
+          .from("blogs")
+          .update({ view_count: current + 1 })
+          .eq("id", req.params.id);
+      } catch (e) {
+        // non-fatal
+      }
     });
 
   res.json(data);
@@ -3072,23 +3083,39 @@ app.get(
   "/api/admin/analytics/traffic",
   requireSection("analytics"),
   async (req, res) => {
-    const range = req.query.range || "24h";
+    const range = req.query.range || "7d";
     let fromDate = new Date();
-    if (range === "24h") fromDate.setDate(fromDate.getDate() - 7);
+    if (range === "24h" || range === "7d") fromDate.setDate(fromDate.getDate() - 7);
     else if (range === "30d") fromDate.setDate(fromDate.getDate() - 30);
     else fromDate = new Date("2020-01-01");
     const from = fromDate.toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
 
-    // All-time total — always fetched regardless of range, using COUNT to avoid row limits
+    // All-time total — only used when range === "all"
     let allTimeTotal = 0;
-    try {
-      const { count, error } = await supabase
-        .from("page_views")
-        .select("*", { count: "exact", head: true });
-      if (!error) allTimeTotal = count || 0;
-    } catch (e) {
-      /* non-fatal */
+    if (range === "all") {
+      try {
+        const { count, error } = await supabase
+          .from("page_views")
+          .select("*", { count: "exact", head: true });
+        if (!error) allTimeTotal = count || 0;
+      } catch (e) {
+        /* non-fatal */
+      }
+    }
+
+    // Total for the selected range (when not "all") — uses COUNT to avoid row limits
+    let rangeTotal = allTimeTotal;
+    if (range !== "all") {
+      try {
+        const { count, error } = await supabase
+          .from("page_views")
+          .select("*", { count: "exact", head: true })
+          .gte("date", from);
+        if (!error) rangeTotal = count || 0;
+      } catch (e) {
+        /* non-fatal */
+      }
     }
 
     // Fetch range rows — limit to 5000 max, enough for any reasonable chart
@@ -3103,7 +3130,7 @@ app.get(
 
     if (!rows.length)
       return res.json({
-        total: allTimeTotal,
+        total: rangeTotal,
         today: 0,
         peak_day: "—",
         by_page: [],
@@ -3137,7 +3164,7 @@ app.get(
         by_hour[r.hour] = (by_hour[r.hour] || 0) + 1;
       });
     res.json({
-      total: allTimeTotal,
+      total: rangeTotal,
       today: todayViews,
       peak_day: peak.date,
       by_page,
