@@ -1071,6 +1071,10 @@ window.addEventListener('storage', e => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') _handleAdminDataChange();
 });
+
+// ── Enter key support ─────────────────────────────────────────────────────────
+
+function handleEnterKey(e) {
   if (e.key !== 'Enter') return;
   const loginStep    = $id('step-login');
   const totpStep     = $id('step-totp');
