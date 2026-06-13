@@ -2229,7 +2229,7 @@ async function loadAdminData(name) {
       <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
-        <button class="btn-sm" onclick="openCreateMemberAccount('${m.id}','${m.name}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
+        <button class="btn-sm" onclick="openMemberPortalModal('${m.id}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
         <button class="btn-sm danger" onclick="deleteMember('${m.id}')">Delete<\/button>
       <\/div><\/td>
     <\/tr>`; }).join('');
@@ -2853,7 +2853,7 @@ async function saveMember() {
     if (!res.ok) { let msg='Error saving member'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
     closeMemberModal();
-    // Instant DOM update
+    localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
     const tbody = document.getElementById('admin-members-tbody');
     const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
     const newRow = `<tr data-id="${saved.id}">
@@ -2886,6 +2886,7 @@ async function deleteMember(id) {
   const ok = await kfsConfirm({ title: `Remove member?`, msg: `<strong style="color:var(--white)">"${name}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Remove Member' });
   if (!ok) return;
   await apiFetch('/api/admin/members/'+id,'DELETE');
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
   row = document.querySelector(`#admin-members-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
@@ -3072,6 +3073,7 @@ async function saveMovie() {
     const saved = await res.json();
     window._movieModalDirty = false;
     closeMovieModal();
+    localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
     // Instant DOM update
     const tbody = document.getElementById('admin-movies-tbody');
     const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
@@ -3105,6 +3107,7 @@ async function deleteMovie(id) {
   const ok = await kfsConfirm({ title: `Delete film?`, msg: `<strong style="color:var(--white)">"${title}"</strong> will be permanently removed. This can't be undone.`, okLabel: 'Delete Film' });
   if (!ok) return;
   await apiFetch('/api/admin/movies/'+id,'DELETE');
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
   row = document.querySelector(`#admin-movies-tbody tr[data-id="${id}"]`);
   if (row) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
@@ -10339,12 +10342,367 @@ async function exportMemberData() {
   }
 }
 
-async function toggleMemberAccountStatus(memberId, currentStatus) {
-  const action = currentStatus === 'active' ? 'disable' : 'enable';
-  showConfirmModal(`${action.charAt(0).toUpperCase() + action.slice(1)} this member's portal account?`, async () => {
-    await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, 'POST');
+// ── Member Portal Modal (opened from Members list "Portal" button) ────────────
+
+async function openMemberPortalModal(memberId) {
+  // Build overlay immediately with a loading state
+  const existing = document.getElementById('kfs-member-portal-modal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'kfs-member-portal-modal';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;z-index:9999;
+    padding:24px;animation:kfsMFadeIn .18s ease`;
+  overlay.innerHTML = `
+    <style>
+      @keyframes kfsMFadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+      #kfs-member-portal-modal .mpm-card{
+        background:#111;border:1px solid #1e1e1e;border-radius:20px;
+        width:100%;max-width:560px;max-height:90vh;overflow-y:auto;
+        box-shadow:0 32px 80px rgba(0,0,0,.6);
+      }
+      #kfs-member-portal-modal .mpm-header{
+        display:flex;align-items:center;gap:16px;
+        padding:28px 28px 20px;border-bottom:1px solid #1a1a1a;
+      }
+      #kfs-member-portal-modal .mpm-avatar{
+        width:56px;height:56px;border-radius:50%;object-fit:cover;
+        background:#1e1e1e;flex-shrink:0;display:flex;align-items:center;
+        justify-content:center;font-size:22px;font-weight:700;color:#888;overflow:hidden;
+      }
+      #kfs-member-portal-modal .mpm-avatar img{width:100%;height:100%;object-fit:cover}
+      #kfs-member-portal-modal .mpm-name{font-size:18px;font-weight:700;letter-spacing:-.02em;color:#f5f5f5}
+      #kfs-member-portal-modal .mpm-role-badge{
+        display:inline-block;margin-top:4px;padding:3px 10px;border-radius:20px;
+        font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+        background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)
+      }
+      #kfs-member-portal-modal .mpm-close{
+        margin-left:auto;background:transparent;border:none;color:#666;
+        font-size:22px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:color .12s;line-height:1
+      }
+      #kfs-member-portal-modal .mpm-close:hover{color:#f5f5f5}
+      #kfs-member-portal-modal .mpm-body{padding:24px 28px}
+      #kfs-member-portal-modal .mpm-section-label{
+        font-size:11px;font-weight:700;color:#555;text-transform:uppercase;
+        letter-spacing:.08em;margin:20px 0 10px
+      }
+      #kfs-member-portal-modal .mpm-section-label:first-child{margin-top:0}
+      #kfs-member-portal-modal .mpm-field{margin-bottom:14px}
+      #kfs-member-portal-modal .mpm-field label{
+        display:block;font-size:11px;color:#666;text-transform:uppercase;
+        letter-spacing:.07em;margin-bottom:5px
+      }
+      #kfs-member-portal-modal .mpm-field input,
+      #kfs-member-portal-modal .mpm-field select,
+      #kfs-member-portal-modal .mpm-field textarea{
+        width:100%;background:#0d0d0d;border:1px solid #222;border-radius:10px;
+        color:#f5f5f5;font-size:14px;padding:10px 13px;outline:none;
+        transition:border-color .15s;font-family:inherit;resize:none;box-sizing:border-box
+      }
+      #kfs-member-portal-modal .mpm-field input:focus,
+      #kfs-member-portal-modal .mpm-field select:focus,
+      #kfs-member-portal-modal .mpm-field textarea:focus{border-color:#3a3a3a}
+      #kfs-member-portal-modal .mpm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+      #kfs-member-portal-modal .mpm-account-row{
+        display:flex;align-items:center;justify-content:space-between;
+        background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;
+        padding:14px 16px;margin-bottom:10px
+      }
+      #kfs-member-portal-modal .mpm-account-label{font-size:13px;color:#f0f0f0;font-weight:500}
+      #kfs-member-portal-modal .mpm-account-sub{font-size:11px;color:#555;margin-top:2px}
+      #kfs-member-portal-modal .mpm-toggle{
+        position:relative;width:44px;height:26px;cursor:pointer;flex-shrink:0
+      }
+      #kfs-member-portal-modal .mpm-toggle input{opacity:0;position:absolute;width:0;height:0}
+      #kfs-member-portal-modal .mpm-toggle-track{
+        position:absolute;inset:0;background:#2a2a2a;border-radius:13px;
+        transition:background .2s;border:1px solid #333
+      }
+      #kfs-member-portal-modal .mpm-toggle input:checked+.mpm-toggle-track{background:#6366f1;border-color:#6366f1}
+      #kfs-member-portal-modal .mpm-toggle-thumb{
+        position:absolute;top:3px;left:3px;width:18px;height:18px;
+        background:#fff;border-radius:50%;transition:transform .2s;
+        box-shadow:0 1px 3px rgba(0,0,0,.4)
+      }
+      #kfs-member-portal-modal .mpm-toggle input:checked~.mpm-toggle-thumb{transform:translateX(18px)}
+      #kfs-member-portal-modal .mpm-actions{
+        display:flex;gap:10px;padding:20px 28px 24px;
+        border-top:1px solid #1a1a1a;margin-top:4px
+      }
+      #kfs-member-portal-modal .mpm-btn-save{
+        flex:1;background:#f5f5f5;color:#0a0a0a;border:none;
+        border-radius:10px;padding:11px 18px;font-size:14px;
+        font-weight:700;cursor:pointer;transition:opacity .15s;font-family:inherit
+      }
+      #kfs-member-portal-modal .mpm-btn-save:hover{opacity:.85}
+      #kfs-member-portal-modal .mpm-btn-save:disabled{opacity:.4;cursor:default}
+      #kfs-member-portal-modal .mpm-btn-secondary{
+        background:transparent;border:1px solid #222;color:#888;
+        border-radius:10px;padding:11px 18px;font-size:14px;
+        font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit
+      }
+      #kfs-member-portal-modal .mpm-btn-secondary:hover{border-color:#444;color:#f5f5f5}
+      #kfs-member-portal-modal .mpm-status-tag{
+        display:inline-flex;align-items:center;gap:6px;
+        padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+        text-transform:uppercase;letter-spacing:.06em
+      }
+      #kfs-member-portal-modal .mpm-status-active{background:#0d1f0d;color:#22c55e;border:1px solid #1a3a1a}
+      #kfs-member-portal-modal .mpm-status-disabled{background:#1f1010;color:#ef4444;border:1px solid #3a1a1a}
+      #kfs-member-portal-modal .mpm-status-none{background:#1a1a1a;color:#888;border:1px solid #2a2a2a}
+      #kfs-member-portal-modal .mpm-msg{
+        font-size:13px;padding:10px 14px;border-radius:8px;margin-top:12px;display:none
+      }
+      #kfs-member-portal-modal .mpm-msg.ok{background:#0d1f0d;color:#4ade80;border:1px solid #1a3a1a}
+      #kfs-member-portal-modal .mpm-msg.err{background:#1f0d0d;color:#ef4444;border:1px solid #3a1a1a}
+      #kfs-member-portal-modal .spinner-sm{
+        display:inline-block;width:16px;height:16px;border:2px solid #333;
+        border-top-color:#888;border-radius:50%;animation:kfsSpin .7s linear infinite;vertical-align:middle;margin-right:6px
+      }
+      @keyframes kfsSpin{to{transform:rotate(360deg)}}
+    </style>
+    <div class="mpm-card">
+      <div id="mpm-inner"><div style="padding:60px;text-align:center;color:#444"><span class="spinner-sm"></span> Loading…</div></div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeMemberPortalModal(); });
+  document.addEventListener('keydown', _mpmEscListener = e => { if (e.key === 'Escape') closeMemberPortalModal(); });
+  document.body.appendChild(overlay);
+
+  // Fetch member + account data in parallel
+  let member = null, account = null;
+  try {
+    [member, account] = await Promise.all([
+      apiFetch(`/api/admin/members/${memberId}`),
+      apiFetch(`/api/admin/members/${memberId}/account`).catch(() => null),
+    ]);
+  } catch(e) {
+    document.getElementById('mpm-inner').innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444">Failed to load member data</div>`;
+    return;
+  }
+  if (!member) {
+    document.getElementById('mpm-inner').innerHTML = `<div style="padding:40px;text-align:center;color:#666">Member not found</div>`;
+    return;
+  }
+
+  const hasAccount = account && account.username;
+  const accStatus  = hasAccount ? account.account_status : null;
+  const avatarEl   = member.photo
+    ? `<div class="mpm-avatar"><img src="${member.photo}" alt="" /></div>`
+    : `<div class="mpm-avatar">${(member.name||'?')[0].toUpperCase()}</div>`;
+
+  const statusBadge = !hasAccount
+    ? `<span class="mpm-status-tag mpm-status-none">No Account</span>`
+    : accStatus === 'active'
+      ? `<span class="mpm-status-tag mpm-status-active">● Active</span>`
+      : `<span class="mpm-status-tag mpm-status-disabled">● Disabled</span>`;
+
+  const roleOptions = ['President','Vice President','Core','Lead','Member','Advisor','Collaborator'].map(r =>
+    `<option value="${r}" ${member.role===r?'selected':''}>${r}</option>`).join('');
+
+  document.getElementById('mpm-inner').innerHTML = `
+    <div class="mpm-header">
+      ${avatarEl}
+      <div>
+        <div class="mpm-name">${member.name}</div>
+        <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="mpm-role-badge">${member.role||'Member'}</span>
+          ${statusBadge}
+        </div>
+      </div>
+      <button class="mpm-close" onclick="closeMemberPortalModal()">×</button>
+    </div>
+    <div class="mpm-body">
+
+      <div class="mpm-section-label">Profile Info</div>
+      <div class="mpm-grid">
+        <div class="mpm-field">
+          <label>Full Name</label>
+          <input id="mpm-name" type="text" value="${(member.name||'').replace(/"/g,'&quot;')}" />
+        </div>
+        <div class="mpm-field">
+          <label>Role</label>
+          <select id="mpm-role">${roleOptions}</select>
+        </div>
+        <div class="mpm-field">
+          <label>Batch</label>
+          <input id="mpm-batch" type="text" value="${(member.batch||'').replace(/"/g,'&quot;')}" placeholder="e.g. 2024–28" />
+        </div>
+        <div class="mpm-field">
+          <label>Domain</label>
+          <input id="mpm-domain" type="text" value="${(member.domain||'').replace(/"/g,'&quot;')}" placeholder="e.g. Direction" />
+        </div>
+      </div>
+      <div class="mpm-field">
+        <label>Bio</label>
+        <textarea id="mpm-bio" rows="3">${(member.bio||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div class="mpm-field">
+        <label>Special Tag</label>
+        <input id="mpm-special-tag" type="text" value="${(member.special_tag||'').replace(/"/g,'&quot;')}" placeholder="e.g. Founder" />
+      </div>
+
+      <div class="mpm-section-label">Portal Account</div>
+
+      ${hasAccount ? `
+      <div class="mpm-account-row">
+        <div>
+          <div class="mpm-account-label">Portal Access</div>
+          <div class="mpm-account-sub">Username: <strong style="color:#ccc">${account.username}</strong> · 2FA: ${account.totp_enabled ? '<span style="color:#4ade80">On</span>' : '<span style="color:#f87171">Off</span>'}</div>
+        </div>
+        <label class="mpm-toggle" title="${accStatus==='active'?'Disable portal access':'Enable portal access'}">
+          <input type="checkbox" id="mpm-portal-toggle" ${accStatus==='active'?'checked':''} />
+          <div class="mpm-toggle-track"></div>
+          <div class="mpm-toggle-thumb"></div>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px" onclick="mpmResetPassword('${memberId}')">Reset Password</button>
+        <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px;color:#f87171;border-color:rgba(239,68,68,.3)" onclick="mpmClear2FA('${memberId}')">Clear 2FA</button>
+      </div>` : `
+      <div class="mpm-account-row">
+        <div>
+          <div class="mpm-account-label">No portal account yet</div>
+          <div class="mpm-account-sub">Create one to give this member portal access</div>
+        </div>
+        <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 16px;background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.3);color:#818cf8" onclick="mpmCreateAccount('${memberId}','${(member.name||'').replace(/'/g,"\\'")}')">Create Account</button>
+      </div>`}
+
+      <div id="mpm-msg" class="mpm-msg"></div>
+    </div>
+    <div class="mpm-actions">
+      <button class="mpm-btn-secondary" onclick="closeMemberPortalModal()">Cancel</button>
+      <button class="mpm-btn-save" id="mpm-save-btn" onclick="mpmSave('${memberId}')">Save Changes</button>
+    </div>`;
+
+  // Wire portal toggle change
+  const toggle = document.getElementById('mpm-portal-toggle');
+  if (toggle) {
+    toggle.addEventListener('change', async () => {
+      toggle.disabled = true;
+      try {
+        await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, 'POST');
+        // Update status badge
+        const newStatus = toggle.checked ? 'active' : 'disabled';
+        const badgeEl = overlay.querySelector('.mpm-status-tag');
+        if (badgeEl) {
+          badgeEl.className = `mpm-status-tag ${toggle.checked ? 'mpm-status-active' : 'mpm-status-disabled'}`;
+          badgeEl.textContent = toggle.checked ? '● Active' : '● Disabled';
+        }
+        mpmShowMsg('Portal access ' + (toggle.checked ? 'enabled' : 'disabled'), true);
+        loadMemberAccounts(); // refresh accounts table in background
+      } catch(e) {
+        toggle.checked = !toggle.checked; // revert
+        mpmShowMsg(e.message || 'Failed to toggle access', false);
+      } finally { toggle.disabled = false; }
+    });
+  }
+}
+
+let _mpmEscListener = null;
+
+function closeMemberPortalModal() {
+  const el = document.getElementById('kfs-member-portal-modal');
+  if (el) { el.style.opacity='0'; el.style.transform='scale(.97)'; el.style.transition='all .15s'; setTimeout(()=>el.remove(),150); }
+  if (_mpmEscListener) { document.removeEventListener('keydown', _mpmEscListener); _mpmEscListener = null; }
+}
+
+function mpmShowMsg(msg, ok) {
+  const el = document.getElementById('mpm-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'mpm-msg ' + (ok ? 'ok' : 'err');
+  el.style.display = 'block';
+  if (ok) setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+async function mpmSave(memberId) {
+  const btn = document.getElementById('mpm-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const fd = new FormData();
+  fd.append('name',        document.getElementById('mpm-name')?.value || '');
+  fd.append('role',        document.getElementById('mpm-role')?.value || '');
+  fd.append('batch',       document.getElementById('mpm-batch')?.value || '');
+  fd.append('domain',      document.getElementById('mpm-domain')?.value || '');
+  fd.append('bio',         document.getElementById('mpm-bio')?.value || '');
+  fd.append('special_tag', document.getElementById('mpm-special-tag')?.value || '');
+  try {
+    const res = await fetch(`/api/admin/members/${memberId}`, {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
+      body: fd,
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error || 'Save failed'); }
+    const saved = await res.json();
+    mpmShowMsg('Changes saved successfully', true);
+    // Update members table row in background
+    const tbody = document.getElementById('admin-members-tbody');
+    if (tbody) {
+      const existingRow = tbody.querySelector(`tr[data-id="${memberId}"]`);
+      if (existingRow) {
+        const mJson = JSON.stringify(saved).replace(/"/g,'&quot;');
+        existingRow.outerHTML = `<tr data-id="${saved.id}">
+          <td><input type="checkbox" class="bulk-cb" data-id="${saved.id}" onchange="updateBulkBar('members')"></td>
+          <td>${saved.photo?`<img src="${saved.photo}" alt="" style="border-radius:50%">`:svgPerson(16)}</td>
+          <td style="font-weight:500">${saved.name}</td>
+          <td style="color:var(--grey)">${saved.role||'—'}</td>
+          <td style="color:var(--grey)">${saved.batch||'—'}</td>
+          <td><span class="tag ${saved.is_past?'':'upcoming'}">${saved.is_past?'Alumni':'Current'}</span></td>
+          <td><div class="action-btns">
+            <button class="btn-sm" onclick="editMember(${mJson})">Edit</button>
+            <button class="btn-sm" onclick="openMemberPortalModal('${saved.id}')" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal</button>
+            <button class="btn-sm danger" onclick="deleteMember('${saved.id}')">Delete</button>
+          </div></td>
+        </tr>`;
+      }
+    }
+    // Signal member portal to refresh
+    localStorage.setItem('kfs_admin_data_change', Date.now().toString());
+  } catch(e) {
+    mpmShowMsg(e.message, false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
+}
+
+async function mpmResetPassword(memberId) {
+  if (!await kfsConfirm({ title: 'Reset Password?', msg: 'Member will need to set a new password on next login.', okLabel: 'Reset' })) return;
+  try {
+    await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
+    mpmShowMsg('Password reset — member must change on next login', true);
+  } catch(e) { mpmShowMsg(e.message, false); }
+}
+
+async function mpmClear2FA(memberId) {
+  if (!await kfsConfirm({ title: 'Clear 2FA?', msg: 'Member will need to set up 2FA again on next login.', okLabel: 'Clear 2FA' })) return;
+  try {
+    await apiFetch(`/api/admin/members/${memberId}/account/force-2fa-reset`, 'POST');
+    mpmShowMsg('2FA cleared', true);
     loadMemberAccounts();
-  });
+  } catch(e) { mpmShowMsg(e.message, false); }
+}
+
+async function mpmCreateAccount(memberId, memberName) {
+  const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
+  if (!res) return;
+  closeMemberPortalModal();
+  loadMemberAccounts();
+  openCreateMemberAccount(memberId, memberName);
+}
+
+async function toggleMemberAccountStatus(memberId, currentStatus) {
+  const action = currentStatus === 'active' ? 'Disable' : 'Enable';
+  const isDanger = currentStatus === 'active';
+  const confirmed = await showConfirmModal(
+    `${action} this member's portal account?`,
+    null, null, action, 'Cancel', isDanger ? 'danger' : 'accent'
+  );
+  if (!confirmed) return;
+  const result = await apiFetch(`/api/admin/members/${memberId}/account/toggle-status`, 'POST');
+  if (result !== null) { loadMemberAccounts(); localStorage.setItem('kfs_admin_data_change', Date.now().toString()); }
 }
 
 async function resetMemberPassword(memberId) {
@@ -10472,6 +10830,7 @@ async function reviewMemberMovieSubmission(submissionId, decision) {
   const actionMap = { approved: 'approve', rejected: 'reject', changes_requested: 'request_changes' };
   const action = actionMap[decision] || decision;
   const result = await apiFetch(`/api/admin/member-movie-submissions/${submissionId}/review`, 'POST', { action, notes });
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString()); // signal portal
   loadMemberMovieSubmissions('pending');
   // If approved, navigate to Films section and highlight the new film row
   if (action === 'approve') {

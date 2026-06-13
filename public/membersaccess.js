@@ -1046,9 +1046,31 @@ async function loadActivity() {
   }
 }
 
-// ── Enter key support ─────────────────────────────────────────────────────────
+// ── Admin-change sync — refresh portal data when admin edits/deletes from same browser ──
+// Uses both localStorage events (cross-tab) and visibilitychange (same-tab refocus)
 
-function handleEnterKey(e) {
+let _lastAdminChange = localStorage.getItem('kfs_admin_data_change') || '0';
+
+function _handleAdminDataChange() {
+  const latest = localStorage.getItem('kfs_admin_data_change') || '0';
+  if (latest !== _lastAdminChange) {
+    _lastAdminChange = latest;
+    // Only refresh if user is logged in and app is visible
+    if (!_token || $id('app-screen')?.style.display === 'none') return;
+    // Silently refresh data panels that could have changed
+    loadProfile();
+    loadMyWorks();
+    loadMovies();
+  }
+}
+
+window.addEventListener('storage', e => {
+  if (e.key === 'kfs_admin_data_change') _handleAdminDataChange();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') _handleAdminDataChange();
+});
   if (e.key !== 'Enter') return;
   const loginStep    = $id('step-login');
   const totpStep     = $id('step-totp');
