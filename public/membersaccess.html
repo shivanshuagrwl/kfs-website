@@ -121,13 +121,15 @@
       width: 340px; background: #0f0f0f;
       border-right: 1px solid #1e1e1e;
       display: flex; flex-direction: column; z-index: 301;
-      transform: translateX(-100%);
+      transform: translateX(calc(-100% - var(--sidebar-w)));
       transition: transform .28s cubic-bezier(.4,0,.2,1);
       will-change: transform;
+      visibility: hidden;
     }
     .notif-panel.open {
       transform: translateX(0);
       box-shadow: 8px 0 40px rgba(0,0,0,.6);
+      visibility: visible;
     }
     .notif-panel-header {
       display: flex; align-items: center; justify-content: space-between;
