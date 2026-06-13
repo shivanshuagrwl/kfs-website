@@ -1740,7 +1740,7 @@ app.post(
 
 app.get("/api/blogs", async (req, res) => {
   cacheFor(res, 60);
-  const data = await memCache("blogs:list", 120, async () => {
+  const data = await memCache("blogs:list", 600, async () => {
     const { data } = await supabasePublic
       .from("blogs")
       .select(
@@ -2562,28 +2562,25 @@ app.get("/api/yt-duration", async (req, res) => {
 
 app.get("/api/movies", async (req, res) => {
   cacheFor(res, 60);
-  // genre filter busts the general cache key
-  const cacheKey = req.query.genre
-    ? `movies:genre:${req.query.genre}`
-    : "movies:list";
-  const movies = await memCache(cacheKey, 300, async () => {
-    let query = supabasePublic
+  // Cache the full table once — genre filtering is applied in-memory below so we don't
+  // create a separate Supabase round-trip (and cache entry) per genre value.
+  const movies = await memCache("movies:list", 1800, async () => {
+    const { data } = await supabasePublic
       .from("movies")
       .select(
         "id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url",
       )
       .order("release_year", { ascending: false });
-    const { data } = await query;
-    let result = data || [];
-    if (req.query.genre) {
-      const filterGenre = req.query.genre.toLowerCase();
-      result = result.filter((m) =>
-        parseGenre(m.genre).some((g) => g.toLowerCase() === filterGenre),
-      );
-    }
-    return result.map((m) => ({ ...m, genre: parseGenre(m.genre) }));
+    return (data || []).map((m) => ({ ...m, genre: parseGenre(m.genre) }));
   });
-  res.json(movies);
+  let result = movies;
+  if (req.query.genre) {
+    const filterGenre = req.query.genre.toLowerCase();
+    result = movies.filter((m) =>
+      m.genre.some((g) => g.toLowerCase() === filterGenre),
+    );
+  }
+  res.json(result);
 });
 
 app.get("/api/movies/:id", async (req, res) => {
