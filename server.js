@@ -60,6 +60,42 @@ async function sbQuery(fn, retries = 3) {
   }
 }
 
+// Shared HTML builder — used by both sendConfirmationEmail and the live preview
+// endpoint, so admins see exactly what lands in inboxes.
+function buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue) {
+  const dateLine = eventDate
+    ? `\n\nDate: ${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
+    : "";
+  const venueLine = eventVenue ? `\nVenue: ${eventVenue}` : "";
+
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;max-width:560px">
+  <tr><td style="background:#0a0a0a;padding:28px 36px;border-bottom:1px solid #1e1e1e">
+    <span style="font-size:18px;font-weight:700;color:#f5f5f5;letter-spacing:-.02em">KFS — KIIT Film Society</span>
+  </td></tr>
+  <tr><td style="padding:32px 36px">
+    <div style="background:#f5f5f5;color:#0a0a0a;display:inline-block;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:24px">✓ Registration Confirmed</div>
+    <h2 style="font-size:22px;font-weight:700;color:#f5f5f5;margin:0 0 20px;letter-spacing:-.02em">${eventTitle || "Event"}</h2>
+    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.split("\n").join("<br>")}</div>
+    ${
+      dateLine || venueLine
+        ? `<div style="margin:24px 0;padding:16px 20px;background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;font-size:13px;color:#888">
+      ${eventDate ? `<div style="margin-bottom:6px;display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span></div>` : ""}
+      ${eventVenue ? `<div style="display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span style="color:#f5f5f5">${eventVenue}</span></div>` : ""}
+    </div>`
+        : ""
+    }
+  </td></tr>
+  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    <p style="font-size:12px;color:#444;margin:0">This is an automated confirmation from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Please do not reply to this email.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
 // ── Email helper (Brevo HTTP API — works on all hosts) ────────────────────────
 async function sendConfirmationEmail({
   toEmail,
@@ -101,32 +137,7 @@ async function sendConfirmationEmail({
     .replace(/{{date_line}}/g, dateLine)
     .replace(/{{venue_line}}/g, venueLine);
 
-  const bodyHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
-<tr><td align="center">
-<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:16px;border:1px solid #1e1e1e;overflow:hidden;max-width:560px">
-  <tr><td style="background:#0a0a0a;padding:28px 36px;border-bottom:1px solid #1e1e1e">
-    <span style="font-size:18px;font-weight:700;color:#f5f5f5;letter-spacing:-.02em">KFS — KIIT Film Society</span>
-  </td></tr>
-  <tr><td style="padding:32px 36px">
-    <div style="background:#f5f5f5;color:#0a0a0a;display:inline-block;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:24px">✓ Registration Confirmed</div>
-    <h2 style="font-size:22px;font-weight:700;color:#f5f5f5;margin:0 0 20px;letter-spacing:-.02em">${eventTitle || "Event"}</h2>
-    <div style="font-size:15px;line-height:1.7;color:#aaa;white-space:pre-line">${bodyText.split("\n").join("<br>")}</div>
-    ${
-      dateLine || venueLine
-        ? `<div style="margin:24px 0;padding:16px 20px;background:#1a1a1a;border-radius:12px;border:1px solid #1e1e1e;font-size:13px;color:#888">
-      ${eventDate ? `<div style="margin-bottom:6px;display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style="color:#f5f5f5">${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span></div>` : ""}
-      ${eventVenue ? `<div style="display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span style="color:#f5f5f5">${eventVenue}</span></div>` : ""}
-    </div>`
-        : ""
-    }
-  </td></tr>
-  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
-    <p style="font-size:12px;color:#444;margin:0">This is an automated confirmation from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Please do not reply to this email.</p>
-  </td></tr>
-</table>
-</td></tr></table>
-</body></html>`;
+  const bodyHtml = buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue);
 
   const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
 
@@ -628,7 +639,8 @@ function requireSection(section) {
 }
 
 // ── Activity logger ───────────────────────────────────────────────────────────
-async function logActivity(adminId, adminName, action, entity, entityName) {
+// entityId + snapshot are optional (only used for soft-delete + undo support).
+async function logActivity(adminId, adminName, action, entity, entityName, entityId = null, snapshot = null) {
   try {
     await supabase.from("admin_activity").insert([
       {
@@ -637,12 +649,22 @@ async function logActivity(adminId, adminName, action, entity, entityName) {
         action,
         entity,
         entity_name: entityName,
+        entity_id: entityId !== null && entityId !== undefined ? String(entityId) : null,
+        snapshot: snapshot ? JSON.stringify(snapshot) : null,
       },
     ]);
   } catch (e) {
     console.error("Activity log error:", e);
   }
 }
+
+// Tables that support soft-delete + undo (must have a `deleted_at` column).
+const UNDOABLE_TABLES = {
+  member: "members",
+  event: "events",
+  blog: "blogs",
+  movie: "movies",
+};
 
 // ── DB Init ───────────────────────────────────────────────────────────────────
 async function initDB() {
@@ -1568,7 +1590,74 @@ app.get("/api/master/activity", masterMiddleware, async (req, res) => {
   res.json(data || []);
 });
 
+// Undo a soft-deleted member/event/blog/movie within a 30-minute window.
+app.post("/api/master/activity/:activityId/undo", masterMiddleware, async (req, res) => {
+  const { data: log, error: logErr } = await supabase
+    .from("admin_activity")
+    .select("*")
+    .eq("id", req.params.activityId)
+    .single();
+
+  if (logErr || !log) return res.status(404).json({ error: "Activity not found" });
+  if (log.action !== "delete" || log.undone_at) {
+    return res.status(400).json({ error: "This action cannot be undone" });
+  }
+
+  const table = UNDOABLE_TABLES[log.entity];
+  if (!table || !log.entity_id) {
+    return res.status(400).json({ error: "This action type does not support undo" });
+  }
+
+  const ageMs = Date.now() - new Date(log.created_at).getTime();
+  if (ageMs > 30 * 60 * 1000) {
+    return res.status(400).json({ error: "Undo window expired (30 min)" });
+  }
+
+  const { error: restoreErr } = await supabase
+    .from(table)
+    .update({ deleted_at: null })
+    .eq("id", log.entity_id);
+  if (restoreErr) return res.status(500).json({ error: "Failed to restore item" });
+
+  await supabase
+    .from("admin_activity")
+    .update({ undone_at: new Date().toISOString(), undone_by: req.admin.name })
+    .eq("id", req.params.activityId);
+
+  // Invalidate caches so the restored item shows up immediately
+  if (table === "members") memInvalidate("members:list");
+  else if (table === "events") memInvalidate("events:list");
+  else if (table === "blogs") memInvalidate("blogs:list", `blogs:${log.entity_id}`);
+  else if (table === "movies") memInvalidate("movies:list", "movies:genre:", `movies:${log.entity_id}`);
+
+  logActivity(req.admin.id, req.admin.name, "undo", log.entity, log.entity_name).catch(e => console.error("[activity]", e.message));
+  res.json({ success: true });
+});
+
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
+// Live preview of the confirmation email — renders the exact same HTML template
+// used by sendConfirmationEmail, with sample placeholder data.
+app.post("/api/admin/settings/email-preview", requireSection("settings"), (req, res) => {
+  const SAMPLE = {
+    name: "Arjun Sharma",
+    event: "Cine Noir Screening",
+    eventDate: "2025-06-21",
+    venue: "F4 Auditorium",
+  };
+  const bodyTemplate = typeof req.body.body === "string" ? req.body.body : "";
+  const dateLine = `\n\nDate: ${new Date(SAMPLE.eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`;
+  const venueLine = `\nVenue: ${SAMPLE.venue}`;
+
+  const bodyText = bodyTemplate
+    .replace(/{{name}}/g, SAMPLE.name)
+    .replace(/{{event}}/g, SAMPLE.event)
+    .replace(/{{date_line}}/g, dateLine)
+    .replace(/{{venue_line}}/g, venueLine);
+
+  const html = buildConfirmationEmailHtml(bodyText, SAMPLE.event, SAMPLE.eventDate, SAMPLE.venue);
+  res.json({ html });
+});
+
 app.get("/api/settings", async (req, res) => {
   cacheFor(res, 60); // 1-min browser cache; server memCache handles DB load
   const obj = await memCache("settings", 300, async () => {
@@ -1747,6 +1836,7 @@ app.get("/api/blogs", async (req, res) => {
         "id,title,author,excerpt,cover_image,published,created_at,sections,view_count",
       )
       .eq("published", true)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
     return data || [];
   });
@@ -1760,6 +1850,7 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
       "id,title,author,published,view_count,cover_image,created_at,sections",
     )
     // Don't fetch `content` in the list — it's huge HTML. Only needed in /api/blogs/:id
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
   res.json(data || []);
@@ -1772,6 +1863,7 @@ app.get("/api/blogs/:id", async (req, res) => {
       .from("blogs")
       .select("*")
       .eq("id", req.params.id)
+      .is("deleted_at", null)
       .maybeSingle();
     return data;
   });
@@ -1896,10 +1988,10 @@ app.delete(
   async (req, res) => {
     const { data: b } = await supabase
       .from("blogs")
-      .select("title")
+      .select("*")
       .eq("id", req.params.id)
       .single();
-    await supabase.from("blogs").delete().eq("id", req.params.id);
+    await supabase.from("blogs").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
     memInvalidate("blogs:list", `blogs:${req.params.id}`);
     logActivity(
       req.admin.id,
@@ -1907,6 +1999,8 @@ app.delete(
       "delete",
       "blog",
       b?.title || req.params.id,
+      req.params.id,
+      b,
     ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
@@ -1919,6 +2013,7 @@ app.get("/api/events", async (req, res) => {
     const { data } = await supabasePublic
       .from("events")
       .select("*")
+      .is("deleted_at", null)
       .order("event_date", { ascending: false });
     return data || [];
   });
@@ -2002,10 +2097,10 @@ app.delete(
   async (req, res) => {
     const { data: e } = await supabase
       .from("events")
-      .select("title")
+      .select("*")
       .eq("id", req.params.id)
       .single();
-    await supabase.from("events").delete().eq("id", req.params.id);
+    await supabase.from("events").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
     memInvalidate("events:list");
     logActivity(
       req.admin.id,
@@ -2013,7 +2108,9 @@ app.delete(
       "delete",
       "event",
       e?.title || req.params.id,
-    ).catch(e => console.error("[activity]", e.message));
+      req.params.id,
+      e,
+    ).catch(e2 => console.error("[activity]", e2.message));
     res.json({ success: true });
   },
 );
@@ -2027,6 +2124,7 @@ app.get("/api/members", async (req, res) => {
       .select(
         "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
       )
+      .is("deleted_at", null)
       .order("sort_order", { ascending: true });
 
     // If social/portal columns don't exist yet, fall back to base columns
@@ -2035,6 +2133,7 @@ app.get("/api/members", async (req, res) => {
       const { data: base } = await supabase
         .from("members")
         .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
       return base || [];
     }
@@ -2048,6 +2147,7 @@ app.get("/api/members", async (req, res) => {
         .select(
           "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
         )
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
       return fallback || [];
     }
@@ -2063,6 +2163,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   let { data, error } = await supabase
     .from("members")
     .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links")
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
 
   if (error) {
@@ -2071,6 +2172,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
     const fallback = await supabase
       .from("members")
       .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+      .is("deleted_at", null)
       .order("sort_order", { ascending: true });
     if (fallback.error) return res.status(500).json({ error: "Internal server error" });
     return res.json(fallback.data || []);
@@ -2226,10 +2328,10 @@ app.delete(
   async (req, res) => {
     const { data: m } = await supabase
       .from("members")
-      .select("name")
+      .select("*")
       .eq("id", req.params.id)
       .single();
-    await supabase.from("members").delete().eq("id", req.params.id);
+    await supabase.from("members").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
     memInvalidate("members:list");
     logActivity(
       req.admin.id,
@@ -2237,6 +2339,8 @@ app.delete(
       "delete",
       "member",
       m?.name || req.params.id,
+      req.params.id,
+      m,
     ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
@@ -2570,6 +2674,7 @@ app.get("/api/movies", async (req, res) => {
       .select(
         "id,title,release_year,genre,director,producer,dop,screenwriter,video_editor,sound_design,management,graphic_design,actors,support_crew,poster_image,description,trailer_url,watch_url",
       )
+      .is("deleted_at", null)
       .order("release_year", { ascending: false });
     return (data || []).map((m) => ({ ...m, genre: parseGenre(m.genre) }));
   });
@@ -2590,6 +2695,7 @@ app.get("/api/movies/:id", async (req, res) => {
       .from("movies")
       .select("*")
       .eq("id", req.params.id)
+      .is("deleted_at", null)
       .maybeSingle();
     return data;
   });
@@ -2763,10 +2869,10 @@ app.delete(
   async (req, res) => {
     const { data: mv } = await supabase
       .from("movies")
-      .select("title")
+      .select("*")
       .eq("id", req.params.id)
       .single();
-    await supabase.from("movies").delete().eq("id", req.params.id);
+    await supabase.from("movies").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
     memInvalidate("movies:list", "movies:genre:", `movies:${req.params.id}`);
     logActivity(
       req.admin.id,
@@ -2774,6 +2880,8 @@ app.delete(
       "delete",
       "movie",
       mv?.title || req.params.id,
+      req.params.id,
+      mv,
     ).catch(e => console.error("[activity]", e.message));
     res.json({ success: true });
   },
@@ -7631,6 +7739,7 @@ app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
   const { data, error } = await supabase
     .from("movies")
     .select("*")
+    .is("deleted_at", null)
     .order("release_year", { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json((data || []).map(m => ({ ...m, genre: typeof m.genre === 'string' ? m.genre.replace(/[{}"]/g,'').split(',').filter(Boolean) : (m.genre || []) })));
@@ -7777,6 +7886,7 @@ app.get("/api/admin/scanner/events", authMiddleware, async (req, res) => {
   const { data, error } = await supabase
     .from("events")
     .select("id, title, event_date, location, is_upcoming")
+    .is("deleted_at", null)
     .order("event_date", { ascending: false });
   if (error) return res.status(500).json({ error: "Internal server error" });
   res.json(data || []);

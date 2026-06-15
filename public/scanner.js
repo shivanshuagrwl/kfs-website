@@ -13,6 +13,7 @@ let _pendingReg  = null;   // { registration_id, name } awaiting confirm
 let _csrfToken   = null;
 let _regsCache   = {};     // eventId → registrations array
 let _allRegs     = [];
+let _audioCtx    = null;   // lazily created on first user gesture
 let _searchQuery = '';
 let _autoRefreshTimer = null;
 let _scanCooldown = false;
@@ -262,6 +263,10 @@ async function startCamera() {
   const eventId = document.getElementById('event-select').value;
   if (!eventId) { toast('Select an event first'); return; }
 
+  // Unlock/resume the audio context now, while we have a user gesture —
+  // browsers block AudioContext until one occurs.
+  ensureAudioCtx();
+
   document.getElementById('start-scan-btn').style.display = 'none';
   document.getElementById('qr-reader-wrap').style.display = 'block';
 
@@ -323,6 +328,7 @@ async function onQrScanned(rawText) {
   if (!ok) {
     flashBody('red');
     vibrateDevice([100, 50, 100]);
+    playError();
     if (status === 404 || data?.status === 'invalid') {
       showResult({ status: 'invalid', error: data?.error || 'Invalid QR code — not a KFS ticket.' });
     } else {
@@ -334,6 +340,7 @@ async function onQrScanned(rawText) {
   if (data.status === 'invalid') {
     flashBody('red');
     vibrateDevice([100, 50, 100]);
+    playError();
     showResult({ status: 'invalid', error: data.error || 'Invalid QR code.' });
     return;
   }
@@ -341,6 +348,7 @@ async function onQrScanned(rawText) {
   if (data.status === 'already_used') {
     flashBody('red');
     vibrateDevice([200, 100, 200]);
+    playError();
     showResult({ status: 'already_used', ...data });
     return;
   }
@@ -348,6 +356,7 @@ async function onQrScanned(rawText) {
   if (data.status === 'valid') {
     flashBody('green');
     vibrateDevice([50]);
+    playSuccess();
     _pendingReg = { registration_id: data.registration_id, name: data.name };
     log('scan', `valid — reg_id=${data.registration_id} name="${data.name}"`);
     showResult({ status: 'valid', ...data });
@@ -782,6 +791,45 @@ function flashBody(color) {
 
 function vibrateDevice(pattern) {
   if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// ── AUDIO FEEDBACK (Web Audio API — works on iOS where navigator.vibrate doesn't) ──
+function ensureAudioCtx() {
+  if (!_audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    _audioCtx = new Ctx();
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  return _audioCtx;
+}
+
+function playTone(freq, duration, type = 'sine') {
+  try {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) { /* non-fatal */ }
+}
+
+// Success — pleasant ascending two-tone chime
+function playSuccess() {
+  playTone(880, 0.12);
+  setTimeout(() => playTone(1320, 0.18), 100);
+}
+
+// Fail / duplicate — low harsh buzz
+function playError() {
+  playTone(220, 0.3, 'sawtooth');
 }
 
 // ── AUTO-LOGIN (cookie session) ───────────────────────────────────────────────

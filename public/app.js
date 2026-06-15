@@ -2344,6 +2344,7 @@ async function loadAdminData(name) {
       if (settings.brevo_api_key) document.getElementById('set-brevo-api-key').placeholder = '(saved — enter new to change)';
       document.getElementById('set-smtp-from-name').value = settings.smtp_from_name || '';
       document.getElementById('set-email-body').value     = settings.email_confirmation_body || '';
+      updateEmailPreview();
       // Load custom tags
       loadTagsUI(settings);
     }
@@ -2410,15 +2411,33 @@ async function loadAdminData(name) {
     if (currentAdminRole !== 'master') return;
     const logs = await apiFetch('/api/master/activity');
     const tbody = document.getElementById('activity-tbody');
-    if (!logs || !logs.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No activity yet.<\/td><\/tr>`; return; }
+    if (!logs || !logs.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No activity yet.<\/td><\/tr>`; return; }
     const actionColors = { create:'#22c55e', update:'#f59e0b', delete:'#ef4444' };
-    tbody.innerHTML = logs.map(l => `<tr>
+    const UNDOABLE = { member:1, event:1, blog:1, movie:1 };
+    tbody.innerHTML = logs.map(l => {
+      let undoCell = '<span style="color:var(--grey);font-size:12px">—<\/span>';
+      if (l.action === 'delete' && UNDOABLE[l.entity] && l.entity_id) {
+        const createdMs = l.created_at ? new Date(l.created_at).getTime() : 0;
+        const ageMs = Date.now() - createdMs;
+        const remainingMs = (30*60*1000) - ageMs;
+        if (l.undone_at) {
+          undoCell = `<span style="color:var(--grey);font-size:12px">Restored<\/span>`;
+        } else if (remainingMs > 0) {
+          const mins = Math.max(1, Math.ceil(remainingMs / 60000));
+          undoCell = `<button class="admin-action-btn" onclick="undoActivity('${l.id}')">&#8617; Undo (${mins} min left)<\/button>`;
+        } else {
+          undoCell = `<span style="color:var(--grey);font-size:12px">Expired<\/span>`;
+        }
+      }
+      return `<tr>
       <td style="font-weight:500">${l.admin_name||'—'}<\/td>
       <td><span style="color:${actionColors[l.action]||'#888'};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">${l.action}<\/span><\/td>
       <td style="color:var(--grey);text-transform:capitalize">${l.entity||'—'}<\/td>
       <td style="color:var(--white)">${l.entity_name||'—'}<\/td>
       <td style="color:var(--grey);font-size:12px">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}<\/td>
-    <\/tr>`).join('');
+      <td>${undoCell}<\/td>
+    <\/tr>`;
+    }).join('');
   }
   else if (name==='wrapped') { loadWrappedAdminSection(); }
   else if (name==='collaborate') { loadAdminCollaborate(); }
@@ -3287,6 +3306,31 @@ async function saveSettings() {
   } finally {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Settings'; }
   }
+}
+
+function insertEmailVar(variable) {
+  const ta = document.getElementById('set-email-body');
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, start) + variable + ta.value.slice(end);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + variable.length;
+  updateEmailPreview();
+}
+
+let _emailPreviewDebounce = null;
+async function updateEmailPreview() {
+  clearTimeout(_emailPreviewDebounce);
+  _emailPreviewDebounce = setTimeout(async () => {
+    const ta = document.getElementById('set-email-body');
+    const frame = document.getElementById('email-preview-frame');
+    if (!ta || !frame) return;
+    try {
+      const res = await apiFetch('/api/admin/settings/email-preview', 'POST', { body: ta.value });
+      if (res && res.html) frame.srcdoc = res.html;
+    } catch (e) { /* non-fatal */ }
+  }, 250);
 }
 
 async function saveEmailSettings() {
@@ -4507,6 +4551,16 @@ async function deleteAdmin(id, name) {
     if (typeof showToast === 'function') showToast(`Admin "${name}" removed`, 'success');
   } else {
     if (typeof showToast === 'function') showToast('Failed to remove admin', 'error');
+  }
+}
+
+async function undoActivity(activityId) {
+  const res = await apiFetch(`/api/master/activity/${activityId}/undo`, 'POST');
+  if (res && res.success) {
+    if (typeof showToast === 'function') showToast('Restored successfully', 'success');
+    loadAdminData('activity');
+  } else {
+    if (typeof showToast === 'function') showToast(res?.error || 'Could not undo', 'error');
   }
 }
 

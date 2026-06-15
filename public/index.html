@@ -3842,9 +3842,17 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
         <div class="form-group" style="margin-top:4px">
           <label>Confirmation Email Body
-            <span style="font-weight:400;color:var(--grey);font-size:11px;margin-left:6px">Supports: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{name}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{event}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{date_line}}</code> <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">{{venue_line}}</code></span>
+            <span style="font-weight:400;color:var(--grey);font-size:11px;margin-left:6px">Click to insert:</span>
           </label>
-          <textarea id="set-email-body" style="min-height:130px;font-size:13px;font-family:monospace;border-radius:10px" placeholder="Hi {{name}},
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button type="button" onclick="insertEmailVar('{{name}}')" class="btn btn-secondary" style="padding:3px 10px;font-size:11px;font-family:monospace;border-radius:6px">{{name}}</button>
+            <button type="button" onclick="insertEmailVar('{{event}}')" class="btn btn-secondary" style="padding:3px 10px;font-size:11px;font-family:monospace;border-radius:6px">{{event}}</button>
+            <button type="button" onclick="insertEmailVar('{{date_line}}')" class="btn btn-secondary" style="padding:3px 10px;font-size:11px;font-family:monospace;border-radius:6px">{{date_line}}</button>
+            <button type="button" onclick="insertEmailVar('{{venue_line}}')" class="btn btn-secondary" style="padding:3px 10px;font-size:11px;font-family:monospace;border-radius:6px">{{venue_line}}</button>
+          </div>
+          <div class="email-editor-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div>
+              <textarea id="set-email-body" oninput="updateEmailPreview()" style="min-height:260px;font-size:13px;font-family:monospace;border-radius:10px;width:100%" placeholder="Hi {{name}},
 
 You're confirmed for {{event}}!{{date_line}}{{venue_line}}
 
@@ -3852,8 +3860,20 @@ See you there!
 
 Warm regards,
 KFS — KIIT Film Society"></textarea>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--grey);margin-bottom:6px">Preview <span style="opacity:.6">(sample data)</span></div>
+              <iframe id="email-preview-frame" style="width:100%;min-height:260px;height:260px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0a0a0a"></iframe>
+            </div>
+          </div>
           <p style="font-size:11px;color:var(--grey);margin-top:6px">The email is sent only when the registration form has an <strong>Email</strong>-type question. Date &amp; venue lines are auto-populated from the event details.</p>
         </div>
+
+        <style>
+          @media (max-width: 760px) {
+            .email-editor-grid { grid-template-columns: 1fr !important; }
+          }
+        </style>
 
         <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
           <button data-action="saveEmailSettings" class="btn btn-primary" style="border-radius:10px">Save Email Settings</button>
@@ -3988,7 +4008,7 @@ KFS — KIIT Film Society"></textarea>
       </div>
       <div class="admin-card">
         <table class="admin-table">
-          <thead><tr><th>Admin</th><th>Action</th><th>Type</th><th>Item</th><th>When</th></tr></thead>
+          <thead><tr><th>Admin</th><th>Action</th><th>Type</th><th>Item</th><th>When</th><th>Undo</th></tr></thead>
           <tbody id="activity-tbody"></tbody>
         </table>
       </div>
