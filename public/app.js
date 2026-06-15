@@ -2157,6 +2157,192 @@ function showAdminPanel() {
   if (sideEl) sideEl.classList.add('active');
 }
 
+// ══════════════════════════════════════════════════════════
+// GLOBAL ADMIN SEARCH
+// ══════════════════════════════════════════════════════════
+let _searchDebounce = null;
+let _searchActiveIndex = -1;
+let _searchFlatItems = [];
+
+const ADMIN_SEARCH_ICONS = {
+  section: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  member: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  event: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  blog: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+  movie: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>',
+  donor: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  admin: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+};
+
+const ADMIN_SEARCH_TYPE_LABELS = {
+  section: 'Go to',
+  member: 'Members',
+  event: 'Events',
+  blog: 'Blog Posts',
+  movie: 'Films',
+  donor: 'Donors',
+  admin: 'Admin Accounts',
+};
+
+function openAdminSearch() {
+  const modal = document.getElementById('admin-search-modal');
+  modal.classList.add('open');
+  const input = document.getElementById('admin-search-input');
+  input.value = '';
+  document.getElementById('admin-search-results').innerHTML = `
+    <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
+  _searchActiveIndex = -1;
+  _searchFlatItems = [];
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeAdminSearch() {
+  document.getElementById('admin-search-modal').classList.remove('open');
+}
+
+function _adminSearchInputHandler(e) {
+  const q = e.target.value.trim();
+  clearTimeout(_searchDebounce);
+  if (q.length < 2) {
+    document.getElementById('admin-search-results').innerHTML = `
+      <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
+    _searchFlatItems = [];
+    _searchActiveIndex = -1;
+    return;
+  }
+  _searchDebounce = setTimeout(() => _runAdminSearch(q), 200);
+}
+
+async function _runAdminSearch(q) {
+  const resultsEl = document.getElementById('admin-search-results');
+  resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Searching&hellip;</div>`;
+  let data;
+  try {
+    data = await apiFetch('/api/admin/search?q=' + encodeURIComponent(q));
+  } catch (e) {
+    resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Search failed. Try again.</div>`;
+    return;
+  }
+  if (!data || (!data.sections.length && !data.results.length)) {
+    resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">No matches for "${q.replace(/</g,'&lt;')}"</div>`;
+    _searchFlatItems = [];
+    _searchActiveIndex = -1;
+    return;
+  }
+
+  const groups = {};
+  data.sections.forEach(s => { (groups['section'] = groups['section'] || []).push(s); });
+  data.results.forEach(r => { (groups[r.type] = groups[r.type] || []).push(r); });
+
+  const order = ['section', 'member', 'event', 'blog', 'movie', 'donor', 'admin'];
+  _searchFlatItems = [];
+  let html = '';
+  order.forEach(type => {
+    const items = groups[type];
+    if (!items || !items.length) return;
+    html += `<div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#555;padding:10px 12px 4px">${ADMIN_SEARCH_TYPE_LABELS[type]}</div>`;
+    items.forEach(item => {
+      const idx = _searchFlatItems.length;
+      _searchFlatItems.push(item);
+      const icon = item.image
+        ? `<img src="${item.image}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0">`
+        : `<div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:var(--grey);flex-shrink:0">${ADMIN_SEARCH_ICONS[item.type] || ADMIN_SEARCH_ICONS.section}</div>`;
+      const title = (item.title || item.label || '').toString();
+      const subtitle = item.subtitle ? `<div style="font-size:11.5px;color:var(--grey);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.subtitle)}</div>` : '';
+      html += `<div class="admin-search-row" data-idx="${idx}" onclick="_adminSearchSelect(${idx})" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;transition:background .1s">
+        ${icon}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13.5px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(title)}</div>
+          ${subtitle}
+        </div>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#555;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>`;
+    });
+  });
+
+  resultsEl.innerHTML = html;
+  _searchActiveIndex = -1;
+}
+
+function subtitle_escape(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _adminSearchKeyHandler(e) {
+  if (e.key === 'Escape') { closeAdminSearch(); return; }
+  if (!_searchFlatItems.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _searchActiveIndex = Math.min(_searchActiveIndex + 1, _searchFlatItems.length - 1);
+    _highlightSearchRow();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _searchActiveIndex = Math.max(_searchActiveIndex - 1, 0);
+    _highlightSearchRow();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_searchActiveIndex >= 0) _adminSearchSelect(_searchActiveIndex);
+    else if (_searchFlatItems.length) _adminSearchSelect(0);
+  }
+}
+
+function _highlightSearchRow() {
+  document.querySelectorAll('.admin-search-row').forEach(el => {
+    const isActive = Number(el.dataset.idx) === _searchActiveIndex;
+    el.style.background = isActive ? 'rgba(255,255,255,.06)' : '';
+    if (isActive) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function _adminSearchSelect(idx) {
+  const item = _searchFlatItems[idx];
+  if (!item) return;
+  closeAdminSearch();
+  if (item.type === 'section') {
+    showAdminSection(item.id);
+    return;
+  }
+  goToAdminRecord(item.type, item.id);
+}
+
+// Navigates to the right section and scrolls/highlights the matching row.
+const ADMIN_RECORD_MAP = {
+  member: { section: 'members', tbody: 'admin-members-tbody' },
+  event:  { section: 'events',  tbody: 'admin-events-tbody' },
+  blog:   { section: 'blogs',   tbody: 'admin-blogs-tbody' },
+  movie:  { section: 'movies',  tbody: 'admin-movies-tbody' },
+  donor:  { section: 'payment-analytics', tbody: null },
+  admin:  { section: 'admins',  tbody: 'admins-tbody' },
+};
+
+function goToAdminRecord(type, id) {
+  const map = ADMIN_RECORD_MAP[type];
+  if (!map) return;
+  showAdminSection(map.section);
+  if (!map.tbody) return;
+  setTimeout(() => {
+    const row = document.querySelector(`#${map.tbody} tr[data-id="${id}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.style.outline = '2px solid #4ade80';
+      row.style.outlineOffset = '-1px';
+      setTimeout(() => { row.style.outline = ''; }, 2000);
+    }
+  }, 400);
+}
+
+document.addEventListener('keydown', (e) => {
+  const isK = e.key === 'k' || e.key === 'K';
+  if ((e.metaKey || e.ctrlKey) && isK) {
+    e.preventDefault();
+    const modal = document.getElementById('admin-search-modal');
+    if (modal) {
+      if (modal.classList.contains('open')) closeAdminSearch();
+      else openAdminSearch();
+    }
+  }
+});
+
 function showAdminSection(name) {
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   document.getElementById('section-'+name).classList.add('active');

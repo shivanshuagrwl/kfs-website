@@ -1843,6 +1843,177 @@ app.get("/api/blogs", async (req, res) => {
   res.json(data);
 });
 
+// ── Global admin search ───────────────────────────────────────────────────────
+// Static index of admin sections, so typing "broadcast" or "themes" jumps straight
+// to that tab even with zero DB records matching.
+const ADMIN_SECTION_INDEX = [
+  { id: "dashboard", label: "Dashboard", section: null, keywords: "overview home stats" },
+  { id: "blogs", label: "Blog Posts", section: "blogs", keywords: "blog post article write content" },
+  { id: "events", label: "Events", section: "events", keywords: "event screening registration" },
+  { id: "scanner", label: "Scanner", section: "events", keywords: "scanner qr checkin check-in ticket" },
+  { id: "members", label: "Members", section: "members", keywords: "member team roster people" },
+  { id: "movies", label: "Films", section: "movies", keywords: "movie film production showcase" },
+  { id: "chitra-vichitra", label: "Chitra Vichitra", section: "chitra-vichitra", keywords: "chitra vichitra magazine" },
+  { id: "testimonials", label: "Testimonials", section: "testimonials", keywords: "testimonial review quote" },
+  { id: "achievements", label: "Achievements", section: "achievements", keywords: "achievement award milestone" },
+  { id: "wrapped", label: "Wrapped", section: "wrapped", keywords: "wrapped recap year in review" },
+  { id: "collaborate", label: "Collaborate", section: "collaborate", keywords: "collaborate collaboration partner" },
+  { id: "easter-eggs", label: "Easter Eggs", section: "settings", keywords: "easter egg search hidden" },
+  { id: "analytics", label: "Analytics", section: "analytics", keywords: "analytics traffic visitors" },
+  { id: "review-analytics", label: "Review Analytics", section: "review-analytics", keywords: "review analytics ratings" },
+  { id: "reg-analytics", label: "Registration Analytics", section: "events", keywords: "registration analytics signups" },
+  { id: "payment-analytics", label: "Payment Analytics", section: "settings", keywords: "payment donation analytics revenue" },
+  { id: "comments", label: "Comments", section: "settings", keywords: "comment moderation reply" },
+  { id: "broadcast", label: "Broadcast", section: "notifications", keywords: "broadcast email newsletter blast" },
+  { id: "themes", label: "Themes", section: "settings", keywords: "theme color palette appearance" },
+  { id: "member-portal", label: "Member Portal", section: "members", keywords: "member portal account login" },
+  { id: "member-profile-changes", label: "Profile Change Requests", section: "members", keywords: "profile change request approval" },
+  { id: "member-movie-submissions", label: "Movie Submissions", section: "members", keywords: "movie submission member upload" },
+  { id: "work-edit-requests", label: "Work Edit Requests", section: "members", keywords: "work edit request portfolio" },
+  { id: "settings", label: "Settings", section: "settings", keywords: "settings config email site" },
+  { id: "change-password", label: "Change Password", section: null, keywords: "password security change" },
+  { id: "two-factor", label: "Two-Factor Auth", section: null, keywords: "2fa two factor security otp" },
+  { id: "admins", label: "Admin Accounts", section: null, keywords: "admin account user role permission", masterOnly: true },
+  { id: "activity", label: "Activity Log", section: null, keywords: "activity log audit history undo", masterOnly: true },
+];
+
+app.get("/api/admin/search", authMiddleware, async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (q.length < 2) return res.json({ sections: [], results: [] });
+
+  const isMaster = req.admin.role === "master";
+  const perms = req.admin.permissions || [];
+  const canAccess = (section) => isMaster || !section || perms.includes(section);
+
+  const lower = q.toLowerCase();
+
+  // Matching sections (static index, no DB hit)
+  const sections = ADMIN_SECTION_INDEX
+    .filter((s) => isMaster || !s.masterOnly)
+    .filter((s) => canAccess(s.section))
+    .filter((s) => s.label.toLowerCase().includes(lower) || s.keywords.includes(lower))
+    .slice(0, 6)
+    .map((s) => ({ type: "section", id: s.id, label: s.label }));
+
+  const results = [];
+  const like = `%${q}%`;
+
+  const tasks = [];
+
+  if (canAccess("members")) {
+    tasks.push(
+      supabase
+        .from("members")
+        .select("id,name,role,batch,email,roll_no,photo")
+        .is("deleted_at", null)
+        .or(`name.ilike.${like},email.ilike.${like},roll_no.ilike.${like},role.ilike.${like}`)
+        .limit(6)
+        .then(({ data }) => (data || []).map((m) => ({
+          type: "member",
+          id: m.id,
+          title: m.name,
+          subtitle: [m.role, m.batch].filter(Boolean).join(" • ") || m.email,
+          image: m.photo || null,
+        }))),
+    );
+  }
+
+  if (canAccess("events")) {
+    tasks.push(
+      supabase
+        .from("events")
+        .select("id,title,location,event_date,is_upcoming")
+        .is("deleted_at", null)
+        .ilike("title", like)
+        .limit(6)
+        .then(({ data }) => (data || []).map((e) => ({
+          type: "event",
+          id: e.id,
+          title: e.title,
+          subtitle: [e.location, e.event_date ? new Date(e.event_date).toLocaleDateString() : null].filter(Boolean).join(" • "),
+          image: null,
+        }))),
+    );
+  }
+
+  if (canAccess("blogs")) {
+    tasks.push(
+      supabase
+        .from("blogs")
+        .select("id,title,author,published,cover_image")
+        .is("deleted_at", null)
+        .or(`title.ilike.${like},author.ilike.${like}`)
+        .limit(6)
+        .then(({ data }) => (data || []).map((b) => ({
+          type: "blog",
+          id: b.id,
+          title: b.title,
+          subtitle: [b.author, b.published ? "Published" : "Draft"].filter(Boolean).join(" • "),
+          image: b.cover_image || null,
+        }))),
+    );
+  }
+
+  if (canAccess("movies")) {
+    tasks.push(
+      supabase
+        .from("movies")
+        .select("id,title,release_year,director,poster_image")
+        .is("deleted_at", null)
+        .or(`title.ilike.${like},director.ilike.${like}`)
+        .limit(6)
+        .then(({ data }) => (data || []).map((m) => ({
+          type: "movie",
+          id: m.id,
+          title: m.title,
+          subtitle: [m.director, m.release_year].filter(Boolean).join(" • "),
+          image: m.poster_image || null,
+        }))),
+    );
+  }
+
+  if (canAccess("settings")) {
+    tasks.push(
+      supabase
+        .from("donors")
+        .select("id,name,email,roll_no,amount_paise,semester_label,is_anonymous")
+        .or(`name.ilike.${like},email.ilike.${like},roll_no.ilike.${like}`)
+        .limit(6)
+        .then(({ data }) => (data || []).map((d) => ({
+          type: "donor",
+          id: d.id,
+          title: d.is_anonymous ? "Anonymous Donor" : (d.name || d.email),
+          subtitle: [d.semester_label, d.amount_paise ? `₹${(d.amount_paise / 100).toLocaleString("en-IN")}` : null].filter(Boolean).join(" • "),
+          image: null,
+        }))),
+    );
+  }
+
+  if (isMaster) {
+    tasks.push(
+      supabase
+        .from("admins")
+        .select("id,username,name,role")
+        .or(`username.ilike.${like},name.ilike.${like}`)
+        .limit(4)
+        .then(({ data }) => (data || []).map((a) => ({
+          type: "admin",
+          id: a.id,
+          title: a.name || a.username,
+          subtitle: a.role,
+          image: null,
+        }))),
+    );
+  }
+
+  const settled = await Promise.allSettled(tasks);
+  settled.forEach((r) => {
+    if (r.status === "fulfilled") results.push(...r.value);
+  });
+
+  res.json({ sections, results: results.slice(0, 30) });
+});
+
 app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
   const { data } = await supabase
     .from("blogs")

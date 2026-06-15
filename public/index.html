@@ -1415,6 +1415,12 @@ body:has(#admin-panel.active) #main-nav{display:none}
 
 .admin-section{display:none}
 .admin-section.active{display:block;animation:fadeUp .4s var(--ease) both}
+#admin-search-trigger:hover{border-color:rgba(255,255,255,.18);color:var(--white)}
+.admin-search-row:hover{background:rgba(255,255,255,.06)}
+@media(max-width:768px){
+  #admin-search-trigger span:last-child{display:none}
+  #admin-search-modal{padding-top:8vh}
+}
 /* ── DASHBOARD STAT CARDS ── */
 .db-stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;transition:border-color .2s,transform .15s}
 .db-stat-card:hover{border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
@@ -2436,6 +2442,18 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 <div id="page-wipe"></div>
 <div id="scroll-progress"></div>
 
+<!-- GLOBAL ADMIN SEARCH -->
+<div class="modal-overlay" id="admin-search-modal" onclick="if(event.target===this) closeAdminSearch()" style="align-items:flex-start;justify-content:center;padding-top:12vh">
+  <div class="modal" style="max-width:560px;width:92%;border-radius:16px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:70vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--grey)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="admin-search-input" type="text" autocomplete="off" placeholder="Search members, events, posts, films, donors&hellip;" oninput="_adminSearchInputHandler(event)" onkeydown="_adminSearchKeyHandler(event)" style="flex:1;background:none;border:none;outline:none;font-size:15px;color:var(--white);font-family:inherit">
+      <span style="font-size:10px;letter-spacing:.04em;color:#555;border:1px solid var(--border);border-radius:5px;padding:1px 5px;flex-shrink:0">ESC</span>
+    </div>
+    <div id="admin-search-results" style="overflow-y:auto;flex:1;padding:8px"></div>
+  </div>
+</div>
+
 <!-- ADD ADMIN MODAL -->
 <div class="modal-overlay" id="add-admin-modal">
   <div class="modal" style="max-width:500px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
@@ -3446,6 +3464,13 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <span id="sidebar-admin-name" style="font-weight:600;color:var(--white)"></span>
       <span id="sidebar-admin-role" style="margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#555"></span>
       <div id="sidebar-last-login" style="margin-top:4px;font-size:10px;color:#444;letter-spacing:.02em"></div>
+    </div>
+    <div style="padding:0 12px 14px;position:relative">
+      <div id="admin-search-trigger" onclick="openAdminSearch()" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--border);cursor:pointer;color:var(--grey);transition:border-color .15s,color .15s">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span style="font-size:12.5px;flex:1">Search admin&hellip;</span>
+        <span style="font-size:10px;letter-spacing:.04em;color:#555;border:1px solid var(--border);border-radius:5px;padding:1px 5px;flex-shrink:0">&#8984;K</span>
+      </div>
     </div>
     <div class="admin-sidebar-group">Overview</div>
     <div data-action="showAdminSection" data-args='["dashboard"]' class="admin-sidebar-item" data-section="dashboard" id="sidebar-dashboard"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Dashboard</div>
