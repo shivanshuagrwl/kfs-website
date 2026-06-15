@@ -2333,13 +2333,17 @@ function goToAdminRecord(type, id) {
 
 document.addEventListener('keydown', (e) => {
   const isK = e.key === 'k' || e.key === 'K';
-  if ((e.metaKey || e.ctrlKey) && isK) {
-    e.preventDefault();
-    const modal = document.getElementById('admin-search-modal');
-    if (modal) {
-      if (modal.classList.contains('open')) closeAdminSearch();
-      else openAdminSearch();
-    }
+  if (!(e.metaKey || e.ctrlKey) || !isK) return;
+  // Only take over Cmd/Ctrl+K while the admin panel is open — otherwise let
+  // the public-site search shortcut (openSearch) handle it as before.
+  const adminPanel = document.getElementById('admin-panel');
+  if (!adminPanel || !adminPanel.classList.contains('active')) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const modal = document.getElementById('admin-search-modal');
+  if (modal) {
+    if (modal.classList.contains('open')) closeAdminSearch();
+    else openAdminSearch();
   }
 });
 

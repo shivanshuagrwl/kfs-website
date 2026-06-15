@@ -1896,7 +1896,12 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
     .map((s) => ({ type: "section", id: s.id, label: s.label }));
 
   const results = [];
-  const like = `%${q}%`;
+  // PostgREST's .or() syntax treats commas and parentheses as structural
+  // delimiters — strip them from the search term so queries like "Smith, John"
+  // or "100% (final)" don't silently break the ilike filters below.
+  const safeQ = q.replace(/[,()]/g, " ").trim();
+  if (!safeQ) return res.json({ sections, results: [] });
+  const like = `%${safeQ}%`;
 
   const tasks = [];
 
