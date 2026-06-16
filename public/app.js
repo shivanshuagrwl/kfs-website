@@ -9220,76 +9220,9 @@ function openCollabForm(post) {
     const memberData      = window._member        || memberDataLS;
 
     if (memberToken && (memberProfile || memberData)) {
-      // Portal member: skip gate, auto-fill locked fields
-      document.getElementById('collab-gate').style.display = 'none';
-      document.getElementById('collab-form-body').style.display = 'block';
-
-      const memberName  = memberProfile?.name  || memberData?.name  || '';
-      const memberEmail = memberProfile?.email || memberData?.email || '';
-      const memberPhone = memberProfile?.mobile || memberData?.mobile || '';
-
-      // Show member badge instead of verified badge
-      const badge = document.getElementById('collab-verified-badge');
-      if (badge) {
-        badge.style.display = 'flex';
-        badge.style.background = 'rgba(255,255,255,.03)';
-        badge.style.borderColor = 'rgba(255,255,255,.1)';
-        // Swap check → lock icon
-        const checkIcon = document.getElementById('collab-badge-check-icon');
-        const lockIcon  = document.getElementById('collab-badge-lock-icon');
-        if (checkIcon) checkIcon.style.display = 'none';
-        if (lockIcon)  lockIcon.style.display  = 'block';
-        const nameEl = document.getElementById('collab-verified-name');
-        if (nameEl) {
-          nameEl.style.color = '#e0e0e0';
-          nameEl.innerHTML = `<span style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#555;font-weight:600;display:block;margin-bottom:1px">Logged in as</span><span style="font-size:13px;font-weight:600;color:#f0f0f0">${memberName}</span>`;
-        }
-        // Hide the "Change" span — member can't change identity
-        const changeEl = badge.querySelector('[data-action="resetCollabGate"]');
-        if (changeEl) changeEl.style.display = 'none';
-      }
-      // Update labels to reflect locked/pre-filled state
-      const nameLabelEl = document.getElementById('collab-name-label');
-      if (nameLabelEl) nameLabelEl.innerHTML = 'Your Name <span style="font-size:10px;color:#555;text-transform:none;font-weight:400;letter-spacing:0">· from your portal profile</span>';
-      const phoneLabelEl = document.getElementById('collab-phone-label');
-      if (phoneLabelEl) phoneLabelEl.innerHTML = 'Phone <span style="font-size:10px;color:#555;text-transform:none;font-weight:400;letter-spacing:0">· from your portal profile</span>';
-
-      _collabVerifiedMember = { email: memberEmail, name: memberName, fromPortal: true };
-
-      // Lock name field — show locked read-only display
-      const namePickerWrap = document.getElementById('collab-name-picker');
-      if (namePickerWrap) {
-        namePickerWrap.innerHTML = `<div style="padding:10px 14px;background:#111;border:1px solid #1e1e1e;border-radius:8px;font-size:14px;color:#e0e0e0;display:flex;align-items:center;gap:8px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span>${memberName}</span>
-        </div>`;
-      }
-
-      // Lock email — read-only
-      const emailEl = document.getElementById('collab-email');
-      if (emailEl) {
-        emailEl.value = memberEmail;
-        emailEl.readOnly = true;
-        emailEl.style.opacity = '.5';
-        emailEl.style.cursor = 'not-allowed';
-      }
-
-      // Lock phone — read-only (pre-filled from member profile)
-      const phoneEl = document.getElementById('collab-phone');
-      if (phoneEl) {
-        phoneEl.value = memberPhone || '';
-        if (memberPhone) {
-          phoneEl.readOnly = true;
-          phoneEl.style.opacity = '.5';
-          phoneEl.style.cursor = 'not-allowed';
-        }
-      }
-
-      // Reset other fields
-      ['collab-title','collab-role','collab-skills','collab-timeline','collab-description','collab-date'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.value = '';
-      });
-      document.getElementById('collab-domain').value = '';
+      // Portal member — send them to the portal collab panel instead of showing the form here
+      closeCollabForm();
+      window.location.href = '/membersaccess#collab';
       return;
     }
 
@@ -9395,19 +9328,6 @@ async function saveCollabPost() {
 
   closeCollabForm();
   loadCollaborate();
-
-  if (data.edit_url) {
-    const full = location.origin + data.edit_url;
-    const successEl = document.getElementById('collab-success');
-    if (successEl) {
-      successEl.style.display = 'block';
-      document.getElementById('collab-edit-link').value = full;
-      setTimeout(() => {
-        const input = document.getElementById('collab-edit-link');
-        if (input) { input.focus(); input.select(); }
-      }, 100);
-    }
-  }
 }
 
 async function loadCollabEditToken(token) {

@@ -9512,6 +9512,36 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
   }
 });
 
+// Member: edit own collab post (authenticated — verifies post belongs to member's email)
+app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, async (req, res) => {
+  try {
+    const { data: member } = await supabase.from("members")
+      .select("email").eq("id", req.member.memberId).maybeSingle();
+    if (!member) return res.status(404).json({ error: "Member not found" });
+
+    // Confirm post exists and belongs to this member
+    const { data: existing } = await supabasePublic.from("collaborate_posts")
+      .select("id, contact_email").eq("edit_token", req.params.token).maybeSingle();
+    if (!existing) return res.status(404).json({ error: "Post not found." });
+    if (existing.contact_email !== member.email)
+      return res.status(403).json({ error: "You can only edit your own posts." });
+
+    const payload = cleanCollabPayload(req.body);
+    if (!payload.title || !payload.role || !payload.description || !payload.fulfillment_date)
+      return res.status(400).json({ error: "Title, role, description, and fulfillment date are required." });
+    if (!payload.contact_email || !payload.contact_phone)
+      return res.status(400).json({ error: "Email and phone are required." });
+
+    const { error } = await supabasePublic.from("collaborate_posts")
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq("edit_token", req.params.token);
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 async function initMemberDB() {
   try {
     const { error: accErr } = await supabase

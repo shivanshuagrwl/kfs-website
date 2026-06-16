@@ -1214,23 +1214,57 @@ document.addEventListener('visibilitychange', () => {
 
 // ── Collaborate ───────────────────────────────────────────────────────────────
 
-function showCollabForm() {
+let _editingCollabToken = null; // edit_token of collab being edited, null = new post
+
+function showCollabForm(existingCollab) {
+  _editingCollabToken = existingCollab?.edit_token || null;
   hideEl('collab-form-err'); hideEl('collab-form-ok');
-  // Prefill email & phone from cached profile
+
+  // Update form title & button label
+  const cardTitle = $id('collab-form')?.querySelector('.card-title');
+  if (cardTitle) cardTitle.textContent = _editingCollabToken ? 'Edit Collaboration Post' : 'New Collaboration Post';
+  const submitBtn = $id('collab-submit-btn');
+  if (submitBtn) submitBtn.textContent = _editingCollabToken ? 'Save Changes' : 'Post Request';
+
   const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
-  const emailEl = $id('cf-email');
-  const phoneEl = $id('cf-phone');
-  if (emailEl && profile.email)  emailEl.value = profile.email;
-  if (phoneEl && profile.mobile) phoneEl.value = profile.mobile;
-  // Set min date to today
   const dateEl = $id('cf-date');
   if (dateEl) dateEl.min = new Date().toISOString().split('T')[0];
+
+  if (existingCollab) {
+    // Prefill all fields from existing collab
+    const v = (id, val) => { const el = $id(id); if (el) el.value = val || ''; };
+    v('cf-title',       existingCollab.title);
+    v('cf-role',        existingCollab.role);
+    v('cf-domain',      existingCollab.domain);
+    v('cf-skills',      existingCollab.skills);
+    v('cf-description', existingCollab.description);
+    v('cf-timeline',    existingCollab.timeline);
+    v('cf-date',        existingCollab.fulfillment_date ? existingCollab.fulfillment_date.split('T')[0] : '');
+    v('cf-email',       existingCollab.contact_email);
+    v('cf-phone',       existingCollab.contact_phone);
+    const cnt = $id('cf-desc-count');
+    if (cnt) cnt.textContent = (existingCollab.description || '').length;
+  } else {
+    // Clear all fields for a new post, prefill contact from profile
+    ['cf-title','cf-role','cf-domain','cf-skills','cf-description','cf-timeline','cf-date','cf-phone'].forEach(id => {
+      const el = $id(id); if (el) el.value = '';
+    });
+    const emailEl = $id('cf-email');
+    const phoneEl = $id('cf-phone');
+    if (emailEl && profile.email)  emailEl.value = profile.email;
+    if (phoneEl && profile.mobile) phoneEl.value = profile.mobile;
+    const cnt = $id('cf-desc-count'); if (cnt) cnt.textContent = '0';
+  }
+
   $id('collab-form').style.display = 'block';
+  $id('new-collab-btn').style.display = 'none';
   $id('collab-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function hideCollabForm() {
+  _editingCollabToken = null;
   $id('collab-form').style.display = 'none';
+  $id('new-collab-btn').style.display = '';
   ['cf-title','cf-role','cf-domain','cf-skills','cf-description','cf-timeline','cf-date','cf-phone'].forEach(id => {
     const el = $id(id); if (el) el.value = '';
   });
@@ -1239,6 +1273,11 @@ function hideCollabForm() {
   const emailEl = $id('cf-email');
   if (emailEl) emailEl.value = profile.email || '';
   const cnt = $id('cf-desc-count'); if (cnt) cnt.textContent = '0';
+  // Reset form title/button back to defaults
+  const cardTitle = $id('collab-form')?.querySelector('.card-title');
+  if (cardTitle) cardTitle.textContent = 'New Collaboration Post';
+  const submitBtn = $id('collab-submit-btn');
+  if (submitBtn) submitBtn.textContent = 'Post Request';
 }
 
 async function submitCollab() {
@@ -1260,10 +1299,10 @@ async function submitCollab() {
   }
 
   const btn = $id('collab-submit-btn');
-  btn.disabled = true; btn.textContent = 'Posting…';
+  btn.disabled = true; btn.textContent = _editingCollabToken ? 'Saving…' : 'Posting…';
   try {
     const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
-    await api('POST', '/api/collaborate/member', {
+    const payload = {
       title,
       role,
       description,
@@ -1274,13 +1313,19 @@ async function submitCollab() {
       contact_name:  profile.name || '',
       contact_email: email,
       contact_phone: phone,
-    });
-    showMsg('collab-form-ok', '🎬 Collab post published! It\'s now live on the /collaborate page.');
+    };
+    if (_editingCollabToken) {
+      await api('PUT', `/api/collaborate/${_editingCollabToken}`, payload);
+      showMsg('collab-form-ok', '✅ Collab post updated!');
+    } else {
+      await api('POST', '/api/collaborate/member', payload);
+      showMsg('collab-form-ok', '🎬 Collab post published! It\'s now live on the /collaborate page.');
+    }
     setTimeout(() => { hideCollabForm(); loadMyCollabs(); }, 2200);
   } catch (e) {
-    showMsg('collab-form-err', e.message || 'Could not post — please try again.', false);
+    showMsg('collab-form-err', e.message || 'Could not save — please try again.', false);
   } finally {
-    btn.disabled = false; btn.textContent = 'Post Request';
+    btn.disabled = false; btn.textContent = _editingCollabToken ? 'Save Changes' : 'Post Request';
   }
 }
 
@@ -1302,7 +1347,9 @@ async function loadMyCollabs() {
         </div>`;
       return;
     }
-    list.innerHTML = mine.map(c => {
+    // Store collab data for edit access
+    window._myCollabs = mine;
+    list.innerHTML = mine.map((c, idx) => {
       const until = new Date(c.fulfillment_date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
       return `
         <div class="collab-posted-card">
@@ -1321,10 +1368,23 @@ async function loadMyCollabs() {
           </div>
           <div class="collab-card-actions">
             <a href="/collaborate" target="_blank" class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;transition:all .12s">View on Site ↗</a>
-            ${c.edit_token ? `<button class="btn-sm btn-danger" onclick="deleteCollab('${c.edit_token}', this)">Delete</button>` : ''}
+            ${c.edit_token ? `<button class="btn-sm collab-edit-btn" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;transition:all .12s" data-collab-idx="${idx}">Edit</button>` : ''}
+            ${c.edit_token ? `<button class="btn-sm btn-danger collab-delete-btn" data-token="${escHtml(c.edit_token)}">Delete</button>` : ''}
           </div>
         </div>`;
     }).join('');
+
+    // Wire edit buttons
+    list.querySelectorAll('.collab-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const collab = window._myCollabs[parseInt(btn.dataset.collabIdx, 10)];
+        if (collab) showCollabForm(collab);
+      });
+    });
+    // Wire delete buttons
+    list.querySelectorAll('.collab-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteCollab(btn.dataset.token, btn));
+    });
   } catch (e) {
     list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
   }
