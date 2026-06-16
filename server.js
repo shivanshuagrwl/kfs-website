@@ -2613,7 +2613,7 @@ app.delete(
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
 //   id           BIGSERIAL PRIMARY KEY,
-//   member_id    BIGINT REFERENCES members(id) ON DELETE SET NULL,
+//   member_id    UUID REFERENCES members(id) ON DELETE SET NULL,
 //   member_name  TEXT NOT NULL,
 //   member_photo TEXT,
 //   credit_roles JSONB DEFAULT '[]'::jsonb,
@@ -2655,7 +2655,7 @@ app.post("/api/admin/credits", requireSection("settings"), async (req, res) => {
   const { data, error } = await supabase
     .from("site_credits")
     .insert([{
-      member_id: member_id ? parseInt(member_id) : null,
+      member_id: member_id || null,
       member_name,
       member_photo: member_photo || null,
       credit_roles: roles,
@@ -2676,7 +2676,7 @@ app.put("/api/admin/credits/:id", requireSection("settings"), async (req, res) =
   let roles = credit_roles || [];
   if (typeof roles === "string") { try { roles = JSON.parse(roles); } catch { roles = []; } }
   const updates = {
-    member_id: member_id ? parseInt(member_id) : null,
+    member_id: member_id || null,
     member_name,
     member_photo: member_photo || null,
     credit_roles: roles,
