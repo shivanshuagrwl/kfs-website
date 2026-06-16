@@ -2167,13 +2167,33 @@ let _searchFlatItems = [];
 let _searchDidYouMean = [];
 
 const ADMIN_SEARCH_ICONS = {
-  section: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
-  member: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-  event: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-  blog: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
-  movie: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>',
-  donor: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
-  admin: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  section: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
+  member: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  event: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  blog: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+  movie: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>',
+  donor: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  admin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+};
+
+// Accent colors per result type for the icon background
+const ADMIN_SEARCH_ICON_BG = {
+  section: 'rgba(139,92,246,.15)',
+  member:  'rgba(59,130,246,.15)',
+  event:   'rgba(234,179,8,.12)',
+  blog:    'rgba(34,197,94,.12)',
+  movie:   'rgba(239,68,68,.12)',
+  donor:   'rgba(236,72,153,.12)',
+  admin:   'rgba(255,255,255,.06)',
+};
+const ADMIN_SEARCH_ICON_COLOR = {
+  section: '#a78bfa',
+  member:  '#60a5fa',
+  event:   '#facc15',
+  blog:    '#4ade80',
+  movie:   '#f87171',
+  donor:   '#f472b6',
+  admin:   '#9ca3af',
 };
 
 const ADMIN_SEARCH_TYPE_LABELS = {
@@ -2192,7 +2212,7 @@ function openAdminSearch() {
   const input = document.getElementById('admin-search-input');
   input.value = '';
   document.getElementById('admin-search-results').innerHTML = `
-    <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
+    <div style="padding:36px 16px;text-align:center;color:#444;font-size:13px">Start typing to search across the admin panel</div>`;
   _searchActiveIndex = -1;
   _searchFlatItems = [];
   _searchDidYouMean = [];
@@ -2208,7 +2228,7 @@ function _adminSearchInputHandler(e) {
   clearTimeout(_searchDebounce);
   if (q.length < 2) {
     document.getElementById('admin-search-results').innerHTML = `
-      <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
+      <div style="padding:36px 16px;text-align:center;color:#444;font-size:13px">Start typing to search</div>`;
     _searchFlatItems = [];
     _searchActiveIndex = -1;
     _searchDidYouMean = [];
@@ -2219,36 +2239,53 @@ function _adminSearchInputHandler(e) {
 
 async function _runAdminSearch(q) {
   const resultsEl = document.getElementById('admin-search-results');
-  resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Searching&hellip;</div>`;
+  resultsEl.innerHTML = `<div style="padding:36px 16px;text-align:center;color:#444;font-size:13px">Searching…</div>`;
   let data;
   try {
     data = await apiFetch('/api/admin/search?q=' + encodeURIComponent(q));
   } catch (e) {
-    resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Search failed. Try again.</div>`;
+    resultsEl.innerHTML = `<div style="padding:36px 16px;text-align:center;color:#444;font-size:13px">Search failed — try again.</div>`;
     return;
   }
+
+  // Helper: build a colored icon box for a result type
+  function _searchIconBox(type, image) {
+    const bg = ADMIN_SEARCH_ICON_BG[type] || 'rgba(255,255,255,.05)';
+    const color = ADMIN_SEARCH_ICON_COLOR[type] || '#666';
+    const svg = ADMIN_SEARCH_ICONS[type] || ADMIN_SEARCH_ICONS.section;
+    if (image) {
+      return `<img src="${image}" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0">`;
+    }
+    return `<div style="width:34px;height:34px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;color:${color};flex-shrink:0">${svg}</div>`;
+  }
+
   if (!data || (!data.sections.length && !data.results.length)) {
     const dym = (data && data.didYouMean) || [];
     if (dym.length) {
       _searchDidYouMean = dym;
-      const rows = dym.map((item, i) => {
-        const icon = ADMIN_SEARCH_ICONS[item.type] || ADMIN_SEARCH_ICONS.section;
+      const chips = dym.map((item, i) => {
+        const bg = ADMIN_SEARCH_ICON_BG[item.type] || 'rgba(255,255,255,.05)';
+        const color = ADMIN_SEARCH_ICON_COLOR[item.type] || '#888';
+        const svg = ADMIN_SEARCH_ICONS[item.type] || ADMIN_SEARCH_ICONS.section;
         const typeLabel = ADMIN_SEARCH_TYPE_LABELS[item.type] || '';
-        return `<div class="admin-search-row" onclick="_adminSearchDidYouMean(${i})" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer">
-            <div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:var(--grey);flex-shrink:0">${icon}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13.5px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.text)}</div>
-              ${typeLabel ? `<div style="font-size:11.5px;color:var(--grey);margin-top:1px">${subtitle_escape(typeLabel)}</div>` : ''}
-            </div>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#555;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>`;
-      }).join('');
-      resultsEl.innerHTML = `<div style="padding:20px 4px 8px">
-          <div style="color:var(--grey);font-size:13px;padding:0 12px 10px">No matches for "${subtitle_escape(q)}" — did you mean:</div>
-          ${rows}
+        return `<div class="admin-search-dym-chip" onclick="_adminSearchDidYouMean(${i})">
+          <div style="width:26px;height:26px;border-radius:7px;background:${bg};display:flex;align-items:center;justify-content:center;color:${color};flex-shrink:0">${svg}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.text)}</div>
+            ${typeLabel ? `<div style="font-size:11px;color:#555;margin-top:1px">${subtitle_escape(typeLabel)}</div>` : ''}
+          </div>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#444;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
         </div>`;
+      }).join('');
+      resultsEl.innerHTML = `<div style="padding:18px 10px 10px">
+        <div style="font-size:11.5px;color:#555;padding:0 4px 10px;letter-spacing:.02em">No matches for <span style="color:#777">“${subtitle_escape(q)}”</span> — did you mean:</div>
+        <div style="display:flex;flex-direction:column;gap:5px">${chips}</div>
+      </div>`;
     } else {
-      resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">No matches for "${subtitle_escape(q)}"</div>`;
+      resultsEl.innerHTML = `<div style="padding:36px 16px;text-align:center">
+        <div style="font-size:13px;color:#555">No results for <span style="color:#777">“${subtitle_escape(q)}”</span></div>
+        <div style="font-size:11.5px;color:#444;margin-top:6px">Try different keywords or check spelling</div>
+      </div>`;
     }
     _searchFlatItems = [];
     _searchActiveIndex = -1;
@@ -2265,22 +2302,24 @@ async function _runAdminSearch(q) {
   order.forEach(type => {
     const items = groups[type];
     if (!items || !items.length) return;
-    html += `<div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#555;padding:10px 12px 4px">${ADMIN_SEARCH_TYPE_LABELS[type]}</div>`;
+    const label = ADMIN_SEARCH_TYPE_LABELS[type] || type;
+    const color = ADMIN_SEARCH_ICON_COLOR[type] || '#555';
+    html += `<div style="font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:${color};padding:12px 12px 4px;font-weight:700;opacity:.7">${label}</div>`;
     items.forEach(item => {
       const idx = _searchFlatItems.length;
       _searchFlatItems.push(item);
-      const icon = item.image
-        ? `<img src="${item.image}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0">`
-        : `<div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:var(--grey);flex-shrink:0">${ADMIN_SEARCH_ICONS[item.type] || ADMIN_SEARCH_ICONS.section}</div>`;
-      const title = (item.title || item.label || '').toString();
-      const subtitle = item.subtitle ? `<div style="font-size:11.5px;color:var(--grey);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.subtitle)}</div>` : '';
-      html += `<div class="admin-search-row" data-idx="${idx}" onclick="_adminSearchSelect(${idx})" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;transition:background .1s">
-        ${icon}
+      const iconBox = _searchIconBox(item.type, item.image);
+      const title = subtitle_escape((item.title || item.label || '').toString());
+      const subtitle = item.subtitle
+        ? `<div style="font-size:11.5px;color:#555;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.subtitle)}</div>`
+        : '';
+      html += `<div class="admin-search-row" data-idx="${idx}" onclick="_adminSearchSelect(${idx})" style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin:0 2px;cursor:pointer">
+        ${iconBox}
         <div style="flex:1;min-width:0">
-          <div style="font-size:13.5px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(title)}</div>
+          <div style="font-size:13.5px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
           ${subtitle}
         </div>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#555;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#444;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
       </div>`;
     });
   });
@@ -2314,7 +2353,7 @@ function _adminSearchKeyHandler(e) {
 function _highlightSearchRow() {
   document.querySelectorAll('.admin-search-row').forEach(el => {
     const isActive = Number(el.dataset.idx) === _searchActiveIndex;
-    el.style.background = isActive ? 'rgba(255,255,255,.06)' : '';
+    el.classList.toggle('kbd-active', isActive);
     if (isActive) el.scrollIntoView({ block: 'nearest' });
   });
 }

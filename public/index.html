@@ -1416,7 +1416,15 @@ body:has(#admin-panel.active) #main-nav{display:none}
 .admin-section{display:none}
 .admin-section.active{display:block;animation:fadeUp .4s var(--ease) both}
 #admin-search-trigger:hover{border-color:rgba(255,255,255,.18);color:var(--white)}
-.admin-search-row:hover{background:rgba(255,255,255,.06)}
+.admin-search-row{border-radius:10px;transition:background .12s}
+.admin-search-row:hover{background:rgba(255,255,255,.07)}
+.admin-search-row.kbd-active{background:rgba(255,255,255,.08)}
+.admin-search-type-pill{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#555;font-weight:600}
+.admin-search-dym-chip{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);transition:background .12s,border-color .12s;font-size:13px;color:var(--white)}
+.admin-search-dym-chip:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.16)}
+.admin-search-footer{padding:9px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-shrink:0;background:rgba(255,255,255,.01)}
+.admin-search-footer-hint{display:flex;align-items:center;gap:5px;font-size:11px;color:#444}
+.admin-search-kbd{font-size:9.5px;color:#555;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 5px;background:rgba(255,255,255,.04);font-family:inherit}
 @media(max-width:768px){
   #admin-search-trigger span:last-child{display:none}
   #admin-search-modal{padding-top:8vh}
@@ -2473,14 +2481,19 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 <div id="scroll-progress"></div>
 
 <!-- GLOBAL ADMIN SEARCH -->
-<div class="modal-overlay" id="admin-search-modal" onclick="if(event.target===this) closeAdminSearch()" style="align-items:flex-start;justify-content:center;padding-top:12vh">
-  <div class="modal" style="max-width:560px;width:92%;border-radius:16px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:70vh">
-    <div style="display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--grey)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="admin-search-input" type="text" autocomplete="off" placeholder="Search members, events, posts, films, donors&hellip;" oninput="_adminSearchInputHandler(event)" onkeydown="_adminSearchKeyHandler(event)" style="flex:1;background:none;border:none;outline:none;font-size:15px;color:var(--white);font-family:inherit">
-      <span style="font-size:10px;letter-spacing:.04em;color:#555;border:1px solid var(--border);border-radius:5px;padding:1px 5px;flex-shrink:0">ESC</span>
+<div class="modal-overlay" id="admin-search-modal" onclick="if(event.target===this) closeAdminSearch()" style="align-items:flex-start;justify-content:center;padding-top:10vh">
+  <div class="modal" style="max-width:580px;width:92%;border-radius:18px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:72vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:#555"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="admin-search-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search members, events, posts, films…" oninput="_adminSearchInputHandler(event)" onkeydown="_adminSearchKeyHandler(event)" style="flex:1;background:none;border:none;outline:none;font-size:15px;color:var(--white);font-family:inherit;caret-color:var(--accent)">
+      <kbd class="admin-search-kbd" onclick="closeAdminSearch()" style="cursor:pointer">ESC</kbd>
     </div>
-    <div id="admin-search-results" style="overflow-y:auto;flex:1;padding:8px"></div>
+    <div id="admin-search-results" style="overflow-y:auto;flex:1;padding:6px 6px"></div>
+    <div class="admin-search-footer">
+      <span class="admin-search-footer-hint"><kbd class="admin-search-kbd">&uarr;&darr;</kbd> <span>Navigate</span></span>
+      <span class="admin-search-footer-hint"><kbd class="admin-search-kbd">Enter</kbd> <span>Open</span></span>
+      <span class="admin-search-footer-hint"><kbd class="admin-search-kbd">ESC</kbd> <span>Close</span></span>
+    </div>
   </div>
 </div>
 

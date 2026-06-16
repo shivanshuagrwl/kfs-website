@@ -1870,7 +1870,7 @@ const ADMIN_SECTION_INDEX = [
   { id: "member-profile-changes", label: "Profile Change Requests", section: "members", keywords: "profile change request approval" },
   { id: "member-movie-submissions", label: "Movie Submissions", section: "members", keywords: "movie submission member upload" },
   { id: "work-edit-requests", label: "Work Edit Requests", section: "members", keywords: "work edit request portfolio" },
-  { id: "credits", label: "Site Credits", section: "settings", keywords: "credits credit site credits team credits contributors built by who made this developers designers" },
+  { id: "credits", label: "Site Credits", section: "settings", keywords: "credits contributors developers designers" },
   { id: "settings", label: "Settings", section: "settings", keywords: "settings config email site" },
   { id: "change-password", label: "Change Password", section: null, keywords: "password security change" },
   { id: "two-factor", label: "Two-Factor Auth", section: null, keywords: "2fa two factor security otp" },
