@@ -2164,7 +2164,7 @@ function showAdminPanel() {
 let _searchDebounce = null;
 let _searchActiveIndex = -1;
 let _searchFlatItems = [];
-let _searchDidYouMean = null;
+let _searchDidYouMean = [];
 
 const ADMIN_SEARCH_ICONS = {
   section: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
@@ -2195,7 +2195,7 @@ function openAdminSearch() {
     <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
   _searchActiveIndex = -1;
   _searchFlatItems = [];
-  _searchDidYouMean = null;
+  _searchDidYouMean = [];
   setTimeout(() => input.focus(), 50);
 }
 
@@ -2211,7 +2211,7 @@ function _adminSearchInputHandler(e) {
       <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
     _searchFlatItems = [];
     _searchActiveIndex = -1;
-    _searchDidYouMean = null;
+    _searchDidYouMean = [];
     return;
   }
   _searchDebounce = setTimeout(() => _runAdminSearch(q), 200);
@@ -2228,14 +2228,24 @@ async function _runAdminSearch(q) {
     return;
   }
   if (!data || (!data.sections.length && !data.results.length)) {
-    const dym = data && data.didYouMean;
-    if (dym) {
+    const dym = (data && data.didYouMean) || [];
+    if (dym.length) {
       _searchDidYouMean = dym;
-      resultsEl.innerHTML = `<div style="padding:28px 16px;text-align:center">
-          <div style="color:var(--grey);font-size:13px;margin-bottom:10px">No matches for "${subtitle_escape(q)}"</div>
-          <div style="font-size:13px;color:var(--white)">Did you mean
-            <a href="javascript:void(0)" onclick="_adminSearchDidYouMean()" style="color:var(--accent,#3b82f6);text-decoration:underline;cursor:pointer">${subtitle_escape(dym.text)}</a>?
-          </div>
+      const rows = dym.map((item, i) => {
+        const icon = ADMIN_SEARCH_ICONS[item.type] || ADMIN_SEARCH_ICONS.section;
+        const typeLabel = ADMIN_SEARCH_TYPE_LABELS[item.type] || '';
+        return `<div class="admin-search-row" onclick="_adminSearchDidYouMean(${i})" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:var(--grey);flex-shrink:0">${icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13.5px;font-weight:500;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subtitle_escape(item.text)}</div>
+              ${typeLabel ? `<div style="font-size:11.5px;color:var(--grey);margin-top:1px">${subtitle_escape(typeLabel)}</div>` : ''}
+            </div>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#555;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>`;
+      }).join('');
+      resultsEl.innerHTML = `<div style="padding:20px 4px 8px">
+          <div style="color:var(--grey);font-size:13px;padding:0 12px 10px">No matches for "${subtitle_escape(q)}" — did you mean:</div>
+          ${rows}
         </div>`;
     } else {
       resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">No matches for "${subtitle_escape(q)}"</div>`;
@@ -2320,9 +2330,9 @@ function _adminSearchSelect(idx) {
   goToAdminRecord(item.type, item.id);
 }
 
-// Handles the "Did you mean X?" link shown on a zero-result search.
-function _adminSearchDidYouMean() {
-  const dym = _searchDidYouMean;
+// Handles a "Did you mean" suggestion click on a zero-result search.
+function _adminSearchDidYouMean(idx) {
+  const dym = _searchDidYouMean && _searchDidYouMean[idx];
   if (!dym) return;
   closeAdminSearch();
   if (dym.type === 'section') {

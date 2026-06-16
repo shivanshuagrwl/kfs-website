@@ -1870,6 +1870,7 @@ const ADMIN_SECTION_INDEX = [
   { id: "member-profile-changes", label: "Profile Change Requests", section: "members", keywords: "profile change request approval" },
   { id: "member-movie-submissions", label: "Movie Submissions", section: "members", keywords: "movie submission member upload" },
   { id: "work-edit-requests", label: "Work Edit Requests", section: "members", keywords: "work edit request portfolio" },
+  { id: "credits", label: "Site Credits", section: "settings", keywords: "credits credit site credits team credits contributors built by who made this developers designers" },
   { id: "settings", label: "Settings", section: "settings", keywords: "settings config email site" },
   { id: "change-password", label: "Change Password", section: null, keywords: "password security change" },
   { id: "two-factor", label: "Two-Factor Auth", section: null, keywords: "2fa two factor security otp" },
@@ -1928,6 +1929,39 @@ function _bestFieldScore(fields, q) {
   return best;
 }
 
+// Score a query (which may be multiple words, e.g. "site credits") against a
+// label + a space-separated keyword blob. Checks three things and takes the
+// best: (1) the whole query as a phrase against the whole blob/label, so
+// "site credits" matches a "site credits team..." keyword string even though
+// no single token equals the full query, (2) each query word against the
+// blob individually for fuzzy/typo tolerance per word, and (3) what fraction
+// of the query's words are found (fuzzily) somewhere in the blob, so partial
+// multi-word matches still rank reasonably.
+function _phraseScore(label, keywordBlob, q) {
+  const query = q.toLowerCase().trim();
+  const haystack = `${label} ${keywordBlob}`.toLowerCase();
+  const wholePhrase = Math.max(_fuzzyScore(label, query), _fuzzyScore(keywordBlob, query));
+  if (wholePhrase >= 0.7) return wholePhrase;
+
+  const qWords = query.split(/\s+/).filter(Boolean);
+  const kwTokens = keywordBlob.split(/\s+/).filter(Boolean);
+  if (qWords.length <= 1) {
+    return Math.max(wholePhrase, _bestFieldScore(kwTokens, query), _fuzzyScore(label, query));
+  }
+
+  let matchedWords = 0;
+  let sum = 0;
+  for (const w of qWords) {
+    const s = Math.max(_bestFieldScore(kwTokens, w), haystack.includes(w) ? 0.8 : 0);
+    if (s > 0.55) matchedWords++;
+    sum += s;
+  }
+  const coverage = matchedWords / qWords.length;
+  const avg = sum / qWords.length;
+  // Reward matching most/all words of the query, not just one.
+  return Math.max(wholePhrase, coverage >= 0.5 ? avg : avg * 0.5);
+}
+
 app.get("/api/admin/search", authMiddleware, async (req, res) => {
   const q = (req.query.q || "").trim();
   if (q.length < 2) return res.json({ sections: [], results: [], didYouMean: null });
@@ -1936,15 +1970,13 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
   const perms = req.admin.permissions || [];
   const canAccess = (section) => isMaster || !section || perms.includes(section);
 
-  // Matching sections — fuzzy scored against label + each keyword, not just substring
+  // Matching sections — fuzzy scored against label + full keyword phrase
+  // (not just single keyword tokens), so multi-word queries like
+  // "site credits" correctly match a "credits site credits team..." blob.
   const scoredSections = ADMIN_SECTION_INDEX
     .filter((s) => isMaster || !s.masterOnly)
     .filter((s) => canAccess(s.section))
-    .map((s) => {
-      const kwScore = _bestFieldScore(s.keywords.split(" "), q);
-      const labelScore = _fuzzyScore(s.label, q);
-      return { s, score: Math.max(kwScore, labelScore) };
-    })
+    .map((s) => ({ s, score: _phraseScore(s.label, s.keywords, q) }))
     .filter((x) => x.score > 0.3)
     .sort((a, b) => b.score - a.score);
 
@@ -2099,27 +2131,43 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
     .map(({ _score, ...rest }) => rest);
 
   // "Did you mean" — only computed when the literal query came up empty.
-  // Compares against section labels (always available, cheap) plus the
-  // single best fuzzy candidate across every table, even below the
-  // relevance floor used for real results, so a typo like "memebrs" can
-  // still surface "Members" or a near-miss name.
-  let didYouMean = null;
+  // Returns multiple ranked guesses (not just one), so a vague or
+  // multi-word typo gets several real options instead of a single guess
+  // that might be wrong. Compares against section labels (always available,
+  // cheap) plus every fetched candidate row across all tables, scored even
+  // below the relevance floor used for real results — a typo like "memebrs"
+  // or "site credits" -> "credits" should still surface the right entries.
+  let didYouMean = [];
   if (!sections.length && !ranked.length) {
-    let best = null;
+    const candidates = [];
+
     ADMIN_SECTION_INDEX
       .filter((s) => isMaster || !s.masterOnly)
       .filter((s) => canAccess(s.section))
       .forEach((s) => {
-        const score = Math.max(_fuzzyScore(s.label, q), _bestFieldScore(s.keywords.split(" "), q));
-        if (score > 0.35 && (!best || score > best.score)) best = { text: s.label, score, type: "section", id: s.id };
+        const score = _phraseScore(s.label, s.keywords, q);
+        if (score > 0.3) candidates.push({ text: s.label, score, type: "section", id: s.id });
       });
+
     results.forEach((r) => {
       const text = r.title || r.label;
-      if (r._score > 0.35 && (!best || r._score > best.score)) {
-        best = { text, score: r._score, type: r.type, id: r.id };
-      }
+      if (r._score > 0.3) candidates.push({ text, score: r._score, type: r.type, id: r.id });
     });
-    if (best) didYouMean = { text: best.text, type: best.type, id: best.id };
+
+    // Dedupe by type+id (a record could theoretically appear twice from
+    // overlapping word-variant ilike clauses) and by identical text, then
+    // take the top few distinct suggestions.
+    const seen = new Set();
+    didYouMean = candidates
+      .sort((a, b) => b.score - a.score)
+      .filter((c) => {
+        const key = `${c.type}:${c.id}:${c.text}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5)
+      .map(({ text, type, id }) => ({ text, type, id }));
   }
 
   res.json({ sections, results: ranked, didYouMean });
