@@ -2613,7 +2613,7 @@ app.delete(
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
 //   id           BIGSERIAL PRIMARY KEY,
-//   member_id    UUID REFERENCES members(id) ON DELETE SET NULL,
+//   member_id    BIGINT REFERENCES members(id) ON DELETE SET NULL,
 //   member_name  TEXT NOT NULL,
 //   member_photo TEXT,
 //   credit_roles JSONB DEFAULT '[]'::jsonb,
@@ -2642,26 +2642,29 @@ app.get("/api/admin/credits", requireSection("settings"), async (req, res) => {
     .from("site_credits")
     .select("*")
     .order("sort_order", { ascending: true });
-  if (error) return res.status(500).json({ error: "Internal server error" });
+  if (error) { console.error("[credits GET]", error); return res.status(500).json({ error: error.message || "Internal server error" }); }
   res.json(data || []);
 });
 
 // Admin: POST /api/admin/credits
 app.post("/api/admin/credits", requireSection("settings"), async (req, res) => {
   const { member_id, member_name, member_photo, credit_roles, description, sort_order } = req.body;
+  // credit_roles arrives as array from JSON body; ensure it's valid for JSONB
+  let roles = credit_roles || [];
+  if (typeof roles === "string") { try { roles = JSON.parse(roles); } catch { roles = []; } }
   const { data, error } = await supabase
     .from("site_credits")
     .insert([{
-      member_id: member_id || null,
+      member_id: member_id ? parseInt(member_id) : null,
       member_name,
       member_photo: member_photo || null,
-      credit_roles: credit_roles || [],
+      credit_roles: roles,
       description: description || null,
       sort_order: parseInt(sort_order) || 99,
     }])
     .select()
     .single();
-  if (error) return res.status(500).json({ error: "Internal server error" });
+  if (error) { console.error("[credits POST]", error); return res.status(500).json({ error: error.message || "Internal server error" }); }
   logActivity(req.admin.id, req.admin.name, "create", "credit", member_name).catch(e => console.error("[activity]", e.message));
   memInvalidate("credits:list");
   res.json(data);
@@ -2670,11 +2673,13 @@ app.post("/api/admin/credits", requireSection("settings"), async (req, res) => {
 // Admin: PUT /api/admin/credits/:id
 app.put("/api/admin/credits/:id", requireSection("settings"), async (req, res) => {
   const { member_id, member_name, member_photo, credit_roles, description, sort_order } = req.body;
+  let roles = credit_roles || [];
+  if (typeof roles === "string") { try { roles = JSON.parse(roles); } catch { roles = []; } }
   const updates = {
-    member_id: member_id || null,
+    member_id: member_id ? parseInt(member_id) : null,
     member_name,
     member_photo: member_photo || null,
-    credit_roles: credit_roles || [],
+    credit_roles: roles,
     description: description || null,
     sort_order: parseInt(sort_order) || 99,
   };
@@ -2684,7 +2689,7 @@ app.put("/api/admin/credits/:id", requireSection("settings"), async (req, res) =
     .eq("id", req.params.id)
     .select()
     .single();
-  if (error) return res.status(500).json({ error: "Internal server error" });
+  if (error) { console.error("[credits PUT]", error); return res.status(500).json({ error: error.message || "Internal server error" }); }
   logActivity(req.admin.id, req.admin.name, "update", "credit", member_name).catch(e => console.error("[activity]", e.message));
   memInvalidate("credits:list");
   res.json(data);
