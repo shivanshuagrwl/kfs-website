@@ -1306,10 +1306,7 @@ async function loadMyCollabs() {
   if (!list) return;
   list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
   try {
-    // Fetch all collabs; filter by member's email client-side
-    const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
-    const all = await api('GET', '/api/collaborate');
-    const mine = profile.email ? all.filter(c => c.contact_email === profile.email) : [];
+    const mine = await api('GET', '/api/collaborate/mine');
     if (!mine.length) {
       list.innerHTML = `
         <div class="collab-empty">

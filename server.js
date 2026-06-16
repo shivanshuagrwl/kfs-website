@@ -9512,6 +9512,28 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
   }
 });
 
+// Member: list own collab posts (authenticated — includes edit_token, unlike the public listing)
+app.get("/api/collaborate/mine", memberAuthMiddleware, async (req, res) => {
+  try {
+    const { data: member } = await supabase.from("members")
+      .select("email").eq("id", req.member.memberId).maybeSingle();
+    if (!member) return res.status(404).json({ error: "Member not found" });
+
+    const { data, error } = await supabasePublic
+      .from("collaborate_posts")
+      .select(
+        "id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,domain,fulfillment_date,created_at,updated_at,edit_token",
+      )
+      .eq("contact_email", member.email)
+      .order("created_at", { ascending: false });
+
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Member: edit own collab post (authenticated — verifies post belongs to member's email)
 app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, async (req, res) => {
   try {
