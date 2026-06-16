@@ -9488,6 +9488,8 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
     const payload = cleanCollabPayload(req.body);
     if (!payload.title || !payload.role || !payload.description || !payload.fulfillment_date)
       return res.status(400).json({ error: "Title, role, description, and fulfillment date are required." });
+    if (!payload.contact_email || !payload.contact_phone)
+      return res.status(400).json({ error: "Email and phone are required." });
 
     const today = new Date().toISOString().split("T")[0];
     if (payload.fulfillment_date < today)
@@ -9496,9 +9498,9 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
     const edit_token = makeEditToken();
     const { data, error } = await supabasePublic.from("collaborate_posts").insert([{
       ...payload,
-      contact_name:  member.name  || payload.contact_name,
-      contact_email: member.email || payload.contact_email,
-      contact_phone: member.mobile || payload.contact_phone,
+      contact_name:  payload.contact_name  || member.name,
+      contact_email: payload.contact_email || member.email,
+      contact_phone: payload.contact_phone || member.mobile,
       is_kfs_member: true,
       edit_token,
     }]).select("id,edit_token").single();

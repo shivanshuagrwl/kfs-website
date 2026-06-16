@@ -340,6 +340,56 @@
       .mobile-nav .nav-item { white-space: nowrap; flex-shrink: 0; }
     }
 
+    /* ── Back to Site button ─────────────────────────────────────────────────── */
+    .back-to-site-btn {
+      position: fixed; top: 18px; right: 24px; z-index: 500;
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 20px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+      color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      transition: background .18s, color .18s, border-color .18s, transform .18s;
+      cursor: pointer; text-decoration: none; font-family: inherit;
+    }
+    .back-to-site-btn:hover {
+      background: rgba(255,255,255,.12); color: var(--text);
+      border-color: rgba(255,255,255,.2); transform: translateY(-1px);
+    }
+    .back-to-site-btn svg { opacity: .7; transition: opacity .18s; }
+    .back-to-site-btn:hover svg { opacity: 1; }
+
+    /* ── Collab panel ────────────────────────────────────────────────────────── */
+    .collab-split {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+    }
+    .collab-split .form-group { margin-bottom: 0; }
+
+    /* Character counter */
+    .char-counter { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+    /* Field with required star */
+    label .req { color: #ef4444; margin-left: 2px; font-size: 11px; }
+
+    /* Collab posted card */
+    .collab-posted-card {
+      background: #0d1f0d; border: 1px solid #1a3a1a; border-radius: var(--radius);
+      padding: 24px; margin-bottom: 20px;
+    }
+    .collab-posted-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .collab-posted-role { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+    .collab-posted-meta { display: flex; gap: 16px; flex-wrap: wrap; }
+    .collab-posted-meta-item { font-size: 12px; color: var(--muted); }
+    .collab-posted-meta-item span { color: var(--text); }
+    .collab-card-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+    /* Empty collab state */
+    .collab-empty {
+      text-align: center; padding: 60px 24px; color: #444;
+    }
+    .collab-empty-icon { font-size: 36px; margin-bottom: 16px; opacity: .4; }
+    .collab-empty-title { font-size: 15px; font-weight: 600; color: #555; margin-bottom: 6px; }
+    .collab-empty-sub { font-size: 13px; color: #383838; }
+
     /* Divider */
     .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
 
@@ -434,6 +484,12 @@
 </head>
 <body>
 
+<!-- ── Back to Site ──────────────────────────────────────────────────────────── -->
+<a href="/" class="back-to-site-btn" id="back-to-site-btn">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  Back to Site
+</a>
+
 <!-- ── AUTH SCREEN ─────────────────────────────────────────────────────────── -->
 <div id="auth-screen">
   <div class="auth-card" id="auth-card">
@@ -527,6 +583,7 @@
     <div class="nav-item" data-panel="works"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span> My Works</div>
     <div class="nav-item" data-panel="security"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Security</div>
     <div class="nav-item" data-panel="activity"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity</div>
+    <div class="nav-item" data-panel="collab"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collab</div>
   </div>
 
   <div class="layout">
@@ -539,6 +596,7 @@
         <div class="nav-item" data-panel="works"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span> My Works</div>
         <div class="nav-item" data-panel="security"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Security</div>
         <div class="nav-item" data-panel="activity"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity</div>
+        <div class="nav-item" data-panel="collab"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collab</div>
       </nav>
       <div class="sidebar-footer">
         <!-- Notification Bell -->
@@ -617,6 +675,10 @@
             <div class="form-group">
               <label>Mobile</label>
               <input id="pf-mobile" type="text" />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input id="pf-email" type="email" placeholder="your@kiit.ac.in" />
             </div>
             <div class="form-group">
               <label>Batch</label>
@@ -821,6 +883,83 @@
         <div class="card">
           <div id="activity-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
         </div>
+      </div>
+
+      <!-- ── COLLABORATE PANEL ─────────────────────────────────────────────── -->
+      <div class="panel" id="panel-collab">
+        <div class="panel-title">Open Calls</div>
+        <div class="panel-sub">Post a collaboration request — find teammates, crew, or contributors for your next project</div>
+
+        <button class="btn-primary" id="new-collab-btn" style="max-width:220px;margin-bottom:24px">+ Post a Collab Request</button>
+
+        <!-- Collab Form -->
+        <div id="collab-form" style="display:none">
+          <div class="card">
+            <div class="card-title">New Collaboration Post</div>
+
+            <div class="collab-split" style="margin-bottom:18px">
+              <div class="form-group">
+                <label>Project Title <span class="req">*</span></label>
+                <input id="cf-title" type="text" placeholder="e.g. Short Film — Ek Raat" maxlength="120" />
+              </div>
+              <div class="form-group">
+                <label>Role Needed <span class="req">*</span></label>
+                <input id="cf-role" type="text" placeholder="e.g. DOP, Sound Designer, Editor" maxlength="100" />
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:18px">
+              <label>Domain / Category</label>
+              <input id="cf-domain" type="text" placeholder="e.g. Short Film, Documentary, Music Video, Photography" maxlength="80" />
+            </div>
+
+            <div class="form-group" style="margin-bottom:18px">
+              <label>Skills Required</label>
+              <input id="cf-skills" type="text" placeholder="e.g. Premiere Pro, DSLR, Lighting, Location Sound" maxlength="200" />
+            </div>
+
+            <div class="form-group" style="margin-bottom:18px">
+              <label>Description <span class="req">*</span></label>
+              <textarea id="cf-description" rows="4" placeholder="Describe the project, what you're looking for, and any relevant context…" maxlength="1000"></textarea>
+              <div class="char-counter"><span id="cf-desc-count">0</span>/1000</div>
+            </div>
+
+            <div class="collab-split" style="margin-bottom:18px">
+              <div class="form-group">
+                <label>Timeline</label>
+                <input id="cf-timeline" type="text" placeholder="e.g. 2 weekends, 3 days shoot" maxlength="100" />
+              </div>
+              <div class="form-group">
+                <label>Needed By (Fulfillment Date) <span class="req">*</span></label>
+                <input id="cf-date" type="date" />
+              </div>
+            </div>
+
+            <hr class="divider" />
+
+            <div class="card-title" style="margin-bottom:16px">Contact Info</div>
+            <div class="collab-split" style="margin-bottom:18px">
+              <div class="form-group">
+                <label>Email <span class="req">*</span></label>
+                <input id="cf-email" type="email" placeholder="your@kiit.ac.in" maxlength="120" />
+              </div>
+              <div class="form-group">
+                <label>Phone <span class="req">*</span></label>
+                <input id="cf-phone" type="tel" placeholder="+91 9XXXXXXXX0" maxlength="20" />
+              </div>
+            </div>
+
+            <div style="display:flex;gap:12px;margin-top:8px;align-items:center">
+              <button class="btn-primary" id="collab-submit-btn" style="max-width:180px">Post Request</button>
+              <button class="btn-sm btn-danger" id="cancel-collab-btn">Cancel</button>
+            </div>
+            <div id="collab-form-err" class="err-msg" style="display:none"></div>
+            <div id="collab-form-ok"  class="ok-msg"  style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Posted collabs list -->
+        <div id="collab-list"></div>
       </div>
 
     </main>

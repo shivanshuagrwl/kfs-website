@@ -338,6 +338,13 @@ function wireStaticButtons() {
   on('sec-change-pw-btn',  'click', changePasswordFromSecurity);
   on('revoke-sessions-btn','click', revokeAllSessions);
 
+  // Collab
+  on('new-collab-btn',    'click', showCollabForm);
+  on('cancel-collab-btn', 'click', hideCollabForm);
+  on('collab-submit-btn', 'click', submitCollab);
+  const cfDesc = $id('cf-description');
+  if (cfDesc) cfDesc.addEventListener('input', () => { const cnt = $id('cf-desc-count'); if(cnt) cnt.textContent = cfDesc.value.length; });
+
   // Work edit modal
   on('work-edit-submit-btn', 'click', submitWorkEditRequest);
   on('work-edit-cancel-btn', 'click', closeWorkEditModal);
@@ -548,6 +555,7 @@ function switchPanel(el) {
   if (panel === 'activity') loadActivity();
   if (panel === 'movies')   loadMovies();
   if (panel === 'works')    loadMyWorks();
+  if (panel === 'collab')   loadMyCollabs();
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -588,8 +596,8 @@ async function loadProfile() {
 }
 
 function fillProfile(d) {
-  const fields = ['name','roll_no','mobile','batch','domain','role','bio','instagram','linkedin','github','twitter','youtube','website'];
-  const ids    = ['pf-name','pf-roll','pf-mobile','pf-batch','pf-domain','pf-role','pf-bio','pf-instagram','pf-linkedin','pf-github','pf-twitter','pf-youtube','pf-website'];
+  const fields = ['name','roll_no','mobile','email','batch','domain','role','bio','instagram','linkedin','github','twitter','youtube','website'];
+  const ids    = ['pf-name','pf-roll','pf-mobile','pf-email','pf-batch','pf-domain','pf-role','pf-bio','pf-instagram','pf-linkedin','pf-github','pf-twitter','pf-youtube','pf-website'];
   fields.forEach((f, i) => {
     const el = $id(ids[i]); if (el) el.value = d[f] || '';
   });
@@ -1203,6 +1211,140 @@ window.addEventListener('storage', e => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') _handleAdminDataChange();
 });
+
+// ── Collaborate ───────────────────────────────────────────────────────────────
+
+function showCollabForm() {
+  hideEl('collab-form-err'); hideEl('collab-form-ok');
+  // Prefill email & phone from cached profile
+  const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
+  const emailEl = $id('cf-email');
+  const phoneEl = $id('cf-phone');
+  if (emailEl && profile.email)  emailEl.value = profile.email;
+  if (phoneEl && profile.mobile) phoneEl.value = profile.mobile;
+  // Set min date to today
+  const dateEl = $id('cf-date');
+  if (dateEl) dateEl.min = new Date().toISOString().split('T')[0];
+  $id('collab-form').style.display = 'block';
+  $id('collab-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideCollabForm() {
+  $id('collab-form').style.display = 'none';
+  ['cf-title','cf-role','cf-domain','cf-skills','cf-description','cf-timeline','cf-date','cf-phone'].forEach(id => {
+    const el = $id(id); if (el) el.value = '';
+  });
+  // Reset email to profile value
+  const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
+  const emailEl = $id('cf-email');
+  if (emailEl) emailEl.value = profile.email || '';
+  const cnt = $id('cf-desc-count'); if (cnt) cnt.textContent = '0';
+}
+
+async function submitCollab() {
+  hideEl('collab-form-err'); hideEl('collab-form-ok');
+  const title       = ($id('cf-title')?.value || '').trim();
+  const role        = ($id('cf-role')?.value || '').trim();
+  const description = ($id('cf-description')?.value || '').trim();
+  const date        = ($id('cf-date')?.value || '').trim();
+  const email       = ($id('cf-email')?.value || '').trim();
+  const phone       = ($id('cf-phone')?.value || '').trim();
+
+  if (!title || !role || !description || !date) {
+    showMsg('collab-form-err', 'Title, role, description, and fulfillment date are required.', false);
+    return;
+  }
+  if (!email || !phone) {
+    showMsg('collab-form-err', 'Email and phone are required.', false);
+    return;
+  }
+
+  const btn = $id('collab-submit-btn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try {
+    const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
+    await api('POST', '/api/collaborate/member', {
+      title,
+      role,
+      description,
+      fulfillment_date: date,
+      domain:        ($id('cf-domain')?.value || '').trim(),
+      skills:        ($id('cf-skills')?.value || '').trim(),
+      timeline:      ($id('cf-timeline')?.value || '').trim(),
+      contact_name:  profile.name || '',
+      contact_email: email,
+      contact_phone: phone,
+    });
+    showMsg('collab-form-ok', '🎬 Collab post published! It\'s now live on the /collaborate page.');
+    setTimeout(() => { hideCollabForm(); loadMyCollabs(); }, 2200);
+  } catch (e) {
+    showMsg('collab-form-err', e.message || 'Could not post — please try again.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Post Request';
+  }
+}
+
+async function loadMyCollabs() {
+  const list = $id('collab-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try {
+    // Fetch all collabs; filter by member's email client-side
+    const profile = window._memberProfile || JSON.parse(localStorage.getItem('kfs-member-profile') || '{}');
+    const all = await api('GET', '/api/collaborate');
+    const mine = profile.email ? all.filter(c => c.contact_email === profile.email) : [];
+    if (!mine.length) {
+      list.innerHTML = `
+        <div class="collab-empty">
+          <div class="collab-empty-icon">🤝</div>
+          <div class="collab-empty-title">No posts yet</div>
+          <div class="collab-empty-sub">Your collab requests will appear here once posted.</div>
+        </div>`;
+      return;
+    }
+    list.innerHTML = mine.map(c => {
+      const until = new Date(c.fulfillment_date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+      return `
+        <div class="collab-posted-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div class="collab-posted-title">${escHtml(c.title)}</div>
+              <div class="collab-posted-role">${escHtml(c.role)}${c.domain ? ' · ' + escHtml(c.domain) : ''}</div>
+            </div>
+            <span class="badge badge-approved">Live</span>
+          </div>
+          ${c.description ? `<div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.55">${escHtml(c.description.slice(0,180))}${c.description.length > 180 ? '…' : ''}</div>` : ''}
+          <div class="collab-posted-meta">
+            <div class="collab-posted-meta-item">Needed by <span>${until}</span></div>
+            ${c.skills ? `<div class="collab-posted-meta-item">Skills <span>${escHtml(c.skills)}</span></div>` : ''}
+            ${c.timeline ? `<div class="collab-posted-meta-item">Timeline <span>${escHtml(c.timeline)}</span></div>` : ''}
+          </div>
+          <div class="collab-card-actions">
+            <a href="/collaborate" target="_blank" class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;transition:all .12s">View on Site ↗</a>
+            ${c.edit_token ? `<button class="btn-sm btn-danger" onclick="deleteCollab('${c.edit_token}', this)">Delete</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+  }
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function deleteCollab(token, btn) {
+  if (!confirm('Delete this collab post? This cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try {
+    await api('DELETE', `/api/collaborate/${token}`);
+    await loadMyCollabs();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Delete';
+    alert('Could not delete: ' + e.message);
+  }
+}
 
 // ── Enter key support ─────────────────────────────────────────────────────────
 
