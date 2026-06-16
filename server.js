@@ -9518,13 +9518,14 @@ app.get("/api/collaborate/mine", memberAuthMiddleware, async (req, res) => {
     const { data: member } = await supabase.from("members")
       .select("email").eq("id", req.member.memberId).maybeSingle();
     if (!member) return res.status(404).json({ error: "Member not found" });
+    const escapedEmail = (member.email || "").replace(/[%_]/g, "\\$&");
 
     const { data, error } = await supabasePublic
       .from("collaborate_posts")
       .select(
         "id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,domain,fulfillment_date,created_at,updated_at,edit_token",
       )
-      .eq("contact_email", member.email)
+      .ilike("contact_email", escapedEmail)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(500).json({ error: "Internal server error" });
@@ -9545,7 +9546,7 @@ app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, asy
     const { data: existing } = await supabasePublic.from("collaborate_posts")
       .select("id, contact_email").eq("edit_token", req.params.token).maybeSingle();
     if (!existing) return res.status(404).json({ error: "Post not found." });
-    if (existing.contact_email !== member.email)
+    if (existing.contact_email.toLowerCase() !== member.email.toLowerCase())
       return res.status(403).json({ error: "You can only edit your own posts." });
 
     const payload = cleanCollabPayload(req.body);
