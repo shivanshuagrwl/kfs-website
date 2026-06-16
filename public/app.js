@@ -2164,6 +2164,7 @@ function showAdminPanel() {
 let _searchDebounce = null;
 let _searchActiveIndex = -1;
 let _searchFlatItems = [];
+let _searchDidYouMean = null;
 
 const ADMIN_SEARCH_ICONS = {
   section: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
@@ -2194,6 +2195,7 @@ function openAdminSearch() {
     <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
   _searchActiveIndex = -1;
   _searchFlatItems = [];
+  _searchDidYouMean = null;
   setTimeout(() => input.focus(), 50);
 }
 
@@ -2209,6 +2211,7 @@ function _adminSearchInputHandler(e) {
       <div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">Start typing to search across the admin panel</div>`;
     _searchFlatItems = [];
     _searchActiveIndex = -1;
+    _searchDidYouMean = null;
     return;
   }
   _searchDebounce = setTimeout(() => _runAdminSearch(q), 200);
@@ -2225,7 +2228,18 @@ async function _runAdminSearch(q) {
     return;
   }
   if (!data || (!data.sections.length && !data.results.length)) {
-    resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">No matches for "${q.replace(/</g,'&lt;')}"</div>`;
+    const dym = data && data.didYouMean;
+    if (dym) {
+      _searchDidYouMean = dym;
+      resultsEl.innerHTML = `<div style="padding:28px 16px;text-align:center">
+          <div style="color:var(--grey);font-size:13px;margin-bottom:10px">No matches for "${subtitle_escape(q)}"</div>
+          <div style="font-size:13px;color:var(--white)">Did you mean
+            <a href="javascript:void(0)" onclick="_adminSearchDidYouMean()" style="color:var(--accent,#3b82f6);text-decoration:underline;cursor:pointer">${subtitle_escape(dym.text)}</a>?
+          </div>
+        </div>`;
+    } else {
+      resultsEl.innerHTML = `<div style="padding:32px 16px;text-align:center;color:var(--grey);font-size:13px">No matches for "${subtitle_escape(q)}"</div>`;
+    }
     _searchFlatItems = [];
     _searchActiveIndex = -1;
     return;
@@ -2304,6 +2318,18 @@ function _adminSearchSelect(idx) {
     return;
   }
   goToAdminRecord(item.type, item.id);
+}
+
+// Handles the "Did you mean X?" link shown on a zero-result search.
+function _adminSearchDidYouMean() {
+  const dym = _searchDidYouMean;
+  if (!dym) return;
+  closeAdminSearch();
+  if (dym.type === 'section') {
+    showAdminSection(dym.id);
+    return;
+  }
+  goToAdminRecord(dym.type, dym.id);
 }
 
 // Navigates to the right section and scrolls/highlights the matching row.

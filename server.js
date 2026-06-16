@@ -1877,31 +1877,99 @@ const ADMIN_SECTION_INDEX = [
   { id: "activity", label: "Activity Log", section: null, keywords: "activity log audit history undo", masterOnly: true },
 ];
 
+// ── Fuzzy matching helpers for admin search ──────────────────────────────
+// Plain ilike substring matching means a single typo ("memebrs", "anlytics")
+// returns nothing. These helpers add typo-tolerant scoring + ranking, and
+// power the "did you mean" suggestion when a query has zero hits.
+function _levenshtein(a, b) {
+  if (a === b) return 0;
+  const al = a.length, bl = b.length;
+  if (!al) return bl;
+  if (!bl) return al;
+  let prev = Array.from({ length: bl + 1 }, (_, i) => i);
+  for (let i = 1; i <= al; i++) {
+    const cur = [i];
+    for (let j = 1; j <= bl; j++) {
+      cur[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : Math.min(prev[j - 1] + 1, prev[j] + 1, cur[j - 1] + 1);
+    }
+    prev = cur;
+  }
+  return prev[bl];
+}
+
+// Score how well `text` matches query `q` (0..1, higher is better).
+// Rewards exact matches, prefix matches, and substrings highest;
+// falls back to edit-distance similarity for fuzzy/typo tolerance.
+function _fuzzyScore(text, q) {
+  if (!text) return 0;
+  const t = text.toLowerCase().trim();
+  const query = q.toLowerCase().trim();
+  if (!t || !query) return 0;
+  if (t === query) return 1;
+  if (t.startsWith(query)) return 0.92;
+  if (t.includes(query)) return 0.8;
+  // word-level prefix match, e.g. "anly" vs "Payment Analytics"
+  const words = t.split(/\s+/);
+  if (words.some((w) => w.startsWith(query))) return 0.7;
+  const dist = _levenshtein(t.length > 40 ? t.slice(0, 40) : t, query);
+  const maxLen = Math.max(t.length, query.length);
+  const similarity = 1 - dist / maxLen;
+  return similarity > 0.45 ? similarity * 0.65 : 0;
+}
+
+function _bestFieldScore(fields, q) {
+  let best = 0;
+  for (const f of fields) {
+    const s = _fuzzyScore(f, q);
+    if (s > best) best = s;
+  }
+  return best;
+}
+
 app.get("/api/admin/search", authMiddleware, async (req, res) => {
   const q = (req.query.q || "").trim();
-  if (q.length < 2) return res.json({ sections: [], results: [] });
+  if (q.length < 2) return res.json({ sections: [], results: [], didYouMean: null });
 
   const isMaster = req.admin.role === "master";
   const perms = req.admin.permissions || [];
   const canAccess = (section) => isMaster || !section || perms.includes(section);
 
-  const lower = q.toLowerCase();
-
-  // Matching sections (static index, no DB hit)
-  const sections = ADMIN_SECTION_INDEX
+  // Matching sections — fuzzy scored against label + each keyword, not just substring
+  const scoredSections = ADMIN_SECTION_INDEX
     .filter((s) => isMaster || !s.masterOnly)
     .filter((s) => canAccess(s.section))
-    .filter((s) => s.label.toLowerCase().includes(lower) || s.keywords.includes(lower))
+    .map((s) => {
+      const kwScore = _bestFieldScore(s.keywords.split(" "), q);
+      const labelScore = _fuzzyScore(s.label, q);
+      return { s, score: Math.max(kwScore, labelScore) };
+    })
+    .filter((x) => x.score > 0.3)
+    .sort((a, b) => b.score - a.score);
+
+  const sections = scoredSections
     .slice(0, 6)
-    .map((s) => ({ type: "section", id: s.id, label: s.label }));
+    .map(({ s }) => ({ type: "section", id: s.id, label: s.label }));
 
   const results = [];
   // PostgREST's .or() syntax treats commas and parentheses as structural
   // delimiters — strip them from the search term so queries like "Smith, John"
   // or "100% (final)" don't silently break the ilike filters below.
   const safeQ = q.replace(/[,()]/g, " ").trim();
-  if (!safeQ) return res.json({ sections, results: [] });
-  const like = `%${safeQ}%`;
+  if (!safeQ) return res.json({ sections, results: [], didYouMean: null });
+
+  // Pull a generous candidate pool per table via trigram-ish broad ilike (each
+  // word of the query, OR'd), then re-rank with fuzzy scoring server-side.
+  // This catches typos/transpositions that a strict substring `like` misses,
+  // while still using an index-friendly ilike to keep the DB query cheap.
+  const words = safeQ.split(/\s+/).filter(Boolean);
+  const wideLike = (cols) => {
+    const variants = words.length ? words : [safeQ];
+    const clauses = [];
+    cols.forEach((c) => variants.forEach((w) => clauses.push(`${c}.ilike.%${w}%`)));
+    return clauses.join(",");
+  };
 
   const tasks = [];
 
@@ -1911,14 +1979,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
         .from("members")
         .select("id,name,role,batch,email,roll_no,photo")
         .is("deleted_at", null)
-        .or(`name.ilike.${like},email.ilike.${like},roll_no.ilike.${like},role.ilike.${like}`)
-        .limit(6)
+        .or(wideLike(["name", "email", "roll_no", "role"]))
+        .limit(40)
         .then(({ data }) => (data || []).map((m) => ({
           type: "member",
           id: m.id,
           title: m.name,
           subtitle: [m.role, m.batch].filter(Boolean).join(" • ") || m.email,
           image: m.photo || null,
+          _score: _bestFieldScore([m.name, m.email, m.roll_no, m.role], safeQ),
         }))),
     );
   }
@@ -1929,14 +1998,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
         .from("events")
         .select("id,title,location,event_date,is_upcoming")
         .is("deleted_at", null)
-        .ilike("title", like)
-        .limit(6)
+        .or(wideLike(["title", "location"]))
+        .limit(40)
         .then(({ data }) => (data || []).map((e) => ({
           type: "event",
           id: e.id,
           title: e.title,
           subtitle: [e.location, e.event_date ? new Date(e.event_date).toLocaleDateString() : null].filter(Boolean).join(" • "),
           image: null,
+          _score: _bestFieldScore([e.title, e.location], safeQ),
         }))),
     );
   }
@@ -1947,14 +2017,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
         .from("blogs")
         .select("id,title,author,published,cover_image")
         .is("deleted_at", null)
-        .or(`title.ilike.${like},author.ilike.${like}`)
-        .limit(6)
+        .or(wideLike(["title", "author"]))
+        .limit(40)
         .then(({ data }) => (data || []).map((b) => ({
           type: "blog",
           id: b.id,
           title: b.title,
           subtitle: [b.author, b.published ? "Published" : "Draft"].filter(Boolean).join(" • "),
           image: b.cover_image || null,
+          _score: _bestFieldScore([b.title, b.author], safeQ),
         }))),
     );
   }
@@ -1965,14 +2036,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
         .from("movies")
         .select("id,title,release_year,director,poster_image")
         .is("deleted_at", null)
-        .or(`title.ilike.${like},director.ilike.${like}`)
-        .limit(6)
+        .or(wideLike(["title", "director"]))
+        .limit(40)
         .then(({ data }) => (data || []).map((m) => ({
           type: "movie",
           id: m.id,
           title: m.title,
           subtitle: [m.director, m.release_year].filter(Boolean).join(" • "),
           image: m.poster_image || null,
+          _score: _bestFieldScore([m.title, m.director], safeQ),
         }))),
     );
   }
@@ -1982,14 +2054,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
       supabase
         .from("donors")
         .select("id,name,email,roll_no,amount_paise,semester_label,is_anonymous")
-        .or(`name.ilike.${like},email.ilike.${like},roll_no.ilike.${like}`)
-        .limit(6)
+        .or(wideLike(["name", "email", "roll_no"]))
+        .limit(40)
         .then(({ data }) => (data || []).map((d) => ({
           type: "donor",
           id: d.id,
           title: d.is_anonymous ? "Anonymous Donor" : (d.name || d.email),
           subtitle: [d.semester_label, d.amount_paise ? `₹${(d.amount_paise / 100).toLocaleString("en-IN")}` : null].filter(Boolean).join(" • "),
           image: null,
+          _score: _bestFieldScore([d.name, d.email, d.roll_no], safeQ),
         }))),
     );
   }
@@ -1999,14 +2072,15 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
       supabase
         .from("admins")
         .select("id,username,name,role")
-        .or(`username.ilike.${like},name.ilike.${like}`)
-        .limit(4)
+        .or(wideLike(["username", "name"]))
+        .limit(20)
         .then(({ data }) => (data || []).map((a) => ({
           type: "admin",
           id: a.id,
           title: a.name || a.username,
           subtitle: a.role,
           image: null,
+          _score: _bestFieldScore([a.name, a.username], safeQ),
         }))),
     );
   }
@@ -2016,7 +2090,39 @@ app.get("/api/admin/search", authMiddleware, async (req, res) => {
     if (r.status === "fulfilled") results.push(...r.value);
   });
 
-  res.json({ sections, results: results.slice(0, 30) });
+  // Rank by fuzzy score (desc), drop noise below a minimum relevance floor,
+  // then strip the internal _score before sending to the client.
+  const ranked = results
+    .filter((r) => r._score > 0.28)
+    .sort((a, b) => b._score - a._score)
+    .slice(0, 30)
+    .map(({ _score, ...rest }) => rest);
+
+  // "Did you mean" — only computed when the literal query came up empty.
+  // Compares against section labels (always available, cheap) plus the
+  // single best fuzzy candidate across every table, even below the
+  // relevance floor used for real results, so a typo like "memebrs" can
+  // still surface "Members" or a near-miss name.
+  let didYouMean = null;
+  if (!sections.length && !ranked.length) {
+    let best = null;
+    ADMIN_SECTION_INDEX
+      .filter((s) => isMaster || !s.masterOnly)
+      .filter((s) => canAccess(s.section))
+      .forEach((s) => {
+        const score = Math.max(_fuzzyScore(s.label, q), _bestFieldScore(s.keywords.split(" "), q));
+        if (score > 0.35 && (!best || score > best.score)) best = { text: s.label, score, type: "section", id: s.id };
+      });
+    results.forEach((r) => {
+      const text = r.title || r.label;
+      if (r._score > 0.35 && (!best || r._score > best.score)) {
+        best = { text, score: r._score, type: r.type, id: r.id };
+      }
+    });
+    if (best) didYouMean = { text: best.text, type: best.type, id: best.id };
+  }
+
+  res.json({ sections, results: ranked, didYouMean });
 });
 
 app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
@@ -2613,7 +2719,7 @@ app.delete(
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
 //   id           BIGSERIAL PRIMARY KEY,
-//   member_id    UUID REFERENCES members(id) ON DELETE SET NULL,
+//   member_id    BIGINT REFERENCES members(id) ON DELETE SET NULL,
 //   member_name  TEXT NOT NULL,
 //   member_photo TEXT,
 //   credit_roles JSONB DEFAULT '[]'::jsonb,
@@ -2626,14 +2732,28 @@ app.delete(
 // Public: GET /api/credits
 app.get("/api/credits", async (req, res) => {
   cacheFor(res, 120);
-  const data = await memCache("credits:list", 600, async () => {
-    const { data } = await supabasePublic
-      .from("site_credits")
-      .select("*")
-      .order("sort_order", { ascending: true });
-    return data || [];
-  });
-  res.json(data);
+  try {
+    const data = await memCache("credits:list", 600, async () => {
+      const { data, error } = await supabasePublic
+        .from("site_credits")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (error) {
+        console.error("[credits GET public]", error);
+        throw error; // don't cache a failed lookup
+      }
+      if (!data || !data.length) {
+        // Don't cache an empty result — a 10-min (and disk-persisted) cache of
+        // "[]" would keep hiding real credits added moments later.
+        throw new Error("__skip_cache_empty__");
+      }
+      return data;
+    });
+    res.json(data);
+  } catch (e) {
+    if (e.message !== "__skip_cache_empty__") console.error("[credits GET public]", e);
+    res.json([]);
+  }
 });
 
 // Admin: GET /api/admin/credits
