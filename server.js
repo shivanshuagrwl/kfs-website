@@ -2609,6 +2609,96 @@ app.delete(
   },
 );
 
+// ── SITE CREDITS ─────────────────────────────────────────────────────────────
+// Supabase migration — run once:
+// CREATE TABLE IF NOT EXISTS site_credits (
+//   id           BIGSERIAL PRIMARY KEY,
+//   member_id    UUID REFERENCES members(id) ON DELETE SET NULL,
+//   member_name  TEXT NOT NULL,
+//   member_photo TEXT,
+//   credit_roles JSONB DEFAULT '[]'::jsonb,
+//   description  TEXT,
+//   sort_order   INT  DEFAULT 99,
+//   created_at   TIMESTAMPTZ DEFAULT NOW()
+// );
+// ALTER TABLE site_credits ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "Public read site_credits" ON site_credits FOR SELECT USING (true);
+// Public: GET /api/credits
+app.get("/api/credits", async (req, res) => {
+  cacheFor(res, 120);
+  const data = await memCache("credits:list", 600, async () => {
+    const { data } = await supabasePublic
+      .from("site_credits")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
+});
+
+// Admin: GET /api/admin/credits
+app.get("/api/admin/credits", requireSection("settings"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("site_credits")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// Admin: POST /api/admin/credits
+app.post("/api/admin/credits", requireSection("settings"), async (req, res) => {
+  const { member_id, member_name, member_photo, credit_roles, description, sort_order } = req.body;
+  const { data, error } = await supabase
+    .from("site_credits")
+    .insert([{
+      member_id: member_id || null,
+      member_name,
+      member_photo: member_photo || null,
+      credit_roles: credit_roles || [],
+      description: description || null,
+      sort_order: parseInt(sort_order) || 99,
+    }])
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "create", "credit", member_name).catch(e => console.error("[activity]", e.message));
+  memInvalidate("credits:list");
+  res.json(data);
+});
+
+// Admin: PUT /api/admin/credits/:id
+app.put("/api/admin/credits/:id", requireSection("settings"), async (req, res) => {
+  const { member_id, member_name, member_photo, credit_roles, description, sort_order } = req.body;
+  const updates = {
+    member_id: member_id || null,
+    member_name,
+    member_photo: member_photo || null,
+    credit_roles: credit_roles || [],
+    description: description || null,
+    sort_order: parseInt(sort_order) || 99,
+  };
+  const { data, error } = await supabase
+    .from("site_credits")
+    .update(updates)
+    .eq("id", req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "update", "credit", member_name).catch(e => console.error("[activity]", e.message));
+  memInvalidate("credits:list");
+  res.json(data);
+});
+
+// Admin: DELETE /api/admin/credits/:id
+app.delete("/api/admin/credits/:id", requireSection("settings"), async (req, res) => {
+  const { data: c } = await supabase.from("site_credits").select("member_name").eq("id", req.params.id).single();
+  await supabase.from("site_credits").delete().eq("id", req.params.id);
+  logActivity(req.admin.id, req.admin.name, "delete", "credit", c?.member_name || req.params.id).catch(e => console.error("[activity]", e.message));
+  memInvalidate("credits:list");
+  res.json({ success: true });
+});
+
 // ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
 app.get("/api/achievements", async (req, res) => {
   cacheFor(res, 120);

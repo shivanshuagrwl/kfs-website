@@ -2432,6 +2432,36 @@ body.light-mode .admin-comment-action:hover{color:#111;border-color:#999}
 .admin-comment-action.pinned{border-color:var(--white);color:var(--white)}
 body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
+
+/* ── CREDITS PAGE ── */
+.credit-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 24px;display:flex;flex-direction:column;gap:0;transition:border-color .2s,transform .2s;position:relative;overflow:hidden}
+.credit-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.03) 0%,transparent 60%);pointer-events:none}
+.credit-card:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px)}
+.credit-photo{width:72px;height:72px;border-radius:16px;object-fit:cover;border:1px solid var(--border);margin-bottom:18px;filter:grayscale(20%)}
+.credit-photo-placeholder{width:72px;height:72px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--grey)}
+.credit-name{font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--white);margin-bottom:6px}
+.credit-roles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.credit-role-tag{font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--grey)}
+.credit-role-tag.role-lead{background:rgba(245,245,245,.1);border-color:rgba(245,245,245,.2);color:var(--white)}
+.credit-role-tag.role-developer{background:rgba(96,165,250,.08);border-color:rgba(96,165,250,.2);color:#93c5fd}
+.credit-role-tag.role-designer{background:rgba(196,181,253,.08);border-color:rgba(196,181,253,.2);color:#c4b5fd}
+.credit-role-tag.role-security{background:rgba(252,165,165,.08);border-color:rgba(252,165,165,.2);color:#fca5a5}
+.credit-role-tag.role-tester{background:rgba(134,239,172,.08);border-color:rgba(134,239,172,.2);color:#86efac}
+.credit-role-tag.role-ideator{background:rgba(253,224,71,.08);border-color:rgba(253,224,71,.2);color:#fde047}
+.credit-desc{font-size:13px;color:var(--grey);line-height:1.65;margin-bottom:16px;flex:1}
+.credit-socials{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+.credit-social-link{display:inline-flex;align-items:center;gap:5px;font-size:11px;letter-spacing:.05em;color:var(--grey);padding:5px 10px;border-radius:8px;border:1px solid var(--border);text-decoration:none;transition:all .2s}
+.credit-social-link:hover{color:var(--white);border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.04)}
+/* Admin credits section */
+.credit-member-preview{display:flex;align-items:center;gap:10px}
+.credit-member-thumb{width:36px;height:36px;border-radius:8px;object-fit:cover;border:1px solid var(--border);filter:grayscale(100%)}
+.credit-member-thumb-ph{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--grey)}
+.credit-role-pills{display:flex;flex-wrap:wrap;gap:4px}
+.credit-role-pill-sm{font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--grey)}
+
+.credit-role-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.04em;padding:6px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .15s;color:var(--grey);user-select:none;background:rgba(255,255,255,.02)}
+.credit-role-check:has(input:checked){border-color:rgba(245,245,245,.25);background:rgba(245,245,245,.08);color:var(--white)}
+.credit-role-check input{display:none}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -2756,6 +2786,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
+      <a data-action="navigate" data-args='["credits"]' style="cursor:pointer">Credits</a>
       <a href="/membersaccess">Member Login</a>
     </div>
   </footer>
@@ -3171,6 +3202,20 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 </div>
 
 <!-- ── 404 PAGE ── -->
+
+<!-- ── CREDITS PAGE ── -->
+<div class="page" id="page-credits">
+  <section class="section" style="min-height:100vh;padding:80px 0 120px">
+    <div class="section-inner" style="max-width:1100px">
+      <p class="section-label" style="letter-spacing:.18em">Behind the Screen</p>
+      <h2 class="section-title" style="margin-bottom:16px">Built with heart.</h2>
+      <p style="color:var(--grey);font-size:15px;max-width:520px;line-height:1.7;margin-bottom:72px">Every pixel of this site was crafted by people who care about film as much as they care about code. Here are the minds behind the machine.</p>
+      <div id="credits-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:24px">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="page" id="page-404">
   <div class="not-found-reel">404</div>
   <div class="not-found-icon">
@@ -3501,6 +3546,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div data-action="showAdminSection" data-args='["member-movie-submissions"]' class="admin-sidebar-item" data-section="member-movie-submissions"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> Movie Submissions</div>
     <div data-action="showAdminSection" data-args='["work-edit-requests"]' class="admin-sidebar-item" data-section="work-edit-requests"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> Work Edit Requests</div>
     <div class="admin-sidebar-group">System</div>
+    <div data-action="showAdminSection" data-args='["credits"]' class="admin-sidebar-item" data-section="credits"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><polyline points="16 3 18 5 22 1"/></svg></span> Site Credits</div>
     <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
     <div data-action="showAdminSection" data-args='["change-password"]' class="admin-sidebar-item" data-section="change-password" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Change Password</div>
     <div data-action="showAdminSection" data-args='["two-factor"]' class="admin-sidebar-item" data-section="two-factor" style="display:flex"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> Two-Factor Auth</div>
@@ -3772,6 +3818,21 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <table class="admin-table">
           <thead><tr><th>Icon</th><th>Title</th><th>Year</th><th>Actions</th></tr></thead>
           <tbody id="admin-achievements-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- CREDITS -->
+    <div class="admin-section" id="section-credits">
+      <div class="admin-header">
+        <div><h2>Site Credits</h2><p>People who built this website</p></div>
+        <button data-action="openCreditModal" class="btn btn-primary">+ Add Person</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Person</th><th>Roles</th><th>Description</th><th>Actions</th></tr></thead>
+          <tbody id="admin-credits-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -5318,6 +5379,71 @@ KFS — KIIT Film Society"></textarea>
 </div>
 
 <!-- ── UNSAVED CHANGES WARNING MODAL ── -->
+
+<!-- Credit Modal -->
+<div class="modal-overlay" id="credit-modal">
+  <div class="modal-panel" style="max-width:560px;border-radius:20px">
+    <div class="modal-header" style="padding:20px 28px;border-bottom:1px solid var(--border)">
+      <h3 id="credit-modal-title" style="font-size:17px;font-weight:700;letter-spacing:-.02em">Add Credit</h3>
+      <button data-action="closeCreditModal" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="padding:24px 28px;display:flex;flex-direction:column;gap:18px;max-height:70vh;overflow-y:auto">
+      <div class="form-group">
+        <label>Member <span style="color:var(--grey);font-weight:400">(select from dropdown)</span></label>
+        <div id="credit-member-picker" style="position:relative">
+          <input type="text" id="credit-member-search" placeholder="Search members…" style="border-radius:12px;width:100%" autocomplete="off">
+          <div id="credit-member-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:12px;z-index:200;max-height:220px;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.5)"></div>
+        </div>
+        <div id="credit-selected-member" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;gap:10px">
+          <span id="credit-sel-thumb"></span>
+          <div style="flex:1;min-width:0">
+            <div id="credit-sel-name" style="font-size:14px;font-weight:600;color:var(--white)"></div>
+            <div id="credit-sel-role" style="font-size:12px;color:var(--grey)"></div>
+          </div>
+          <button onclick="clearCreditMember()" style="background:none;border:none;color:var(--grey);cursor:pointer;font-size:16px;padding:0 4px">✕</button>
+        </div>
+        <input type="hidden" id="credit-member-id">
+        <input type="hidden" id="credit-member-photo-url">
+        <input type="hidden" id="credit-member-name-val">
+      </div>
+
+      <div class="form-group">
+        <label>Display Name <span style="color:var(--grey);font-weight:400">(auto-filled from member or enter manually)</span></label>
+        <input type="text" id="credit-name" placeholder="e.g. Aryan Mehta" style="border-radius:12px">
+      </div>
+
+      <div class="form-group">
+        <label>Roles <span style="color:var(--grey);font-weight:400">(select all that apply)</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="credit-roles-picker">
+          <label class="credit-role-check"><input type="checkbox" value="Lead"> Lead</label>
+          <label class="credit-role-check"><input type="checkbox" value="Developer"> Developer</label>
+          <label class="credit-role-check"><input type="checkbox" value="Designer"> Designer</label>
+          <label class="credit-role-check"><input type="checkbox" value="Security Tester"> Security Tester</label>
+          <label class="credit-role-check"><input type="checkbox" value="Tester"> Tester</label>
+          <label class="credit-role-check"><input type="checkbox" value="Ideator"> Ideator</label>
+          <label class="credit-role-check"><input type="checkbox" value="Content"> Content</label>
+          <label class="credit-role-check"><input type="checkbox" value="Backend"> Backend</label>
+          <label class="credit-role-check"><input type="checkbox" value="Frontend"> Frontend</label>
+          <label class="credit-role-check"><input type="checkbox" value="DevOps"> DevOps</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description <span style="color:var(--grey);font-weight:400">(optional)</span></label>
+        <textarea id="credit-description" placeholder="A short note about their contribution…" style="min-height:80px;border-radius:12px"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Sort Order</label>
+        <input type="number" id="credit-sort-order" placeholder="99" style="border-radius:12px">
+      </div>
+    </div>
+    <div class="modal-footer" style="padding:16px 28px;border-top:1px solid var(--border)">
+      <button data-action="closeCreditModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button>
+      <button data-action="saveCredit" class="btn btn-primary" style="border-radius:12px" id="save-credit-btn">Save</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="kfs-unsaved-modal" style="z-index:9999;display:none;align-items:center;justify-content:center">
   <div class="modal-box" style="max-width:380px;width:92%;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;box-sizing:border-box">
     <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">

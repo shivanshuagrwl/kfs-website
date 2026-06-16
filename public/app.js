@@ -245,6 +245,7 @@ function loadPageData(page) {
   else if (page==='wrapped') loadWrapped();
   else if (page==='collaborate') loadCollaborate();
   else if (page==='donations') loadDonationsPage();
+  else if (page==='credits') loadCreditsPage();
 }
 
 function toggleMenu() {
@@ -2507,6 +2508,9 @@ async function loadAdminData(name) {
       loadCustomEggsUI();
     }
   }
+  else if (name==='credits') {
+    loadAdminCredits();
+  }
   else if (name==='settings') {
     const settings = await apiFetch('/api/settings');
     if (settings) {
@@ -3992,6 +3996,7 @@ async function checkRoute() {
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
   if (path === 'admin') { navigate('admin', false); return; }
+  if (path === 'credits') { navigate('credits', false); return; }
 
   const blogMatch  = path.match(/^blog\/(.+)/);
   const filmMatch  = path.match(/^films\/(.+)/);
@@ -11393,4 +11398,262 @@ async function reviewWorkEditRequest(requestId, action) {
   if (action === 'reject') notes = prompt('Reason for rejection (optional):') || '';
   await apiFetch(`/api/admin/work-edit-requests/${requestId}/review`, 'POST', { action, notes });
   loadWorkEditRequests('pending');
+}
+
+// ── SITE CREDITS ────────────────────────────────────────────────────────────
+
+// ── Public Credits Page ──────────────────────────────────────────────────────
+async function loadCreditsPage() {
+  const grid = document.getElementById('credits-grid');
+  if (!grid) return;
+  try {
+    const credits = await apiFetch('/api/credits').catch(() => []);
+    const members = window._allMembersCache || await apiFetch('/api/members').catch(() => []);
+    window._allMembersCache = members;
+
+    if (!credits || !credits.length) {
+      grid.innerHTML = '<p style="color:var(--grey);font-size:14px">No credits yet.</p>';
+      return;
+    }
+
+    // Social icons (reuse member profile icons)
+    const SICONS = {
+      github:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.482 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.021C22 6.484 17.522 2 12 2z"/></svg>`,
+      linkedin:  `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
+      instagram: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>`,
+      twitter:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.734l7.73-8.835L2.054 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
+      youtube:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`,
+      website:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>`,
+    };
+
+    const ROLE_CLASS = {
+      'Lead': 'role-lead', 'Developer': 'role-developer', 'Frontend': 'role-developer',
+      'Backend': 'role-developer', 'DevOps': 'role-developer',
+      'Designer': 'role-designer', 'Security Tester': 'role-security',
+      'Tester': 'role-tester', 'Ideator': 'role-ideator', 'Content': 'role-ideator',
+    };
+
+    function safeSocialUrl(url) {
+      if (!url) return '';
+      try { const u = new URL(url); return (u.protocol==='https:'||u.protocol==='http:') ? u.href : ''; } catch { return ''; }
+    }
+
+    function buildSocialLinks(member) {
+      if (!member) return '';
+      const links = [];
+      const keys = { instagram:'Instagram', github:'GitHub', linkedin:'LinkedIn', twitter:'X', youtube:'YouTube', website:'Portfolio' };
+      Object.entries(keys).forEach(([k, label]) => {
+        let val = member[k];
+        if (!val) return;
+        val = val.trim();
+        if (k==='instagram'&&!val.startsWith('http')) val=`https://instagram.com/${val.replace(/^@+/,'')}`;
+        if (k==='github'&&!val.startsWith('http')) val=`https://github.com/${val.replace(/^@+/,'')}`;
+        if (k==='twitter'&&!val.startsWith('http')) val=`https://x.com/${val.replace(/^@+/,'')}`;
+        const safe = safeSocialUrl(val);
+        if (!safe) return;
+        links.push(`<a class="credit-social-link" href="${safe}" target="_blank" rel="noopener noreferrer">${SICONS[k]} ${label}</a>`);
+      });
+      return links.join('');
+    }
+
+    grid.innerHTML = credits.map(c => {
+      // Find matched member for social links
+      const member = c.member_id ? members.find(m => String(m.id) === String(c.member_id)) : null;
+      const photo = c.member_photo || (member && member.photo);
+      const photoHtml = photo
+        ? `<img class="credit-photo" src="${photo}" alt="${c.member_name}">`
+        : `<div class="credit-photo-placeholder"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+      const roles = (Array.isArray(c.credit_roles) ? c.credit_roles : (c.credit_roles ? JSON.parse(c.credit_roles) : []));
+      const roleTags = roles.map(r => `<span class="credit-role-tag ${ROLE_CLASS[r]||''}">${r}</span>`).join('');
+      const socials = buildSocialLinks(member);
+      return `<div class="credit-card" ${member ? `style="cursor:pointer" onclick="navigate('members');setTimeout(()=>openMemberProfileById('${c.member_id}'),400)"` : ''}>
+        ${photoHtml}
+        <div class="credit-name">${c.member_name}</div>
+        ${roleTags ? `<div class="credit-roles">${roleTags}</div>` : ''}
+        ${c.description ? `<p class="credit-desc">${c.description}</p>` : ''}
+        ${socials ? `<div class="credit-socials">${socials}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('[credits]', e);
+    if (grid) grid.innerHTML = '<p style="color:var(--grey)">Could not load credits.</p>';
+  }
+}
+
+// ── Admin Credits ────────────────────────────────────────────────────────────
+let _editingCreditId = null;
+
+async function loadAdminCredits() {
+  const tbody = document.getElementById('admin-credits-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" class="loading">Loading…</td></tr>';
+  try {
+    const credits = await apiFetch('/api/admin/credits');
+    if (!credits || !credits.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--grey);font-size:13px;padding:20px">No credits yet. Add the first person.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = credits.map(c => {
+      const roles = Array.isArray(c.credit_roles) ? c.credit_roles : (c.credit_roles ? JSON.parse(c.credit_roles) : []);
+      const rolesPillsHtml = roles.map(r => `<span class="credit-role-pill-sm">${r}</span>`).join('');
+      const photoHtml = c.member_photo
+        ? `<img class="credit-member-thumb" src="${c.member_photo}" alt="${c.member_name}">`
+        : `<div class="credit-member-thumb-ph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+      return `<tr>
+        <td>
+          <div class="credit-member-preview">
+            ${photoHtml}
+            <div>
+              <div style="font-weight:600;font-size:14px">${c.member_name}</div>
+              ${c.member_id ? '<div style="font-size:11px;color:var(--grey)">Linked member</div>' : ''}
+            </div>
+          </div>
+        </td>
+        <td><div class="credit-role-pills">${rolesPillsHtml || '<span style="color:var(--grey);font-size:12px">—</span>'}</div></td>
+        <td style="max-width:200px;font-size:13px;color:var(--grey)">${c.description ? c.description.slice(0,80)+(c.description.length>80?'…':'') : '—'}</td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-sm" onclick="openCreditModal(${JSON.stringify(c).replace(/"/g,'&quot;')})">Edit</button>
+            <button class="btn-sm danger" onclick="deleteCredit(${c.id})">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('[admin/credits]', e);
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--grey)">Error loading credits.</td></tr>';
+  }
+}
+
+function openCreditModal(existing) {
+  _editingCreditId = null;
+  // Reset form
+  document.getElementById('credit-member-search').value = '';
+  document.getElementById('credit-member-id').value = '';
+  document.getElementById('credit-member-photo-url').value = '';
+  document.getElementById('credit-member-name-val').value = '';
+  document.getElementById('credit-name').value = '';
+  document.getElementById('credit-description').value = '';
+  document.getElementById('credit-sort-order').value = '';
+  document.getElementById('credit-selected-member').style.display = 'none';
+  document.querySelectorAll('#credit-roles-picker input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.getElementById('credit-modal-title').textContent = 'Add Credit';
+
+  if (existing && typeof existing === 'object') {
+    _editingCreditId = existing.id;
+    document.getElementById('credit-modal-title').textContent = 'Edit Credit';
+    document.getElementById('credit-name').value = existing.member_name || '';
+    document.getElementById('credit-description').value = existing.description || '';
+    document.getElementById('credit-sort-order').value = existing.sort_order || '';
+    if (existing.member_id) {
+      document.getElementById('credit-member-id').value = existing.member_id;
+      document.getElementById('credit-member-photo-url').value = existing.member_photo || '';
+      document.getElementById('credit-member-name-val').value = existing.member_name || '';
+      showSelectedCreditMember({ id: existing.member_id, name: existing.member_name, photo: existing.member_photo, role: '' });
+    }
+    const roles = Array.isArray(existing.credit_roles) ? existing.credit_roles : (existing.credit_roles ? JSON.parse(existing.credit_roles) : []);
+    document.querySelectorAll('#credit-roles-picker input[type=checkbox]').forEach(cb => {
+      cb.checked = roles.includes(cb.value);
+    });
+  }
+
+  document.getElementById('credit-modal').classList.add('open');
+  initCreditMemberSearch();
+}
+
+function closeCreditModal() {
+  document.getElementById('credit-modal').classList.remove('open');
+  document.getElementById('credit-member-dropdown').style.display = 'none';
+}
+
+function showSelectedCreditMember(m) {
+  const wrap = document.getElementById('credit-selected-member');
+  const thumbEl = document.getElementById('credit-sel-thumb');
+  document.getElementById('credit-sel-name').textContent = m.name;
+  document.getElementById('credit-sel-role').textContent = m.role || '';
+  thumbEl.innerHTML = m.photo
+    ? `<img src="${m.photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;border:1px solid var(--border)">`
+    : `<div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--grey)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+  wrap.style.display = 'flex';
+  if (!document.getElementById('credit-name').value) {
+    document.getElementById('credit-name').value = m.name;
+  }
+  document.getElementById('credit-member-id').value = m.id;
+  document.getElementById('credit-member-photo-url').value = m.photo || '';
+  document.getElementById('credit-member-name-val').value = m.name;
+  document.getElementById('credit-member-search').value = '';
+  document.getElementById('credit-member-dropdown').style.display = 'none';
+}
+
+function clearCreditMember() {
+  document.getElementById('credit-member-id').value = '';
+  document.getElementById('credit-member-photo-url').value = '';
+  document.getElementById('credit-member-name-val').value = '';
+  document.getElementById('credit-selected-member').style.display = 'none';
+}
+
+function initCreditMemberSearch() {
+  const input = document.getElementById('credit-member-search');
+  const dropdown = document.getElementById('credit-member-dropdown');
+  if (input._creditsInited) return;
+  input._creditsInited = true;
+
+  input.addEventListener('input', async () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { dropdown.style.display = 'none'; return; }
+    const members = window._allMembersCache || await apiFetch('/api/members').catch(() => []);
+    window._allMembersCache = members;
+    const matches = members.filter(m => m.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!matches.length) { dropdown.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--grey)">No members found</div>'; dropdown.style.display = 'block'; return; }
+    dropdown.innerHTML = matches.map(m => `
+      <div class="credit-member-dropdown-item" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''" onmousedown="event.preventDefault();showSelectedCreditMember(${JSON.stringify({id:m.id,name:m.name,photo:m.photo||'',role:m.role||''}).replace(/"/g,'&quot;')})">
+        ${m.photo ? `<img src="${m.photo}" style="width:30px;height:30px;border-radius:6px;object-fit:cover;filter:grayscale(100%)">` : `<div style="width:30px;height:30px;border-radius:6px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`}
+        <div><div style="font-size:13px;font-weight:600">${m.name}</div><div style="font-size:11px;color:var(--grey)">${m.role||''}</div></div>
+      </div>
+    `).join('');
+    dropdown.style.display = 'block';
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 150));
+}
+
+async function saveCredit() {
+  const btn = document.getElementById('save-credit-btn');
+  const name = document.getElementById('credit-name').value.trim();
+  if (!name) { showToast('Please enter a display name.', 'error'); return; }
+  const roles = Array.from(document.querySelectorAll('#credit-roles-picker input[type=checkbox]:checked')).map(cb => cb.value);
+  const payload = {
+    member_id: document.getElementById('credit-member-id').value || null,
+    member_name: name,
+    member_photo: document.getElementById('credit-member-photo-url').value || null,
+    credit_roles: roles,
+    description: document.getElementById('credit-description').value.trim() || null,
+    sort_order: parseInt(document.getElementById('credit-sort-order').value) || 99,
+  };
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+  try {
+    if (_editingCreditId) {
+      await apiFetch(`/api/admin/credits/${_editingCreditId}`, 'PUT', payload);
+    } else {
+      await apiFetch('/api/admin/credits', 'POST', payload);
+    }
+    closeCreditModal();
+    loadAdminCredits();
+  } catch(e) {
+    alert('Failed to save credit. Please try again.');
+  } finally {
+    btn.textContent = 'Save';
+    btn.disabled = false;
+  }
+}
+
+async function deleteCredit(id) {
+  if (!confirm('Remove this person from credits?')) return;
+  try {
+    await apiFetch(`/api/admin/credits/${id}`, 'DELETE');
+    loadAdminCredits();
+  } catch(e) {
+    alert('Failed to delete credit. Please try again.');
+  }
 }
