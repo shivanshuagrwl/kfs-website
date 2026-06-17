@@ -9502,6 +9502,7 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
       contact_email: payload.contact_email || member.email,
       contact_phone: payload.contact_phone || member.mobile,
       is_kfs_member: true,
+      member_id: req.member.memberId,
       edit_token,
     }]).select("id,edit_token").single();
 
@@ -9515,17 +9516,12 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
 // Member: list own collab posts (authenticated — includes edit_token, unlike the public listing)
 app.get("/api/collaborate/mine", memberAuthMiddleware, async (req, res) => {
   try {
-    const { data: member } = await supabase.from("members")
-      .select("email").eq("id", req.member.memberId).maybeSingle();
-    if (!member) return res.status(404).json({ error: "Member not found" });
-    const escapedEmail = (member.email || "").replace(/[%_]/g, "\\$&");
-
     const { data, error } = await supabasePublic
       .from("collaborate_posts")
       .select(
         "id,title,role,skills,timeline,description,contact_name,contact_email,contact_phone,domain,fulfillment_date,created_at,updated_at,edit_token",
       )
-      .ilike("contact_email", escapedEmail)
+      .eq("member_id", req.member.memberId)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(500).json({ error: "Internal server error" });
@@ -9535,18 +9531,14 @@ app.get("/api/collaborate/mine", memberAuthMiddleware, async (req, res) => {
   }
 });
 
-// Member: edit own collab post (authenticated — verifies post belongs to member's email)
+// Member: edit own collab post (authenticated — verifies post belongs to this member account)
 app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, async (req, res) => {
   try {
-    const { data: member } = await supabase.from("members")
-      .select("email").eq("id", req.member.memberId).maybeSingle();
-    if (!member) return res.status(404).json({ error: "Member not found" });
-
     // Confirm post exists and belongs to this member
     const { data: existing } = await supabasePublic.from("collaborate_posts")
-      .select("id, contact_email").eq("edit_token", req.params.token).maybeSingle();
+      .select("id, member_id").eq("edit_token", req.params.token).maybeSingle();
     if (!existing) return res.status(404).json({ error: "Post not found." });
-    if (existing.contact_email.toLowerCase() !== member.email.toLowerCase())
+    if (existing.member_id !== req.member.memberId)
       return res.status(403).json({ error: "You can only edit your own posts." });
 
     const payload = cleanCollabPayload(req.body);
