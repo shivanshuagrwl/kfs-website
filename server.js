@@ -5483,7 +5483,7 @@ app.put("/api/collaborate/:token", csrfProtect, async (req, res) => {
       .json({ error: "Please provide an email or phone number." });
   }
 
-  const { data, error } = await supabasePublic
+  const { data, error } = await supabase
     .from("collaborate_posts")
     .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("edit_token", req.params.token)
@@ -5505,12 +5505,15 @@ app.delete("/api/collaborate/:token", csrfProtect, async (req, res) => {
 
   if (!existing) return res.status(404).json({ error: "Post not found or token invalid." });
 
-  const { error } = await supabasePublic
+  const { data, error } = await supabase
     .from("collaborate_posts")
     .delete()
-    .eq("edit_token", req.params.token);
+    .eq("edit_token", req.params.token)
+    .select("id")
+    .maybeSingle();
 
   if (error) return res.status(500).json({ error: "Internal server error" });
+  if (!data) return res.status(404).json({ error: "Post not found or token invalid." });
   res.json({ success: true });
 });
 
@@ -9547,10 +9550,13 @@ app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, asy
     if (!payload.contact_email || !payload.contact_phone)
       return res.status(400).json({ error: "Email and phone are required." });
 
-    const { error } = await supabasePublic.from("collaborate_posts")
+    const { data, error } = await supabase.from("collaborate_posts")
       .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq("edit_token", req.params.token);
+      .eq("edit_token", req.params.token)
+      .select("id")
+      .maybeSingle();
     if (error) return res.status(500).json({ error: "Internal server error" });
+    if (!data) return res.status(404).json({ error: "Post not found." });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Internal server error" });
