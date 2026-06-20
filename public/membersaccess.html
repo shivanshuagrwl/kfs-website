@@ -57,6 +57,9 @@
     .btn-ghost:hover { color: var(--text); }
     .err-msg { font-size: 13px; color: var(--danger); margin-top: 14px; }
     .ok-msg  { font-size: 13px; color: var(--success); margin-top: 14px; }
+    .lockout-bar-track { display: none; width: 100%; height: 3px; background: rgba(239,68,68,.18); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+    .lockout-bar-track.show { display: block; }
+    .lockout-bar-fill { height: 100%; width: 100%; background: var(--danger); border-radius: 2px; transition: width 1s linear; }
 
     /* ── Dashboard layout ────────────────────────────────────────────────── */
     #app-screen { display: none; min-height: 100vh; }
@@ -305,6 +308,76 @@
     .qr-box img { border-radius: 8px; }
     .qr-secret { font-family: monospace; font-size: 13px; background: #1a1a1a; padding: 8px 14px; border-radius: 6px; word-break: break-all; color: var(--muted); margin-top: 12px; display: inline-block; }
 
+    /* ── Forgot password flow ──────────────────────────────────────────────── */
+    .fp-link {
+      background: none; border: none; color: var(--muted); font-size: 13px;
+      padding: 0; margin-top: 16px; display: block; text-align: center; width: 100%;
+      transition: color .15s;
+    }
+    .fp-link:hover { color: var(--text); }
+    .fp-channel-badge {
+      display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px;
+      background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.25);
+      border-radius: 10px; font-size: 13px; color: var(--success); margin-bottom: 24px;
+    }
+    .fp-channel-badge svg { flex-shrink: 0; }
+    .otp-input {
+      letter-spacing: .5em; font-size: 22px; text-align: center; font-weight: 600;
+      padding-left: 18px; /* visually re-centers given the letter-spacing */
+    }
+    .fp-resend {
+      background: none; border: none; color: var(--muted); font-size: 12.5px;
+      padding: 0; margin-top: 14px; text-align: center; width: 100%; transition: color .15s;
+    }
+    .fp-resend:hover:not(:disabled) { color: var(--text); }
+    .fp-resend:disabled { opacity: .5; cursor: default; }
+
+    /* Password strength meter (forgot-password new-password step) */
+    .pw-strength { display: flex; gap: 4px; margin-top: 8px; }
+    .pw-strength-bar { height: 3px; flex: 1; border-radius: 2px; background: var(--faint); transition: background .2s; }
+    .pw-strength-bar.weak { background: var(--danger); }
+    .pw-strength-bar.medium { background: var(--warn); }
+    .pw-strength-bar.strong { background: var(--success); }
+    .pw-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+    /* ── Recovery contact info banner (dismissible) ──────────────────────────── */
+    .recovery-banner {
+      display: none; align-items: flex-start; gap: 14px; padding: 16px 18px;
+      background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.25);
+      border-radius: 14px; margin: 0 0 20px;
+    }
+    .recovery-banner.show { display: flex; }
+    .recovery-banner-icon {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(245,158,11,.12); display: flex; align-items: center; justify-content: center; color: var(--warn);
+    }
+    .recovery-banner-body { flex: 1; min-width: 0; }
+    .recovery-banner-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+    .recovery-banner-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+    .recovery-banner-actions { display: flex; gap: 10px; }
+    .recovery-banner-actions button {
+      font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 8px; background: none; border: none;
+    }
+    .recovery-banner-actions .rb-primary { background: var(--text); color: var(--bg); }
+    .recovery-banner-actions .rb-dismiss { color: var(--muted); }
+    .recovery-banner-actions .rb-dismiss:hover { color: var(--text); }
+    .recovery-banner-close {
+      background: none; border: none; color: var(--muted); flex-shrink: 0; padding: 2px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .recovery-banner-close:hover { color: var(--text); }
+
+    /* ── Contact info modal (add/edit recovery email + phone) ───────────────── */
+    #contact-info-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 9999;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    #contact-info-modal-overlay.open { display: flex; }
+    .contact-info-modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      width: 100%; max-width: 420px; padding: 32px;
+    }
+
     /* Avatar upload */
     .avatar-wrap { position: relative; display: inline-block; margin-bottom: 20px; }
     .avatar-lg { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; background: var(--faint); display: flex; align-items: center; justify-content: center; font-size: 28px; }
@@ -508,6 +581,8 @@
       </div>
       <button class="btn-primary" id="login-btn">Sign in</button>
       <div id="login-err" class="err-msg" style="display:none"></div>
+      <div class="lockout-bar-track" id="login-lockout-bar-track"><div class="lockout-bar-fill" id="login-lockout-bar-fill"></div></div>
+      <button class="fp-link" id="forgot-password-link">Forgot password?</button>
     </div>
 
     <!-- Step: TOTP -->
@@ -522,6 +597,72 @@
       <button class="btn-primary" id="totp-btn">Verify</button>
       <div id="totp-err" class="err-msg" style="display:none"></div>
       <button class="btn-ghost" id="back-to-login-btn">← Back</button>
+    </div>
+
+    <!-- Step: Forgot Password — enter username -->
+    <div id="step-fp-username" style="display:none">
+      <div class="auth-logo">KFS <span>Member Portal</span></div>
+      <div class="auth-title">Reset your password</div>
+      <div class="auth-sub">Enter your username and we'll send a verification code to your email on file.</div>
+      <div class="form-group">
+        <label>Username</label>
+        <input id="fp-username" type="text" autocomplete="username" placeholder="firstname.lastname" />
+      </div>
+      <button class="btn-primary" id="fp-start-btn">Send code</button>
+      <div id="fp-username-err" class="err-msg" style="display:none"></div>
+      <div class="lockout-bar-track" id="fp-username-lockout-bar-track"><div class="lockout-bar-fill" id="fp-username-lockout-bar-fill"></div></div>
+      <button class="btn-ghost" id="fp-back-to-login-btn">← Back to sign in</button>
+    </div>
+
+    <!-- Step: Forgot Password — enter OTP -->
+    <div id="step-fp-otp" style="display:none">
+      <div class="auth-logo">KFS <span>Member Portal</span></div>
+      <div class="auth-title">Enter verification code</div>
+      <div class="auth-sub" id="fp-otp-sub">We've sent a 6-digit code to your phone.</div>
+      <div class="fp-channel-badge" id="fp-channel-badge" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="fp-channel-text">Sent</span>
+      </div>
+      <div class="form-group">
+        <label>6-digit code</label>
+        <input id="fp-otp-input" class="otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code" />
+      </div>
+      <button class="btn-primary" id="fp-verify-btn">Verify code</button>
+      <div id="fp-otp-err" class="err-msg" style="display:none"></div>
+      <button class="fp-resend" id="fp-resend-btn">Resend code</button>
+      <button class="btn-ghost" id="fp-otp-back-btn">← Start over</button>
+    </div>
+
+    <!-- Step: Forgot Password — set new password -->
+    <div id="step-fp-reset" style="display:none">
+      <div class="auth-logo">KFS <span>Member Portal</span></div>
+      <div class="auth-title">Set a new password</div>
+      <div class="auth-sub">Choose a strong password you haven't used before.</div>
+      <div class="form-group">
+        <label>New password</label>
+        <input id="fp-new-password" type="password" autocomplete="new-password" placeholder="••••••••" />
+        <div class="pw-strength" id="fp-pw-strength">
+          <div class="pw-strength-bar"></div><div class="pw-strength-bar"></div><div class="pw-strength-bar"></div>
+        </div>
+        <div class="pw-hint">At least 8 characters, with 1 uppercase letter, 1 number, and 1 special character.</div>
+      </div>
+      <div class="form-group">
+        <label>Confirm new password</label>
+        <input id="fp-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••" />
+      </div>
+      <button class="btn-primary" id="fp-reset-btn">Update password</button>
+      <div id="fp-reset-err" class="err-msg" style="display:none"></div>
+    </div>
+
+    <!-- Step: Forgot Password — success -->
+    <div id="step-fp-success" style="display:none">
+      <div class="auth-logo">KFS <span>Member Portal</span></div>
+      <div style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);margin-bottom:20px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="auth-title">Password updated</div>
+      <div class="auth-sub">Your password has been changed. You've been signed out of all other devices for security.</div>
+      <button class="btn-primary" id="fp-done-btn">Back to sign in</button>
     </div>
 
     <!-- Step: Change Password (forced on first login) -->
@@ -647,10 +788,26 @@
         <div class="panel-title">Profile</div>
         <div class="panel-sub">Manage your public KFS profile</div>
 
+        <!-- Recovery contact info banner — dismissible, shown only if neither email nor phone on file -->
+        <div class="recovery-banner" id="recovery-banner">
+          <div class="recovery-banner-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          </div>
+          <div class="recovery-banner-body">
+            <div class="recovery-banner-title">Add a recovery email</div>
+            <div class="recovery-banner-desc">This lets you reset your password yourself if you ever get locked out — no need to wait on an admin.</div>
+            <div class="recovery-banner-actions">
+              <button class="rb-primary" id="recovery-banner-add-btn">Add now</button>
+              <button class="rb-dismiss" id="recovery-banner-dismiss-btn">Remind me later</button>
+            </div>
+          </div>
+        </div>
+
         <div id="profile-pending-banner" class="pending-banner" style="display:none">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:8px;vertical-align:middle"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           You have a profile update pending admin review.
         </div>
+
 
         <div class="card">
           <div class="card-title">Photo</div>
@@ -1048,6 +1205,27 @@
     </div>
     <div id="work-edit-msg" class="ok-msg" style="display:none"></div>
     <div id="work-edit-err" class="err-msg" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ── Recovery contact info modal ───────────────────────────────────────────── -->
+<div id="contact-info-modal-overlay">
+  <div class="contact-info-modal">
+    <div class="auth-title" style="font-size:18px;margin-bottom:6px">Recovery contact info</div>
+    <div class="auth-sub" style="margin-bottom:24px;font-size:13px">We'll use your email only to send you a verification code if you ever forget your password.</div>
+    <div class="form-group">
+      <label>Email</label>
+      <input id="ci-email" type="email" placeholder="your@kiit.ac.in" />
+    </div>
+    <div class="form-group">
+      <label>Phone (for records)</label>
+      <input id="ci-phone" type="tel" placeholder="+91 9XXXXXXXX0" />
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Email is required for password recovery. Phone is optional and kept for records only.</div>
+    <button class="btn-primary" id="ci-save-btn">Save</button>
+    <div id="ci-err" class="err-msg" style="display:none"></div>
+    <div id="ci-ok" class="ok-msg" style="display:none"></div>
+    <button class="btn-ghost" id="ci-cancel-btn" style="width:100%;text-align:center">Cancel</button>
   </div>
 </div>
 

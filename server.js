@@ -168,6 +168,131 @@ async function sendConfirmationEmail({
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION FP — Forgot Password: OTP generation, masking, delivery helpers
+// Used by both /api/admin/forgot-password/* and /api/member/forgot-password/*
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OTP_TTL_MS          = 10 * 60 * 1000; // 10 minutes
+const OTP_MAX_ATTEMPTS     = 5;
+const RESET_TOKEN_TTL_MS   = 15 * 60 * 1000; // 15 minutes to actually set the new password after verifying
+
+function generateOtp() {
+  // 6-digit numeric, zero-padded. crypto.randomInt is uniform (no modulo bias).
+  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+}
+
+function hashOtp(otp) {
+  return crypto.createHash("sha256").update(otp).digest("hex");
+}
+
+// Masks contact info for display, e.g. "+91 98765 43210" -> "+91 98••• •••10"
+// and "jdoe@kiit.ac.in" -> "j***@kiit.ac.in". Never expose the full value.
+function maskPhone(phone) {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (digits.length < 4) return "••••";
+  const last2 = digits.slice(-2);
+  return `••••••${last2}`;
+}
+function maskEmail(email) {
+  const [user, domain] = (email || "").split("@");
+  if (!user || !domain) return "••••";
+  const visible = user.slice(0, 1);
+  return `${visible}${"*".repeat(Math.max(user.length - 1, 3))}@${domain}`;
+}
+
+// Generic OTP email via Brevo (separate template from sendConfirmationEmail —
+// short-lived security code, not a marketing/event email).
+async function sendOtpViaEmail(toEmail, toName, otp) {
+  const { data: rows } = await supabase
+    .from("settings")
+    .select("key,value")
+    .in("key", ["brevo_api_key", "smtp_from_name"]);
+  const s = {};
+  (rows || []).forEach((r) => (s[r.key] = r.value));
+  if (!s.brevo_api_key) {
+    throw new Error("EMAIL_NOT_CONFIGURED");
+  }
+  const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
+  const html = `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 0"><tr><td align="center">
+<table width="420" cellpadding="0" cellspacing="0" style="background:#111111;border:1px solid #1e1e1e;border-radius:18px;overflow:hidden">
+  <tr><td style="padding:36px 36px 8px">
+    <p style="font-size:13px;color:#888;margin:0 0 6px;text-transform:uppercase;letter-spacing:.08em">KFS — KIIT Film Society</p>
+    <h2 style="color:#f5f5f5;font-size:20px;margin:0 0 18px;letter-spacing:-.02em">Your verification code</h2>
+    <p style="color:#ccc;font-size:14px;line-height:1.6;margin:0 0 24px">Hi ${toName || "there"}, use this code to reset your password. It expires in 10 minutes.</p>
+    <div style="background:#1a1a1a;border:1px solid #1e1e1e;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px">
+      <span style="font-size:32px;font-weight:700;letter-spacing:.3em;color:#f5f5f5">${otp}</span>
+    </div>
+    <p style="color:#666;font-size:12px;line-height:1.6;margin:0">If you didn't request this, you can safely ignore this email — your password won't change unless this code is used.</p>
+  </td></tr>
+  <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    <p style="font-size:12px;color:#444;margin:0">This is an automated message from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Please do not reply to this email.</p>
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": s.brevo_api_key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
+      to: [{ email: toEmail, name: toName || toEmail }],
+      subject: "Your KFS verification code",
+      textContent: `Your KFS verification code is ${otp}. It expires in 10 minutes.`,
+      htmlContent: html,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Brevo API error ${response.status}: ${err}`);
+  }
+}
+
+// Sends OTP via email. account = { email, name }.
+// Email is now the sole forgot-password channel (Twilio/WhatsApp/SMS removed —
+// see v1.18 migration notes). Returns { channel, destination, maskedDestination }
+// or throws NO_CONTACT_METHOD if the account has no email on file.
+async function dispatchOtp(account, otp) {
+  if (!account.email) {
+    throw new Error("NO_CONTACT_METHOD");
+  }
+  await sendOtpViaEmail(account.email, account.name, otp);
+  return { channel: "email", destination: account.email, maskedDestination: maskEmail(account.email) };
+}
+
+// ── Forgot-password lockout (mirrors login lockout pattern) ───────────────────
+const FP_ATTEMPTS = new Map(); // key: `${accountType}:${normalisedUsername}` -> { count, lockedUntil }
+
+function checkForgotPasswordLockout(key) {
+  const entry = FP_ATTEMPTS.get(key);
+  if (!entry) return null;
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+    const timeStr = secsLeft < 120 ? `${secsLeft} second(s)` : `${Math.ceil(secsLeft / 60)} minute(s)`;
+    return {
+      message: `Too many attempts. Try again in ${timeStr}.`,
+      lockedUntil: entry.lockedUntil, // epoch ms — client uses this to drive a live countdown
+    };
+  }
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) FP_ATTEMPTS.delete(key);
+  return null;
+}
+function recordForgotPasswordAttempt(key) {
+  const entry = FP_ATTEMPTS.get(key) || { count: 0, lockedUntil: null };
+  entry.count += 1;
+  if (entry.count >= 5) entry.lockedUntil = Date.now() + 15 * 60 * 1000;
+  FP_ATTEMPTS.set(key, entry);
+}
+function clearForgotPasswordAttempts(key) {
+  FP_ATTEMPTS.delete(key);
+}
+
+
 // ── File uploads ──────────────────────────────────────────────────────────────
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -1020,7 +1145,10 @@ function checkLoginLockout(username) {
     else if (secsLeft < 7200)  timeStr = `${Math.ceil(secsLeft / 60)} minute(s)`;
     else if (secsLeft < 172800) timeStr = `${Math.ceil(secsLeft / 3600)} hour(s)`;
     else                        timeStr = `${Math.ceil(secsLeft / 86400)} day(s)`;
-    return `Account locked. Try again in ${timeStr}.`;
+    return {
+      message: `Account locked. Try again in ${timeStr}.`,
+      lockedUntil: entry.lockedUntil, // epoch ms — client uses this to drive a live countdown
+    };
   }
   // Lockout expired — clear it so the next attempt counts fresh
   if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
@@ -1152,8 +1280,8 @@ app.post(
     const normalised = username.trim().toLowerCase();
 
     // Check lockout before touching the DB
-    const lockMsg = checkLoginLockout(normalised);
-    if (lockMsg) return res.status(429).json({ error: lockMsg });
+    const lock = checkLoginLockout(normalised);
+    if (lock) return res.status(429).json({ error: lock.message, locked_until: lock.lockedUntil });
 
     const { data: admin } = await supabase
       .from("admins")
@@ -1214,7 +1342,169 @@ app.post(
       role:         admin.role,
       permissions:  perms,
       totp_enabled: !!admin.totp_enabled,
+      has_recovery_contact: !!admin.email,
+      recovery_prompt_dismissed: !!admin.recovery_prompt_dismissed_at,
     });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION D2 — Admin Forgot Password (username -> OTP via WhatsApp/SMS/Email -> reset)
+// Three-step flow, mirrors the TOTP login pattern. Exempt from CSRF (pre-auth,
+// like /login) and rate-limited per step.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Step 1 — submit username, receive OTP via email
+app.post(
+  "/api/admin/forgot-password/start",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: "Too many requests. Try again later." } }),
+  async (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: "Username is required" });
+    const normalised = username.trim().toLowerCase();
+    const lockKey = `admin:${normalised}`;
+
+    const lock = checkForgotPasswordLockout(lockKey);
+    if (lock) return res.status(429).json({ error: lock.message, locked_until: lock.lockedUntil });
+
+    const { data: admin } = await supabase
+      .from("admins")
+      .select("id, name, email")
+      .eq("username", normalised)
+      .maybeSingle();
+
+    // Always return a generic success-shaped response even if the account
+    // doesn't exist or has no contact info — avoids leaking which usernames
+    // are valid (standard account-enumeration defence).
+    const genericResponse = { success: true, message: "If an account with an email on file exists for this username, a verification code has been sent." };
+
+    if (!admin) {
+      recordForgotPasswordAttempt(lockKey);
+      return res.json(genericResponse);
+    }
+    if (!admin.email) {
+      // Real account but no recovery email on file — tell them plainly so
+      // they know to go to a master admin instead of waiting on a code that
+      // will never arrive. (Trade-off: this confirms the username exists,
+      // unlike the fully generic response above — see setup notes.)
+      return res.json({
+        success: false,
+        reason: "no_contact",
+        error: "Your email is not on file yet. Please contact your site admin for assistance.",
+      });
+    }
+
+    const otp = generateOtp();
+    let sent;
+    try {
+      sent = await dispatchOtp({ email: admin.email, name: admin.name }, otp);
+    } catch (e) {
+      console.error("[admin/forgot-password] OTP dispatch failed:", e.message);
+      return res.status(500).json({ error: "Could not send verification code. Please contact a master admin." });
+    }
+
+    await supabase.from("password_reset_otps").insert([{
+      account_type: "admin",
+      account_id:   admin.id,
+      channel:      sent.channel,
+      destination:  sent.destination,
+      otp_hash:     hashOtp(otp),
+      max_attempts: OTP_MAX_ATTEMPTS,
+      expires_at:   new Date(Date.now() + OTP_TTL_MS).toISOString(),
+      ip_address:   req.ip,
+    }]);
+
+    recordForgotPasswordAttempt(lockKey);
+    res.json({ ...genericResponse, channel: sent.channel, masked_destination: sent.maskedDestination });
+  },
+);
+
+// Step 2 — verify the 6-digit code, receive a short-lived reset token
+app.post(
+  "/api/admin/forgot-password/verify",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { error: "Too many attempts. Try again later." } }),
+  async (req, res) => {
+    const { username, code } = req.body;
+    if (!username || !code) return res.status(400).json({ error: "Username and code are required" });
+    const normalised = username.trim().toLowerCase();
+
+    const { data: admin } = await supabase
+      .from("admins").select("id").eq("username", normalised).maybeSingle();
+    if (!admin) return res.status(400).json({ error: "Invalid or expired code" });
+
+    const { data: otpRow } = await supabase
+      .from("password_reset_otps")
+      .select("*")
+      .eq("account_type", "admin")
+      .eq("account_id", admin.id)
+      .eq("consumed", false)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!otpRow) return res.status(400).json({ error: "Invalid or expired code" });
+    if (new Date(otpRow.expires_at) < new Date()) return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    if (otpRow.attempts >= otpRow.max_attempts) return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
+
+    const valid = hashOtp(code.replace(/\s/g, "")) === otpRow.otp_hash;
+    if (!valid) {
+      await supabase.from("password_reset_otps").update({ attempts: otpRow.attempts + 1 }).eq("id", otpRow.id);
+      return res.status(401).json({ error: "Incorrect code" });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    await supabase.from("password_reset_otps").update({
+      reset_token: resetToken,
+      reset_token_expires_at: new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString(),
+      consumed: true,
+    }).eq("id", otpRow.id);
+
+    res.json({ success: true, reset_token: resetToken });
+  },
+);
+
+// Step 3 — set the new password using the reset token from Step 2
+app.post(
+  "/api/admin/forgot-password/reset",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many attempts. Try again later." } }),
+  async (req, res) => {
+    const { username, reset_token, newPassword } = req.body;
+    if (!username || !reset_token || !newPassword)
+      return res.status(400).json({ error: "Missing required fields" });
+
+    function isStrongPassword(pw) {
+      return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+    }
+    if (!isStrongPassword(newPassword))
+      return res.status(400).json({ error: "Password must be at least 8 characters, include 1 uppercase letter, 1 number, and 1 special character." });
+
+    const normalised = username.trim().toLowerCase();
+    const { data: admin } = await supabase
+      .from("admins").select("id").eq("username", normalised).maybeSingle();
+    if (!admin) return res.status(400).json({ error: "Invalid or expired session. Please start over." });
+
+    const { data: otpRow } = await supabase
+      .from("password_reset_otps")
+      .select("*")
+      .eq("account_type", "admin")
+      .eq("account_id", admin.id)
+      .eq("reset_token", reset_token)
+      .maybeSingle();
+
+    if (!otpRow) return res.status(400).json({ error: "Invalid or expired session. Please start over." });
+    if (new Date(otpRow.reset_token_expires_at) < new Date())
+      return res.status(400).json({ error: "This reset session has expired. Please start over." });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await supabase.from("admins").update({ password_hash: hash }).eq("id", admin.id);
+    // Invalidate the reset token immediately so it can't be reused.
+    await supabase.from("password_reset_otps").update({ reset_token: null }).eq("id", otpRow.id);
+    // Also revoke all existing sessions for this admin — a password reset should log out everywhere.
+    await revokeAllForAdmin(admin.id);
+    clearForgotPasswordAttempts(`admin:${normalised}`);
+
+    logActivity(admin.id, normalised, "password_reset_via_forgot_password", "admin", normalised).catch(() => {});
+    res.json({ success: true, message: "Password updated. Please sign in with your new password." });
   },
 );
 
@@ -1257,12 +1547,70 @@ app.post("/api/admin/change-password", authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION D3 — Admin recovery contact info (email / phone) — self-service, instant
+// Every admin (including masters) can set their own recovery contact info.
+// This is what forgot-password uses to decide WhatsApp/SMS vs email.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/contact-info — fetch your own current contact info
+app.get("/api/admin/contact-info", authMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("admins")
+    .select("email, phone, recovery_prompt_dismissed_at")
+    .eq("id", req.admin.id)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || { email: null, phone: null });
+});
+
+// PUT /api/admin/contact-info
+app.put("/api/admin/contact-info", authMiddleware, async (req, res) => {
+  const { email, phone } = req.body;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const updates = {};
+  if (email !== undefined) {
+    const v = (email || "").trim();
+    if (v && !EMAIL_RE.test(v)) return res.status(400).json({ error: "Invalid email address" });
+    updates.email = v || null;
+  }
+  if (phone !== undefined) {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (phone && digits.length < 10) return res.status(400).json({ error: "Invalid phone number" });
+    updates.phone = phone ? phone.trim() : null;
+  }
+  if (!Object.keys(updates).length) return res.status(400).json({ error: "Nothing to update" });
+
+  const { data: current } = await supabase.from("admins").select("email,phone").eq("id", req.admin.id).maybeSingle();
+  const willHaveEmail = updates.email !== undefined ? updates.email : current?.email;
+  if (!willHaveEmail) {
+    return res.status(400).json({ error: "Please provide an email for account recovery." });
+  }
+
+  const { error } = await supabase.from("admins").update(updates).eq("id", req.admin.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  logActivity(req.admin.id, req.admin.name, "contact_info_updated", "admin", req.admin.username).catch(() => {});
+  res.json({ success: true });
+});
+
+// POST /api/admin/contact-info/dismiss-prompt
+app.post("/api/admin/contact-info/dismiss-prompt", authMiddleware, async (req, res) => {
+  await supabase.from("admins")
+    .update({ recovery_prompt_dismissed_at: new Date().toISOString() })
+    .eq("id", req.admin.id);
+  res.json({ success: true });
+});
+
+
 // Protect all admin and master write routes.
 // /login and /refresh are exempt — login uses rate-limit+bcrypt, refresh uses httpOnly cookie.
+// /forgot-password/* is exempt — it's pre-auth by definition (the whole point is the
+// user doesn't have a valid session), and is independently rate-limited + OTP-protected.
 // When mounted at /api/admin, req.path is the remainder e.g. "/login", "/refresh".
 function csrfProtectAdmin(req, res, next) {
-  // login and refresh have their own protections — exempt from CSRF
-  if (req.path.startsWith("/login") || req.path.startsWith("/refresh")) return next();
+  if (req.path.startsWith("/login") || req.path.startsWith("/refresh") || req.path.startsWith("/forgot-password")) return next();
   return csrfProtect(req, res, next);
 }
 app.use("/api/admin", csrfProtectAdmin);
@@ -1454,11 +1802,23 @@ app.get("/api/master/admins", masterMiddleware, async (req, res) => {
 });
 
 app.post("/api/master/admins", masterMiddleware, async (req, res) => {
-  const { name, username, password, permissions } = req.body;
+  const { name, username, password, permissions, email, phone } = req.body;
   if (!name || !username || !password)
     return res
       .status(400)
       .json({ error: "Name, username and password required" });
+  // Recovery email is required for NEW admins (existing admins are untouched —
+  // they get a soft in-app prompt to add theirs instead). Phone is still
+  // collected but is no longer used for forgot-password (Twilio removed).
+  const emailTrim = (email || "").trim();
+  const phoneTrim = (phone || "").trim();
+  if (!emailTrim)
+    return res.status(400).json({ error: "Email is required (used for password recovery)." });
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_RE.test(emailTrim))
+    return res.status(400).json({ error: "Invalid email address" });
+  if (phoneTrim && phoneTrim.replace(/\D/g, "").length < 10)
+    return res.status(400).json({ error: "Invalid phone number" });
   // v1.17.9: Enforce complexity for admin creation too
   const isStrong = (pw) => pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
   if (!isStrong(password))
@@ -1476,9 +1836,11 @@ app.post("/api/master/admins", masterMiddleware, async (req, res) => {
         password_hash: hash,
         role: "admin",
         permissions: JSON.stringify(permsArr),
+        email: emailTrim || null,
+        phone: phoneTrim || null,
       },
     ])
-    .select("id,name,username,role,permissions,created_at")
+    .select("id,name,username,role,permissions,email,phone,created_at")
     .single();
   if (error)
     return res.status(400).json({
@@ -2578,10 +2940,23 @@ app.post(
   requireSection("members"),
   upload.single("photo"),
   async (req, res) => {
-    const { name, role, batch, bio, sort_order, is_past, domain, special_tag } =
+    const { name, role, batch, bio, sort_order, is_past, domain, special_tag, email, mobile } =
       req.body;
     if (!name || !name.trim())
       return res.status(400).json({ error: "Name is required" });
+
+    // New members must have a recovery email — existing members are
+    // untouched, this only gates fresh creation. Mobile is still collected
+    // but no longer used for forgot-password (Twilio removed).
+    const emailTrim = (email || "").trim();
+    const mobileTrim = (mobile || "").trim();
+    if (!emailTrim)
+      return res.status(400).json({ error: "Email is required (used for account recovery)." });
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!EMAIL_RE.test(emailTrim))
+      return res.status(400).json({ error: "Invalid email address" });
+    if (mobileTrim && mobileTrim.replace(/\D/g, "").length < 10)
+      return res.status(400).json({ error: "Invalid phone number" });
 
     // ── Duplicate guard: block members with same name (case-insensitive) ──────
     const { data: existing } = await supabase
@@ -2608,6 +2983,8 @@ app.post(
           special_tag: special_tag || null,
           sort_order: parseInt(sort_order) || 99,
           is_past: is_past === "true",
+          email: emailTrim || null,
+          mobile: mobileTrim || null,
         },
       ])
       .select()
@@ -2624,7 +3001,7 @@ app.put(
   requireSection("members"),
   upload.single("photo"),
   async (req, res) => {
-    const { name, role, batch, bio, sort_order, is_past, domain, special_tag } =
+    const { name, role, batch, bio, sort_order, is_past, domain, special_tag, email, mobile } =
       req.body;
     if (!name || !name.trim())
       return res.status(400).json({ error: "Name is required" });
@@ -2638,6 +3015,19 @@ app.put(
       sort_order: parseInt(sort_order) || 99,
       is_past: is_past === "true" || is_past === true,
     };
+    // Email/phone are optional on edit (existing members aren't forced to backfill),
+    // but validate format if the admin does supply them.
+    if (email !== undefined) {
+      const emailTrim = (email || "").trim();
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailTrim && !EMAIL_RE.test(emailTrim)) return res.status(400).json({ error: "Invalid email address" });
+      updates.email = emailTrim || null;
+    }
+    if (mobile !== undefined) {
+      const mobileTrim = (mobile || "").trim();
+      if (mobileTrim && mobileTrim.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Invalid phone number" });
+      updates.mobile = mobileTrim || null;
+    }
     if (req.file) updates.photo = await uploadImage(req.file, "members");
     const { data, error } = await supabase
       .from("members")
@@ -8480,7 +8870,10 @@ function checkMemberLockout(username) {
     const timeStr = secsLeft < 120 ? `${secsLeft} second(s)` :
                     secsLeft < 7200 ? `${Math.ceil(secsLeft/60)} minute(s)` :
                     `${Math.ceil(secsLeft/3600)} hour(s)`;
-    return `Account locked. Try again in ${timeStr}.`;
+    return {
+      message: `Account locked. Try again in ${timeStr}.`,
+      lockedUntil: entry.lockedUntil, // epoch ms — client uses this to drive a live countdown
+    };
   }
   if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
     MEMBER_LOGIN_ATTEMPTS.delete(username);
@@ -8639,7 +9032,7 @@ async function sendMemberCredentialsEmail({ toEmail, toName, username, tempPassw
 // ─────────────────────────────────────────────────────────────────────────────
 
 function csrfProtectMember(req, res, next) {
-  if (req.path.startsWith("/login") || req.path.startsWith("/refresh")) return next();
+  if (req.path.startsWith("/login") || req.path.startsWith("/refresh") || req.path.startsWith("/forgot-password")) return next();
   return csrfProtect(req, res, next);
 }
 app.use("/api/member", csrfProtectMember);
@@ -8671,12 +9064,12 @@ app.post(
 
     const normalised = username.trim().toLowerCase();
 
-    const lockMsg = checkMemberLockout(normalised);
-    if (lockMsg) return res.status(429).json({ error: lockMsg });
+    const lock = checkMemberLockout(normalised);
+    if (lock) return res.status(429).json({ error: lock.message, locked_until: lock.lockedUntil });
 
     const { data: account } = await supabase
       .from("member_accounts")
-      .select("*, members(id, name, role, batch, domain, photo)")
+      .select("*, members(id, name, role, batch, domain, photo, email, mobile)")
       .eq("username", normalised)
       .maybeSingle();
 
@@ -8734,7 +9127,165 @@ app.post(
       must_change_password: account.must_change_password,
       totp_enabled: account.totp_enabled,
       member: account.members,
+      has_recovery_contact: !!account.members?.email,
+      recovery_prompt_dismissed: !!account.recovery_prompt_dismissed_at,
     });
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-11b — Member Forgot Password (username -> OTP via WhatsApp/SMS/Email -> reset)
+// Mirrors the admin forgot-password flow exactly. Pre-auth, so it's defined
+// outside memberAuthMiddleware and is independently rate-limited.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Step 1 — submit username, receive OTP via email
+app.post(
+  "/api/member/forgot-password/start",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: "Too many requests. Try again later." } }),
+  async (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: "Username is required" });
+    const normalised = username.trim().toLowerCase();
+    const lockKey = `member:${normalised}`;
+
+    const lock = checkForgotPasswordLockout(lockKey);
+    if (lock) return res.status(429).json({ error: lock.message, locked_until: lock.lockedUntil });
+
+    const { data: account } = await supabase
+      .from("member_accounts")
+      .select("id, account_status, members(name, email, mobile)")
+      .eq("username", normalised)
+      .maybeSingle();
+
+    const genericResponse = { success: true, message: "If an account with an email on file exists for this username, a verification code has been sent." };
+
+    if (!account || account.account_status === "disabled") {
+      recordForgotPasswordAttempt(lockKey);
+      return res.json(genericResponse);
+    }
+    const member = account.members || {};
+    if (!member.email) {
+      // Real account but no recovery email on file — tell them plainly so
+      // they know to go to an admin instead of waiting on a code that will
+      // never arrive. (Trade-off: this confirms the username exists, unlike
+      // the fully generic response above — see setup notes.)
+      return res.json({
+        success: false,
+        reason: "no_contact",
+        error: "Your email is not on file yet. Please contact your site admin for assistance.",
+      });
+    }
+
+    const otp = generateOtp();
+    let sent;
+    try {
+      sent = await dispatchOtp({ email: member.email, name: member.name }, otp);
+    } catch (e) {
+      console.error("[member/forgot-password] OTP dispatch failed:", e.message);
+      return res.status(500).json({ error: "Could not send verification code. Please contact an admin." });
+    }
+
+    await supabase.from("password_reset_otps").insert([{
+      account_type: "member",
+      account_id:   account.id,
+      channel:      sent.channel,
+      destination:  sent.destination,
+      otp_hash:     hashOtp(otp),
+      max_attempts: OTP_MAX_ATTEMPTS,
+      expires_at:   new Date(Date.now() + OTP_TTL_MS).toISOString(),
+      ip_address:   req.ip,
+    }]);
+
+    recordForgotPasswordAttempt(lockKey);
+    res.json({ ...genericResponse, channel: sent.channel, masked_destination: sent.maskedDestination });
+  },
+);
+
+// Step 2 — verify the 6-digit code, receive a short-lived reset token
+app.post(
+  "/api/member/forgot-password/verify",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { error: "Too many attempts. Try again later." } }),
+  async (req, res) => {
+    const { username, code } = req.body;
+    if (!username || !code) return res.status(400).json({ error: "Username and code are required" });
+    const normalised = username.trim().toLowerCase();
+
+    const { data: account } = await supabase
+      .from("member_accounts").select("id").eq("username", normalised).maybeSingle();
+    if (!account) return res.status(400).json({ error: "Invalid or expired code" });
+
+    const { data: otpRow } = await supabase
+      .from("password_reset_otps")
+      .select("*")
+      .eq("account_type", "member")
+      .eq("account_id", account.id)
+      .eq("consumed", false)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!otpRow) return res.status(400).json({ error: "Invalid or expired code" });
+    if (new Date(otpRow.expires_at) < new Date()) return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    if (otpRow.attempts >= otpRow.max_attempts) return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
+
+    const valid = hashOtp(code.replace(/\s/g, "")) === otpRow.otp_hash;
+    if (!valid) {
+      await supabase.from("password_reset_otps").update({ attempts: otpRow.attempts + 1 }).eq("id", otpRow.id);
+      return res.status(401).json({ error: "Incorrect code" });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    await supabase.from("password_reset_otps").update({
+      reset_token: resetToken,
+      reset_token_expires_at: new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString(),
+      consumed: true,
+    }).eq("id", otpRow.id);
+
+    res.json({ success: true, reset_token: resetToken });
+  },
+);
+
+// Step 3 — set the new password using the reset token from Step 2
+app.post(
+  "/api/member/forgot-password/reset",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many attempts. Try again later." } }),
+  async (req, res) => {
+    const { username, reset_token, newPassword } = req.body;
+    if (!username || !reset_token || !newPassword)
+      return res.status(400).json({ error: "Missing required fields" });
+
+    if (!isStrongMemberPassword(newPassword))
+      return res.status(400).json({ error: "Password must be ≥8 chars, include 1 uppercase, 1 number, 1 special character." });
+
+    const normalised = username.trim().toLowerCase();
+    const { data: account } = await supabase
+      .from("member_accounts").select("id, member_id").eq("username", normalised).maybeSingle();
+    if (!account) return res.status(400).json({ error: "Invalid or expired session. Please start over." });
+
+    const { data: otpRow } = await supabase
+      .from("password_reset_otps")
+      .select("*")
+      .eq("account_type", "member")
+      .eq("account_id", account.id)
+      .eq("reset_token", reset_token)
+      .maybeSingle();
+
+    if (!otpRow) return res.status(400).json({ error: "Invalid or expired session. Please start over." });
+    if (new Date(otpRow.reset_token_expires_at) < new Date())
+      return res.status(400).json({ error: "This reset session has expired. Please start over." });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await supabase.from("member_accounts")
+      .update({ password_hash: hash, must_change_password: false, login_failures: 0, locked_until: null })
+      .eq("id", account.id);
+    await supabase.from("password_reset_otps").update({ reset_token: null }).eq("id", otpRow.id);
+    // Revoke all existing sessions — a password reset should log out everywhere.
+    await revokeAllMemberRefreshTokens(account.id);
+    clearForgotPasswordAttempts(`member:${normalised}`);
+
+    await logMemberActivity(account.id, account.member_id, "password_reset_via_forgot_password", null, req.ip);
+    res.json({ success: true, message: "Password updated. Please sign in with your new password." });
   },
 );
 
@@ -8999,6 +9550,61 @@ app.get("/api/member/profile/pending-changes", memberAuthMiddleware, async (req,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-14b — Recovery contact info (email / mobile) — INSTANT, no approval
+// Unlike the rest of the profile, email/mobile are security/recovery fields,
+// not public-facing profile fields — so they apply immediately rather than
+// going through member_profile_changes moderation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /api/member/contact-info
+app.put("/api/member/contact-info", memberAuthMiddleware, async (req, res) => {
+  const { email, mobile } = req.body;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const updates = {};
+  if (email !== undefined) {
+    const v = (email || "").trim();
+    if (v && !EMAIL_RE.test(v)) return res.status(400).json({ error: "Invalid email address" });
+    updates.email = v || null;
+  }
+  if (mobile !== undefined) {
+    const digits = (mobile || "").replace(/\D/g, "");
+    if (mobile && digits.length < 10) return res.status(400).json({ error: "Invalid phone number" });
+    updates.mobile = mobile ? mobile.trim() : null;
+  }
+  if (!Object.keys(updates).length) return res.status(400).json({ error: "Nothing to update" });
+  if (updates.email !== undefined) {
+    // Only check when email is actually being touched — re-check against
+    // current DB state in case it would end up empty.
+    const willHaveEmail = updates.email;
+    if (!willHaveEmail) {
+      return res.status(400).json({ error: "Please provide an email for account recovery." });
+    }
+  } else {
+    const { data: current } = await supabase.from("members").select("email").eq("id", req.member.memberId).maybeSingle();
+    if (!current?.email) {
+      return res.status(400).json({ error: "Please provide an email for account recovery." });
+    }
+  }
+
+  updates.updated_at = new Date().toISOString();
+  const { error } = await supabase.from("members").update(updates).eq("id", req.member.memberId);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  memInvalidate("members:list");
+  await logMemberActivity(req.member.id, req.member.memberId, "contact_info_updated", { fields: Object.keys(updates) }, req.ip);
+  res.json({ success: true });
+});
+
+// POST /api/member/contact-info/dismiss-prompt — "remind me later" on the recovery banner
+app.post("/api/member/contact-info/dismiss-prompt", memberAuthMiddleware, async (req, res) => {
+  await supabase.from("member_accounts")
+    .update({ recovery_prompt_dismissed_at: new Date().toISOString() })
+    .eq("id", req.member.id);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION MA-15 — Member Sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -9146,13 +9752,40 @@ app.put(
 app.post("/api/admin/members/:id/create-account", requireSection("members"), async (req, res) => {
   const memberId = req.params.id;
   const { data: member } = await supabase
-    .from("members").select("id, name, roll_no, email").eq("id", memberId).maybeSingle();
+    .from("members").select("id, name, roll_no, email, mobile").eq("id", memberId).maybeSingle();
   if (!member) return res.status(404).json({ error: "Member not found" });
 
   // Check if account already exists
   const { data: existing } = await supabase
     .from("member_accounts").select("id, username").eq("member_id", memberId).maybeSingle();
   if (existing) return res.status(409).json({ error: "Account already exists", username: existing.username });
+
+  // Recovery email is required before an account can be opened — that's
+  // what powers forgot-password (Twilio/mobile removed). Admin can supply
+  // it inline here if the member record doesn't already have one. Mobile
+  // is still collected/stored but no longer gates account creation.
+  const { email: suppliedEmail, mobile: suppliedMobile } = req.body || {};
+  const finalEmail  = (suppliedEmail  || member.email  || "").trim();
+  const finalMobile = (suppliedMobile || member.mobile || "").trim();
+  if (!finalEmail) {
+    return res.status(400).json({
+      error: "This member needs an email on file before an account can be created.",
+      needs_contact_info: true,
+    });
+  }
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (finalEmail && !EMAIL_RE.test(finalEmail)) return res.status(400).json({ error: "Invalid email address" });
+  if (finalMobile && finalMobile.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Invalid phone number" });
+
+  // Persist any newly-supplied contact info onto the member record itself.
+  if ((suppliedEmail && suppliedEmail.trim() !== member.email) || (suppliedMobile && suppliedMobile.trim() !== member.mobile)) {
+    await supabase.from("members").update({
+      email:  finalEmail  || null,
+      mobile: finalMobile || null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", memberId);
+    memInvalidate("members:list");
+  }
 
   const username  = await generateMemberUsername(member.name, member.roll_no);
   const tempPw    = "Kfs@2026";
@@ -9165,7 +9798,7 @@ app.post("/api/admin/members/:id/create-account", requireSection("members"), asy
   if (error) return res.status(500).json({ error: "Internal server error" });
 
   logActivity(req.admin.id, req.admin.name, "create", "member_account", username).catch(() => {});
-  res.json({ success: true, username, tempPassword: tempPw, accountId: account.id, email: member.email || null });
+  res.json({ success: true, username, tempPassword: tempPw, accountId: account.id, email: finalEmail || null });
 });
 
 // POST /api/admin/members/:id/send-credentials — email credentials to member

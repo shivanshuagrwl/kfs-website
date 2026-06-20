@@ -1784,6 +1784,64 @@ function renderTestimonials(testimonials) {
   track.addEventListener('touchend',()=>{isDragging=false;setTimeout(()=>paused=false,700);});
 }
 
+// ── Live lockout countdown ───────────────────────────────────────────────────
+// Generic helper for any "locked out, try again in X" UI. Ticks every second,
+// updates the error text + a depleting progress bar, disables the action
+// button while locked, and auto re-enables everything the instant it expires
+// (no page refresh needed). Used by admin login, member login, and both
+// forgot-password username-lockout screens.
+const _activeLockoutTimers = {}; // keyed by errEl id, so concurrent screens don't collide
+
+function startLockoutCountdown({ errId, barTrackId, barFillId, btn, btnIdleText, lockedUntil, baseMessage }) {
+  const errEl = document.getElementById(errId);
+  const barTrack = barTrackId ? document.getElementById(barTrackId) : null;
+  const barFill = barFillId ? document.getElementById(barFillId) : null;
+
+  // Clear any existing timer for this element so re-triggering doesn't stack intervals
+  if (_activeLockoutTimers[errId]) clearInterval(_activeLockoutTimers[errId]);
+
+  const totalMs = Math.max(lockedUntil - Date.now(), 0);
+  if (totalMs <= 0) return; // already expired, nothing to animate
+
+  function formatRemaining(ms) {
+    const totalSecs = Math.max(Math.ceil(ms / 1000), 0);
+    if (totalSecs < 3600) {
+      const m = Math.floor(totalSecs / 60);
+      const s = totalSecs % 60;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+    if (totalSecs < 86400) {
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      return `${h}h ${m}m`;
+    }
+    const d = Math.floor(totalSecs / 86400);
+    const h = Math.floor((totalSecs % 86400) / 3600);
+    return `${d}d ${h}h`;
+  }
+
+  function tick() {
+    const msLeft = lockedUntil - Date.now();
+    if (msLeft <= 0) {
+      clearInterval(_activeLockoutTimers[errId]);
+      delete _activeLockoutTimers[errId];
+      if (errEl) errEl.textContent = '';
+      if (barTrack) barTrack.classList.remove('show');
+      if (btn) { btn.disabled = false; if (btnIdleText) btn.textContent = btnIdleText; }
+      return;
+    }
+    if (errEl) errEl.textContent = `${baseMessage} ${formatRemaining(msLeft)}`;
+    if (barTrack && barFill) {
+      barTrack.classList.add('show');
+      barFill.style.width = `${Math.max((msLeft / totalMs) * 100, 0)}%`;
+    }
+  }
+
+  if (btn) btn.disabled = true;
+  tick(); // paint immediately, don't wait a full second for the first frame
+  _activeLockoutTimers[errId] = setInterval(tick, 1000);
+}
+
 // ── ADMIN ──
 async function adminLogin() {
   const username = document.getElementById('admin-username').value.trim();
@@ -1791,6 +1849,7 @@ async function adminLogin() {
   const err = document.getElementById('login-error');
   const totpStep = document.getElementById('totp-step');
   const totpVal = document.getElementById('admin-totp')?.value?.replace(/\s/g,'');
+  const signInBtn = document.querySelector('[data-action="adminLogin"]');
   if (!username || !password) { err.textContent = 'Enter username and password.'; return; }
   const body = { username, password };
   if (totpVal) body.totp_code = totpVal;
@@ -1799,6 +1858,18 @@ async function adminLogin() {
     body: JSON.stringify(body)
   });
   const data = await res.json();
+  if (res.status === 429 && data.locked_until) {
+    startLockoutCountdown({
+      errId: 'login-error',
+      barTrackId: 'login-lockout-bar-track',
+      barFillId: 'login-lockout-bar-fill',
+      btn: signInBtn,
+      btnIdleText: 'Sign In',
+      lockedUntil: data.locked_until,
+      baseMessage: 'Account locked. Try again in',
+    });
+    return;
+  }
   if (data.require_totp) {
     // Password OK but 2FA needed — show TOTP input
     if (totpStep) totpStep.style.display = 'block';
@@ -1818,6 +1889,8 @@ async function adminLogin() {
     localStorage.setItem('kfs_last_login', new Date().toISOString());
     // Store full admin info for 2FA section
     window._currentAdmin = { totp_enabled: !!data.totp_enabled, role: data.role };
+    window._adminHasRecoveryContact = !!data.has_recovery_contact;
+    window._adminRecoveryPromptDismissed = !!data.recovery_prompt_dismissed;
     err.textContent = '';
     if (totpStep) { totpStep.style.display = 'none'; }
     if (document.getElementById('admin-totp')) document.getElementById('admin-totp').value = '';
@@ -1842,11 +1915,263 @@ function adminLogout() {
   currentAdminRole = 'admin';
   currentAdminName = '';
   currentAdminPermissions = [];
+  window._adminHasRecoveryContact = false;
+  window._adminRecoveryPromptDismissed = false;
   // kfs_token was never in localStorage — only clear UI state keys
   ['kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
   document.body.classList.remove('kfs-admin-view');
   navigate('home');
 }
+
+// ── Admin Forgot Password ───────────────────────────────────────────────────
+// Three steps: username -> OTP (email) -> new password.
+
+let _adminFpUsername = null, _adminFpResetToken = null, _adminFpResendTimer = null;
+
+function _adminFpShowBox(id) {
+  ['admin-login-box','admin-fp-username-box','admin-fp-otp-box','admin-fp-reset-box','admin-fp-success-box'].forEach(b => {
+    const el = document.getElementById(b);
+    if (el) el.style.display = b === id ? 'block' : 'none';
+  });
+}
+
+function adminForgotPasswordStart() {
+  _adminFpUsername = null; _adminFpResetToken = null;
+  const u = document.getElementById('admin-fp-username'); if (u) u.value = '';
+  const o = document.getElementById('admin-fp-otp'); if (o) o.value = '';
+  const errEl = document.getElementById('admin-fp-username-error'); if (errEl) errEl.textContent = '';
+  _adminFpShowBox('admin-fp-username-box');
+  setTimeout(() => document.getElementById('admin-fp-username')?.focus(), 50);
+}
+function adminFpStart() { adminForgotPasswordStart(); }
+function adminFpBackToLogin() { _adminFpShowBox('admin-login-box'); }
+
+async function adminFpSubmitUsername() {
+  const username = document.getElementById('admin-fp-username').value.trim();
+  const errEl = document.getElementById('admin-fp-username-error');
+  const sendBtn = document.querySelector('[data-action="adminFpSubmitUsername"]');
+  if (!username) { errEl.textContent = 'Please enter your username'; return; }
+  errEl.textContent = '';
+  try {
+    const r = await fetch('/api/admin/forgot-password/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }), credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { errEl.textContent = 'Server error — please try again'; return; }
+    if (r.status === 429 && d.locked_until) {
+      startLockoutCountdown({
+        errId: 'admin-fp-username-error',
+        barTrackId: 'admin-fp-username-lockout-bar-track',
+        barFillId: 'admin-fp-username-lockout-bar-fill',
+        btn: sendBtn,
+        btnIdleText: 'Send code',
+        lockedUntil: d.locked_until,
+        baseMessage: 'Too many attempts. Try again in',
+      });
+      return;
+    }
+    if (!r.ok) { errEl.textContent = d.error || 'Something went wrong'; return; }
+    if (d.reason === 'no_contact') {
+      errEl.textContent = d.error || 'Your email is not on file yet. Please contact your site admin for assistance.';
+      return;
+    }
+
+    _adminFpUsername = username;
+    _adminFpSetChannelUI(d.channel, d.masked_destination);
+    _adminFpShowBox('admin-fp-otp-box');
+    _adminFpStartResendCooldown();
+    setTimeout(() => document.getElementById('admin-fp-otp')?.focus(), 50);
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not connect to server';
+  }
+}
+
+function _adminFpSetChannelUI(channel, maskedDestination) {
+  const badge = document.getElementById('admin-fp-channel-badge');
+  const text  = document.getElementById('admin-fp-channel-text');
+  const sub   = document.getElementById('admin-fp-otp-sub');
+  if (!channel) {
+    if (badge) badge.style.display = 'none';
+    if (sub) sub.textContent = "If we found an email on file, a 6-digit code is on its way.";
+    return;
+  }
+  if (sub) sub.textContent = `We've sent a 6-digit code to ${maskedDestination || 'your email on file'}.`;
+  if (badge && text) { text.textContent = 'Sent via email'; badge.style.display = 'inline-flex'; }
+}
+
+async function adminFpSubmitOtp() {
+  const code = document.getElementById('admin-fp-otp').value.trim();
+  const errEl = document.getElementById('admin-fp-otp-error');
+  if (!code || code.length !== 6) { errEl.textContent = 'Enter the 6-digit code'; return; }
+  errEl.textContent = '';
+  try {
+    const r = await fetch('/api/admin/forgot-password/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: _adminFpUsername, code }), credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { errEl.textContent = 'Server error — please try again'; return; }
+    if (!r.ok) { errEl.textContent = d.error || 'Incorrect code'; return; }
+
+    _adminFpResetToken = d.reset_token;
+    const np = document.getElementById('admin-fp-new-password'); if (np) np.value = '';
+    const cp = document.getElementById('admin-fp-confirm-password'); if (cp) cp.value = '';
+    _adminFpUpdateStrength('');
+    _adminFpShowBox('admin-fp-reset-box');
+    setTimeout(() => document.getElementById('admin-fp-new-password')?.focus(), 50);
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not connect to server';
+  }
+}
+
+function _adminFpStartResendCooldown() {
+  const btn = document.getElementById('admin-fp-resend-btn');
+  if (!btn) return;
+  let seconds = 30;
+  btn.disabled = true;
+  btn.textContent = `Resend code (${seconds}s)`;
+  clearInterval(_adminFpResendTimer);
+  _adminFpResendTimer = setInterval(() => {
+    seconds -= 1;
+    if (seconds <= 0) {
+      clearInterval(_adminFpResendTimer);
+      btn.disabled = false;
+      btn.textContent = 'Resend code';
+    } else {
+      btn.textContent = `Resend code (${seconds}s)`;
+    }
+  }, 1000);
+}
+
+async function adminFpResendOtp() {
+  if (!_adminFpUsername) return;
+  const btn = document.getElementById('admin-fp-resend-btn');
+  if (btn.disabled) return;
+  const errEl = document.getElementById('admin-fp-otp-error');
+  errEl.textContent = '';
+  try {
+    const r = await fetch('/api/admin/forgot-password/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: _adminFpUsername }), credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (d && r.ok && d.reason === 'no_contact') {
+      errEl.style.color = '';
+      errEl.textContent = d.error || 'Your email is not on file yet. Please contact your site admin for assistance.';
+    } else if (d && r.ok) {
+      _adminFpSetChannelUI(d.channel, d.masked_destination);
+      errEl.style.color = '#22c55e';
+      errEl.textContent = 'A new code has been sent.';
+      _adminFpStartResendCooldown();
+    } else {
+      errEl.style.color = '';
+      errEl.textContent = d?.error || 'Could not resend code';
+    }
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not connect to server';
+  }
+}
+
+function _adminFpUpdateStrength(pw) {
+  const bars = document.querySelectorAll('#admin-fp-pw-strength .pw-strength-admin-bar');
+  if (!bars.length) return;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const level = score <= 1 ? 'weak' : score <= 3 ? 'medium' : 'strong';
+  const litCount = score <= 1 ? 1 : score <= 3 ? 2 : 3;
+  bars.forEach((bar, i) => { bar.className = 'pw-strength-admin-bar' + (i < litCount && pw.length ? ` ${level}` : ''); });
+}
+
+async function adminFpSubmitReset() {
+  const newPw = document.getElementById('admin-fp-new-password').value;
+  const confirmPw = document.getElementById('admin-fp-confirm-password').value;
+  const errEl = document.getElementById('admin-fp-reset-error');
+  errEl.textContent = '';
+  if (newPw !== confirmPw) { errEl.textContent = 'Passwords do not match'; return; }
+  const isStrong = newPw.length >= 8 && /[A-Z]/.test(newPw) && /[0-9]/.test(newPw) && /[^A-Za-z0-9]/.test(newPw);
+  if (!isStrong) { errEl.textContent = 'Password must be ≥8 chars, with 1 uppercase, 1 number, 1 special character'; return; }
+
+  try {
+    const r = await fetch('/api/admin/forgot-password/reset', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: _adminFpUsername, reset_token: _adminFpResetToken, newPassword: newPw }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { errEl.textContent = 'Server error — please try again'; return; }
+    if (!r.ok) { errEl.textContent = d.error || 'Could not update password'; return; }
+
+    _adminFpUsername = null; _adminFpResetToken = null;
+    _adminFpShowBox('admin-fp-success-box');
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not connect to server';
+  }
+}
+
+// ── Admin recovery contact info (banner + modal) ────────────────────────────
+
+function dismissAdminRecoveryBanner() {
+  const banner = document.getElementById('admin-recovery-banner');
+  if (banner) banner.classList.remove('show');
+  window._adminRecoveryPromptDismissed = true;
+  fetch('/api/admin/contact-info/dismiss-prompt', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
+    credentials: 'include',
+  }).catch(() => {});
+}
+
+async function openAdminContactInfoModal() {
+  const modal = document.getElementById('admin-contact-info-modal');
+  const errEl = document.getElementById('admin-ci-error');
+  const okEl  = document.getElementById('admin-ci-ok');
+  if (errEl) errEl.textContent = '';
+  if (okEl) okEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/admin/contact-info', {
+      headers: { 'Authorization': 'Bearer ' + adminToken }, credentials: 'include',
+    });
+    const d = await r.json().catch(() => ({}));
+    document.getElementById('admin-ci-email').value = d.email || '';
+    document.getElementById('admin-ci-phone').value = d.phone || '';
+  } catch (e) { /* non-fatal — leave fields blank */ }
+  if (modal) modal.classList.add('open');
+}
+function closeAdminContactInfoModal() {
+  document.getElementById('admin-contact-info-modal')?.classList.remove('open');
+}
+
+async function saveAdminContactInfo() {
+  const email = document.getElementById('admin-ci-email').value.trim();
+  const phone = document.getElementById('admin-ci-phone').value.trim();
+  const errEl = document.getElementById('admin-ci-error');
+  const okEl  = document.getElementById('admin-ci-ok');
+  errEl.textContent = ''; okEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'Please provide an email for account recovery'; return; }
+  try {
+    const r = await fetch('/api/admin/contact-info', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ email, phone }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) { errEl.textContent = (d && d.error) || 'Could not save contact info'; return; }
+    okEl.style.display = 'block';
+    okEl.textContent = 'Saved! Your recovery email is now up to date.';
+    window._adminHasRecoveryContact = !!email;
+    const banner = document.getElementById('admin-recovery-banner');
+    if (banner) banner.classList.remove('show');
+    setTimeout(closeAdminContactInfoModal, 900);
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not connect to server';
+  }
+}
+
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
@@ -1860,6 +2185,14 @@ async function loadDashboard() {
   const subEl   = document.getElementById('dashboard-subtitle');
   if (greetEl) greetEl.textContent = greet + (currentAdminName ? ', ' + currentAdminName.split(' ')[0] : '');
   if (subEl)   subEl.textContent   = "Here's what's happening at KFS";
+
+  // Recovery contact banner — show only if admin has no email on file
+  // and hasn't dismissed the prompt.
+  const recoveryBanner = document.getElementById('admin-recovery-banner');
+  if (recoveryBanner) {
+    const shouldShow = !window._adminHasRecoveryContact && !window._adminRecoveryPromptDismissed;
+    recoveryBanner.classList.toggle('show', shouldShow);
+  }
 
   // Hide cards the sub-admin can't access
   const cardMap = { blogs:'db-stat-blogs', events:'db-stat-events', members:'db-stat-members', movies:'db-stat-films', analytics:'db-stat-traffic', collaborate:'db-stat-collabs' };
@@ -3112,12 +3445,19 @@ function openMemberModal(m=null) {
   document.getElementById('member-modal-title').textContent = m ? 'Edit Member' : 'Add Member';
   document.getElementById('member-edit-id').value = m?.id||'';
   document.getElementById('member-name').value = m?.name||'';
+  document.getElementById('member-email').value = m?.email||'';
+  document.getElementById('member-mobile').value = m?.mobile||'';
   document.getElementById('member-role').value = m?.role||'President';
   document.getElementById('member-batch').value = m?.batch||'';
   document.getElementById('member-bio').value = m?.bio||'';
   document.getElementById('member-special-tag').value = m?.special_tag||'';
   document.getElementById('member-is-past').checked = m?.is_past||false;
   document.getElementById('member-domain').value = m?.domain||'';
+  // Email is REQUIRED for brand-new members (used for account recovery),
+  // but optional when editing an existing member — we don't force older records to backfill.
+  // Mobile is still collected but no longer satisfies the recovery requirement.
+  const hint = document.getElementById('member-contact-hint');
+  if (hint) hint.style.display = m ? 'none' : 'block';
   autoMemberSort();
   toggleDomainField();
   document.getElementById('member-photo').value='';
@@ -3128,9 +3468,17 @@ function closeMemberModal() { document.getElementById('member-modal').classList.
 async function saveMember() {
   const id = document.getElementById('member-edit-id').value;
   const btn = document.querySelector('#member-modal button[data-action="saveMember"]');
+  const email = document.getElementById('member-email').value.trim();
+  const mobile = document.getElementById('member-mobile').value.trim();
+  if (!id && !email) {
+    alert('Please provide an email for this member — it\'s required for account recovery.');
+    return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const fd = new FormData();
   fd.append('name', document.getElementById('member-name').value);
+  fd.append('email', email);
+  fd.append('mobile', mobile);
   fd.append('role', document.getElementById('member-role').value);
   const _role = document.getElementById('member-role').value;
   fd.append('domain', (_role === 'Lead' || _role === 'Member') ? (document.getElementById('member-domain').value||'') : '');
@@ -4697,6 +5045,8 @@ function openAddAdminModal() {
   document.getElementById('new-admin-name').value = '';
   document.getElementById('new-admin-username').value = '';
   document.getElementById('new-admin-password').value = '';
+  document.getElementById('new-admin-email').value = '';
+  document.getElementById('new-admin-phone').value = '';
   document.getElementById('add-admin-error').textContent = '';
   document.querySelectorAll('.new-admin-perm').forEach(cb => cb.checked = true);
   document.getElementById('add-admin-modal').classList.add('open');
@@ -4710,11 +5060,14 @@ async function saveNewAdmin() {
   const name = document.getElementById('new-admin-name').value.trim();
   const username = document.getElementById('new-admin-username').value.trim().toLowerCase();
   const password = document.getElementById('new-admin-password').value;
+  const email = document.getElementById('new-admin-email').value.trim();
+  const phone = document.getElementById('new-admin-phone').value.trim();
   const permissions = Array.from(document.querySelectorAll('.new-admin-perm:checked')).map(cb => cb.value);
   const errEl = document.getElementById('add-admin-error');
   const btn = document.querySelector('#add-admin-modal .btn-primary');
   if (!name || !username || !password) { errEl.textContent = 'All fields are required.'; return; }
   if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  if (!email) { errEl.textContent = 'Email is required (used for password recovery).'; return; }
   errEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
   try {
@@ -4722,7 +5075,7 @@ async function saveNewAdmin() {
     const rawRes = await fetch('/api/master/admins', {
       method: 'POST', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
-      body: JSON.stringify({ name, username, password, permissions })
+      body: JSON.stringify({ name, username, password, email, phone, permissions })
     });
     const data = await rawRes.json().catch(() => ({}));
     if (rawRes.ok && data.id) {
@@ -4742,7 +5095,7 @@ async function saveNewAdmin() {
         const retry = await fetch('/api/master/admins', {
           method: 'POST', credentials: 'include',
           headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
-          body: JSON.stringify({ name, username, password, permissions })
+          body: JSON.stringify({ name, username, password, email, phone, permissions })
         });
         const retryData = await retry.json().catch(() => ({}));
         if (retry.ok && retryData.id) {
@@ -10744,12 +11097,66 @@ async function loadMemberAccounts() {
   }).join('');
 }
 
+// Small inline prompt used when create-account is blocked because the member
+// has no email on file yet. Returns {email, mobile} or null if cancelled.
+function promptForMemberContactInfo(memberName) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999';
+    overlay.innerHTML = `
+      <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:28px 32px;width:420px;max-width:90vw">
+        <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:#f0f0f0">Add contact info for ${memberName}</p>
+        <p style="margin:0 0 18px;font-size:13px;color:#888">An email is required before an account can be created — it's used for password recovery. Phone is optional.</p>
+        <label style="font-size:11px;letter-spacing:.08em;color:#888;font-weight:600;display:block;margin-bottom:6px">EMAIL</label>
+        <input id="mci-email-input" type="email" placeholder="firstname.lastname@kiit.ac.in"
+          style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;font-size:14px;color:#f0f0f0;outline:none;margin-bottom:14px">
+        <label style="font-size:11px;letter-spacing:.08em;color:#888;font-weight:600;display:block;margin-bottom:6px">PHONE (OPTIONAL)</label>
+        <input id="mci-phone-input" type="tel" placeholder="+91 9XXXXXXXX0"
+          style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;font-size:14px;color:#f0f0f0;outline:none;margin-bottom:8px">
+        <p id="mci-err" style="font-size:12px;color:#e74c3c;min-height:16px;margin:0 0 12px"></p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="mci-cancel" style="background:transparent;border:1px solid #2a2a2a;color:#888;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px">Cancel</button>
+          <button id="mci-ok" style="background:#6366f1;border:none;color:#fff;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:500">Continue</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const emailInput = overlay.querySelector('#mci-email-input');
+    const phoneInput = overlay.querySelector('#mci-phone-input');
+    const errEl = overlay.querySelector('#mci-err');
+    emailInput.focus();
+    const cleanup = () => overlay.remove();
+    overlay.querySelector('#mci-cancel').onclick = () => { cleanup(); resolve(null); };
+    overlay.querySelector('#mci-ok').onclick = () => {
+      const email = emailInput.value.trim();
+      const mobile = phoneInput.value.trim();
+      if (!email) { errEl.textContent = 'Please provide an email.'; return; }
+      cleanup();
+      resolve({ email, mobile });
+    };
+  });
+}
+
 function openCreateMemberAccount(memberId, memberName) {
   showConfirmModal(
     `Create portal account for <strong>${memberName}</strong>?<br><br>A username and temporary password will be generated automatically.`,
     async () => {
-      const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
+      let res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
       if (!res) return;
+
+      if (res.needs_contact_info) {
+        // Member has no email on file yet — collect it inline, then retry once.
+        const contact = await promptForMemberContactInfo(memberName);
+        if (!contact) return; // admin cancelled
+        res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST', contact);
+        if (!res) return;
+        if (res.needs_contact_info || res.error) {
+          showAdminError(res.error || "Could not create account — please add an email from the member's profile and try again.");
+          return;
+        }
+      } else if (res.error) {
+        showAdminError(res.error);
+        return;
+      }
       loadMemberAccounts();
 
       // Show account details and ask whether to send email
@@ -11183,10 +11590,10 @@ async function mpmClear2FA(memberId) {
 }
 
 async function mpmCreateAccount(memberId, memberName) {
-  const res = await apiFetch(`/api/admin/members/${memberId}/create-account`, 'POST');
-  if (!res) return;
   closeMemberPortalModal();
-  loadMemberAccounts();
+  // openCreateMemberAccount handles confirmation, the actual create-account call,
+  // the needs_contact_info gate, and the post-create "send credentials" flow —
+  // calling it directly here avoids creating the account twice.
   openCreateMemberAccount(memberId, memberName);
 }
 

@@ -316,6 +316,20 @@ function wireStaticButtons() {
   on('cp-btn',            'click', handleChangePw);
   on('setup-totp-btn',    'click', verify2FASetup);
 
+  // Forgot password flow
+  on('forgot-password-link', 'click', startForgotPasswordFlow);
+  on('fp-back-to-login-btn', 'click', backToLogin);
+  on('fp-start-btn',         'click', fpSubmitUsername);
+  on('fp-otp-back-btn',      'click', startForgotPasswordFlow);
+  on('fp-verify-btn',        'click', fpSubmitOtp);
+  on('fp-resend-btn',        'click', fpResendOtp);
+  on('fp-reset-btn',         'click', fpSubmitNewPassword);
+  on('fp-done-btn',          'click', backToLogin);
+  const fpNewPw = $id('fp-new-password');
+  if (fpNewPw) fpNewPw.addEventListener('input', () => updatePasswordStrength(fpNewPw.value));
+  const fpOtpInput = $id('fp-otp-input');
+  if (fpOtpInput) fpOtpInput.addEventListener('input', function() { this.value = this.value.replace(/\D/g, '').slice(0, 6); });
+
   // Logout buttons
   on('mobile-logout-btn', 'click', logoutMember);
   on('sidebar-logout-btn','click', logoutMember);
@@ -328,6 +342,14 @@ function wireStaticButtons() {
   // Profile
   on('profile-photo-input', 'change', function() { previewPhoto(this); });
   on('profile-save-btn',    'click',  saveProfile);
+
+  // Recovery contact info banner + modal
+  on('recovery-banner-add-btn',     'click', openContactInfoModal);
+  on('recovery-banner-dismiss-btn', 'click', dismissRecoveryBanner);
+  on('ci-save-btn',                 'click', saveContactInfo);
+  on('ci-cancel-btn',                'click', closeContactInfoModal);
+  const ciOverlay = $id('contact-info-modal-overlay');
+  if (ciOverlay) ciOverlay.addEventListener('click', e => { if (e.target === ciOverlay) closeContactInfoModal(); });
 
   // Movies
   on('new-movie-btn',    'click', () => showMovieForm(null));
@@ -399,9 +421,66 @@ async function loadDashboard() {
   if (hash) history.replaceState(null, '', window.location.pathname);
 }
 
+// ── Live lockout countdown ───────────────────────────────────────────────────
+// Generic helper for any "locked out, try again in X" UI. Ticks every second,
+// updates the error text + a depleting progress bar, disables the action
+// button while locked, and auto re-enables everything the instant it expires
+// (no page refresh needed). Mirrors the admin portal's version.
+const _activeLockoutTimers = {}; // keyed by errEl id, so concurrent screens don't collide
+
+function startLockoutCountdown({ errId, barTrackId, barFillId, btn, btnIdleText, lockedUntil, baseMessage }) {
+  const errEl = $id(errId);
+  const barTrack = barTrackId ? $id(barTrackId) : null;
+  const barFill = barFillId ? $id(barFillId) : null;
+
+  if (_activeLockoutTimers[errId]) clearInterval(_activeLockoutTimers[errId]);
+
+  const totalMs = Math.max(lockedUntil - Date.now(), 0);
+  if (totalMs <= 0) return;
+
+  function formatRemaining(ms) {
+    const totalSecs = Math.max(Math.ceil(ms / 1000), 0);
+    if (totalSecs < 3600) {
+      const m = Math.floor(totalSecs / 60);
+      const s = totalSecs % 60;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+    if (totalSecs < 86400) {
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      return `${h}h ${m}m`;
+    }
+    const d = Math.floor(totalSecs / 86400);
+    const h = Math.floor((totalSecs % 86400) / 3600);
+    return `${d}d ${h}h`;
+  }
+
+  function tick() {
+    const msLeft = lockedUntil - Date.now();
+    if (msLeft <= 0) {
+      clearInterval(_activeLockoutTimers[errId]);
+      delete _activeLockoutTimers[errId];
+      if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+      if (barTrack) barTrack.classList.remove('show');
+      if (btn) { btn.disabled = false; if (btnIdleText) btn.textContent = btnIdleText; }
+      return;
+    }
+    if (errEl) { errEl.textContent = `${baseMessage} ${formatRemaining(msLeft)}`; errEl.style.display = 'block'; errEl.className = 'err-msg'; }
+    if (barTrack && barFill) {
+      barTrack.classList.add('show');
+      barFill.style.width = `${Math.max((msLeft / totalMs) * 100, 0)}%`;
+    }
+  }
+
+  if (btn) btn.disabled = true;
+  tick();
+  _activeLockoutTimers[errId] = setInterval(tick, 1000);
+}
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 let _pendingUsername = null, _pendingPassword = null;
+let _recoveryPromptDismissedThisSession = false;
 
 async function handleLogin() {
   const username = $id('login-username').value.trim();
@@ -413,6 +492,7 @@ async function handleLogin() {
   const btn = $id('login-btn');
   btn.disabled = true; btn.textContent = 'Signing in…';
   hideEl('login-err');
+  let lockedOut = false;
   try {
     const csrfH = await getCsrf();
     const r = await fetch('/api/member/login', {
@@ -423,6 +503,19 @@ async function handleLogin() {
     });
     const d = await r.json().catch(() => null);
     if (!d) { showMsg('login-err', 'Server error — please try again', false); return; }
+    if (r.status === 429 && d.locked_until) {
+      lockedOut = true;
+      startLockoutCountdown({
+        errId: 'login-err',
+        barTrackId: 'login-lockout-bar-track',
+        barFillId: 'login-lockout-bar-fill',
+        btn,
+        btnIdleText: 'Sign in',
+        lockedUntil: d.locked_until,
+        baseMessage: 'Account locked. Try again in',
+      });
+      return;
+    }
     if (!r.ok) { showMsg('login-err', d.error || 'Login failed', false); return; }
 
     if (d.require_totp) {
@@ -433,6 +526,7 @@ async function handleLogin() {
     }
     _token  = d.token;
     _member = d.member;
+    _recoveryPromptDismissedThisSession = !!d.recovery_prompt_dismissed;
     // Persist token + member data so index.html collab gate can read them
     localStorage.setItem('kfs-member-token', d.token);
     localStorage.setItem('kfs-member-data', JSON.stringify(d.member || {}));
@@ -448,8 +542,12 @@ async function handleLogin() {
   } catch (e) {
     showMsg('login-err', e.message || 'Could not connect to server', false);
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Sign in';
+    // Skip resetting the button if a live lockout countdown just took over —
+    // it owns the disabled/text state until it hits 0:00.
+    if (!lockedOut) {
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
   }
 }
 
@@ -470,6 +568,7 @@ async function submitTotp() {
     if (!r.ok) { showMsg('totp-err', d.error || 'Invalid code', false); return; }
     _token  = d.token;
     _member = d.member;
+    _recoveryPromptDismissedThisSession = !!d.recovery_prompt_dismissed;
     localStorage.setItem('kfs-member-token', d.token);
     localStorage.setItem('kfs-member-data', JSON.stringify(d.member || {}));
     window._member = d.member;
@@ -486,10 +585,265 @@ async function submitTotp() {
 function backToLogin() { showStep('login'); }
 
 function showStep(step) {
-  ['login', 'totp', 'change-pw', '2fa-setup'].forEach(s => {
+  ['login', 'totp', 'change-pw', '2fa-setup', 'fp-username', 'fp-otp', 'fp-reset', 'fp-success'].forEach(s => {
     const el = $id(`step-${s}`);
     if (el) el.style.display = s === step ? 'block' : 'none';
   });
+}
+
+// ── Forgot Password ─────────────────────────────────────────────────────────
+// Three steps: username -> OTP (email) -> new password.
+// Mirrors the existing login/TOTP UX so it doesn't feel like a bolted-on flow.
+
+let _fpUsername = null, _fpResetToken = null, _fpResendCooldownTimer = null;
+
+function startForgotPasswordFlow() {
+  _fpUsername = null;
+  _fpResetToken = null;
+  const u = $id('fp-username'); if (u) u.value = '';
+  const o = $id('fp-otp-input'); if (o) o.value = '';
+  hideEl('fp-username-err');
+  hideEl('fp-otp-err');
+  showStep('fp-username');
+  setTimeout(() => $id('fp-username')?.focus(), 50);
+}
+
+async function fpSubmitUsername() {
+  const username = $id('fp-username').value.trim();
+  if (!username) { showMsg('fp-username-err', 'Please enter your username', false); return; }
+  const btn = $id('fp-start-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  hideEl('fp-username-err');
+  let lockedOut = false;
+  try {
+    const csrfH = await getCsrf();
+    const r = await fetch('/api/member/forgot-password/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
+      body: JSON.stringify({ username }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { showMsg('fp-username-err', 'Server error — please try again', false); return; }
+    if (r.status === 429 && d.locked_until) {
+      lockedOut = true;
+      startLockoutCountdown({
+        errId: 'fp-username-err',
+        barTrackId: 'fp-username-lockout-bar-track',
+        barFillId: 'fp-username-lockout-bar-fill',
+        btn,
+        btnIdleText: 'Send code',
+        lockedUntil: d.locked_until,
+        baseMessage: 'Too many attempts. Try again in',
+      });
+      return;
+    }
+    if (!r.ok) { showMsg('fp-username-err', d.error || 'Something went wrong', false); return; }
+    if (d.reason === 'no_contact') {
+      showMsg('fp-username-err', d.error || 'Your email is not on file yet. Please contact your site admin for assistance.', false);
+      return;
+    }
+
+    _fpUsername = username;
+    setFpChannelUI(d.channel, d.masked_destination);
+    showStep('fp-otp');
+    startFpResendCooldown();
+    setTimeout(() => $id('fp-otp-input')?.focus(), 50);
+  } catch (e) {
+    showMsg('fp-username-err', e.message || 'Could not connect to server', false);
+  } finally {
+    if (!lockedOut) {
+      btn.disabled = false;
+      btn.textContent = 'Send code';
+    }
+  }
+}
+
+function setFpChannelUI(channel, maskedDestination) {
+  const badge = $id('fp-channel-badge');
+  const text  = $id('fp-channel-text');
+  const sub   = $id('fp-otp-sub');
+  if (!channel) {
+    // Generic response (account/email couldn't be confirmed) — don't reveal anything extra.
+    if (badge) badge.style.display = 'none';
+    if (sub) sub.textContent = "If we found an email on file, a 6-digit code is on its way.";
+    return;
+  }
+  if (sub) sub.textContent = `We've sent a 6-digit code to ${maskedDestination || 'your email on file'}.`;
+  if (badge && text) {
+    text.textContent = 'Sent via email';
+    badge.style.display = 'inline-flex';
+  }
+}
+
+async function fpSubmitOtp() {
+  const code = $id('fp-otp-input').value.trim();
+  if (!code || code.length !== 6) { showMsg('fp-otp-err', 'Enter the 6-digit code', false); return; }
+  const btn = $id('fp-verify-btn');
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  hideEl('fp-otp-err');
+  try {
+    const csrfH = await getCsrf();
+    const r = await fetch('/api/member/forgot-password/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
+      body: JSON.stringify({ username: _fpUsername, code }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { showMsg('fp-otp-err', 'Server error — please try again', false); return; }
+    if (!r.ok) { showMsg('fp-otp-err', d.error || 'Incorrect code', false); return; }
+
+    _fpResetToken = d.reset_token;
+    const np = $id('fp-new-password'); if (np) np.value = '';
+    const cp = $id('fp-confirm-password'); if (cp) cp.value = '';
+    updatePasswordStrength('');
+    showStep('fp-reset');
+    setTimeout(() => $id('fp-new-password')?.focus(), 50);
+  } catch (e) {
+    showMsg('fp-otp-err', e.message || 'Could not connect to server', false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Verify code';
+  }
+}
+
+function startFpResendCooldown() {
+  const btn = $id('fp-resend-btn');
+  if (!btn) return;
+  let seconds = 30;
+  btn.disabled = true;
+  btn.textContent = `Resend code (${seconds}s)`;
+  clearInterval(_fpResendCooldownTimer);
+  _fpResendCooldownTimer = setInterval(() => {
+    seconds -= 1;
+    if (seconds <= 0) {
+      clearInterval(_fpResendCooldownTimer);
+      btn.disabled = false;
+      btn.textContent = 'Resend code';
+    } else {
+      btn.textContent = `Resend code (${seconds}s)`;
+    }
+  }, 1000);
+}
+
+async function fpResendOtp() {
+  if (!_fpUsername) return;
+  const btn = $id('fp-resend-btn');
+  if (btn.disabled) return;
+  hideEl('fp-otp-err');
+  try {
+    const csrfH = await getCsrf();
+    const r = await fetch('/api/member/forgot-password/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
+      body: JSON.stringify({ username: _fpUsername }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (d && r.ok && d.reason === 'no_contact') {
+      showMsg('fp-otp-err', d.error || 'Your email is not on file yet. Please contact your site admin for assistance.', false);
+    } else if (d && r.ok) {
+      setFpChannelUI(d.channel, d.masked_destination);
+      showMsg('fp-otp-err', 'A new code has been sent.', true);
+      startFpResendCooldown();
+    } else {
+      showMsg('fp-otp-err', d?.error || 'Could not resend code', false);
+    }
+  } catch (e) {
+    showMsg('fp-otp-err', e.message || 'Could not connect to server', false);
+  }
+}
+
+function updatePasswordStrength(pw) {
+  const bars = document.querySelectorAll('#fp-pw-strength .pw-strength-bar');
+  if (!bars.length) return;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const level = score <= 1 ? 'weak' : score <= 3 ? 'medium' : 'strong';
+  const litCount = score <= 1 ? 1 : score <= 3 ? 2 : 3;
+  bars.forEach((bar, i) => {
+    bar.className = 'pw-strength-bar' + (i < litCount && pw.length ? ` ${level}` : '');
+  });
+}
+
+async function fpSubmitNewPassword() {
+  const newPw = $id('fp-new-password').value;
+  const confirmPw = $id('fp-confirm-password').value;
+  hideEl('fp-reset-err');
+  if (newPw !== confirmPw) { showMsg('fp-reset-err', 'Passwords do not match', false); return; }
+  const isStrong = newPw.length >= 8 && /[A-Z]/.test(newPw) && /[0-9]/.test(newPw) && /[^A-Za-z0-9]/.test(newPw);
+  if (!isStrong) { showMsg('fp-reset-err', 'Password must be ≥8 chars, with 1 uppercase, 1 number, 1 special character', false); return; }
+
+  const btn = $id('fp-reset-btn');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  try {
+    const csrfH = await getCsrf();
+    const r = await fetch('/api/member/forgot-password/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
+      body: JSON.stringify({ username: _fpUsername, reset_token: _fpResetToken, newPassword: newPw }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { showMsg('fp-reset-err', 'Server error — please try again', false); return; }
+    if (!r.ok) { showMsg('fp-reset-err', d.error || 'Could not update password', false); return; }
+
+    _fpUsername = null; _fpResetToken = null;
+    showStep('fp-success');
+  } catch (e) {
+    showMsg('fp-reset-err', e.message || 'Could not connect to server', false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Update password';
+  }
+}
+
+// ── Recovery contact info (banner + modal) ───────────────────────────────────
+
+function dismissRecoveryBanner() {
+  const banner = $id('recovery-banner');
+  if (banner) banner.classList.remove('show');
+  _recoveryPromptDismissedThisSession = true;
+  api('POST', '/api/member/contact-info/dismiss-prompt').catch(() => {});
+}
+
+function openContactInfoModal() {
+  const d = window._memberProfile || {};
+  const e = $id('ci-email');   if (e) e.value = d.email  || '';
+  const p = $id('ci-phone');   if (p) p.value = d.mobile || '';
+  hideEl('ci-err'); hideEl('ci-ok');
+  $id('contact-info-modal-overlay')?.classList.add('open');
+}
+function closeContactInfoModal() {
+  $id('contact-info-modal-overlay')?.classList.remove('open');
+}
+
+async function saveContactInfo() {
+  const email = $id('ci-email').value.trim();
+  const phone = $id('ci-phone').value.trim();
+  hideEl('ci-err'); hideEl('ci-ok');
+  if (!email) { showMsg('ci-err', 'Please provide an email for account recovery', false); return; }
+
+  const btn = $id('ci-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('PUT', '/api/member/contact-info', { email, mobile: phone });
+    showMsg('ci-ok', 'Saved! Your recovery email is now up to date.', true);
+    const banner = $id('recovery-banner');
+    if (banner) banner.classList.remove('show');
+    // Refresh cached profile + pf-mobile/pf-email fields if visible
+    await loadProfile();
+    setTimeout(closeContactInfoModal, 900);
+  } catch (e) {
+    showMsg('ci-err', e.message || 'Could not save contact info', false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
 }
 
 // ── Change Password (forced) ──────────────────────────────────────────────────
@@ -551,6 +905,7 @@ async function verify2FASetup() {
 async function logoutMember() {
   try { await api('POST', '/api/member/logout'); } catch (_) {}
   _token = null; _member = null; _csrfToken = null;
+  _recoveryPromptDismissedThisSession = false;
   localStorage.removeItem('kfs-member-token');
   localStorage.removeItem('kfs-member-data');
   localStorage.removeItem('kfs-member-profile');
@@ -606,6 +961,13 @@ async function loadProfile() {
     } else {
       av.textContent = (displayData.name || '?')[0].toUpperCase();
     }
+
+    // Recovery contact banner — show only if no email is on file (mobile
+    // no longer satisfies forgot-password — Twilio removed), and the member
+    // hasn't dismissed it (server-side flag from login, or this-session dismiss).
+    const hasRecoveryContact = !!d.email;
+    const banner = $id('recovery-banner');
+    if (banner) banner.classList.toggle('show', !hasRecoveryContact && !_recoveryPromptDismissedThisSession);
   } catch (e) {
     console.error('loadProfile:', e);
   }
@@ -1447,8 +1809,14 @@ function handleEnterKey(e) {
   const totpStep     = $id('step-totp');
   const changePwStep = $id('step-change-pw');
   const setup2FAStep = $id('step-2fa-setup');
+  const fpUserStep   = $id('step-fp-username');
+  const fpOtpStep    = $id('step-fp-otp');
+  const fpResetStep  = $id('step-fp-reset');
   if      (loginStep    && loginStep.style.display    !== 'none')  handleLogin();
   else if (totpStep     && totpStep.style.display     !== 'none')  submitTotp();
   else if (changePwStep && changePwStep.style.display === 'block') handleChangePw();
   else if (setup2FAStep && setup2FAStep.style.display === 'block') verify2FASetup();
+  else if (fpUserStep   && fpUserStep.style.display   === 'block') fpSubmitUsername();
+  else if (fpOtpStep    && fpOtpStep.style.display    === 'block') fpSubmitOtp();
+  else if (fpResetStep  && fpResetStep.style.display  === 'block') fpSubmitNewPassword();
 }

@@ -1370,6 +1370,40 @@ footer{border-top:1px solid var(--border);padding:60px 40px;
 .form-group select option{background:var(--card)}
 .login-error{color:#e74c3c;font-size:13px;margin-top:16px}
 
+/* ── Live lockout countdown (text + depleting progress bar) ──────────────── */
+.lockout-bar-track{display:none;width:100%;height:3px;background:rgba(231,76,60,.18);border-radius:2px;margin-top:10px;overflow:hidden}
+.lockout-bar-track.show{display:block}
+.lockout-bar-fill{height:100%;width:100%;background:#e74c3c;border-radius:2px;transition:width 1s linear}
+
+/* ── Admin Forgot Password flow ───────────────────────────────────────────── */
+.fp-link-btn{background:none;border:none;color:var(--grey);font-size:13px;padding:0;margin-top:18px;display:block;width:100%;text-align:center;transition:color .15s}
+.fp-link-btn:hover{color:var(--white)}
+.fp-channel-badge{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;font-size:13px;color:#22c55e;margin-bottom:20px}
+.otp-input-admin{letter-spacing:.5em;font-size:20px;text-align:center;font-weight:600;padding-left:18px}
+.fp-resend-btn{background:none;border:none;color:var(--grey);font-size:12.5px;padding:0;margin-top:14px;text-align:center;width:100%;transition:color .15s}
+.fp-resend-btn:hover:not(:disabled){color:var(--white)}
+.fp-resend-btn:disabled{opacity:.5;cursor:default}
+.pw-strength-admin{display:flex;gap:4px;margin-top:8px}
+.pw-strength-admin-bar{height:3px;flex:1;border-radius:2px;background:var(--mid);transition:background .2s}
+.pw-strength-admin-bar.weak{background:#e74c3c}
+.pw-strength-admin-bar.medium{background:#f59e0b}
+.pw-strength-admin-bar.strong{background:#22c55e}
+.fp-ok-msg{font-size:13px;color:#22c55e;margin-top:14px}
+
+/* ── Recovery contact info banner (admin dashboard) ──────────────────────── */
+.recovery-banner-admin{display:none;align-items:flex-start;gap:14px;padding:16px 20px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:14px;margin:0 0 22px}
+.recovery-banner-admin.show{display:flex}
+.recovery-banner-admin-icon{width:32px;height:32px;border-radius:50%;flex-shrink:0;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;color:#f59e0b}
+.recovery-banner-admin-body{flex:1;min-width:0}
+.recovery-banner-admin-title{font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px}
+.recovery-banner-admin-desc{font-size:12.5px;color:var(--grey);line-height:1.5;margin-bottom:12px}
+.recovery-banner-admin-actions{display:flex;gap:10px}
+.recovery-banner-admin-actions button{font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:8px;background:none;border:none}
+.recovery-banner-admin-actions .rba-primary{background:var(--white);color:var(--black)}
+.recovery-banner-admin-actions .rba-dismiss{color:var(--grey)}
+.recovery-banner-admin-actions .rba-dismiss:hover{color:var(--white)}
+
+
 /* ── ADMIN PANEL ────────────────────────────────────────────────────────── */
 #admin-panel.active ~ * #main-nav,
 body:has(#admin-panel.active) #main-nav{display:none}
@@ -2504,6 +2538,9 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">FULL NAME</label><input type="text" id="new-admin-name" placeholder="e.g. Riya Sharma" style="border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">USERNAME</label><input type="text" id="new-admin-username" placeholder="e.g. riya_sharma" style="text-transform:lowercase;border-radius:12px"></div>
     <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PASSWORD</label><input type="password" id="new-admin-password" placeholder="Min. 6 characters" style="border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">EMAIL</label><input type="email" id="new-admin-email" placeholder="e.g. riya@kiit.ac.in" style="border-radius:12px"></div>
+    <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PHONE</label><input type="tel" id="new-admin-phone" placeholder="e.g. +91 9XXXXXXXX0" style="border-radius:12px"></div>
+    <p style="font-size:11.5px;color:var(--grey);margin:-10px 0 18px">Email is required — used for password recovery. Phone is optional.</p>
     <div class="form-group">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600;margin:0">SECTION ACCESS</label>
@@ -2529,6 +2566,22 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
     <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeAddAdminModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="saveNewAdmin" class="btn btn-primary" style="border-radius:12px">Create Admin</button></div>
+  </div>
+</div>
+
+<!-- ADMIN RECOVERY CONTACT INFO MODAL (self-service, instant) -->
+<div class="modal-overlay" id="admin-contact-info-modal">
+  <div class="modal" style="max-width:420px;border-radius:20px;padding:0;overflow:hidden;display:flex;flex-direction:column">
+    <div style="padding:28px 28px 0">
+      <div class="modal-header" style="border:none;padding:0 0 6px"><h3 style="font-size:18px">Recovery contact info</h3><button data-action="closeAdminContactInfoModal" class="modal-close" style="border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button></div>
+      <p style="font-size:13px;color:var(--grey);margin:0 0 20px">We'll use your email only to send you a verification code if you ever forget your password.</p>
+      <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">EMAIL</label><input type="email" id="admin-ci-email" placeholder="your@kiit.ac.in" style="border-radius:12px"></div>
+      <div class="form-group"><label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">PHONE (FOR ADMIN RECORDS)</label><input type="tel" id="admin-ci-phone" placeholder="+91 9XXXXXXXX0" style="border-radius:12px"></div>
+      <p style="font-size:11.5px;color:var(--grey);margin:-8px 0 16px">Email is required for password recovery. Phone is optional and kept for records only.</p>
+      <p id="admin-ci-error" style="color:#ff4444;font-size:13px;margin:0 0 8px"></p>
+      <p id="admin-ci-ok" style="color:#22c55e;font-size:13px;margin:0 0 8px;display:none"></p>
+    </div>
+    <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeAdminContactInfoModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="saveAdminContactInfo" class="btn btn-primary" style="border-radius:12px">Save</button></div>
   </div>
 </div>
 
@@ -3478,7 +3531,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
 <!-- ── ADMIN LOGIN ── -->
 <div id="admin-login">
-  <div class="login-box">
+  <div class="login-box" id="admin-login-box">
     <h2>Admin Access</h2>
     <p>KFS Content Management</p>
     <div class="form-group">
@@ -3505,6 +3558,70 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </div>
     <button data-action="adminLogin" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:12px">Sign In</button>
     <p class="login-error" id="login-error" style="margin-top:16px;min-height:20px"></p>
+    <div class="lockout-bar-track" id="login-lockout-bar-track"><div class="lockout-bar-fill" id="login-lockout-bar-fill"></div></div>
+    <button class="fp-link-btn" data-action="adminForgotPasswordStart">Forgot password?</button>
+  </div>
+
+  <!-- Forgot Password — Step 1: username -->
+  <div class="login-box" id="admin-fp-username-box" style="display:none">
+    <h2>Reset Password</h2>
+    <p>Enter your username and we'll send a code to your email on file.</p>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="admin-fp-username" placeholder="Enter username" data-onkeydown="if(event.key==='Enter')adminFpSubmitUsername()" style="width:100%;box-sizing:border-box" autocomplete="username">
+    </div>
+    <button data-action="adminFpSubmitUsername" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px">Send code</button>
+    <p class="login-error" id="admin-fp-username-error" style="margin-top:16px;min-height:20px"></p>
+    <div class="lockout-bar-track" id="admin-fp-username-lockout-bar-track"><div class="lockout-bar-fill" id="admin-fp-username-lockout-bar-fill"></div></div>
+    <button class="fp-link-btn" data-action="adminFpBackToLogin">← Back to sign in</button>
+  </div>
+
+  <!-- Forgot Password — Step 2: OTP -->
+  <div class="login-box" id="admin-fp-otp-box" style="display:none">
+    <h2>Enter Code</h2>
+    <p id="admin-fp-otp-sub">We've sent a 6-digit code to your phone.</p>
+    <div class="fp-channel-badge" id="admin-fp-channel-badge" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="admin-fp-channel-text">Sent</span>
+    </div>
+    <div class="form-group">
+      <label>6-digit code</label>
+      <input type="text" id="admin-fp-otp" class="otp-input-admin" inputmode="numeric" maxlength="6" placeholder="••••••" data-onkeydown="if(event.key==='Enter')adminFpSubmitOtp()" style="width:100%;box-sizing:border-box" autocomplete="one-time-code">
+    </div>
+    <button data-action="adminFpSubmitOtp" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px">Verify code</button>
+    <p class="login-error" id="admin-fp-otp-error" style="margin-top:16px;min-height:20px"></p>
+    <button class="fp-resend-btn" id="admin-fp-resend-btn" data-action="adminFpResendOtp">Resend code</button>
+    <button class="fp-link-btn" data-action="adminFpStart">← Start over</button>
+  </div>
+
+  <!-- Forgot Password — Step 3: new password -->
+  <div class="login-box" id="admin-fp-reset-box" style="display:none">
+    <h2>New Password</h2>
+    <p>Choose a strong password you haven't used before.</p>
+    <div class="form-group">
+      <label>New Password</label>
+      <input type="password" id="admin-fp-new-password" placeholder="••••••••" style="width:100%;box-sizing:border-box" autocomplete="new-password">
+      <div class="pw-strength-admin" id="admin-fp-pw-strength">
+        <div class="pw-strength-admin-bar"></div><div class="pw-strength-admin-bar"></div><div class="pw-strength-admin-bar"></div>
+      </div>
+      <p style="font-size:12px;color:var(--grey);margin-top:8px">At least 8 characters, 1 uppercase, 1 number, 1 special character.</p>
+    </div>
+    <div class="form-group">
+      <label>Confirm New Password</label>
+      <input type="password" id="admin-fp-confirm-password" placeholder="••••••••" style="width:100%;box-sizing:border-box" autocomplete="new-password">
+    </div>
+    <button data-action="adminFpSubmitReset" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px">Update password</button>
+    <p class="login-error" id="admin-fp-reset-error" style="margin-top:16px;min-height:20px"></p>
+  </div>
+
+  <!-- Forgot Password — Step 4: success -->
+  <div class="login-box" id="admin-fp-success-box" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);margin:0 auto 20px">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2 style="font-size:20px">Password Updated</h2>
+    <p>You've been signed out of all other sessions for security. Please sign in with your new password.</p>
+    <button data-action="adminFpBackToLogin" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px">Back to sign in</button>
   </div>
 </div>
 
@@ -3575,6 +3692,22 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <div><h2 id="dashboard-greeting">Good morning</h2><p id="dashboard-subtitle">Here's what's happening at KFS</p></div>
         <button class="btn btn-primary" id="dashboard-refresh-btn" data-action="loadDashboard" style="font-size:12px;padding:8px 14px">↻ Refresh</button>
       </div>
+
+      <!-- Recovery contact info banner — dismissible, shown only if neither email nor phone on file -->
+      <div class="recovery-banner-admin" id="admin-recovery-banner">
+        <div class="recovery-banner-admin-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        </div>
+        <div class="recovery-banner-admin-body">
+          <div class="recovery-banner-admin-title">Add a recovery email</div>
+          <div class="recovery-banner-admin-desc">This lets you reset your password yourself via "Forgot password?" if you ever get locked out.</div>
+          <div class="recovery-banner-admin-actions">
+            <button class="rba-primary" data-action="openAdminContactInfoModal">Add now</button>
+            <button class="rba-dismiss" data-action="dismissAdminRecoveryBanner">Remind me later</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Stat cards -->
       <div id="dashboard-stats-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:28px">
         <div class="db-stat-card" id="db-stat-blogs" data-action="showAdminSection" data-args='["blogs"]' style="cursor:pointer">
@@ -4944,6 +5077,9 @@ KFS — KIIT Film Society"></textarea>
     <input type="hidden" id="member-edit-id">
     <div class="form-group"><label>Photo</label><input type="file" id="member-photo" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
+    <div class="form-group"><label id="member-email-label">Email</label><input type="email" id="member-email" placeholder="firstname.lastname@kiit.ac.in"></div>
+    <div class="form-group"><label id="member-mobile-label">Phone</label><input type="tel" id="member-mobile" placeholder="+91 9XXXXXXXX0"></div>
+    <p id="member-contact-hint" style="font-size:11.5px;color:var(--grey);margin:-10px 0 14px">Email is required for new members — used for account recovery. Phone is optional.</p>
     <div class="form-group">
       <label>Role / Position</label>
       <select id="member-role" data-onchange="autoMemberSort();toggleDomainField()">
