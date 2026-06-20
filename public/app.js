@@ -2658,11 +2658,14 @@ async function loadAdminData(name) {
       } else if (a.role !== 'master' && a.totp_enabled) {
         deadlineCell = `<span style="color:#50c878;font-size:12px;font-weight:600">Secured<\/span>`;
       }
-      const twoFaDisableBtn = (a.role !== 'master' && a.totp_enabled)
+      const isSelf = a.name === currentAdminName;
+      const twoFaDisableBtn = (a.totp_enabled && !isSelf)
         ? `<button class="admin-action-btn" onclick="masterDisable2FA('${a.id}','${a.name.replace(/'/g,"\\'")}')" style="color:#ff8080;border-color:rgba(255,80,80,.2)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"\/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"\/><\/svg> Disable 2FA<\/button>`
         : '';
       const actions = a.role === 'master'
-        ? `<span style="color:var(--grey);font-size:12px">Protected<\/span>`
+        ? (isSelf
+            ? `<span style="color:var(--grey);font-size:12px">This is you<\/span>`
+            : (twoFaDisableBtn || `<span style="color:var(--grey);font-size:12px">Protected<\/span>`))
         : `<button class="admin-action-btn perm-btn" onclick="openEditPermsModal('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"\/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"\/><\/svg> Permissions<\/button>${twoFaDisableBtn}<button class="admin-action-btn" onclick="openResetPasswordModal('${a.id}','${a.name.replace(/'/g,"\\'")}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"\/><path d="M7 11V7a5 5 0 0 1 10 0v4"\/><\/svg> Reset PW<\/button><button class="admin-action-btn del-btn" onclick="deleteAdmin('${a.id}','${a.name.replace(/'/g,"\\'")}')">Remove<\/button>`;
       return `<tr>
         <td style="font-weight:500">${a.name}<\/td>
