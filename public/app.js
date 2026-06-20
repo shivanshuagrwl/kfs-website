@@ -4115,6 +4115,50 @@ function tfa_initSection() {
   tfa_showBlocks(enabled ? 'enabled' : 'setup');
   document.getElementById('tfa-verify-msg').textContent = '';
   document.getElementById('tfa-disable-msg') && (document.getElementById('tfa-disable-msg').textContent = '');
+  tfa_loadRecoveryEmail();
+}
+
+async function tfa_loadRecoveryEmail() {
+  const input = document.getElementById('tfa-recovery-email-input');
+  const msgEl = document.getElementById('tfa-recovery-email-msg');
+  if (!input) return;
+  if (msgEl) msgEl.textContent = '';
+  try {
+    const r = await fetch('/api/admin/contact-info', {
+      headers: { 'Authorization': 'Bearer ' + adminToken }, credentials: 'include',
+    });
+    const d = await r.json().catch(() => ({}));
+    input.value = d.email || '';
+  } catch (e) { /* non-fatal — leave field blank */ }
+}
+
+async function tfa_saveRecoveryEmail() {
+  const input = document.getElementById('tfa-recovery-email-input');
+  const btn = document.getElementById('tfa-recovery-email-save-btn');
+  const msgEl = document.getElementById('tfa-recovery-email-msg');
+  const email = input.value.trim();
+  if (msgEl) { msgEl.style.color = '#ff6060'; msgEl.textContent = ''; }
+  if (!email) { if (msgEl) msgEl.textContent = 'Please provide an email for account recovery'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/admin/contact-info', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ email }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) { if (msgEl) msgEl.textContent = (d && d.error) || 'Could not save'; return; }
+    window._adminHasRecoveryContact = true;
+    const banner = document.getElementById('admin-recovery-banner');
+    if (banner) banner.classList.remove('show');
+    if (msgEl) { msgEl.style.color = '#22c55e'; msgEl.textContent = 'Saved!'; }
+  } catch (e) {
+    if (msgEl) msgEl.textContent = e.message || 'Could not connect to server';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
 }
 
 async function tfa_startSetup() {

@@ -4142,6 +4142,19 @@ KFS — KIIT Film Society"></textarea>
       </div>
       <div class="settings-form">
 
+        <!-- RECOVERY EMAIL CARD — used for "Forgot password?" OTP delivery -->
+        <div id="tfa-recovery-email-card" style="padding:20px 22px;background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:24px">
+          <p class="settings-section-title" style="margin-top:0">Recovery email</p>
+          <p class="settings-section-desc">Used to send you a verification code if you ever forget your password.</p>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:12px">
+            <div class="form-group" style="margin:0;flex:1;min-width:220px">
+              <input type="email" id="tfa-recovery-email-input" placeholder="your@kiit.ac.in" style="border-radius:12px;width:100%;box-sizing:border-box">
+            </div>
+            <button data-action="tfa_saveRecoveryEmail" class="btn btn-primary" id="tfa-recovery-email-save-btn" style="border-radius:12px">Save</button>
+          </div>
+          <p id="tfa-recovery-email-msg" style="font-size:12px;margin-top:10px;min-height:18px;color:var(--grey)"></p>
+        </div>
+
         <!-- STATUS CARD -->
         <div id="tfa-status-card" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:24px">
           <div style="display:flex;align-items:center;gap:14px">
