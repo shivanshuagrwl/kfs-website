@@ -12073,6 +12073,17 @@ async function openMemberPortalModal(member) {
         <input id="mpm-special-tag" type="text" value="${(member.special_tag||'').replace(/"/g,'&quot;')}" placeholder="e.g. Founder" />
       </div>
 
+      <div class="mpm-grid">
+        <div class="mpm-field">
+          <label>Email <span style="color:#555;text-transform:none;letter-spacing:0">(KIIT domain only)</span></label>
+          <input id="mpm-email" type="email" value="${(member.email||'').replace(/"/g,'&quot;')}" placeholder="name@kiit.ac.in" />
+        </div>
+        <div class="mpm-field">
+          <label>Mobile</label>
+          <input id="mpm-mobile" type="tel" value="${(member.mobile||'').replace(/"/g,'&quot;')}" placeholder="+91 9XXXXXXXX0" />
+        </div>
+      </div>
+
       <div class="mpm-section-label">Portal Account</div>
 
       ${hasAccount ? `
@@ -12164,6 +12175,8 @@ async function mpmSave(memberId) {
   fd.append('domain',      document.getElementById('mpm-domain')?.value || '');
   fd.append('bio',         document.getElementById('mpm-bio')?.value || '');
   fd.append('special_tag', document.getElementById('mpm-special-tag')?.value || '');
+  fd.append('email',       document.getElementById('mpm-email')?.value || '');
+  fd.append('mobile',      document.getElementById('mpm-mobile')?.value || '');
   try {
     const res = await fetch(`/api/admin/members/${memberId}`, {
       method: 'PUT', credentials: 'include',

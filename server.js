@@ -2885,7 +2885,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   // Try full column list first; fall back to base columns if social/portal columns don't exist yet
   let { data, error } = await supabase
     .from("members")
-    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links,email,mobile")
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
 
@@ -2894,7 +2894,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
     console.warn("[admin/members] Full select failed, falling back to base columns:", error.message);
     const fallback = await supabase
       .from("members")
-      .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past")
+      .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,email,mobile")
       .is("deleted_at", null)
       .order("sort_order", { ascending: true });
     if (fallback.error) return res.status(500).json({ error: "Internal server error" });

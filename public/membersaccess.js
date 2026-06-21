@@ -315,6 +315,7 @@ function wireStaticButtons() {
   on('back-to-login-btn', 'click', backToLogin);
   on('cp-btn',            'click', handleChangePw);
   on('setup-totp-btn',    'click', verify2FASetup);
+  on('skip-2fa-btn',      'click', skip2FASetup);
 
   // Forgot password flow
   on('forgot-password-link', 'click', startForgotPasswordFlow);
@@ -484,10 +485,7 @@ async function submitGoogleCredential(credential, totpCode) {
     window._member = d.member;
 
     if (d.must_change_password) { showStep('change-pw'); return; }
-    if (!d.totp_enabled) {
-      await initiate2FASetup();
-      return;
-    }
+    // 2FA is opt-in, not forced — members can turn it on later from Security settings.
     await loadDashboard();
   } catch (e) {
     showMsg('google-signin-err', e.message || 'Could not connect to server', false);
@@ -624,11 +622,7 @@ async function handleLogin() {
     window._member = d.member;
 
     if (d.must_change_password) { showStep('change-pw'); return; }
-    if (!d.totp_enabled) {
-      btn.textContent = 'Setting up 2FA…';
-      await initiate2FASetup();
-      return;
-    }
+    // 2FA is opt-in, not forced — members can turn it on later from Security settings.
     await loadDashboard();
   } catch (e) {
     showMsg('login-err', e.message || 'Could not connect to server', false);
@@ -962,7 +956,7 @@ async function handleChangePw() {
   }
 }
 
-// ── 2FA Setup (forced) ───────────────────────────────────────────────────────
+// ── 2FA Setup (optional — skippable) ─────────────────────────────────────────
 
 async function initiate2FASetup() {
   showStep('2fa-setup');
@@ -993,6 +987,12 @@ async function verify2FASetup() {
     btn.disabled = false;
     btn.textContent = 'Enable 2FA & Continue';
   }
+}
+
+// 2FA is optional — a member who doesn't want it yet can skip straight to
+// their dashboard. They can always turn it on later from Security settings.
+async function skip2FASetup() {
+  await loadDashboard();
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
