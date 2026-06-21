@@ -401,6 +401,97 @@ function showLoginScreen() {
   const p = $id('login-password'); if (p) p.value = '';
   hideEl('login-err');
   _csrfToken = null; // force fresh CSRF on next login attempt
+  initGoogleSignIn();
+}
+
+// ── Google Sign-In ───────────────────────────────────────────────────────────
+// Loads the (non-secret) Google OAuth Client ID from the server, then renders
+// Google's own sign-in button into #google-signin-container. Google handles
+// the account picker UI; we only get a signed ID token back via the callback,
+// which we send straight to /api/member/google-login for verification.
+
+let _googleInitialized = false;
+let _pendingGoogleCredential = null; // held while a Google sign-in is waiting on a 2FA code
+
+async function initGoogleSignIn() {
+  const container = $id('google-signin-container');
+  if (!container) return;
+  hideEl('google-signin-err');
+
+  if (typeof google === 'undefined' || !google.accounts?.id) {
+    // Google's script may not have finished loading yet (it's loaded with
+    // `defer`) — retry shortly instead of silently failing.
+    setTimeout(() => { if ($id('step-login')?.style.display !== 'none') initGoogleSignIn(); }, 300);
+    return;
+  }
+
+  try {
+    if (!_googleInitialized) {
+      const r = await fetch('/api/member/google-client-id');
+      if (!r.ok) { container.style.display = 'none'; return; } // not configured — hide gracefully, password login still works
+      const { client_id } = await r.json();
+      if (!client_id) { container.style.display = 'none'; return; }
+
+      google.accounts.id.initialize({
+        client_id,
+        callback: handleGoogleCredential,
+      });
+      _googleInitialized = true;
+    }
+    container.innerHTML = '';
+    google.accounts.id.renderButton(container, {
+      type: 'standard',
+      theme: 'filled_black',
+      size: 'large',
+      text: 'signin_with',
+      shape: 'pill',
+      width: 320,
+    });
+  } catch (e) {
+    container.style.display = 'none'; // fail quiet — password login is always the fallback
+  }
+}
+
+async function handleGoogleCredential(response) {
+  await submitGoogleCredential(response.credential, null);
+}
+
+async function submitGoogleCredential(credential, totpCode) {
+  hideEl('google-signin-err');
+  try {
+    const csrfH = await getCsrf();
+    const r = await fetch('/api/member/google-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfH },
+      body: JSON.stringify({ credential, totp_code: totpCode || undefined }),
+      credentials: 'include',
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { showMsg('google-signin-err', 'Server error — please try again', false); return; }
+    if (!r.ok) { showMsg('google-signin-err', d.error || 'Google sign-in failed', false); return; }
+
+    if (d.require_totp) {
+      _pendingGoogleCredential = d.google_credential || credential;
+      showStep('totp');
+      return;
+    }
+    _pendingGoogleCredential = null;
+    _token  = d.token;
+    _member = d.member;
+    _recoveryPromptDismissedThisSession = !!d.recovery_prompt_dismissed;
+    localStorage.setItem('kfs-member-token', d.token);
+    localStorage.setItem('kfs-member-data', JSON.stringify(d.member || {}));
+    window._member = d.member;
+
+    if (d.must_change_password) { showStep('change-pw'); return; }
+    if (!d.totp_enabled) {
+      await initiate2FASetup();
+      return;
+    }
+    await loadDashboard();
+  } catch (e) {
+    showMsg('google-signin-err', e.message || 'Could not connect to server', false);
+  }
 }
 
 async function loadDashboard() {
@@ -557,6 +648,10 @@ async function submitTotp() {
   const btn = $id('totp-btn');
   btn.disabled = true; btn.textContent = 'Verifying…';
   try {
+    if (_pendingGoogleCredential) {
+      await submitGoogleCredential(_pendingGoogleCredential, code);
+      return;
+    }
     const csrfH = await getCsrf();
     const r = await fetch('/api/member/login', {
       method: 'POST',
@@ -582,7 +677,7 @@ async function submitTotp() {
   }
 }
 
-function backToLogin() { showStep('login'); }
+function backToLogin() { _pendingGoogleCredential = null; showStep('login'); }
 
 function showStep(step) {
   ['login', 'totp', 'change-pw', '2fa-setup', 'fp-username', 'fp-otp', 'fp-reset', 'fp-success'].forEach(s => {

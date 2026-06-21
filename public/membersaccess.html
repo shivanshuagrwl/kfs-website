@@ -43,6 +43,8 @@
     .auth-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
     .auth-sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
     .form-group { margin-bottom: 18px; }
+    .auth-divider { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; color: var(--faint); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
     .btn-primary {
       width: 100%; background: var(--text); color: var(--bg);
       font-size: 14px; font-weight: 700; padding: 12px 20px;
@@ -571,6 +573,12 @@
       <div class="auth-logo">KFS <span>Member Portal</span></div>
       <div class="auth-title">Sign in</div>
       <div class="auth-sub">Access your KFS member account</div>
+
+      <div id="google-signin-container" style="display:flex;justify-content:center;margin-bottom:16px"></div>
+      <div id="google-signin-err" class="err-msg" style="display:none"></div>
+
+      <div class="auth-divider"><span>or sign in with username</span></div>
+
       <div class="form-group">
         <label>Username</label>
         <input id="login-username" type="text" autocomplete="username" placeholder="firstname.lastname" />
@@ -1229,6 +1237,7 @@
   </div>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="/membersaccess.js" defer></script>
 
 </body>

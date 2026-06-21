@@ -11865,6 +11865,7 @@ async function openMemberPortalModal(member) {
   // Build overlay immediately with a loading state
   const existing = document.getElementById('kfs-member-portal-modal');
   if (existing) existing.remove();
+  _mpmActivityLoaded = false; // fresh per member — don't carry over the previous member's loaded state
 
   const overlay = document.createElement('div');
   overlay.id = 'kfs-member-portal-modal';
@@ -11980,6 +11981,25 @@ async function openMemberPortalModal(member) {
         border-top-color:#888;border-radius:50%;animation:kfsSpin .7s linear infinite;vertical-align:middle;margin-right:6px
       }
       @keyframes kfsSpin{to{transform:rotate(360deg)}}
+      #kfs-member-portal-modal .mpm-activity-row{
+        display:flex;align-items:center;justify-content:space-between;gap:12px;
+        padding:10px 0;border-bottom:1px solid #161616;font-size:12px
+      }
+      #kfs-member-portal-modal .mpm-activity-row:last-child{border-bottom:none}
+      #kfs-member-portal-modal .mpm-activity-action{color:#e5e5e5;font-weight:600}
+      #kfs-member-portal-modal .mpm-activity-meta{color:#666;margin-top:2px}
+      #kfs-member-portal-modal .mpm-activity-time{color:#555;white-space:nowrap;text-align:right;flex-shrink:0}
+      #kfs-member-portal-modal .mpm-method-pill{
+        display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;
+        font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px
+      }
+      #kfs-member-portal-modal .mpm-method-google{background:rgba(66,133,244,.15);color:#8ab4f8}
+      #kfs-member-portal-modal .mpm-method-password{background:#1a1a1a;color:#777}
+      #kfs-member-portal-modal .mpm-activity-toggle{
+        font-size:12px;color:#818cf8;cursor:pointer;background:transparent;border:none;
+        font-family:inherit;padding:0;font-weight:600
+      }
+      #kfs-member-portal-modal .mpm-activity-toggle:hover{text-decoration:underline}
     </style>
     <div class="mpm-card">
       <div id="mpm-inner"><div style="padding:60px;text-align:center;color:#444"><span class="spinner-sm"></span> Loading…</div></div>
@@ -12070,7 +12090,14 @@ async function openMemberPortalModal(member) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px" onclick="mpmResetPassword('${memberId}')">Reset Password</button>
         <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px;color:#f87171;border-color:rgba(239,68,68,.3)" onclick="mpmClear2FA('${memberId}')">Clear 2FA</button>
-      </div>` : `
+      </div>
+
+      <div class="mpm-section-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Login Activity</span>
+        <button class="mpm-activity-toggle" id="mpm-activity-toggle" onclick="mpmLoadActivity('${memberId}')">Show</button>
+      </div>
+      <div id="mpm-activity-list" style="display:none"></div>
+      ` : `
       <div class="mpm-account-row">
         <div>
           <div class="mpm-account-label">No portal account yet</div>
@@ -12176,6 +12203,68 @@ async function mpmClear2FA(memberId) {
     mpmShowMsg('2FA cleared', true);
     loadMemberAccounts();
   } catch(e) { mpmShowMsg(e.message, false); }
+}
+
+let _mpmActivityLoaded = false;
+
+async function mpmLoadActivity(memberId) {
+  const listEl = document.getElementById('mpm-activity-list');
+  const toggleBtn = document.getElementById('mpm-activity-toggle');
+  if (!listEl) return;
+
+  // Toggle visibility if already loaded
+  if (_mpmActivityLoaded) {
+    const showing = listEl.style.display !== 'none';
+    listEl.style.display = showing ? 'none' : 'block';
+    if (toggleBtn) toggleBtn.textContent = showing ? 'Show' : 'Hide';
+    return;
+  }
+
+  listEl.style.display = 'block';
+  listEl.innerHTML = `<div style="padding:16px 0;text-align:center;color:#444;font-size:12px"><span class="spinner-sm"></span> Loading…</div>`;
+  if (toggleBtn) { toggleBtn.textContent = 'Hide'; toggleBtn.disabled = true; }
+
+  try {
+    const logs = await apiFetch(`/api/admin/members/${memberId}/activity?limit=20`);
+    _mpmActivityLoaded = true;
+    if (!logs || !logs.length) {
+      listEl.innerHTML = `<div style="padding:16px 0;text-align:center;color:#444;font-size:12px">No activity recorded yet.</div>`;
+      return;
+    }
+    listEl.innerHTML = logs.map(l => {
+      const methodPill = l.login_method
+        ? `<span class="mpm-method-pill mpm-method-${l.login_method}">${l.login_method === 'google' ? 'Google' : 'Password'}</span>`
+        : '';
+      const deviceStr = l.device_info ? l.device_info.label : null;
+      const metaParts = [l.ip_address || null, deviceStr].filter(Boolean);
+      const actionLabel = (l.action || '').replace(/_/g, ' ');
+      return `<div class="mpm-activity-row">
+        <div>
+          <div class="mpm-activity-action">${actionLabel}${methodPill}</div>
+          ${metaParts.length ? `<div class="mpm-activity-meta">${metaParts.join(' · ')}</div>` : ''}
+        </div>
+        <div class="mpm-activity-time">${mpmRelativeTime(l.created_at)}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div style="padding:16px 0;text-align:center;color:#ef4444;font-size:12px">Failed to load activity.</div>`;
+  } finally {
+    if (toggleBtn) toggleBtn.disabled = false;
+  }
+}
+
+function mpmRelativeTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 async function mpmCreateAccount(memberId, memberName) {

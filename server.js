@@ -2979,6 +2979,8 @@ app.post(
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!EMAIL_RE.test(emailTrim))
       return res.status(400).json({ error: "Invalid email address" });
+    if (!isKiitEmail(emailTrim))
+      return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
     if (mobileTrim && mobileTrim.replace(/\D/g, "").length < 10)
       return res.status(400).json({ error: "Invalid phone number" });
 
@@ -3045,6 +3047,7 @@ app.put(
       const emailTrim = (email || "").trim();
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (emailTrim && !EMAIL_RE.test(emailTrim)) return res.status(400).json({ error: "Invalid email address" });
+      if (emailTrim && !isKiitEmail(emailTrim)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
       updates.email = emailTrim || null;
     }
     if (mobile !== undefined) {
@@ -4012,6 +4015,22 @@ app.delete(
     res.json({ success: true });
   },
 );
+
+// ── SHARED: KIIT email domain check ────────────────────────────────────────────
+// Single source of truth for "is this a KIIT institutional email" — used by
+// /api/collaborate, members.email writes (admin create/edit + member self-edit),
+// and Google Sign-In domain enforcement. Keep every consumer pointed at this
+// function so the allowed-domain list only ever needs to change in one place.
+function isKiitEmail(email) {
+  if (!email) return false;
+  const emailLower = String(email).trim().toLowerCase();
+  return (
+    emailLower.endsWith("@kiit.ac.in") ||
+    emailLower.endsWith(".kiit.ac.in") ||
+    emailLower.endsWith("@ksom.ac.in") ||
+    emailLower.endsWith("@kiitbiotech.ac.in")
+  );
+}
 
 // ── TRAFFIC ───────────────────────────────────────────────────────────────────
 const trackLimit = rateLimit({
@@ -6169,13 +6188,7 @@ app.post("/api/collaborate", strictWriteLimit, async (req, res) => {
     }
 
     // Enforce KIIT email domain
-    const emailLower = payload.contact_email.toLowerCase();
-    const isKiitDomain =
-      emailLower.endsWith("@kiit.ac.in") ||
-      emailLower.includes(".kiit.ac.in") ||
-      emailLower.endsWith("@ksom.ac.in") ||
-      emailLower.endsWith("@kiitbiotech.ac.in");
-    if (!isKiitDomain) {
+    if (!isKiitEmail(payload.contact_email)) {
       return res.status(403).json({
         error:
           "This feature is exclusive to KFS members only. Contact us at filmsocietykiit@gmail.com for external support.",
@@ -9400,7 +9413,7 @@ async function sendMemberCredentialsEmail({ toEmail, toName, username, tempPassw
 // ─────────────────────────────────────────────────────────────────────────────
 
 function csrfProtectMember(req, res, next) {
-  if (req.path.startsWith("/login") || req.path.startsWith("/refresh") || req.path.startsWith("/forgot-password")) return next();
+  if (req.path.startsWith("/login") || req.path.startsWith("/google-login") || req.path.startsWith("/refresh") || req.path.startsWith("/forgot-password")) return next();
   return csrfProtect(req, res, next);
 }
 app.use("/api/member", csrfProtectMember);
@@ -9500,6 +9513,169 @@ app.post(
     });
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-11a — Member Google Sign-In
+//
+// Flow: frontend loads Google Identity Services, user picks their KIIT Google
+// account, we get back a signed Google ID token (JWT). We verify that token
+// server-side via Google's tokeninfo endpoint (no new npm dependency — this
+// file already calls fetch() against other *.googleapis.com endpoints for the
+// Sheets integration, so this stays consistent with that existing pattern).
+//
+// NOTE: per Google's docs, the tokeninfo endpoint is fine for low/medium
+// traffic but is rate-limited; if this portal's login volume grows a lot,
+// switching to the `google-auth-library` npm package for local JWT
+// verification would be more robust. Flagging this for awareness, not
+// blocking — it's not needed for a society-sized member portal.
+//
+// Matching rule: Google email must (a) be on KIIT's domain allow-list and
+// (b) match an existing members.email exactly (case-insensitive). We do NOT
+// let a Google sign-in create a brand-new *member* — only admins create
+// members. We DO auto-create the member_accounts row (username + login
+// credential) on first-ever Google sign-in if the member doesn't have one
+// yet, since you said that should "just work".
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+
+app.post(
+  "/api/member/google-login",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { error: "Too many attempts. Try again later." } }),
+  async (req, res) => {
+    const { credential, totp_code } = req.body;
+    if (!credential) return res.status(400).json({ error: "Missing Google credential" });
+    if (!GOOGLE_CLIENT_ID) {
+      console.error("[member-google-login] GOOGLE_CLIENT_ID not configured");
+      return res.status(503).json({ error: "Google sign-in is not configured. Contact admin." });
+    }
+
+    // ── Verify the ID token with Google ──────────────────────────────────────
+    let payload;
+    try {
+      const verifyRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
+      );
+      if (!verifyRes.ok) return res.status(401).json({ error: "Invalid Google sign-in. Please try again." });
+      payload = await verifyRes.json();
+    } catch (e) {
+      console.error("[member-google-login] tokeninfo fetch failed:", e.message);
+      return res.status(502).json({ error: "Could not verify Google sign-in right now. Please try again." });
+    }
+
+    if (payload.aud !== GOOGLE_CLIENT_ID) {
+      return res.status(401).json({ error: "Invalid Google sign-in. Please try again." });
+    }
+    if (payload.email_verified !== "true" && payload.email_verified !== true) {
+      return res.status(401).json({ error: "Your Google email is not verified." });
+    }
+
+    const googleEmail = (payload.email || "").trim().toLowerCase();
+    if (!isKiitEmail(googleEmail)) {
+      return res.status(403).json({
+        error: "Sign in with your KIIT Google account (e.g. @kiit.ac.in). Other Google accounts can't access the member portal.",
+      });
+    }
+
+    // ── Match against an existing member by email ────────────────────────────
+    const { data: member } = await supabase
+      .from("members")
+      .select("id, name, role, batch, domain, photo, email, mobile")
+      .ilike("email", googleEmail)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (!member) {
+      return res.status(404).json({
+        error: "No KFS member record matches this Google account's email. Ask an admin to add or update your email on file.",
+      });
+    }
+
+    // ── Find or auto-create the linked member_accounts row ───────────────────
+    let { data: account } = await supabase
+      .from("member_accounts")
+      .select("*")
+      .eq("member_id", member.id)
+      .maybeSingle();
+
+    if (!account) {
+      const username = await generateMemberUsername(member.name, null);
+      // Random, unguessable placeholder password — this account was opened via
+      // Google, not a temp password, so there's no "first login" password to
+      // hand out. Member can still use "Forgot password" later to set one if
+      // they ever want username/password as a fallback alongside Google.
+      const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+      const { data: created, error: createErr } = await supabase
+        .from("member_accounts")
+        .insert([{
+          member_id: member.id,
+          username,
+          password_hash: placeholderHash,
+          must_change_password: false, // nothing to "change" — no password was issued
+        }])
+        .select("*")
+        .single();
+      if (createErr) {
+        console.error("[member-google-login] auto-create account failed:", createErr.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      account = created;
+      logMemberActivity(account.id, member.id, "account_auto_created_google", { email: googleEmail }, req.ip).catch(() => {});
+    }
+
+    if (account.account_status === "disabled") {
+      return res.status(403).json({ error: "Account disabled. Contact admin." });
+    }
+
+    // ── 2FA still applies if the member has it enabled ────────────────────────
+    // Google sign-in replaces the password step, not the 2FA step — a member
+    // who turned on TOTP should still be asked for it.
+    if (account.totp_enabled) {
+      if (!totp_code) return res.status(200).json({ require_totp: true, google_credential: credential });
+      const verified = speakeasy.totp.verify({
+        secret: account.totp_secret, encoding: "base32",
+        token: totp_code.replace(/\s/g, ""), window: 1,
+      });
+      if (!verified) return res.status(401).json({ error: "Invalid 2FA code" });
+    }
+
+    await supabase.from("member_accounts")
+      .update({ last_login: new Date().toISOString(), login_failures: 0, locked_until: null })
+      .eq("id", account.id);
+
+    const ip = req.ip || req.socket?.remoteAddress;
+    await logMemberActivity(account.id, account.member_id, "login", { ip, ua: req.headers["user-agent"], method: "google" }, ip);
+
+    const accessToken = signMemberAccessToken({
+      id: account.id,
+      memberId: account.member_id,
+      username: account.username,
+      must_change_password: account.must_change_password,
+      totp_enabled: account.totp_enabled,
+    });
+
+    const { raw } = await issueMemberRefreshToken(account.id);
+    setMemberRefreshCookie(res, raw);
+
+    res.json({
+      token: accessToken,
+      must_change_password: account.must_change_password,
+      totp_enabled: account.totp_enabled,
+      member,
+      has_recovery_contact: !!member.email,
+      recovery_prompt_dismissed: !!account.recovery_prompt_dismissed_at,
+    });
+  },
+);
+
+// GET /api/member/google-client-id — public, non-secret Google OAuth Client ID
+// for the frontend to initialize Google Identity Services with. Mirrors how
+// Razorpay's key_id is handed to the frontend: it's not a secret, it's the
+// public half of the credential pair, safe to expose.
+app.get("/api/member/google-client-id", (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(503).json({ error: "Not configured" });
+  res.json({ client_id: GOOGLE_CLIENT_ID });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION MA-11b — Member Forgot Password (username -> OTP via WhatsApp/SMS/Email -> reset)
@@ -9933,6 +10109,7 @@ app.put("/api/member/contact-info", memberAuthMiddleware, async (req, res) => {
   if (email !== undefined) {
     const v = (email || "").trim();
     if (v && !EMAIL_RE.test(v)) return res.status(400).json({ error: "Invalid email address" });
+    if (v && !isKiitEmail(v)) return res.status(400).json({ error: "Email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
     updates.email = v || null;
   }
   if (mobile !== undefined) {
@@ -10143,6 +10320,7 @@ app.post("/api/admin/members/:id/create-account", requireSection("members"), asy
   }
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (finalEmail && !EMAIL_RE.test(finalEmail)) return res.status(400).json({ error: "Invalid email address" });
+  if (finalEmail && !isKiitEmail(finalEmail)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
   if (finalMobile && finalMobile.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Invalid phone number" });
 
   // Persist any newly-supplied contact info onto the member record itself.
@@ -10422,6 +10600,33 @@ app.post(
 // SECTION MA-21 — Admin: Member Activity & Monitoring
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Tiny dependency-free UA summarizer — good enough for "what device did they
+// log in from" at a glance in the admin panel. Not as thorough as a full
+// UA-parser library, but covers the common browsers/OSes/device types and
+// needs zero new npm packages.
+function summarizeUserAgent(ua) {
+  if (!ua) return null;
+  const isMobile = /Mobile|Android|iPhone/i.test(ua);
+  const isTablet = /Tablet|iPad/i.test(ua);
+  const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+
+  let os = "Unknown OS";
+  if (/Windows NT/i.test(ua)) os = "Windows";
+  else if (/Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua)) os = "macOS";
+  else if (/Android/i.test(ua)) os = "Android";
+  else if (/iPhone|iPad|iOS/i.test(ua)) os = "iOS";
+  else if (/Linux/i.test(ua)) os = "Linux";
+
+  let browser = "Unknown browser";
+  if (/Edg\//i.test(ua)) browser = "Edge";
+  else if (/OPR\/|Opera/i.test(ua)) browser = "Opera";
+  else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) browser = "Chrome";
+  else if (/Firefox\//i.test(ua)) browser = "Firefox";
+  else if (/Safari\//i.test(ua) && /Version\//i.test(ua)) browser = "Safari";
+
+  return { device, os, browser, label: `${browser} on ${os} (${device})` };
+}
+
 app.get("/api/admin/members/:id/activity", requireSection("members"), async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page)  || 1);
   const limit = Math.min(100, parseInt(req.query.limit) || 30);
@@ -10431,7 +10636,13 @@ app.get("/api/admin/members/:id/activity", requireSection("members"), async (req
     .eq("member_id", req.params.id)
     .order("created_at", { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
-  res.json(data || []);
+
+  const enriched = (data || []).map(row => ({
+    ...row,
+    login_method: row.metadata?.method === "google" ? "google" : (row.action === "login" ? "password" : null),
+    device_info: summarizeUserAgent(row.metadata?.ua),
+  }));
+  res.json(enriched);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
