@@ -393,6 +393,65 @@ body.light-mode .fb-toggle-track{background:rgba(0,0,0,.12)}
 body.light-mode .fb-response-chip{color:rgba(0,0,0,.4)}
 body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 
+/* ── SECTIONS (branching form builder) ─────────────────────────────────── */
+.fb-sections{display:flex;flex-direction:column;gap:18px}
+.fb-section-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.fb-section-header{display:flex;align-items:flex-start;gap:10px}
+.fb-section-num{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:rgba(245,245,245,.6);flex-shrink:0;margin-top:2px}
+.fb-section-meta{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.fb-section-title{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.14);padding:5px 0;color:var(--white);font:inherit;font-size:15px;font-weight:700;outline:none;width:100%}
+.fb-section-title::placeholder{color:rgba(245,245,245,.25)}
+.fb-section-desc{background:transparent;border:none;padding:2px 0;color:rgba(245,245,245,.6);font:inherit;font-size:12.5px;outline:none;width:100%;resize:none}
+.fb-section-desc::placeholder{color:rgba(245,245,245,.22)}
+.fb-section-actions{display:flex;gap:4px;flex-shrink:0}
+.fb-section-move,.fb-section-del{background:none;border:none;color:rgba(245,245,245,.3);cursor:pointer;padding:5px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.fb-section-move:hover{color:var(--white);background:rgba(255,255,255,.08)}
+.fb-section-del:hover{color:#ff453a;background:rgba(255,69,58,.12)}
+.fb-section-questions{display:flex;flex-direction:column;gap:10px;padding-left:34px}
+.fb-add-q-btn-sm{margin-top:2px;margin-left:34px;background:none;border:1px dashed rgba(255,255,255,.12);border-radius:10px;padding:9px;color:rgba(245,245,245,.35);font:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.fb-add-q-btn-sm:hover{border-color:rgba(255,255,255,.3);color:rgba(245,245,245,.7);background:rgba(255,255,255,.03)}
+
+.fb-section-footer{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);margin-left:34px}
+.fb-pay-toggle-row{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.55);font-weight:500}
+.fb-pay-amount{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px 10px}
+.fb-pay-amount span{font-size:12px;color:rgba(245,245,245,.45)}
+.fb-pay-amount input{width:64px;background:transparent;border:none;color:var(--white);font:inherit;font-size:13px;outline:none}
+.fb-next-row{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.45);margin-left:auto}
+.fb-next-select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 10px;color:rgba(245,245,245,.85);font:inherit;font-size:12px;outline:none;cursor:pointer;max-width:220px}
+
+/* Branching (per-option "go to section") */
+.fb-branch-toggle-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:rgba(245,245,245,.45);margin-top:2px;font-weight:500}
+.fb-branch-options{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px}
+.fb-branch-option-row{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.fb-branch-option-label{flex:1;color:rgba(245,245,245,.7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-branch-arrow{color:rgba(245,245,245,.25);flex-shrink:0}
+.fb-branch-select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 8px;color:rgba(245,245,245,.85);font:inherit;font-size:12px;outline:none;cursor:pointer;max-width:170px;flex-shrink:0}
+
+.fb-add-section-btn{margin-top:4px;background:none;border:1.5px dashed rgba(255,255,255,.16);border-radius:16px;padding:16px;color:rgba(245,245,245,.4);font:inherit;font-size:13px;font-weight:600;cursor:pointer;width:100%;text-align:center;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.fb-add-section-btn:hover{border-color:rgba(255,255,255,.35);color:rgba(245,245,245,.8);background:rgba(255,255,255,.03)}
+
+body.light-mode .fb-section-card{background:#fff;border-color:#ddd}
+body.light-mode .fb-section-num{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1);color:rgba(0,0,0,.5)}
+body.light-mode .fb-section-title{color:#111;border-bottom-color:rgba(0,0,0,.14)}
+body.light-mode .fb-section-title::placeholder{color:rgba(0,0,0,.25)}
+body.light-mode .fb-section-desc{color:rgba(0,0,0,.6)}
+body.light-mode .fb-section-desc::placeholder{color:rgba(0,0,0,.25)}
+body.light-mode .fb-section-move{color:rgba(0,0,0,.3)}
+body.light-mode .fb-section-move:hover{background:rgba(0,0,0,.06);color:#111}
+body.light-mode .fb-section-footer{border-top-color:rgba(0,0,0,.07)}
+body.light-mode .fb-pay-toggle-row{color:rgba(0,0,0,.55)}
+body.light-mode .fb-pay-amount{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12)}
+body.light-mode .fb-pay-amount input{color:#111}
+body.light-mode .fb-pay-amount span{color:rgba(0,0,0,.4)}
+body.light-mode .fb-next-row{color:rgba(0,0,0,.45)}
+body.light-mode .fb-next-select{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12);color:#111}
+body.light-mode .fb-branch-toggle-row{color:rgba(0,0,0,.45)}
+body.light-mode .fb-branch-options{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.07)}
+body.light-mode .fb-branch-option-label{color:rgba(0,0,0,.6)}
+body.light-mode .fb-branch-select{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12);color:#111}
+body.light-mode .fb-add-section-btn{border-color:rgba(0,0,0,.16);color:rgba(0,0,0,.4)}
+body.light-mode .fb-add-section-btn:hover{border-color:rgba(0,0,0,.35);color:rgba(0,0,0,.8)}
+
 /* ── PUBLIC REGISTRATION FORM ─────────────────────────────────────────────── */
 .reg-form-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2500;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(8px)}
 .reg-form-overlay.open{opacity:1;pointer-events:auto}
@@ -439,6 +498,23 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .reg-success-icon{display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--white)}
 .reg-success-title{font-size:20px;font-weight:700;margin-bottom:8px}
 .reg-success-sub{font-size:14px;color:var(--grey)}
+
+/* Section navigation (branching forms) */
+.reg-progress{display:flex;gap:5px;padding:0 24px 14px;flex-shrink:0}
+.reg-progress-dot{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.1);transition:background .2s}
+.reg-progress-dot.done{background:rgba(245,245,245,.55)}
+.reg-progress-dot.current{background:#fff}
+.reg-nav-row{padding:0 24px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-shrink:0}
+.reg-back-btn{padding:14px 22px;background:transparent;border:1.5px solid var(--border);color:var(--white);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.reg-back-btn:hover{border-color:var(--grey)}
+.reg-fee-note{font-size:12.5px;color:var(--grey);text-align:center;padding:0 24px 12px;flex-shrink:0;line-height:1.5}
+.reg-fee-note strong{color:var(--white)}
+body.light-mode .reg-back-btn{color:#111;border-color:#ddd}
+body.light-mode .reg-progress-dot{background:rgba(0,0,0,.1)}
+body.light-mode .reg-progress-dot.done{background:rgba(0,0,0,.45)}
+body.light-mode .reg-progress-dot.current{background:#111}
+body.light-mode .reg-fee-note strong{color:#111}
+
 .event-register-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 0;width:130px;background:transparent;border:2px solid var(--white);border-radius:20px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
 .event-register-btn:hover{background:var(--white);color:var(--black)}
 body.light-mode .event-register-btn{background:transparent;border-color:#111;color:#111}
@@ -5396,10 +5472,10 @@ KFS — KIIT Film Society"></textarea>
         <input type="text" id="fb-form-title" placeholder="Form title (e.g. KFS Screening Registration)">
         <textarea id="fb-form-desc" placeholder="Short description or instructions (optional)"></textarea>
       </div>
-      <div class="fb-questions" id="fb-questions"></div>
-      <button data-action="addFBQuestion" class="fb-add-q-btn">
+      <div class="fb-sections" id="fb-sections"></div>
+      <button data-action="addFBSection" class="fb-add-section-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Question
+        Add Section
       </button>
     </div>
     <div class="fb-status-bar">
@@ -5425,9 +5501,15 @@ KFS — KIIT Film Society"></textarea>
       <div class="reg-form-desc" id="rf-desc"></div>
       <button data-action="closeRegForm" class="reg-form-close">✕</button>
     </div>
+    <div class="reg-progress" id="rf-progress" style="display:none"></div>
     <div class="reg-form-body" id="rf-body"></div>
-    <div class="reg-submit-row" id="rf-submit-row">
-      <button data-action="submitRegForm" class="reg-submit-btn" id="rf-submit-btn">
+    <div class="reg-fee-note" id="rf-fee-note" style="display:none"></div>
+    <div class="reg-nav-row" id="rf-submit-row">
+      <button data-action="rfGoBack" class="reg-back-btn" id="rf-back-btn" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </button>
+      <button data-action="rfPrimaryAction" class="reg-submit-btn" id="rf-submit-btn">
         Submit
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>

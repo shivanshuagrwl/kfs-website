@@ -6960,13 +6960,82 @@ async function runMemberImport() {
 // ════════════════════════════════════════════════════════════════════════════
 let _fbEventId = null;
 let _fbEventTitle = '';
-let _fbQuestions = [];
+let _fbSections = [];
+let _fbQuestions = []; // kept as a flattened mirror of _fbSections for the response viewer/export below
 let _fbResponseCount = 0;
+
+const FB_SUBMIT_END = '__submit__';
+
+// Mirrors server's parseFormSchema() — normalizes legacy flat question arrays
+// and new sections-based forms into one uniform {version, sections} shape.
+function clientParseFormSchema(rawQuestions) {
+  let parsed;
+  try { parsed = JSON.parse(rawQuestions || '[]'); } catch (e) { parsed = []; }
+  if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sections)) {
+    return { version: 2, sections: parsed.sections };
+  }
+  const flat = Array.isArray(parsed) ? parsed : [];
+  return {
+    version: 1,
+    sections: [{ id: '_legacy', title: '', description: '', questions: flat, next_section: FB_SUBMIT_END, is_paid: false, amount_paise: null }],
+  };
+}
+
+// Flattens every question across every section, regardless of branch —
+// used for the response viewer/export where any individual response may
+// have taken a different path through the form.
+function clientFlattenAllQuestions(rawQuestions) {
+  const { sections } = clientParseFormSchema(rawQuestions);
+  const out = [];
+  for (const s of sections) for (const q of (s.questions || [])) out.push(q);
+  return out;
+}
+
+// Mirrors server's computeSectionPath() — used by the public form renderer
+// to decide, live, which section the registrant goes to next.
+function clientComputeSectionPath(sections, answers) {
+  answers = answers || {};
+  const byId = new Map((sections || []).map(s => [s.id, s]));
+  const visitedSectionIds = [];
+  const questions = [];
+  let requiredAmountPaise = 0;
+  let current = (sections || [])[0] || null;
+  const seen = new Set();
+  let guard = 0;
+  while (current && guard <= sections.length + 1) {
+    guard++;
+    if (seen.has(current.id)) break;
+    seen.add(current.id);
+    visitedSectionIds.push(current.id);
+    for (const q of current.questions || []) questions.push(q);
+    if (current.is_paid && Number(current.amount_paise) > 0) requiredAmountPaise += Number(current.amount_paise);
+    let nextId = null;
+    for (const q of current.questions || []) {
+      if (q.branch && q.branch.enabled && q.type === 'radio') {
+        const ans = (answers[q.id] || '').toString();
+        const target = ans && q.branch.map ? q.branch.map[ans] : null;
+        if (target === FB_SUBMIT_END) nextId = FB_SUBMIT_END;
+        else if (target && byId.has(target)) nextId = target;
+        if (nextId) break;
+      }
+    }
+    if (nextId === null) {
+      if (current.next_section === FB_SUBMIT_END) nextId = FB_SUBMIT_END;
+      else if (current.next_section && byId.has(current.next_section)) nextId = current.next_section;
+      else {
+        const idx = sections.findIndex(s => s.id === current.id);
+        nextId = (idx >= 0 && idx + 1 < sections.length) ? sections[idx + 1].id : FB_SUBMIT_END;
+      }
+    }
+    current = (nextId === FB_SUBMIT_END || !nextId) ? null : (byId.get(nextId) || null);
+  }
+  return { visitedSectionIds, questions, requiredAmountPaise };
+}
 
 async function openFormBuilder(eventId, eventTitle) {
   _fbEventId = eventId;
   _fbEventTitle = eventTitle;
-  _fbQuestions = [];
+  _fbSections = [];
   document.getElementById('fb-event-label').textContent = eventTitle;
   document.getElementById('fb-title').textContent = 'Registration Form';
   document.getElementById('fb-form-title').value = '';
@@ -6974,7 +7043,7 @@ async function openFormBuilder(eventId, eventTitle) {
   document.getElementById('fb-is-open').checked = true;
   document.getElementById('fb-open-label').textContent = 'Form is Open';
   document.getElementById('fb-response-count').textContent = '0 responses';
-  document.getElementById('fb-questions').innerHTML = '';
+  document.getElementById('fb-sections').innerHTML = '';
 
   // Try to load existing form
   try {
@@ -6985,7 +7054,21 @@ async function openFormBuilder(eventId, eventTitle) {
       document.getElementById('fb-form-desc').value = form.description || '';
       document.getElementById('fb-is-open').checked = form.is_open !== false;
       document.getElementById('fb-open-label').textContent = form.is_open !== false ? 'Form is Open' : 'Form is Closed';
-      try { _fbQuestions = JSON.parse(form.questions || '[]'); } catch(e){ _fbQuestions = []; }
+
+      const { sections } = clientParseFormSchema(form.questions);
+      // amount_paise -> amount_rupees for editing; every section/question
+      // gets the new fields so an older saved form upgrades cleanly the
+      // first time it's opened in this builder.
+      _fbSections = sections.map(s => ({
+        id: s.id || ('sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+        title: s.title || '',
+        description: s.description || '',
+        questions: (s.questions || []).map(q => ({ ...q, branch: q.branch || { enabled: false, map: {} } })),
+        next_section: s.next_section === FB_SUBMIT_END ? FB_SUBMIT_END : (s.next_section || ''),
+        is_paid: !!s.is_paid,
+        amount_rupees: s.amount_paise ? Math.round(s.amount_paise / 100) : '',
+      }));
+
       // Load response count
       try {
         const rRes = await fetch('/api/admin/events/' + eventId + '/form/responses', {
@@ -6996,11 +7079,15 @@ async function openFormBuilder(eventId, eventTitle) {
           _fbResponseCount = rs.length;
           document.getElementById('fb-response-count').textContent = rs.length + (rs.length === 1 ? ' response' : ' responses');
         }
-      } catch(e){}
+      } catch (e) {}
     }
-  } catch(e){}
+  } catch (e) {}
 
-  renderFBQuestions();
+  if (!_fbSections.length) {
+    _fbSections = [{ id: 'sec_' + Date.now(), title: '', description: '', questions: [], next_section: '', is_paid: false, amount_rupees: '' }];
+  }
+
+  renderFBSections();
   const isOpenEl = document.getElementById('fb-is-open');
   isOpenEl.onchange = function() {
     document.getElementById('fb-open-label').textContent = this.checked ? 'Form is Open' : 'Form is Closed';
@@ -7012,94 +7099,263 @@ function closeFormBuilder() {
   document.getElementById('form-builder-overlay').classList.remove('open');
 }
 
-function addFBQuestion(q=null) {
-  const id = 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-  _fbQuestions.push(q || { id, label: '', type: 'text', required: false, options: [] });
-  renderFBQuestions();
-  // Scroll to new question
+function addFBSection() {
+  syncFBState();
+  const id = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  _fbSections.push({ id, title: '', description: '', questions: [], next_section: '', is_paid: false, amount_rupees: '' });
+  renderFBSections();
   setTimeout(() => {
-    const cards = document.querySelectorAll('.fb-question-card');
-    if (cards.length) cards[cards.length-1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const cards = document.querySelectorAll('.fb-section-card');
+    if (cards.length) cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, 60);
 }
 
-function removeFBQuestion(idx) {
-  _fbQuestions.splice(idx, 1);
-  renderFBQuestions();
+function removeFBSection(idx) {
+  syncFBState();
+  if (_fbSections.length <= 1) { alert('A form needs at least one section.'); return; }
+  const removedId = _fbSections[idx].id;
+  _fbSections.splice(idx, 1);
+  // Clear any "leads to" / branch targets that pointed at the removed section
+  _fbSections.forEach(s => {
+    if (s.next_section === removedId) s.next_section = '';
+    (s.questions || []).forEach(q => {
+      if (q.branch && q.branch.map) {
+        for (const k of Object.keys(q.branch.map)) {
+          if (q.branch.map[k] === removedId) delete q.branch.map[k];
+        }
+      }
+    });
+  });
+  renderFBSections();
 }
 
-function fbQuestionTypeChange(idx, val) {
-  _fbQuestions[idx].type = val;
-  if ((val === 'radio' || val === 'checkbox') && !_fbQuestions[idx].options.length) {
-    _fbQuestions[idx].options = ['Option 1', 'Option 2'];
-  }
-  renderFBQuestions();
+function moveFBSection(idx, dir) {
+  syncFBState();
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= _fbSections.length) return;
+  const [s] = _fbSections.splice(idx, 1);
+  _fbSections.splice(newIdx, 0, s);
+  renderFBSections();
 }
 
-function addFBOption(idx) {
-  _fbQuestions[idx].options.push('');
-  renderFBQuestions();
+function addFBQuestion(sIdx, q = null) {
+  syncFBState();
+  const id = 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  _fbSections[sIdx].questions.push(q || { id, label: '', type: 'text', required: false, options: [], branch: { enabled: false, map: {} } });
+  renderFBSections();
+  setTimeout(() => {
+    const cards = document.querySelectorAll(`.fb-section-card[data-sidx="${sIdx}"] .fb-question-card`);
+    if (cards.length) cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 60);
 }
 
-function removeFBOption(qIdx, oIdx) {
-  _fbQuestions[qIdx].options.splice(oIdx, 1);
-  renderFBQuestions();
+function removeFBQuestion(sIdx, qIdx) {
+  syncFBState();
+  _fbSections[sIdx].questions.splice(qIdx, 1);
+  renderFBSections();
 }
 
+function fbQuestionTypeChange(sIdx, qIdx, val) {
+  syncFBState();
+  const q = _fbSections[sIdx].questions[qIdx];
+  q.type = val;
+  if ((val === 'radio' || val === 'checkbox') && !(q.options || []).length) q.options = ['Option 1', 'Option 2'];
+  if (val !== 'radio' && q.branch) q.branch.enabled = false; // only multiple-choice can branch
+  renderFBSections();
+}
+
+function addFBOption(sIdx, qIdx) {
+  syncFBState();
+  _fbSections[sIdx].questions[qIdx].options.push('');
+  renderFBSections();
+}
+
+function removeFBOption(sIdx, qIdx, oIdx) {
+  syncFBState();
+  _fbSections[sIdx].questions[qIdx].options.splice(oIdx, 1);
+  renderFBSections();
+}
+
+// ── Direct-sync setters (fire on every keystroke/toggle, no re-render needed
+//    unless noted) ─────────────────────────────────────────────────────────
+function syncFBSectionTitle(sIdx, val) { _fbSections[sIdx].title = val; }
+function syncFBSectionDesc(sIdx, val) { _fbSections[sIdx].description = val; }
+function syncFBSectionNext(sIdx, val) { _fbSections[sIdx].next_section = val; }
+function syncFBSectionPaidToggle(sIdx, val) { _fbSections[sIdx].is_paid = val; renderFBSections(); }
+function syncFBSectionAmount(sIdx, val) { _fbSections[sIdx].amount_rupees = val; }
+function syncFBQuestionLabel(sIdx, qIdx, val) { _fbSections[sIdx].questions[qIdx].label = val; }
+function syncFBQuestionReq(sIdx, qIdx, val) { _fbSections[sIdx].questions[qIdx].required = val; }
+function syncFBOptionVal(sIdx, qIdx, oIdx, val) {
+  const q = _fbSections[sIdx].questions[qIdx];
+  if (q.options) q.options[oIdx] = val;
+}
+function syncFBBranchToggle(sIdx, qIdx, val) {
+  const q = _fbSections[sIdx].questions[qIdx];
+  if (!q.branch) q.branch = { enabled: false, map: {} };
+  q.branch.enabled = val;
+  if (val) q.required = true; // a branching question must always be answered
+  renderFBSections();
+}
+function syncFBBranchTarget(sIdx, qIdx, optionKey, val) {
+  const q = _fbSections[sIdx].questions[qIdx];
+  if (!q.branch) q.branch = { enabled: true, map: {} };
+  if (!q.branch.map) q.branch.map = {};
+  if (val) q.branch.map[optionKey] = val; else delete q.branch.map[optionKey];
+}
+
+// Full DOM re-scan — a safety net called before every structural change
+// (add/remove/move/save) in case any field's direct-sync handler was missed.
 function syncFBState() {
-  // Sync all live input values back to _fbQuestions before re-render
-  document.querySelectorAll('.fb-question-card').forEach((card, i) => {
-    if (!_fbQuestions[i]) return;
-    const labelEl = card.querySelector('.fb-q-label');
-    const typeEl = card.querySelector('.fb-q-type');
-    const reqEl = card.querySelector('.fb-q-req');
-    if (labelEl) _fbQuestions[i].label = labelEl.value;
-    if (typeEl) _fbQuestions[i].type = typeEl.value;
-    if (reqEl) _fbQuestions[i].required = reqEl.checked;
-    const optInputs = card.querySelectorAll('.fb-option-input');
-    optInputs.forEach((inp, j) => {
-      if (_fbQuestions[i].options && _fbQuestions[i].options[j] !== undefined)
-        _fbQuestions[i].options[j] = inp.value;
+  document.querySelectorAll('.fb-section-card').forEach(card => {
+    const sIdx = parseInt(card.dataset.sidx, 10);
+    if (!_fbSections[sIdx]) return;
+    const titleEl = card.querySelector('.fb-section-title');
+    const descEl = card.querySelector('.fb-section-desc');
+    const nextEl = card.querySelector('.fb-next-select');
+    const payToggleEl = card.querySelector('.fb-pay-toggle-row input[type=checkbox]');
+    const amtEl = card.querySelector('.fb-pay-amount input');
+    if (titleEl) _fbSections[sIdx].title = titleEl.value;
+    if (descEl) _fbSections[sIdx].description = descEl.value;
+    if (nextEl) _fbSections[sIdx].next_section = nextEl.value;
+    if (payToggleEl) _fbSections[sIdx].is_paid = payToggleEl.checked;
+    if (amtEl) _fbSections[sIdx].amount_rupees = amtEl.value;
+
+    card.querySelectorAll('.fb-question-card').forEach(qCard => {
+      const qIdx = parseInt(qCard.dataset.qidx, 10);
+      const q = _fbSections[sIdx].questions[qIdx];
+      if (!q) return;
+      const labelEl = qCard.querySelector('.fb-q-label');
+      const typeEl = qCard.querySelector('.fb-q-type');
+      const reqEl = qCard.querySelector('.fb-q-req');
+      const branchToggleEl = qCard.querySelector('.fb-branch-toggle-row input[type=checkbox]');
+      if (labelEl) q.label = labelEl.value;
+      if (typeEl) q.type = typeEl.value;
+      if (reqEl) q.required = reqEl.checked;
+      if (branchToggleEl) {
+        if (!q.branch) q.branch = { enabled: false, map: {} };
+        q.branch.enabled = branchToggleEl.checked;
+      }
+      qCard.querySelectorAll('.fb-option-input').forEach((inp, j) => {
+        if (q.options && q.options[j] !== undefined) q.options[j] = inp.value;
+      });
+      qCard.querySelectorAll('.fb-branch-select').forEach(sel => {
+        const optKey = sel.dataset.optkey;
+        if (optKey === undefined) return;
+        if (!q.branch) q.branch = { enabled: false, map: {} };
+        if (!q.branch.map) q.branch.map = {};
+        if (sel.value) q.branch.map[optKey] = sel.value; else delete q.branch.map[optKey];
+      });
     });
   });
 }
 
-function renderFBQuestions() {
-  const wrap = document.getElementById('fb-questions');
-  const TYPE_LABELS = { text:'Short Text', email:'Email', phone:'Phone Number', textarea:'Long Text', radio:'Multiple Choice', checkbox:'Checkboxes', image:'Image Upload' };
+function renderFBSections() {
+  const wrap = document.getElementById('fb-sections');
+  _fbQuestions = clientFlattenAllQuestions(JSON.stringify({ sections: _fbSections })); // keep response-viewer fallback in sync
+  const TYPE_LABELS = { text: 'Short Text', email: 'Email', phone: 'Phone Number', textarea: 'Long Text', radio: 'Multiple Choice', checkbox: 'Checkboxes', image: 'Image Upload' };
+  const esc = s => (s || '').toString().replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const escJs = s => esc(s).replace(/'/g, "\\'");
 
-  wrap.innerHTML = _fbQuestions.map((q, i) => `
-    <div class="fb-question-card" data-idx="${i}">
-      <div class="fb-q-row">
-        <input class="fb-q-label" placeholder="Question label..." value="${(q.label||'').replace(/"/g,'&quot;')}"
-          oninput="syncFBFieldLabel(${i},this.value)">
-        <select class="fb-q-type" onchange="fbQuestionTypeChange(${i},this.value)">
-          ${Object.entries(TYPE_LABELS).map(([v,l])=>`<option value="${v}" ${q.type===v?'selected':''}>${l}</option>`).join('')}
-        </select>
-        <label class="fb-q-required"><input type="checkbox" class="fb-q-req" ${q.required?'checked':''} onchange="syncFBFieldReq(${i},this.checked)"> Required</label>
-        <button class="fb-q-delete" onclick="syncFBState();removeFBQuestion(${i})" title="Remove">✕</button>
-      </div>
-      ${(q.type === 'radio' || q.type === 'checkbox') ? `
-        <div class="fb-options-wrap">
-          ${(q.options||[]).map((opt,j) => `
-            <div class="fb-option-row">
-              <span style="color:var(--grey);font-size:12px;width:16px;text-align:center">${q.type==='radio'?'◯':'☐'}</span>
-              <input class="fb-option-input" placeholder="Option ${j+1}" value="${(opt||'').replace(/"/g,'&quot;')}"
-                oninput="syncFBOptionVal(${i},${j},this.value)">
-              <button class="fb-option-del" onclick="syncFBState();removeFBOption(${i},${j})">✕</button>
+  wrap.innerHTML = _fbSections.map((section, sIdx) => {
+    const otherSections = _fbSections.map((s, si) => ({ s, si })).filter(x => x.si !== sIdx);
+    const nextOptions = `<option value="">Next section (in order)</option>` +
+      otherSections.map(({ s, si }) => `<option value="${s.id}" ${section.next_section === s.id ? 'selected' : ''}>${esc(s.title) || 'Section ' + (si + 1)}</option>`).join('') +
+      `<option value="${FB_SUBMIT_END}" ${section.next_section === FB_SUBMIT_END ? 'selected' : ''}>End form (Submit)</option>`;
+
+    const questionsHtml = (section.questions || []).map((q, qIdx) => {
+      const branchEnabled = q.type === 'radio' && q.branch && q.branch.enabled;
+      const branchOptionsHtml = branchEnabled ? `
+        <div class="fb-branch-options">
+          ${(q.options || []).map(opt => `
+            <div class="fb-branch-option-row">
+              <span class="fb-branch-option-label">${esc(opt) || '(empty option)'}</span>
+              <span class="fb-branch-arrow">→</span>
+              <select class="fb-branch-select" data-optkey="${esc(opt)}" onchange="syncFBBranchTarget(${sIdx},${qIdx},'${escJs(opt)}',this.value)">
+                <option value="">(use section default)</option>
+                ${otherSections.map(({ s, si }) => `<option value="${s.id}" ${q.branch.map && q.branch.map[opt] === s.id ? 'selected' : ''}>${esc(s.title) || 'Section ' + (si + 1)}</option>`).join('')}
+                <option value="${FB_SUBMIT_END}" ${q.branch.map && q.branch.map[opt] === FB_SUBMIT_END ? 'selected' : ''}>End form (Submit)</option>
+              </select>
             </div>
           `).join('')}
-          <button class="fb-add-option" onclick="syncFBState();addFBOption(${i})">+ Add option</button>
-        </div>` : ''}
-      ${q.type === 'image' ? `<div class="fb-image-hint">Respondents will upload an image file (JPEG, PNG, max 10MB)</div>` : ''}
-    </div>
-  `).join('');
-}
+        </div>` : '';
 
-function syncFBFieldLabel(idx, val) { _fbQuestions[idx].label = val; }
-function syncFBFieldReq(idx, val) { _fbQuestions[idx].required = val; }
-function syncFBOptionVal(idx, oIdx, val) {
-  if (_fbQuestions[idx].options) _fbQuestions[idx].options[oIdx] = val;
+      return `
+      <div class="fb-question-card" data-sidx="${sIdx}" data-qidx="${qIdx}">
+        <div class="fb-q-row">
+          <input class="fb-q-label" placeholder="Question label..." value="${esc(q.label)}"
+            oninput="syncFBQuestionLabel(${sIdx},${qIdx},this.value)">
+          <select class="fb-q-type" onchange="fbQuestionTypeChange(${sIdx},${qIdx},this.value)">
+            ${Object.entries(TYPE_LABELS).map(([v, l]) => `<option value="${v}" ${q.type === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <label class="fb-q-required"><input type="checkbox" class="fb-q-req" ${q.required ? 'checked' : ''} ${branchEnabled ? 'disabled title="Required automatically — this question branches the form"' : ''} onchange="syncFBQuestionReq(${sIdx},${qIdx},this.checked)"> Required</label>
+          <button class="fb-q-delete" onclick="syncFBState();removeFBQuestion(${sIdx},${qIdx})" title="Remove">✕</button>
+        </div>
+        ${(q.type === 'radio' || q.type === 'checkbox') ? `
+          <div class="fb-options-wrap">
+            ${(q.options || []).map((opt, oIdx) => `
+              <div class="fb-option-row">
+                <span style="color:var(--grey);font-size:12px;width:16px;text-align:center">${q.type === 'radio' ? '◯' : '☐'}</span>
+                <input class="fb-option-input" placeholder="Option ${oIdx + 1}" value="${esc(opt)}"
+                  oninput="syncFBOptionVal(${sIdx},${qIdx},${oIdx},this.value)">
+                <button class="fb-option-del" onclick="syncFBState();removeFBOption(${sIdx},${qIdx},${oIdx})">✕</button>
+              </div>
+            `).join('')}
+            <button class="fb-add-option" onclick="syncFBState();addFBOption(${sIdx},${qIdx})">+ Add option</button>
+          </div>` : ''}
+        ${q.type === 'image' ? `<div class="fb-image-hint">Respondents will upload an image file (JPEG, PNG, max 10MB)</div>` : ''}
+        ${q.type === 'radio' ? `
+          <label class="fb-branch-toggle-row">
+            <span class="fb-q-req-toggle">
+              <input type="checkbox" ${q.branch && q.branch.enabled ? 'checked' : ''} onchange="syncFBBranchToggle(${sIdx},${qIdx},this.checked)">
+              <span class="fb-q-req-track"></span><span class="fb-q-req-thumb"></span>
+            </span>
+            Branch to a different section based on the answer
+          </label>
+          ${branchOptionsHtml}
+        ` : ''}
+      </div>`;
+    }).join('') || '<div style="font-size:12.5px;color:rgba(245,245,245,.3);padding:2px 0 6px">No questions yet — add one below.</div>';
+
+    return `
+    <div class="fb-section-card" data-sidx="${sIdx}">
+      <div class="fb-section-header">
+        <div class="fb-section-num">${sIdx + 1}</div>
+        <div class="fb-section-meta">
+          <input class="fb-section-title" placeholder="Section title (e.g. Participant Details)" value="${esc(section.title)}" oninput="syncFBSectionTitle(${sIdx},this.value)">
+          <textarea class="fb-section-desc" placeholder="Shown to registrants (optional)" rows="1" oninput="syncFBSectionDesc(${sIdx},this.value)">${esc(section.description)}</textarea>
+        </div>
+        <div class="fb-section-actions">
+          <button class="fb-section-move" onclick="syncFBState();moveFBSection(${sIdx},-1)" title="Move up" ${sIdx === 0 ? 'style="opacity:.25;pointer-events:none"' : ''}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <button class="fb-section-move" onclick="syncFBState();moveFBSection(${sIdx},1)" title="Move down" ${sIdx === _fbSections.length - 1 ? 'style="opacity:.25;pointer-events:none"' : ''}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button class="fb-section-del" onclick="syncFBState();removeFBSection(${sIdx})" title="Delete section">✕</button>
+        </div>
+      </div>
+      <div class="fb-section-questions">${questionsHtml}</div>
+      <button class="fb-add-q-btn-sm" onclick="syncFBState();addFBQuestion(${sIdx})">+ Add Question</button>
+      <div class="fb-section-footer">
+        <label class="fb-pay-toggle-row">
+          <span class="fb-toggle">
+            <input type="checkbox" ${section.is_paid ? 'checked' : ''} onchange="syncFBSectionPaidToggle(${sIdx},this.checked)">
+            <span class="fb-toggle-track"></span><span class="fb-toggle-thumb"></span>
+          </span>
+          Require payment for this section
+        </label>
+        ${section.is_paid ? `
+          <div class="fb-pay-amount">
+            <span>₹</span>
+            <input type="number" min="1" step="1" value="${esc(section.amount_rupees)}" placeholder="Amount" oninput="syncFBSectionAmount(${sIdx},this.value)">
+          </div>` : ''}
+        <div class="fb-next-row">
+          Leads to
+          <select class="fb-next-select" onchange="syncFBSectionNext(${sIdx},this.value)">${nextOptions}</select>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function saveFormBuilder() {
@@ -7108,13 +7364,42 @@ async function saveFormBuilder() {
   const desc = document.getElementById('fb-form-desc').value.trim();
   const is_open = document.getElementById('fb-is-open').checked;
   const btn = document.getElementById('fb-save-btn');
+
+  // Basic client-side guardrails before hitting the server
+  for (const s of _fbSections) {
+    if (s.is_paid && (!s.amount_rupees || Number(s.amount_rupees) <= 0)) {
+      alert(`Section "${s.title || 'Untitled'}" has payment enabled but no amount set.`);
+      return;
+    }
+    for (const q of s.questions || []) {
+      if ((q.type === 'radio' || q.type === 'checkbox') && (!q.options || !q.options.filter(o => o.trim()).length)) {
+        alert(`Question "${q.label || 'Untitled question'}" needs at least one option.`);
+        return;
+      }
+    }
+  }
+
+  const cleanedSections = _fbSections.map(s => ({
+    id: s.id,
+    title: s.title || '',
+    description: s.description || '',
+    questions: (s.questions || []).map(q => ({
+      id: q.id, label: q.label, type: q.type, required: !!q.required,
+      options: q.options || [],
+      ...(q.type === 'radio' && q.branch && q.branch.enabled ? { branch: { enabled: true, map: q.branch.map || {} } } : {}),
+    })),
+    next_section: s.next_section || '',
+    is_paid: !!s.is_paid,
+    amount_paise: s.is_paid ? Math.round(Number(s.amount_rupees || 0) * 100) : null,
+  }));
+
   btn.textContent = 'Saving…'; btn.disabled = true;
   try {
     const token = adminToken;
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
-      body: JSON.stringify({ title, description: desc, questions: _fbQuestions, is_open })
+      body: JSON.stringify({ title, description: desc, sections: cleanedSections, is_open })
     });
     if (res.ok) {
       btn.textContent = '✓ Saved'; btn.disabled = false;
@@ -7124,7 +7409,7 @@ async function saveFormBuilder() {
       alert('Error saving form: ' + (err.error || res.status));
       btn.textContent = 'Save Form'; btn.disabled = false;
     }
-  } catch(e) {
+  } catch (e) {
     alert('Error saving form: ' + e.message);
     btn.textContent = 'Save Form'; btn.disabled = false;
   }
@@ -7175,6 +7460,7 @@ async function deleteEntireForm() {
       setTimeout(() => {
         closeFormBuilder();
         // Reset form builder state
+        _fbSections = [];
         _fbQuestions = [];
         _fbResponseCount = 0;
       }, 1200);
@@ -7222,7 +7508,7 @@ async function openResponseViewer() {
     let questions = _fbQuestions;
     if (formRes.ok) {
       const form = await formRes.json();
-      try { questions = JSON.parse(form.questions || '[]'); } catch(e) {}
+      questions = clientFlattenAllQuestions(form.questions);
     }
 
     countEl.textContent = responses.length + ' response' + (responses.length !== 1 ? 's' : '');
@@ -7239,6 +7525,9 @@ async function openResponseViewer() {
       let answers = {};
       try { answers = JSON.parse(r.answers || '{}'); } catch(e) {}
       const time = r.submitted_at ? new Date(r.submitted_at).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      const paidBadge = r.amount_paise > 0
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.25);color:#34c759;border-radius:20px;font-size:10.5px;font-weight:700" title="${r.razorpay_payment_id || ''}">₹${Math.round(r.amount_paise / 100).toLocaleString('en-IN')} paid</span>`
+        : '';
       const answerRows = questions.map(q => {
         const val = answers[q.id] || answers[q.label] || '';
         const display = Array.isArray(val) ? val.join(', ') : String(val);
@@ -7252,7 +7541,10 @@ async function openResponseViewer() {
       return `<div class="fb-rv-row">
         <div class="fb-rv-row-header">
           <div class="fb-rv-num">${i + 1}</div>
-          <div class="fb-rv-time">${time}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${paidBadge}
+            <div class="fb-rv-time">${time}</div>
+          </div>
         </div>
         <div class="fb-rv-answers">${answerRows || '<div class="fb-rv-a" style="opacity:.4">No text answers</div>'}</div>
       </div>`;
@@ -7300,11 +7592,11 @@ async function downloadFormResponses() {
     let questions = _fbQuestions;
     if (formRes.ok) {
       const form = await formRes.json();
-      try { questions = JSON.parse(form.questions || '[]'); } catch(e){}
+      questions = clientFlattenAllQuestions(form.questions);
     }
 
     // Build CSV
-    const headers = ['#', 'Submitted At', ...questions.map(q => q.label || q.id)];
+    const headers = ['#', 'Submitted At', ...questions.map(q => q.label || q.id), 'Amount Paid (₹)', 'Payment ID', 'Paid At'];
     const rows = responses.map((r, i) => {
       let answers = {};
       try { answers = JSON.parse(r.answers || '{}'); } catch(e){}
@@ -7315,7 +7607,10 @@ async function downloadFormResponses() {
           const val = answers[q.id] || answers[q.label] || '';
           if (Array.isArray(val)) return val.join(', ');
           return String(val);
-        })
+        }),
+        r.amount_paise > 0 ? Math.round(r.amount_paise / 100) : '',
+        r.razorpay_payment_id || '',
+        r.payment_verified_at ? new Date(r.payment_verified_at).toLocaleString() : '',
       ];
     });
 
@@ -7356,6 +7651,12 @@ let _rfEventTime = '';
 let _rfEventLocation = '';
 let _rfForm = null;
 let _rfImageFiles = {};
+let _rfSections = [];
+let _rfCurrentSectionId = null;
+let _rfAnswers = {};   // persists across Back/Next so re-visited sections keep prior input
+let _rfHistory = [];   // stack of previously visited section ids, for the Back button
+let _rfPaymentInfo = null; // razorpay order/payment/signature, once paid — carried forward in
+                            // case a paid section is followed by further (free) sections
 
 // Safe wrappers — look up event from registry to avoid apostrophe/quote issues in onclick
 function openEventFormById(eventId) {
@@ -7380,13 +7681,24 @@ async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', ev
   _rfEventLocation = eventLocation;
   _rfForm = null;
   _rfImageFiles = {};
+  _rfSections = [];
+  _rfCurrentSectionId = null;
+  _rfAnswers = {};
+  _rfHistory = [];
+  _rfPaymentInfo = null;
+  _rfPaidSectionId = null;
 
   document.getElementById('rf-event-label').textContent = eventTitle;
   document.getElementById('rf-title').textContent = 'Registration';
   document.getElementById('rf-desc').textContent = '';
   document.getElementById('rf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey);font-size:14px">Loading form…</div>';
   document.getElementById('rf-submit-row').style.display = 'flex';
+  document.getElementById('rf-progress').style.display = 'none';
+  document.getElementById('rf-fee-note').style.display = 'none';
+  document.getElementById('rf-back-btn').style.display = 'none';
   document.getElementById('reg-form-overlay').classList.add('open');
+  const banner0 = document.getElementById('rf-test-mode-banner');
+  if (banner0) banner0.remove();
 
   const res = await fetch('/api/events/' + eventId + '/form');
   if (!res.ok) {
@@ -7402,13 +7714,259 @@ async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', ev
   }
 
   _rfForm = form;
-  let questions = [];
-  try { questions = JSON.parse(form.questions || '[]'); } catch(e){}
+  const { sections } = clientParseFormSchema(form.questions);
+  _rfSections = sections;
+  _rfCurrentSectionId = sections[0] ? sections[0].id : null;
 
   document.getElementById('rf-title').textContent = form.title || eventTitle + ' Registration';
   document.getElementById('rf-desc').textContent = form.description || '';
 
-  document.getElementById('rf-body').innerHTML = questions.map(q => buildRegField(q)).join('');
+  renderRFCurrentSection();
+}
+
+function rfGetCurrentSection() {
+  return _rfSections.find(s => s.id === _rfCurrentSectionId) || null;
+}
+
+// True only when we can be CERTAIN the section leads straight to submission
+// without needing an answer first (i.e. it has no branching question). Used
+// only to choose the button's label ahead of time — the actual outcome is
+// always recomputed for real once the section is answered and submitted.
+function rfPeekIsTerminal(section) {
+  const hasBranch = (section.questions || []).some(q => q.type === 'radio' && q.branch && q.branch.enabled);
+  if (hasBranch) return false;
+  if (section.next_section === '__submit__') return true;
+  if (section.next_section) return false;
+  const idx = _rfSections.findIndex(s => s.id === section.id);
+  return !(idx >= 0 && idx + 1 < _rfSections.length);
+}
+
+function updateRFPrimaryButton() {
+  const section = rfGetCurrentSection();
+  const btn = document.getElementById('rf-submit-btn');
+  const feeNote = document.getElementById('rf-fee-note');
+  if (!section || !btn) return;
+  btn.disabled = false;
+  if (section.is_paid && Number(section.amount_paise) > 0) {
+    const rupees = Math.round(Number(section.amount_paise) / 100);
+    btn.innerHTML = `Pay ₹${rupees.toLocaleString('en-IN')} &amp; Continue <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+    feeNote.style.display = 'block';
+    feeNote.innerHTML = `A payment of <strong>₹${rupees.toLocaleString('en-IN')}</strong> is required to complete this step.`;
+  } else {
+    feeNote.style.display = 'none';
+    const isTerminal = rfPeekIsTerminal(section);
+    btn.innerHTML = isTerminal
+      ? 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+      : 'Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+}
+
+function renderRFCurrentSection() {
+  const section = rfGetCurrentSection();
+  if (!section) return;
+  document.getElementById('rf-body').innerHTML = (section.questions || []).map(q => buildRegField(q)).join('');
+  restoreRFAnswersIntoDom(section.questions || []);
+
+  const descEl = document.getElementById('rf-desc');
+  if (descEl) descEl.textContent = section.description || (_rfHistory.length ? '' : (_rfForm?.description || ''));
+
+  // Progress dots — shows progress along the path taken so far. Branching
+  // means the total section count can vary, so this reflects steps-so-far
+  // rather than a fixed denominator.
+  const progressEl = document.getElementById('rf-progress');
+  const stepsSoFar = [..._rfHistory, _rfCurrentSectionId];
+  if (_rfSections.length > 1) {
+    progressEl.style.display = 'flex';
+    progressEl.innerHTML = stepsSoFar.map((id, i) =>
+      `<div class="reg-progress-dot ${i < stepsSoFar.length - 1 ? 'done' : 'current'}"></div>`
+    ).join('');
+  } else {
+    progressEl.style.display = 'none';
+  }
+
+  document.getElementById('rf-back-btn').style.display = _rfHistory.length ? 'inline-flex' : 'none';
+  updateRFPrimaryButton();
+
+  const errEl = document.getElementById('rf-submit-error');
+  if (errEl) errEl.style.display = 'none';
+}
+
+function restoreRFAnswersIntoDom(questions) {
+  for (const q of questions) {
+    const saved = _rfAnswers[q.id];
+    if (saved === undefined) continue;
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
+      if (el) el.value = saved;
+    } else if (q.type === 'radio') {
+      document.querySelectorAll(`input[name="q_${q.id}"]`).forEach(inp => {
+        if (inp.value === saved) { inp.checked = true; inp.closest('.reg-radio-item')?.classList.add('selected'); }
+      });
+    } else if (q.type === 'checkbox') {
+      const vals = Array.isArray(saved) ? saved : [];
+      document.querySelectorAll(`input[data-qid="${q.id}"]`).forEach(inp => {
+        if (vals.includes(inp.value)) { inp.checked = true; inp.closest('.reg-check-item')?.classList.add('selected'); }
+      });
+    } else if (q.type === 'image') {
+      const file = _rfImageFiles[q.id];
+      if (file) {
+        const prev = document.getElementById('img-preview-' + q.id);
+        if (prev) { prev.src = URL.createObjectURL(file); prev.style.display = 'block'; }
+        const hint = document.querySelector(`#img-upload-${q.id} .reg-image-upload-text`);
+        if (hint) hint.textContent = file.name;
+      }
+    }
+  }
+}
+
+function rfShowTransientError(msg) {
+  const btn = document.getElementById('rf-submit-btn');
+  const orig = btn.innerHTML;
+  btn.innerHTML = msg;
+  btn.style.background = '#ff453a';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; updateRFPrimaryButton(); }, 2500);
+}
+
+function collectRFCurrentAnswers(section) {
+  let valid = true;
+  let firstInvalid = null;
+  const collected = {};
+  for (const q of section.questions || []) {
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
+      const val = el ? el.value.trim() : '';
+      if (q.required && !val) { firstInvalid = firstInvalid || el; valid = false; }
+      collected[q.id] = val;
+    } else if (q.type === 'radio') {
+      const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+      if (q.required && !checked) valid = false;
+      collected[q.id] = checked ? checked.value : '';
+    } else if (q.type === 'checkbox') {
+      const checked = [...document.querySelectorAll(`input[data-qid="${q.id}"]:checked`)].map(i => i.value);
+      if (q.required && !checked.length) valid = false;
+      collected[q.id] = checked;
+    } else if (q.type === 'image') {
+      if (q.required && !_rfImageFiles[q.id]) valid = false;
+    }
+  }
+  return { valid, firstInvalid, collected };
+}
+
+async function rfPrimaryAction() {
+  const section = rfGetCurrentSection();
+  if (!section) return;
+  const { valid, firstInvalid, collected } = collectRFCurrentAnswers(section);
+  if (!valid) {
+    if (firstInvalid) firstInvalid.focus();
+    rfShowTransientError('Please fill all required fields');
+    return;
+  }
+  Object.assign(_rfAnswers, collected);
+
+  if (section.is_paid && Number(section.amount_paise) > 0) {
+    await rfStartPayment(section);
+    return;
+  }
+  rfAdvance();
+}
+
+function rfAdvance() {
+  const result = clientComputeSectionPath(_rfSections, _rfAnswers);
+  const idx = result.visitedSectionIds.indexOf(_rfCurrentSectionId);
+  const nextId = idx >= 0 ? result.visitedSectionIds[idx + 1] : undefined;
+  if (!nextId) {
+    rfFinalSubmit(_rfPaymentInfo);
+    return;
+  }
+  _rfHistory.push(_rfCurrentSectionId);
+  _rfCurrentSectionId = nextId;
+  renderRFCurrentSection();
+  const bodyEl = document.getElementById('rf-body');
+  if (bodyEl) bodyEl.scrollTop = 0;
+}
+
+let _rfPaidSectionId = null; // which section's "Pay & Continue" produced _rfPaymentInfo
+
+function rfGoBack() {
+  if (!_rfHistory.length) return;
+  _rfCurrentSectionId = _rfHistory.pop();
+  // Stepping back INTO the section that was just paid for invalidates that
+  // payment proof — if the registrant changes an earlier answer and the
+  // required path/amount shifts, re-confirming will trigger a fresh order
+  // rather than resubmitting stale signature data the server would reject.
+  if (_rfCurrentSectionId === _rfPaidSectionId) {
+    _rfPaymentInfo = null;
+    _rfPaidSectionId = null;
+  }
+  renderRFCurrentSection();
+}
+
+async function rfStartPayment(section) {
+  const btn = document.getElementById('rf-submit-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Opening payment…';
+  try {
+    const orderRes = await fetch('/api/events/' + _rfEventId + '/form/create-order', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ answers: _rfAnswers }),
+    });
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) {
+      rfShowTransientError(orderData.error || 'Could not start payment');
+      btn.disabled = false; btn.innerHTML = origHtml;
+      return;
+    }
+    const { order_id, key_id, amount_paise } = orderData;
+
+    // TEST MODE banner — same convention as the donation flow
+    const existingBanner = document.getElementById('rf-test-mode-banner');
+    if (existingBanner) existingBanner.remove();
+    if (key_id && key_id.startsWith('rzp_test_')) {
+      const banner = document.createElement('div');
+      banner.id = 'rf-test-mode-banner';
+      banner.style.cssText = 'background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin:0 24px 12px;text-align:center;letter-spacing:.04em';
+      banner.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
+      const feeNote = document.getElementById('rf-fee-note');
+      if (feeNote && feeNote.parentNode) feeNote.parentNode.insertBefore(banner, feeNote);
+    }
+
+    // Prefill from whatever looks like an email in answers collected so far
+    let prefillEmail = '';
+    for (const val of Object.values(_rfAnswers)) {
+      if (typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) { prefillEmail = val.trim(); break; }
+    }
+
+    const rzp = new Razorpay({
+      key: key_id,
+      amount: amount_paise,
+      currency: 'INR',
+      name: 'KFS — KIIT Film Society',
+      description: _rfEventTitle + ' Registration',
+      order_id: order_id,
+      prefill: { email: prefillEmail },
+      theme: { color: '#f5f5f5' },
+      modal: {
+        ondismiss: () => { btn.disabled = false; btn.innerHTML = origHtml; },
+      },
+      handler: async (response) => {
+        _rfPaymentInfo = {
+          razorpay_order_id:   response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature:  response.razorpay_signature,
+        };
+        _rfPaidSectionId = section.id;
+        btn.innerHTML = 'Payment received…';
+        rfAdvance();
+      },
+    });
+    rzp.open();
+  } catch (e) {
+    console.error('Payment init error:', e);
+    rfShowTransientError('Network error — please try again');
+    btn.disabled = false; btn.innerHTML = origHtml;
+  }
 }
 
 function buildRegField(q) {
@@ -7486,48 +8044,20 @@ function previewRegImage(input, qid) {
   if (hint) hint.textContent = file.name;
 }
 
-async function submitRegForm() {
+// Called once the section path is fully walked (rfAdvance found no next
+// section). `paymentPayload` is whatever rfStartPayment's Razorpay handler
+// stashed in _rfPaymentInfo if a paid section was crossed along the way —
+// null for an entirely free path. Answers/files were already accumulated
+// into _rfAnswers/_rfImageFiles section-by-section as the user moved through
+// the form, so there's nothing left to collect here.
+async function rfFinalSubmit(paymentPayload) {
   if (!_rfForm || !_rfEventId) return;
-  let questions = [];
-  try { questions = JSON.parse(_rfForm.questions || '[]'); } catch(e){}
-
-  // Collect answers
-  const answers = {};
-  let valid = true;
-  let firstInvalid = null;
-  for (const q of questions) {
-    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
-      // Target the actual input/textarea, NOT the wrapper div
-      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
-      const val = el ? el.value.trim() : '';
-      if (q.required && !val) { firstInvalid = el; valid = false; break; }
-      answers[q.id] = val;
-    } else if (q.type === 'radio') {
-      const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
-      if (q.required && !checked) { valid = false; break; }
-      answers[q.id] = checked ? checked.value : '';
-    } else if (q.type === 'checkbox') {
-      const checked = [...document.querySelectorAll(`input[data-qid="${q.id}"]:checked`)].map(i => i.value);
-      if (q.required && !checked.length) { valid = false; break; }
-      answers[q.id] = checked;
-    } else if (q.type === 'image') {
-      if (q.required && !_rfImageFiles[q.id]) { valid = false; break; }
-    }
-  }
-
-  if (!valid) {
-    if (firstInvalid) firstInvalid.focus();
-    const btn = document.getElementById('rf-submit-btn');
-    const orig = btn.innerHTML;
-    btn.innerHTML = 'Please fill all required fields';
-    btn.style.background = '#ff453a';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
-    return;
-  }
 
   const btn = document.getElementById('rf-submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg> Submitting…';
+  const backBtn = document.getElementById('rf-back-btn');
+  if (backBtn) backBtn.style.display = 'none';
 
   // Clear any previous duplicate/error message before each attempt
   const prevErr = document.getElementById('rf-submit-error');
@@ -7535,7 +8065,8 @@ async function submitRegForm() {
 
   try {
     const fd = new FormData();
-    fd.append('answers', JSON.stringify(answers));
+    fd.append('answers', JSON.stringify(_rfAnswers));
+    if (paymentPayload) fd.append('payment', JSON.stringify(paymentPayload));
     for (const [qid, file] of Object.entries(_rfImageFiles)) {
       fd.append(qid, file);
     }
@@ -7543,10 +8074,16 @@ async function submitRegForm() {
     const res = await fetch('/api/events/' + _rfEventId + '/form/submit', { method: 'POST', credentials: 'include', body: fd });
 
     if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+
       document.querySelector('.reg-form-header').style.display = 'none';
       document.getElementById('rf-submit-row').style.display = 'none';
+      document.getElementById('rf-progress').style.display = 'none';
+      document.getElementById('rf-fee-note').style.display = 'none';
       const errEl2 = document.getElementById('rf-submit-error');
       if (errEl2) errEl2.style.display = 'none';
+      const banner = document.getElementById('rf-test-mode-banner');
+      if (banner) banner.remove();
 
       // ── Track event registration in localStorage for Wrapped ──
       try {
@@ -7580,6 +8117,10 @@ async function submitRegForm() {
       }
       const _gcUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + _gcTitle + '&dates=' + _gcDates + '&location=' + _gcLoc + '&details=' + encodeURIComponent('Registered via KFS — KIIT Film Society');
 
+      const paidNote = data.amount_paise > 0
+        ? `<div class="reg-success-sub" style="margin-top:-10px">Payment of <strong>₹${Math.round(data.amount_paise / 100).toLocaleString('en-IN')}</strong> received.</div>`
+        : '';
+
       document.getElementById('rf-body').innerHTML = `
         <div class="reg-success">
           <div class="reg-success-icon">
@@ -7593,10 +8134,11 @@ async function submitRegForm() {
           </div>
           <div class="reg-success-title">You\'re registered!</div>
           <div class="reg-success-sub">We\'ll see you at <strong>${_rfEventTitle}</strong>. Stay tuned for updates.</div>
+          ${paidNote}
           <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
             ${_rfEventDate ? `<a href="${_gcUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(255,255,255,.1);color:var(--white);border:1px solid rgba(255,255,255,.2);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(255,255,255,.18)\'" onmouseout="this.style.background=\'rgba(255,255,255,.1)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Add to Google Calendar</a>` : ''}
             <a href="https://wa.me/?text=${encodeURIComponent('I just registered for ' + _rfEventTitle + ' by KFS — KIIT Film Society! Join me: https://kiitfilmsociety.in/events')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none" onmouseover="this.style.background=\'rgba(37,211,102,.2)\'" onmouseout="this.style.background=\'rgba(37,211,102,.12)\'"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Share on WhatsApp</a>
-            <button onclick="closeRegForm()" style="padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+            <button data-action="closeRegForm" style="padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Close</button>
           </div>
         </div>`;
     } else {
@@ -7613,13 +8155,16 @@ async function submitRegForm() {
       errEl.textContent = errMsg;
       errEl.style.display = 'block';
       btn.disabled = false;
-      btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+      // Restore whatever label correctly reflects the current section
+      // (Pay/Next/Submit) rather than freezing on the "Submitting…" spinner.
+      updateRFPrimaryButton();
+      if (backBtn) backBtn.style.display = _rfHistory.length ? 'inline-flex' : 'none';
     }
   } catch(err) {
     console.error('Form submit error:', err);
-    alert('Network error. Please check your connection and try again.');
     btn.disabled = false;
-    btn.innerHTML = 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+    rfShowTransientError('Network error — please try again');
+    if (backBtn) backBtn.style.display = _rfHistory.length ? 'inline-flex' : 'none';
   }
 }
 

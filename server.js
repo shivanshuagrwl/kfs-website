@@ -935,6 +935,30 @@ async function initDB() {
     } else {
       console.log("[initDB] donors table OK");
     }
+
+    // Probe form_responses for the payment columns added by the
+    // branching/paid-section registration forms feature.
+    const { error: formRespPayErr } = await supabase
+      .from("form_responses")
+      .select("amount_paise,razorpay_order_id,razorpay_payment_id,razorpay_signature,payment_verified_at")
+      .limit(1);
+    if (formRespPayErr) {
+      console.warn(
+        "[initDB] form_responses is missing payment columns — run this SQL migration in Supabase:\n" +
+        "  ALTER TABLE form_responses\n" +
+        "    ADD COLUMN IF NOT EXISTS amount_paise        INTEGER,\n" +
+        "    ADD COLUMN IF NOT EXISTS razorpay_order_id    TEXT UNIQUE,\n" +
+        "    ADD COLUMN IF NOT EXISTS razorpay_payment_id  TEXT,\n" +
+        "    ADD COLUMN IF NOT EXISTS razorpay_signature   TEXT,\n" +
+        "    ADD COLUMN IF NOT EXISTS payment_verified_at  TIMESTAMPTZ;\n" +
+        "  CREATE INDEX IF NOT EXISTS idx_fr_order ON form_responses(razorpay_order_id);\n" +
+        "\n" +
+        "  Without this, paid registration forms (sections marked is_paid) will\n" +
+        "  fail to save once a payment is verified."
+      );
+    } else {
+      console.log("[initDB] form_responses payment columns OK");
+    }
   } catch (e) {
     console.error("initDB error:", e.message);
     // Don't crash the server — Supabase may be temporarily unreachable
@@ -4234,6 +4258,178 @@ app.post("/api/reviews", strictWriteLimit, async (req, res) => {
 });
 
 // ── EVENT REGISTRATION FORMS ──────────────────────────────────────────────────
+//
+// Forms support branching "sections" (à la Google Forms): a form is a list of
+// sections, each holding one or more questions. After a section, the form
+// moves to a default "next section" — unless one of that section's
+// multiple-choice questions has branching enabled, in which case the chosen
+// option can route to a different section entirely (e.g. a "Participant or
+// Audience?" question routing into two completely different question paths).
+//
+// Any section can also be flagged is_paid with a fixed amount_paise — set
+// once by the admin and never customizable by the registrant. The actual
+// path taken (and therefore the amount owed) is always recomputed
+// server-side from the submitted answers, never trusted from the client.
+//
+// Storage: reuses the existing event_forms.questions TEXT column (no DB
+// migration needed for this table). Shape on disk:
+//   v1 (legacy, flat):  [ {id,label,type,required,options}, ... ]
+//   v2 (sections):      { version: 2, sections: [ {id,title,description,
+//                          questions:[...], next_section, is_paid,
+//                          amount_paise}, ... ] }
+// parseFormSchema() normalizes both into a uniform {version, sections} shape
+// so every downstream route only has to deal with one representation.
+
+const SUBMIT_END = "__submit__";
+
+function parseFormSchema(rawQuestions) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawQuestions || "[]");
+  } catch {
+    parsed = [];
+  }
+  if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sections)) {
+    return { version: 2, sections: parsed.sections };
+  }
+  // Legacy flat array — wrap as a single implicit section so the branching
+  // engine below works unchanged for old forms that haven't been rebuilt yet.
+  const flat = Array.isArray(parsed) ? parsed : [];
+  return {
+    version: 1,
+    sections: [
+      {
+        id: "_legacy",
+        title: null,
+        description: null,
+        questions: flat,
+        next_section: SUBMIT_END,
+        is_paid: false,
+        amount_paise: null,
+      },
+    ],
+  };
+}
+
+// Walk the section graph starting at sections[0], using `answers` to resolve
+// any branching questions along the way. Returns the section ids actually
+// visited, the flattened list of questions belonging to those sections
+// (this — not the raw full schema — is what required-field validation and
+// dedupe checks should run against), and the total amount owed (paise).
+function computeSectionPath(sections, answers) {
+  answers = answers || {};
+  const byId = new Map((sections || []).map((s) => [s.id, s]));
+  const visitedSectionIds = [];
+  const questions = [];
+  let requiredAmountPaise = 0;
+
+  let current = (sections || [])[0] || null;
+  const seen = new Set();
+  let guard = 0;
+
+  while (current && guard <= sections.length + 1) {
+    guard++;
+    if (seen.has(current.id)) break; // cycle guard — malformed schema
+    seen.add(current.id);
+    visitedSectionIds.push(current.id);
+    for (const q of current.questions || []) questions.push(q);
+    if (current.is_paid && Number(current.amount_paise) > 0) {
+      requiredAmountPaise += Number(current.amount_paise);
+    }
+
+    // 1. A branching question's answer can override the section default.
+    let nextId = null;
+    for (const q of current.questions || []) {
+      if (q.branch && q.branch.enabled && q.type === "radio") {
+        const ans = (answers[q.id] || "").toString();
+        const target = ans && q.branch.map ? q.branch.map[ans] : null;
+        if (target === SUBMIT_END) nextId = SUBMIT_END;
+        else if (target && byId.has(target)) nextId = target;
+        if (nextId) break; // first branching question with a match wins
+      }
+    }
+
+    // 2. Otherwise fall back to the section's own default next-section.
+    if (nextId === null) {
+      if (current.next_section === SUBMIT_END) nextId = SUBMIT_END;
+      else if (current.next_section && byId.has(current.next_section))
+        nextId = current.next_section;
+      else {
+        const idx = sections.findIndex((s) => s.id === current.id);
+        nextId =
+          idx >= 0 && idx + 1 < sections.length
+            ? sections[idx + 1].id
+            : SUBMIT_END;
+      }
+    }
+
+    current = nextId === SUBMIT_END || !nextId ? null : byId.get(nextId) || null;
+  }
+
+  return { visitedSectionIds, questions, requiredAmountPaise };
+}
+
+// ADMIN-side validation when saving a sections-based form.
+function validateSectionsPayload(sections) {
+  if (!Array.isArray(sections) || sections.length === 0)
+    return "At least one section is required";
+
+  const sectionIds = new Set();
+  for (const s of sections) {
+    if (!s.id || typeof s.id !== "string") return "Each section needs an id";
+    if (sectionIds.has(s.id)) return `Duplicate section id: ${s.id}`;
+    sectionIds.add(s.id);
+  }
+
+  for (const s of sections) {
+    if (!Array.isArray(s.questions))
+      return `Section "${s.title || s.id}" needs a questions array`;
+    if (s.is_paid) {
+      const amt = parseInt(s.amount_paise, 10);
+      if (!amt || amt < 100)
+        return `Section "${s.title || s.id}" needs a payment amount of at least ₹1`;
+    }
+    if (
+      s.next_section &&
+      s.next_section !== SUBMIT_END &&
+      !sectionIds.has(s.next_section)
+    )
+      return `Section "${s.title || s.id}" has an invalid "next section" target`;
+
+    const qIds = new Set();
+    for (const q of s.questions) {
+      if (!q.id || !q.type)
+        return `Each question must have id and type (section "${s.title || s.id}")`;
+      if (qIds.has(q.id)) return `Duplicate question id: ${q.id}`;
+      qIds.add(q.id);
+      if (
+        (q.type === "radio" || q.type === "checkbox") &&
+        (!Array.isArray(q.options) || q.options.length < 1)
+      )
+        return `Question "${q.label || q.id}" needs at least 1 option`;
+      if (q.branch && q.branch.enabled) {
+        if (q.type !== "radio")
+          return `Only multiple-choice questions can branch ("${q.label || q.id}")`;
+        q.required = true; // a branching question must always be answered
+        for (const target of Object.values(q.branch.map || {})) {
+          if (target && target !== SUBMIT_END && !sectionIds.has(target))
+            return `Question "${q.label || q.id}" branches to an unknown section`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Public — CSRF-protected. Limits payment-order creation attempts per IP.
+const eventFormPaymentLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many payment attempts. Please wait 15 minutes." },
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+});
 
 // PUBLIC: Get the registration form for an event (schema only, no responses)
 app.get("/api/events/:id/form", async (req, res) => {
@@ -4256,29 +4452,97 @@ app.get("/api/events/:id/form", async (req, res) => {
   }
 });
 
+// PUBLIC: Create a Razorpay order for a paid section reached during a form.
+// The amount is NEVER taken from the client — it's recomputed server-side
+// from the form's branching schema plus the answers given so far, so it
+// can't be tampered with by editing the request.
+app.post(
+  "/api/events/:id/form/create-order",
+  eventFormPaymentLimit,
+  csrfProtect,
+  async (req, res) => {
+    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+      console.error("[event-form/create-order] Razorpay env vars not configured.");
+      return res
+        .status(503)
+        .json({ error: "Payment gateway not configured. Contact support." });
+    }
+
+    const { data: form, error: formErr } = await supabasePublic
+      .from("event_forms")
+      .select("id,is_open,questions")
+      .eq("event_id", req.params.id)
+      .maybeSingle();
+    if (formErr || !form) return res.status(404).json({ error: "Form not found" });
+    if (!form.is_open)
+      return res.status(403).json({ error: "Registrations are currently closed" });
+
+    const { sections } = parseFormSchema(form.questions);
+
+    let answers = {};
+    try {
+      answers = JSON.parse(req.body.answers || "{}");
+    } catch {
+      return res.status(400).json({ error: "Invalid answers payload" });
+    }
+
+    const { requiredAmountPaise } = computeSectionPath(sections, answers);
+    if (!requiredAmountPaise || requiredAmountPaise <= 0) {
+      return res.status(400).json({ error: "No payment is required at this step." });
+    }
+
+    try {
+      const receiptId = `kfs_evtreg_${req.params.id}_${Date.now()}`;
+      const order = await createRazorpayOrder(requiredAmountPaise, receiptId);
+      return res.json({
+        order_id: order.id,
+        key_id: RAZORPAY_KEY_ID,
+        amount_paise: requiredAmountPaise,
+      });
+    } catch (e) {
+      console.error("[event-form/create-order]", e.message);
+      return res.status(502).json({ error: "Could not initiate payment. Please try again." });
+    }
+  },
+);
+
 // ADMIN: Create or update (upsert) the registration form for an event
 app.post(
+
   "/api/admin/events/:id/form",
   requireSection("events"),
   async (req, res) => {
-    const { title, description, questions, is_open } = req.body;
-    if (!Array.isArray(questions))
-      return res.status(400).json({ error: "questions must be an array" });
+    const { title, description, sections, questions, is_open } = req.body;
 
-    // Validate each question minimally
-    for (const q of questions) {
-      if (!q.id || !q.type)
-        return res
-          .status(400)
-          .json({ error: "Each question must have id and type" });
-      if (
-        (q.type === "radio" || q.type === "checkbox") &&
-        (!Array.isArray(q.options) || q.options.length < 1)
-      ) {
-        return res
-          .status(400)
-          .json({ error: `Question "${q.label}" needs at least 1 option` });
+    // Preferred path: sections-based schema (branching + per-section payment).
+    // `questions` (flat array) is still accepted for any older client code,
+    // and is stored as-is — it gets wrapped into an implicit single section
+    // by parseFormSchema() wherever it's read back out.
+    let storedQuestionsJson;
+    if (Array.isArray(sections)) {
+      const err = validateSectionsPayload(sections);
+      if (err) return res.status(400).json({ error: err });
+      storedQuestionsJson = JSON.stringify({ version: 2, sections });
+    } else if (Array.isArray(questions)) {
+      for (const q of questions) {
+        if (!q.id || !q.type)
+          return res
+            .status(400)
+            .json({ error: "Each question must have id and type" });
+        if (
+          (q.type === "radio" || q.type === "checkbox") &&
+          (!Array.isArray(q.options) || q.options.length < 1)
+        ) {
+          return res
+            .status(400)
+            .json({ error: `Question "${q.label}" needs at least 1 option` });
+        }
       }
+      storedQuestionsJson = JSON.stringify(questions);
+    } else {
+      return res
+        .status(400)
+        .json({ error: "sections (or legacy questions) array is required" });
     }
 
     // Check if form already exists for this event
@@ -4293,7 +4557,7 @@ app.post(
       event_id: req.params.id,
       title: title || null,
       description: description || null,
-      questions: JSON.stringify(questions),
+      questions: storedQuestionsJson,
       is_open: is_open !== false && is_open !== "false",
       updated_at: new Date().toISOString(),
     };
@@ -4423,11 +4687,13 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
     return res.status(400).json({ error: "Invalid answers payload" });
   }
 
-  // 3. Validate required fields against schema
-  let questions = [];
-  try {
-    questions = JSON.parse(form.questions || "[]");
-  } catch (e) {}
+  // 3. Recompute the actual path taken through the form's sections from the
+  //    submitted answers (never trust a client-reported path). `questions`
+  //    below is the flattened set of questions belonging only to the
+  //    sections actually visited — branches not taken are correctly ignored
+  //    for both required-field validation and the fee that's owed.
+  const { sections } = parseFormSchema(form.questions);
+  const { questions, requiredAmountPaise } = computeSectionPath(sections, answers);
 
   for (const q of questions) {
     if (!q.required) continue;
@@ -4449,6 +4715,91 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           .status(400)
           .json({ error: `"${q.label || q.id}" is required` });
     }
+  }
+
+  // 3a. Payment verification — only when the visited path crossed a paid
+  //     section. The amount is whatever computeSectionPath() determined
+  //     server-side; the client cannot influence it.
+  let paymentRecord = null;
+  if (requiredAmountPaise > 0) {
+    let payment = null;
+    try {
+      payment = JSON.parse(req.body.payment || "null");
+    } catch {}
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = payment || {};
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature)
+      return res
+        .status(402)
+        .json({ error: "Payment is required to complete this registration." });
+    if (!RAZORPAY_KEY_SECRET)
+      return res.status(503).json({ error: "Payment gateway not configured." });
+
+    // Idempotency — if this order was already recorded, don't double-submit
+    const { data: existingPay } = await supabase
+      .from("form_responses")
+      .select("id")
+      .eq("razorpay_order_id", razorpay_order_id)
+      .maybeSingle();
+    if (existingPay) {
+      return res.json({ success: true, duplicate: true, id: existingPay.id });
+    }
+
+    // HMAC-SHA256 signature check (same scheme as the donation flow)
+    const sigBody = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSig = crypto
+      .createHmac("sha256", RAZORPAY_KEY_SECRET)
+      .update(sigBody)
+      .digest("hex");
+    let sigValid = false;
+    try {
+      sigValid = crypto.timingSafeEqual(
+        Buffer.from(expectedSig),
+        Buffer.from(razorpay_signature),
+      );
+    } catch {
+      sigValid = false;
+    }
+    if (!sigValid) {
+      console.warn("[event-form/submit] Signature mismatch for order:", razorpay_order_id);
+      supabase.from("payment_failures").insert([{
+        razorpay_order_id,
+        razorpay_payment_id,
+        failure_reason: "invalid_signature_event_registration",
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"] || null,
+      }]).then(({ error }) => {
+        if (error) console.warn("[event-form/submit] Could not log failure:", error.message);
+      });
+      return res.status(400).json({ error: "Payment verification failed. Signature mismatch." });
+    }
+
+    // Confirm the amount actually paid via Razorpay — never trust the client.
+    let paidAmountPaise = null;
+    try {
+      const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64");
+      const payRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+        headers: { Authorization: `Basic ${auth}` },
+      });
+      const payData = await payRes.json();
+      if (payRes.ok && payData.amount) paidAmountPaise = payData.amount;
+    } catch (e) {
+      console.warn("[event-form/submit] Could not fetch payment amount from Razorpay:", e.message);
+    }
+    if (paidAmountPaise !== null && paidAmountPaise !== requiredAmountPaise) {
+      console.warn(`[event-form/submit] Amount mismatch: expected ${requiredAmountPaise}, paid ${paidAmountPaise}`);
+      return res
+        .status(400)
+        .json({ error: "Payment amount does not match the required registration fee." });
+    }
+
+    paymentRecord = {
+      amount_paise: paidAmountPaise || requiredAmountPaise,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      payment_verified_at: new Date().toISOString(),
+    };
   }
 
   // 3b. Duplicate check — block if same email or phone already submitted for this event
@@ -4514,6 +4865,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
         form_id: form.id,
         answers: JSON.stringify(finalAnswers),
         submitted_at: new Date().toISOString(),
+        ...(paymentRecord || {}),
       },
     ])
     .select()
@@ -4624,6 +4976,22 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
             // Send QR ticket email
             sendTicketEmail({ event: ev, reg, qrDataUrl })
               .catch(e => console.error("[form-submit] ticket email failed:", e.message));
+
+            // If this registration was paid, also send the Razorpay receipt PDF
+            if (paymentRecord) {
+              sendPaymentBill({
+                type:            "REGISTRATION",
+                donorId:         null,
+                recipientEmail:  toEmail,
+                recipientName:   toName,
+                isAnonymous:     false,
+                cause:           ev.title || "Event Registration",
+                amountPaise:     paymentRecord.amount_paise,
+                paymentId:       paymentRecord.razorpay_payment_id,
+                orderId:         paymentRecord.razorpay_order_id,
+                paymentDateTime: paymentRecord.payment_verified_at,
+              }).catch(e => console.error("[form-submit] payment bill email failed:", e.message));
+            }
           } catch (e) {
             console.error("[form-submit] registration+ticket flow error:", e.message);
             // Fallback: send plain confirmation
@@ -4646,7 +5014,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
     console.error("[email] pre-send error:", e.message);
   }
 
-  res.json({ success: true, id: response.id });
+  res.json({ success: true, id: response.id, amount_paise: paymentRecord?.amount_paise || 0 });
 });
 
 // ADMIN: Download responses as server-side JSON (client does XLSX conversion)
