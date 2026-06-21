@@ -574,11 +574,6 @@
       <div class="auth-title">Sign in</div>
       <div class="auth-sub">Access your KFS member account</div>
 
-      <div id="google-signin-container" style="display:flex;justify-content:center;margin-bottom:16px"></div>
-      <div id="google-signin-err" class="err-msg" style="display:none"></div>
-
-      <div class="auth-divider"><span>or sign in with username</span></div>
-
       <div class="form-group">
         <label>Username</label>
         <input id="login-username" type="text" autocomplete="username" placeholder="firstname.lastname" />
@@ -591,6 +586,12 @@
       <div id="login-err" class="err-msg" style="display:none"></div>
       <div class="lockout-bar-track" id="login-lockout-bar-track"><div class="lockout-bar-fill" id="login-lockout-bar-fill"></div></div>
       <button class="fp-link" id="forgot-password-link">Forgot password?</button>
+
+      <div class="auth-divider"><span>or sign in with Google</span></div>
+
+      <div id="google-signin-container" style="display:flex;justify-content:center;margin-bottom:8px"></div>
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:16px">Make sure you login with your KIIT mail ID</div>
+      <div id="google-signin-err" class="err-msg" style="display:none"></div>
     </div>
 
     <!-- Step: TOTP -->
