@@ -1,1247 +1,3173 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Member Portal — KFS</title>
-  <meta name="robots" content="noindex,nofollow" />
-  <style>
-    /* ── Reset & Base ────────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:       #0a0a0a;
-      --surface:  #111111;
-      --border:   #1e1e1e;
-      --text:     #f5f5f5;
-      --muted:    #888888;
-      --faint:    #333333;
-      --accent:   #f5f5f5;
-      --danger:   #ef4444;
-      --success:  #22c55e;
-      --warn:     #f59e0b;
-      --radius:   12px;
-      --sidebar-w: 220px;
-    }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; }
-    a { color: inherit; text-decoration: none; }
-    button { font-family: inherit; cursor: pointer; border: none; outline: none; }
-    input, textarea, select { font-family: inherit; font-size: 14px; background: #1a1a1a; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 14px; width: 100%; outline: none; transition: border-color .15s; }
-    input:focus, textarea:focus, select:focus { border-color: #444; }
-    textarea { resize: vertical; min-height: 80px; }
-    label { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Member Portal — KFS</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <style>
+      /* ── Reset & Base ────────────────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #0a0a0a;
+        --surface: #111111;
+        --border: #1e1e1e;
+        --text: #f5f5f5;
+        --muted: #888888;
+        --faint: #333333;
+        --accent: #f5f5f5;
+        --danger: #ef4444;
+        --success: #22c55e;
+        --warn: #f59e0b;
+        --radius: 12px;
+        --sidebar-w: 220px;
+      }
+      html,
+      body {
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font-family: inherit;
+        cursor: pointer;
+        border: none;
+        outline: none;
+      }
+      input,
+      textarea,
+      select {
+        font-family: inherit;
+        font-size: 14px;
+        background: #1a1a1a;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 10px 14px;
+        width: 100%;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #444;
+      }
+      textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 6px;
+      }
 
-    /* ── Auth screens ────────────────────────────────────────────────────── */
-    #auth-screen {
-      display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;
-    }
-    .auth-card {
-      width: 100%; max-width: 400px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 36px;
-    }
-    .auth-logo { font-size: 18px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 28px; }
-    .auth-logo span { color: var(--muted); font-weight: 400; }
-    .auth-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
-    .auth-sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
-    .form-group { margin-bottom: 18px; }
-    .auth-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 18px; color: var(--faint); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
-    .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-    .btn-primary {
-      width: 100%; background: var(--text); color: var(--bg);
-      font-size: 14px; font-weight: 700; padding: 12px 20px;
-      border-radius: 8px; transition: opacity .15s;
-    }
-    .btn-primary:hover { opacity: .85; }
-    .btn-primary:disabled { opacity: .4; cursor: default; }
-    .btn-ghost {
-      background: transparent; color: var(--muted);
-      font-size: 13px; padding: 8px 0; margin-top: 12px;
-    }
-    .btn-ghost:hover { color: var(--text); }
-    .err-msg { font-size: 13px; color: var(--danger); margin-top: 14px; }
-    .ok-msg  { font-size: 13px; color: var(--success); margin-top: 14px; }
-    .lockout-bar-track { display: none; width: 100%; height: 3px; background: rgba(239,68,68,.18); border-radius: 2px; margin-top: 10px; overflow: hidden; }
-    .lockout-bar-track.show { display: block; }
-    .lockout-bar-fill { height: 100%; width: 100%; background: var(--danger); border-radius: 2px; transition: width 1s linear; }
+      /* ── Auth screens ────────────────────────────────────────────────────── */
+      #auth-screen {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .auth-card {
+        width: 100%;
+        max-width: 400px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 36px;
+      }
+      .auth-logo {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 28px;
+      }
+      .auth-logo span {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .auth-title {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 6px;
+      }
+      .auth-sub {
+        font-size: 14px;
+        color: var(--muted);
+        margin-bottom: 28px;
+      }
+      .form-group {
+        margin-bottom: 18px;
+      }
+      .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 18px 0 18px;
+        color: var(--faint);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .auth-divider::before,
+      .auth-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+      .btn-primary {
+        width: 100%;
+        background: var(--text);
+        color: var(--bg);
+        font-size: 14px;
+        font-weight: 700;
+        padding: 12px 20px;
+        border-radius: 8px;
+        transition: opacity 0.15s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+      }
+      .btn-primary:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        padding: 8px 0;
+        margin-top: 12px;
+      }
+      .btn-ghost:hover {
+        color: var(--text);
+      }
+      .err-msg {
+        font-size: 13px;
+        color: var(--danger);
+        margin-top: 14px;
+      }
+      .ok-msg {
+        font-size: 13px;
+        color: var(--success);
+        margin-top: 14px;
+      }
+      .lockout-bar-track {
+        display: none;
+        width: 100%;
+        height: 3px;
+        background: rgba(239, 68, 68, 0.18);
+        border-radius: 2px;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .lockout-bar-track.show {
+        display: block;
+      }
+      .lockout-bar-fill {
+        height: 100%;
+        width: 100%;
+        background: var(--danger);
+        border-radius: 2px;
+        transition: width 1s linear;
+      }
 
-    /* ── Dashboard layout ────────────────────────────────────────────────── */
-    #app-screen { display: none; min-height: 100vh; }
-    .layout { display: flex; min-height: 100vh; }
+      /* ── Dashboard layout ────────────────────────────────────────────────── */
+      #app-screen {
+        display: none;
+        min-height: 100vh;
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
 
-    /* Sidebar */
-    .sidebar {
-      width: var(--sidebar-w); flex-shrink: 0; position: fixed; top: 0; left: 0; bottom: 0;
-      background: var(--surface); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; padding: 24px 16px; z-index: 100;
-    }
-    .sidebar-logo { font-size: 16px; font-weight: 700; letter-spacing: -.02em; padding: 4px 12px; margin-bottom: 28px; }
-    .sidebar-logo span { color: var(--muted); font-weight: 400; }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-      border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--muted);
-      cursor: pointer; transition: all .12s; margin-bottom: 2px;
-    }
-    .nav-item:hover { background: #1a1a1a; color: var(--text); }
-    .nav-item.active { background: #1e1e1e; color: var(--text); }
-    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
-    .sidebar-footer { margin-top: auto; }
-    .member-chip {
-      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-      border-radius: 8px; background: #161616; border: 1px solid var(--border);
-      margin-bottom: 8px;
-    }
-    .member-avatar {
-      width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
-      background: var(--faint); flex-shrink: 0; font-size: 14px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .member-chip-name { font-size: 13px; font-weight: 600; }
-    .member-chip-role { font-size: 11px; color: var(--muted); }
+      /* Sidebar */
+      .sidebar {
+        width: var(--sidebar-w);
+        flex-shrink: 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 24px 16px;
+        z-index: 100;
+      }
+      .sidebar-logo {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        padding: 4px 12px;
+        margin-bottom: 28px;
+      }
+      .sidebar-logo span {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--muted);
+        cursor: pointer;
+        transition: all 0.12s;
+        margin-bottom: 2px;
+      }
+      .nav-item:hover {
+        background: #1a1a1a;
+        color: var(--text);
+      }
+      .nav-item.active {
+        background: #1e1e1e;
+        color: var(--text);
+      }
+      .nav-icon {
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+      }
+      .sidebar-footer {
+        margin-top: auto;
+      }
+      .member-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #161616;
+        border: 1px solid var(--border);
+        margin-bottom: 8px;
+      }
+      .member-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--faint);
+        flex-shrink: 0;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .member-chip-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .member-chip-role {
+        font-size: 11px;
+        color: var(--muted);
+      }
 
-    /* ── Notification bell + slide-in panel ────────────────────────────── */
-    .notif-bell-wrap { position: relative; margin-bottom: 8px; }
-    .notif-bell-btn {
-      width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-      border-radius: 8px; background: none; border: none; color: var(--muted);
-      font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s, color .15s;
-      font-family: inherit;
-    }
-    .notif-bell-btn:hover { background: #1a1a1a; color: var(--text); }
-    .notif-bell-btn.active { background: #1e1e1e; color: var(--text); }
-    .notif-badge {
-      display: none; position: absolute; top: 6px; left: 26px;
-      background: #ef4444; color: #fff; font-size: 9px; font-weight: 800;
-      min-width: 15px; height: 15px; border-radius: 20px; padding: 0 4px;
-      line-height: 15px; text-align: center; letter-spacing: 0;
-      box-shadow: 0 0 0 2px var(--surface);
-    }
-    .notif-badge.visible { display: block; }
+      /* ── Notification bell + slide-in panel ────────────────────────────── */
+      .notif-bell-wrap {
+        position: relative;
+        margin-bottom: 8px;
+      }
+      .notif-bell-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s;
+        font-family: inherit;
+      }
+      .notif-bell-btn:hover {
+        background: #1a1a1a;
+        color: var(--text);
+      }
+      .notif-bell-btn.active {
+        background: #1e1e1e;
+        color: var(--text);
+      }
+      .notif-badge {
+        display: none;
+        position: absolute;
+        top: 6px;
+        left: 26px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 9px;
+        font-weight: 800;
+        min-width: 15px;
+        height: 15px;
+        border-radius: 20px;
+        padding: 0 4px;
+        line-height: 15px;
+        text-align: center;
+        letter-spacing: 0;
+        box-shadow: 0 0 0 2px var(--surface);
+      }
+      .notif-badge.visible {
+        display: block;
+      }
 
-    /* Slide-in panel — fixed overlay */
-    .notif-panel-backdrop {
-      display: none; position: fixed; inset: 0; z-index: 300;
-    }
-    .notif-panel-backdrop.open { display: block; }
-    .notif-panel {
-      position: fixed; bottom: 0; left: var(--sidebar-w); top: 0;
-      width: 340px; background: #0f0f0f;
-      border-right: 1px solid #1e1e1e;
-      display: flex; flex-direction: column; z-index: 301;
-      transform: translateX(calc(-100% - var(--sidebar-w)));
-      transition: transform .28s cubic-bezier(.4,0,.2,1);
-      will-change: transform;
-      visibility: hidden;
-    }
-    .notif-panel.open {
-      transform: translateX(0);
-      box-shadow: 8px 0 40px rgba(0,0,0,.6);
-      visibility: visible;
-    }
-    .notif-panel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 22px 20px 16px; border-bottom: 1px solid #1a1a1a; flex-shrink: 0;
-    }
-    .notif-panel-title {
-      font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.02em;
-    }
-    .notif-panel-actions { display: flex; align-items: center; gap: 8px; }
-    .notif-read-all {
-      font-size: 11px; font-weight: 600; color: var(--muted); background: none; border: none;
-      cursor: pointer; font-family: inherit; padding: 4px 8px; border-radius: 6px;
-      letter-spacing: .03em; text-transform: uppercase; transition: color .15s, background .15s;
-    }
-    .notif-read-all:hover { color: var(--text); background: #1e1e1e; }
-    .notif-panel-close {
-      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-      background: #1a1a1a; border: none; border-radius: 50%; cursor: pointer;
-      color: var(--muted); transition: color .15s, background .15s; flex-shrink: 0;
-    }
-    .notif-panel-close:hover { background: #242424; color: var(--text); }
+      /* Slide-in panel — fixed overlay */
+      .notif-panel-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+      }
+      .notif-panel-backdrop.open {
+        display: block;
+      }
+      .notif-panel {
+        position: fixed;
+        bottom: 0;
+        left: var(--sidebar-w);
+        top: 0;
+        width: 340px;
+        background: #0f0f0f;
+        border-right: 1px solid #1e1e1e;
+        display: flex;
+        flex-direction: column;
+        z-index: 301;
+        transform: translateX(calc(-100% - var(--sidebar-w)));
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform;
+        visibility: hidden;
+      }
+      .notif-panel.open {
+        transform: translateX(0);
+        box-shadow: 8px 0 40px rgba(0, 0, 0, 0.6);
+        visibility: visible;
+      }
+      .notif-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 22px 20px 16px;
+        border-bottom: 1px solid #1a1a1a;
+        flex-shrink: 0;
+      }
+      .notif-panel-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+      }
+      .notif-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .notif-read-all {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 4px 8px;
+        border-radius: 6px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        transition:
+          color 0.15s,
+          background 0.15s;
+      }
+      .notif-read-all:hover {
+        color: var(--text);
+        background: #1e1e1e;
+      }
+      .notif-panel-close {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #1a1a1a;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        color: var(--muted);
+        transition:
+          color 0.15s,
+          background 0.15s;
+        flex-shrink: 0;
+      }
+      .notif-panel-close:hover {
+        background: #242424;
+        color: var(--text);
+      }
 
-    /* Scrollable list */
-    .notif-panel-list {
-      flex: 1; overflow-y: auto; padding: 8px 0;
-    }
-    .notif-panel-list::-webkit-scrollbar { width: 4px; }
-    .notif-panel-list::-webkit-scrollbar-track { background: transparent; }
-    .notif-panel-list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+      /* Scrollable list */
+      .notif-panel-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 0;
+      }
+      .notif-panel-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .notif-panel-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .notif-panel-list::-webkit-scrollbar-thumb {
+        background: #2a2a2a;
+        border-radius: 4px;
+      }
 
-    /* Individual notification item */
-    .notif-item {
-      display: flex; gap: 14px; padding: 14px 20px;
-      border-bottom: 1px solid #141414; transition: background .12s; cursor: pointer;
-      align-items: flex-start; position: relative;
-    }
-    .notif-item:last-child { border-bottom: none; }
-    .notif-item:hover { background: #161616; }
-    .notif-item.unread { background: rgba(255,255,255,.02); }
-    .notif-item.unread:hover { background: rgba(255,255,255,.04); }
+      /* Individual notification item */
+      .notif-item {
+        display: flex;
+        gap: 14px;
+        padding: 14px 20px;
+        border-bottom: 1px solid #141414;
+        transition: background 0.12s;
+        cursor: pointer;
+        align-items: flex-start;
+        position: relative;
+      }
+      .notif-item:last-child {
+        border-bottom: none;
+      }
+      .notif-item:hover {
+        background: #161616;
+      }
+      .notif-item.unread {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .notif-item.unread:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
 
-    /* Icon bubble */
-    .notif-icon-bubble {
-      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
-      background: #1a1a1a; border: 1px solid #272727;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
-    }
-    .notif-icon-bubble svg { width: 14px; height: 14px; stroke: var(--muted); }
-    .notif-item.unread .notif-icon-bubble { border-color: #2e2e2e; }
-    .notif-item.unread .notif-icon-bubble svg { stroke: var(--text); }
+      /* Icon bubble */
+      .notif-icon-bubble {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: #1a1a1a;
+        border: 1px solid #272727;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+      .notif-icon-bubble svg {
+        width: 14px;
+        height: 14px;
+        stroke: var(--muted);
+      }
+      .notif-item.unread .notif-icon-bubble {
+        border-color: #2e2e2e;
+      }
+      .notif-item.unread .notif-icon-bubble svg {
+        stroke: var(--text);
+      }
 
-    .notif-item-content { flex: 1; min-width: 0; }
-    .notif-item-title {
-      font-size: 13px; font-weight: 600; color: #e8e8e8; line-height: 1.35;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .notif-item.unread .notif-item-title { color: #f5f5f5; }
-    .notif-item-body {
-      font-size: 12px; color: #555; margin-top: 3px; line-height: 1.45;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    .notif-item.unread .notif-item-body { color: #777; }
-    .notif-item-time { font-size: 11px; color: #383838; margin-top: 5px; font-variant-numeric: tabular-nums; }
-    .notif-item.unread .notif-item-time { color: #444; }
+      .notif-item-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .notif-item-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #e8e8e8;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .notif-item.unread .notif-item-title {
+        color: #f5f5f5;
+      }
+      .notif-item-body {
+        font-size: 12px;
+        color: #555;
+        margin-top: 3px;
+        line-height: 1.45;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .notif-item.unread .notif-item-body {
+        color: #777;
+      }
+      .notif-item-time {
+        font-size: 11px;
+        color: #383838;
+        margin-top: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .notif-item.unread .notif-item-time {
+        color: #444;
+      }
 
-    /* Unread dot — small pill on right */
-    .notif-unread-pip {
-      width: 7px; height: 7px; border-radius: 50%; background: var(--text);
-      flex-shrink: 0; margin-top: 6px; opacity: .8;
-    }
-    .notif-item.read .notif-unread-pip,
-    .notif-unread-pip.read { display: none; }
+      /* Unread dot — small pill on right */
+      .notif-unread-pip {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text);
+        flex-shrink: 0;
+        margin-top: 6px;
+        opacity: 0.8;
+      }
+      .notif-item.read .notif-unread-pip,
+      .notif-unread-pip.read {
+        display: none;
+      }
 
-    .notif-empty {
-      padding: 60px 20px; text-align: center; color: #383838; font-size: 13px;
-    }
-    .notif-empty svg { margin-bottom: 12px; opacity: .3; }
-    .notif-empty-title { font-size: 14px; font-weight: 600; color: #444; margin-bottom: 4px; }
-    .notif-empty-sub { font-size: 12px; color: #333; }
+      .notif-empty {
+        padding: 60px 20px;
+        text-align: center;
+        color: #383838;
+        font-size: 13px;
+      }
+      .notif-empty svg {
+        margin-bottom: 12px;
+        opacity: 0.3;
+      }
+      .notif-empty-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 4px;
+      }
+      .notif-empty-sub {
+        font-size: 12px;
+        color: #333;
+      }
 
-    /* Main content */
-    .main { margin-left: var(--sidebar-w); flex: 1; padding: 40px 48px; max-width: 900px; }
+      /* Main content */
+      .main {
+        margin-left: var(--sidebar-w);
+        flex: 1;
+        padding: 40px 48px;
+        max-width: 900px;
+      }
 
-    /* Section panels */
-    .panel { display: none; }
-    .panel.active { display: block; }
-    .panel-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
-    .panel-sub { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+      /* Section panels */
+      .panel {
+        display: none;
+      }
+      .panel.active {
+        display: block;
+      }
+      .panel-title {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 6px;
+      }
+      .panel-sub {
+        font-size: 14px;
+        color: var(--muted);
+        margin-bottom: 32px;
+      }
 
-    /* Cards */
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
-    }
-    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+      /* Cards */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .card-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
 
-    /* Grid */
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .form-grid.full { grid-template-columns: 1fr; }
-    .col-span-2 { grid-column: span 2; }
+      /* Grid */
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .form-grid.full {
+        grid-template-columns: 1fr;
+      }
+      .col-span-2 {
+        grid-column: span 2;
+      }
 
-    /* Status badge */
-    .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 20px;
-      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-    }
-    .badge-pending   { background: #1c1600; color: var(--warn); border: 1px solid #2e2200; }
-    .badge-approved  { background: #0d1f0d; color: var(--success); border: 1px solid #1a3a1a; }
-    .badge-rejected  { background: #1f0d0d; color: var(--danger); border: 1px solid #3a1a1a; }
-    .badge-changes   { background: #1a1a0d; color: #a3a300; border: 1px solid #2e2e00; }
+      /* Status badge */
+      .badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .badge-pending {
+        background: #1c1600;
+        color: var(--warn);
+        border: 1px solid #2e2200;
+      }
+      .badge-approved {
+        background: #0d1f0d;
+        color: var(--success);
+        border: 1px solid #1a3a1a;
+      }
+      .badge-rejected {
+        background: #1f0d0d;
+        color: var(--danger);
+        border: 1px solid #3a1a1a;
+      }
+      .badge-changes {
+        background: #1a1a0d;
+        color: #a3a300;
+        border: 1px solid #2e2e00;
+      }
 
-    /* Movie submission cards */
-    .movie-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
-      display: flex; gap: 16px; align-items: flex-start;
-    }
-    .movie-poster {
-      width: 56px; height: 80px; object-fit: cover; border-radius: 6px;
-      background: var(--faint); flex-shrink: 0;
-    }
-    .movie-info { flex: 1; }
-    .movie-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .movie-meta  { font-size: 12px; color: var(--muted); }
-    .movie-notes { font-size: 13px; color: var(--warn); background: #1c1600; border-radius: 6px; padding: 10px 14px; margin-top: 10px; }
+      /* Movie submission cards */
+      .movie-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 14px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .movie-poster {
+        width: 56px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 6px;
+        background: var(--faint);
+        flex-shrink: 0;
+      }
+      .movie-info {
+        flex: 1;
+      }
+      .movie-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .movie-meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .movie-notes {
+        font-size: 13px;
+        color: var(--warn);
+        background: #1c1600;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-top: 10px;
+      }
 
-    /* Activity feed */
-    .activity-item {
-      display: flex; gap: 14px; padding: 14px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .activity-item:last-child { border-bottom: none; }
-    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; margin-top: 7px; }
-    .activity-text { font-size: 13px; }
-    .activity-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      /* Activity feed */
+      .activity-item {
+        display: flex;
+        gap: 14px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .activity-item:last-child {
+        border-bottom: none;
+      }
+      .activity-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex-shrink: 0;
+        margin-top: 7px;
+      }
+      .activity-text {
+        font-size: 13px;
+      }
+      .activity-time {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
 
-    /* Sessions */
-    .session-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px;
-    }
-    .session-item:last-child { border-bottom: none; }
-    .btn-sm { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-    .btn-danger { background: #2a0a0a; color: var(--danger); border: 1px solid #3a1414; }
-    .btn-danger:hover { background: #3a1010; }
+      /* Sessions */
+      .session-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .session-item:last-child {
+        border-bottom: none;
+      }
+      .btn-sm {
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .btn-danger {
+        background: #2a0a0a;
+        color: var(--danger);
+        border: 1px solid #3a1414;
+      }
+      .btn-danger:hover {
+        background: #3a1010;
+      }
 
-    /* Genre tag input */
-    .mf-tag-input-wrap {
-      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-      background: #1a1a1a; border: 1px solid var(--border); border-radius: 8px;
-      padding: 8px 10px; min-height: 44px; cursor: text;
-      transition: border-color .15s;
-    }
-    .mf-tag-input-wrap:focus-within { border-color: #444; }
-    .mf-tag-chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px;
-      padding: 2px 8px; font-size: 12px; color: var(--text);
-    }
-    .mf-tag-chip button {
-      background: none; border: none; color: var(--muted); cursor: pointer;
-      padding: 0; font-size: 14px; line-height: 1; display: flex; align-items: center;
-    }
-    .mf-tag-chip button:hover { color: var(--text); }
-    .mf-tag-bare-input {
-      border: none; background: transparent; color: var(--text); font-size: 14px;
-      outline: none; flex: 1; min-width: 100px; padding: 0;
-    }
+      /* Genre tag input */
+      .mf-tag-input-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        background: #1a1a1a;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        min-height: 44px;
+        cursor: text;
+        transition: border-color 0.15s;
+      }
+      .mf-tag-input-wrap:focus-within {
+        border-color: #444;
+      }
+      .mf-tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #2a2a2a;
+        border: 1px solid #3a3a3a;
+        border-radius: 5px;
+        padding: 2px 8px;
+        font-size: 12px;
+        color: var(--text);
+      }
+      .mf-tag-chip button {
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 0;
+        font-size: 14px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+      }
+      .mf-tag-chip button:hover {
+        color: var(--text);
+      }
+      .mf-tag-bare-input {
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 14px;
+        outline: none;
+        flex: 1;
+        min-width: 100px;
+        padding: 0;
+      }
 
-    /* QR container */
-    .qr-box { text-align: center; padding: 24px; }
-    .qr-box img { border-radius: 8px; }
-    .qr-secret { font-family: monospace; font-size: 13px; background: #1a1a1a; padding: 8px 14px; border-radius: 6px; word-break: break-all; color: var(--muted); margin-top: 12px; display: inline-block; }
+      /* QR container */
+      .qr-box {
+        text-align: center;
+        padding: 24px;
+      }
+      .qr-box img {
+        border-radius: 8px;
+      }
+      .qr-secret {
+        font-family: monospace;
+        font-size: 13px;
+        background: #1a1a1a;
+        padding: 8px 14px;
+        border-radius: 6px;
+        word-break: break-all;
+        color: var(--muted);
+        margin-top: 12px;
+        display: inline-block;
+      }
 
-    /* ── Forgot password flow ──────────────────────────────────────────────── */
-    .fp-link {
-      background: none; border: none; color: var(--muted); font-size: 13px;
-      padding: 0; margin-top: 16px; display: block; text-align: center; width: 100%;
-      transition: color .15s;
-    }
-    .fp-link:hover { color: var(--text); }
-    .fp-channel-badge {
-      display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px;
-      background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.25);
-      border-radius: 10px; font-size: 13px; color: var(--success); margin-bottom: 24px;
-    }
-    .fp-channel-badge svg { flex-shrink: 0; }
-    .otp-input {
-      letter-spacing: .5em; font-size: 22px; text-align: center; font-weight: 600;
-      padding-left: 18px; /* visually re-centers given the letter-spacing */
-    }
-    .fp-resend {
-      background: none; border: none; color: var(--muted); font-size: 12.5px;
-      padding: 0; margin-top: 14px; text-align: center; width: 100%; transition: color .15s;
-    }
-    .fp-resend:hover:not(:disabled) { color: var(--text); }
-    .fp-resend:disabled { opacity: .5; cursor: default; }
+      /* ── Forgot password flow ──────────────────────────────────────────────── */
+      .fp-link {
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 13px;
+        padding: 0;
+        margin-top: 16px;
+        display: block;
+        text-align: center;
+        width: 100%;
+        transition: color 0.15s;
+      }
+      .fp-link:hover {
+        color: var(--text);
+      }
+      .fp-channel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 14px;
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.25);
+        border-radius: 10px;
+        font-size: 13px;
+        color: var(--success);
+        margin-bottom: 24px;
+      }
+      .fp-channel-badge svg {
+        flex-shrink: 0;
+      }
+      .otp-input {
+        letter-spacing: 0.5em;
+        font-size: 22px;
+        text-align: center;
+        font-weight: 600;
+        padding-left: 18px; /* visually re-centers given the letter-spacing */
+      }
+      .fp-resend {
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 12.5px;
+        padding: 0;
+        margin-top: 14px;
+        text-align: center;
+        width: 100%;
+        transition: color 0.15s;
+      }
+      .fp-resend:hover:not(:disabled) {
+        color: var(--text);
+      }
+      .fp-resend:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
 
-    /* Password strength meter (forgot-password new-password step) */
-    .pw-strength { display: flex; gap: 4px; margin-top: 8px; }
-    .pw-strength-bar { height: 3px; flex: 1; border-radius: 2px; background: var(--faint); transition: background .2s; }
-    .pw-strength-bar.weak { background: var(--danger); }
-    .pw-strength-bar.medium { background: var(--warn); }
-    .pw-strength-bar.strong { background: var(--success); }
-    .pw-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+      /* Password strength meter (forgot-password new-password step) */
+      .pw-strength {
+        display: flex;
+        gap: 4px;
+        margin-top: 8px;
+      }
+      .pw-strength-bar {
+        height: 3px;
+        flex: 1;
+        border-radius: 2px;
+        background: var(--faint);
+        transition: background 0.2s;
+      }
+      .pw-strength-bar.weak {
+        background: var(--danger);
+      }
+      .pw-strength-bar.medium {
+        background: var(--warn);
+      }
+      .pw-strength-bar.strong {
+        background: var(--success);
+      }
+      .pw-hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+        line-height: 1.5;
+      }
 
-    /* ── Recovery contact info banner (dismissible) ──────────────────────────── */
-    .recovery-banner {
-      display: none; align-items: flex-start; gap: 14px; padding: 16px 18px;
-      background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.25);
-      border-radius: 14px; margin: 0 0 20px;
-    }
-    .recovery-banner.show { display: flex; }
-    .recovery-banner-icon {
-      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
-      background: rgba(245,158,11,.12); display: flex; align-items: center; justify-content: center; color: var(--warn);
-    }
-    .recovery-banner-body { flex: 1; min-width: 0; }
-    .recovery-banner-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
-    .recovery-banner-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
-    .recovery-banner-actions { display: flex; gap: 10px; }
-    .recovery-banner-actions button {
-      font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 8px; background: none; border: none;
-    }
-    .recovery-banner-actions .rb-primary { background: var(--text); color: var(--bg); }
-    .recovery-banner-actions .rb-dismiss { color: var(--muted); }
-    .recovery-banner-actions .rb-dismiss:hover { color: var(--text); }
-    .recovery-banner-close {
-      background: none; border: none; color: var(--muted); flex-shrink: 0; padding: 2px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .recovery-banner-close:hover { color: var(--text); }
+      /* ── Recovery contact info banner (dismissible) ──────────────────────────── */
+      .recovery-banner {
+        display: none;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 18px;
+        background: rgba(245, 158, 11, 0.07);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        border-radius: 14px;
+        margin: 0 0 20px;
+      }
+      .recovery-banner.show {
+        display: flex;
+      }
+      .recovery-banner-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: rgba(245, 158, 11, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--warn);
+      }
+      .recovery-banner-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .recovery-banner-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 3px;
+      }
+      .recovery-banner-desc {
+        font-size: 12.5px;
+        color: var(--muted);
+        line-height: 1.5;
+        margin-bottom: 12px;
+      }
+      .recovery-banner-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .recovery-banner-actions button {
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 8px;
+        background: none;
+        border: none;
+      }
+      .recovery-banner-actions .rb-primary {
+        background: var(--text);
+        color: var(--bg);
+      }
+      .recovery-banner-actions .rb-dismiss {
+        color: var(--muted);
+      }
+      .recovery-banner-actions .rb-dismiss:hover {
+        color: var(--text);
+      }
+      .recovery-banner-close {
+        background: none;
+        border: none;
+        color: var(--muted);
+        flex-shrink: 0;
+        padding: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .recovery-banner-close:hover {
+        color: var(--text);
+      }
 
-    /* ── Contact info modal (add/edit recovery email + phone) ───────────────── */
-    #contact-info-modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 9999;
-      display: none; align-items: center; justify-content: center; padding: 20px;
-    }
-    #contact-info-modal-overlay.open { display: flex; }
-    .contact-info-modal {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-      width: 100%; max-width: 420px; padding: 32px;
-    }
+      /* ── Contact info modal (add/edit recovery email + phone) ───────────────── */
+      #contact-info-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      #contact-info-modal-overlay.open {
+        display: flex;
+      }
+      .contact-info-modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 420px;
+        padding: 32px;
+      }
 
-    /* Avatar upload */
-    .avatar-wrap { position: relative; display: inline-block; margin-bottom: 20px; }
-    .avatar-lg { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; background: var(--faint); display: flex; align-items: center; justify-content: center; font-size: 28px; }
-    .avatar-edit-btn {
-      position: absolute; bottom: 0; right: 0; width: 26px; height: 26px; border-radius: 50%;
-      background: var(--text); color: var(--bg); font-size: 12px; display: flex; align-items: center; justify-content: center;
-    }
+      /* Avatar upload */
+      .avatar-wrap {
+        position: relative;
+        display: inline-block;
+        margin-bottom: 20px;
+      }
+      .avatar-lg {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--faint);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+      }
+      .avatar-edit-btn {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--text);
+        color: var(--bg);
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-    /* Onboarding steps */
-    .step-indicator { display: flex; gap: 8px; margin-bottom: 28px; }
-    .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-    .step-dot.done  { background: var(--success); }
-    .step-dot.current { background: var(--text); }
+      /* Onboarding steps */
+      .step-indicator {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 28px;
+      }
+      .step-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--faint);
+      }
+      .step-dot.done {
+        background: var(--success);
+      }
+      .step-dot.current {
+        background: var(--text);
+      }
 
-    /* Mobile */
-    .mobile-topbar { display: none; }
-    @media (max-width: 768px) {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 24px 20px; }
-      .form-grid { grid-template-columns: 1fr; }
-      .col-span-2 { grid-column: span 1; }
+      /* Mobile */
       .mobile-topbar {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 16px 20px; border-bottom: 1px solid var(--border);
-        background: var(--surface); position: sticky; top: 0; z-index: 50;
+        display: none;
       }
-      #app-screen { display: flex; flex-direction: column; }
-      .layout { flex-direction: column; }
-      .mobile-nav {
-        display: flex; overflow-x: auto; gap: 4px; padding: 12px 16px;
-        border-bottom: 1px solid var(--border); background: var(--surface);
+      @media (max-width: 768px) {
+        .sidebar {
+          display: none;
+        }
+        .main {
+          margin-left: 0;
+          padding: 24px 20px;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .col-span-2 {
+          grid-column: span 1;
+        }
+        .mobile-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border);
+          background: var(--surface);
+          position: sticky;
+          top: 0;
+          z-index: 50;
+        }
+        #app-screen {
+          display: flex;
+          flex-direction: column;
+        }
+        .layout {
+          flex-direction: column;
+        }
+        .mobile-nav {
+          display: flex;
+          overflow-x: auto;
+          gap: 4px;
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--border);
+          background: var(--surface);
+        }
+        .mobile-nav .nav-item {
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
       }
-      .mobile-nav .nav-item { white-space: nowrap; flex-shrink: 0; }
-    }
 
-    /* ── Back to Site button ─────────────────────────────────────────────────── */
-    .back-to-site-btn {
-      position: fixed; top: 18px; right: 24px; z-index: 500;
-      display: flex; align-items: center; gap: 7px;
-      padding: 8px 16px; border-radius: 20px;
-      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
-      color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em;
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      transition: background .18s, color .18s, border-color .18s, transform .18s;
-      cursor: pointer; text-decoration: none; font-family: inherit;
-    }
-    .back-to-site-btn:hover {
-      background: rgba(255,255,255,.12); color: var(--text);
-      border-color: rgba(255,255,255,.2); transform: translateY(-1px);
-    }
-    .back-to-site-btn svg { opacity: .7; transition: opacity .18s; }
-    .back-to-site-btn:hover svg { opacity: 1; }
+      /* ── Back to Site button ─────────────────────────────────────────────────── */
+      .back-to-site-btn {
+        position: fixed;
+        top: 18px;
+        right: 24px;
+        z-index: 500;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transition:
+          background 0.18s,
+          color 0.18s,
+          border-color 0.18s,
+          transform 0.18s;
+        cursor: pointer;
+        text-decoration: none;
+        font-family: inherit;
+      }
+      .back-to-site-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--text);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-1px);
+      }
+      .back-to-site-btn svg {
+        opacity: 0.7;
+        transition: opacity 0.18s;
+      }
+      .back-to-site-btn:hover svg {
+        opacity: 1;
+      }
 
-    /* ── Collab panel ────────────────────────────────────────────────────────── */
-    .collab-split {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
-    }
-    .collab-split .form-group { margin-bottom: 0; }
+      /* ── Collab panel ────────────────────────────────────────────────────────── */
+      .collab-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .collab-split .form-group {
+        margin-bottom: 0;
+      }
 
-    /* Character counter */
-    .char-counter { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+      /* Character counter */
+      .char-counter {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: right;
+        margin-top: 4px;
+      }
 
-    /* Field with required star */
-    label .req { color: #ef4444; margin-left: 2px; font-size: 11px; }
+      /* Field with required star */
+      label .req {
+        color: #ef4444;
+        margin-left: 2px;
+        font-size: 11px;
+      }
 
-    /* Collab posted card */
-    .collab-posted-card {
-      background: #0d1f0d; border: 1px solid #1a3a1a; border-radius: var(--radius);
-      padding: 24px; margin-bottom: 20px;
-    }
-    .collab-posted-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .collab-posted-role { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
-    .collab-posted-meta { display: flex; gap: 16px; flex-wrap: wrap; }
-    .collab-posted-meta-item { font-size: 12px; color: var(--muted); }
-    .collab-posted-meta-item span { color: var(--text); }
-    .collab-card-actions { display: flex; gap: 8px; margin-top: 16px; }
+      /* Collab posted card */
+      .collab-posted-card {
+        background: #0d1f0d;
+        border: 1px solid #1a3a1a;
+        border-radius: var(--radius);
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .collab-posted-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .collab-posted-role {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 14px;
+      }
+      .collab-posted-meta {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .collab-posted-meta-item {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .collab-posted-meta-item span {
+        color: var(--text);
+      }
+      .collab-card-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+      }
 
-    /* Empty collab state */
-    .collab-empty {
-      text-align: center; padding: 60px 24px; color: #444;
-    }
-    .collab-empty-icon { font-size: 36px; margin-bottom: 16px; opacity: .4; }
-    .collab-empty-title { font-size: 15px; font-weight: 600; color: #555; margin-bottom: 6px; }
-    .collab-empty-sub { font-size: 13px; color: #383838; }
+      /* Empty collab state */
+      .collab-empty {
+        text-align: center;
+        padding: 60px 24px;
+        color: #444;
+      }
+      .collab-empty-icon {
+        font-size: 36px;
+        margin-bottom: 16px;
+        opacity: 0.4;
+      }
+      .collab-empty-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 6px;
+      }
+      .collab-empty-sub {
+        font-size: 13px;
+        color: #383838;
+      }
 
-    /* Divider */
-    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+      /* Divider */
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 24px 0;
+      }
 
-    /* Input with prefix */
-    .input-group { position: relative; }
-    .input-prefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
-    .input-group input { padding-left: 28px; }
+      /* Input with prefix */
+      .input-group {
+        position: relative;
+      }
+      .input-prefix {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 13px;
+        pointer-events: none;
+      }
+      .input-group input {
+        padding-left: 28px;
+      }
 
-    /* Pending banner */
-    .pending-banner {
-      background: #1c1600; border: 1px solid #2e2200; border-radius: 8px;
-      padding: 12px 16px; font-size: 13px; color: var(--warn); margin-bottom: 20px;
-      display: flex; align-items: center;
-    }
+      /* Pending banner */
+      .pending-banner {
+        background: #1c1600;
+        border: 1px solid #2e2200;
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 13px;
+        color: var(--warn);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
 
-    /* Spinner */
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--faint); border-top-color: var(--text); border-radius: 50%; animation: spin .6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+      /* Spinner */
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--faint);
+        border-top-color: var(--text);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
-    /* ── Portal Member Picker ──────────────────────────────────────────────── */
-    .portal-mpick { position: relative; }
-    .portal-mpicker-input {
-      width: 100%; padding: 10px 14px; background: #1a1a1a; border: 1px solid var(--border);
-      color: var(--text); font-family: inherit; font-size: 14px; border-radius: 8px; outline: none; box-sizing: border-box;
-      transition: border-color .15s;
-    }
-    .portal-mpicker-input:focus { border-color: #444; }
-    .portal-mpicker-dropdown {
-      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-      background: #1a1a1a; border: 1px solid #444; border-radius: 10px;
-      z-index: 300; max-height: 200px; overflow-y: auto; scrollbar-width: none;
-    }
-    .portal-mpicker-dropdown::-webkit-scrollbar { display: none; }
-    .portal-mpicker-opt {
-      padding: 9px 14px; cursor: pointer; font-size: 13px;
-      display: flex; align-items: center; gap: 10px; transition: background .12s;
-    }
-    .portal-mpicker-opt:hover { background: #222; }
-    .portal-mpicker-opt img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .portal-mpicker-avatar {
-      width: 28px; height: 28px; border-radius: 50%; background: var(--faint);
-      display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;
-    }
-    .portal-mpicker-opt-name { font-weight: 500; color: #eee; flex: 1; }
-    .portal-mpicker-opt-role { font-size: 11px; color: var(--muted); }
-    .portal-mpicker-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .portal-mpicker-tag {
-      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px;
-      background: #1e1e1e; border: 1px solid #333; border-radius: 20px;
-      font-size: 12px; color: #ddd;
-    }
-    .portal-mpicker-tag img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
-    .portal-mpicker-tag-avatar {
-      width: 20px; height: 20px; border-radius: 50%; background: var(--faint);
-      display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
-    }
-    .portal-mpicker-tag-remove { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; padding: 0 2px; }
-    .portal-mpicker-tag-remove:hover { color: var(--text); }
+      /* ── Portal Member Picker ──────────────────────────────────────────────── */
+      .portal-mpick {
+        position: relative;
+      }
+      .portal-mpicker-input {
+        width: 100%;
+        padding: 10px 14px;
+        background: #1a1a1a;
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 14px;
+        border-radius: 8px;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+      }
+      .portal-mpicker-input:focus {
+        border-color: #444;
+      }
+      .portal-mpicker-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 10px;
+        z-index: 300;
+        max-height: 200px;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      .portal-mpicker-dropdown::-webkit-scrollbar {
+        display: none;
+      }
+      .portal-mpicker-opt {
+        padding: 9px 14px;
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.12s;
+      }
+      .portal-mpicker-opt:hover {
+        background: #222;
+      }
+      .portal-mpicker-opt img {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+      }
+      .portal-mpicker-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--faint);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .portal-mpicker-opt-name {
+        font-weight: 500;
+        color: #eee;
+        flex: 1;
+      }
+      .portal-mpicker-opt-role {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .portal-mpicker-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .portal-mpicker-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px 4px 6px;
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 20px;
+        font-size: 12px;
+        color: #ddd;
+      }
+      .portal-mpicker-tag img {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        object-fit: cover;
+      }
+      .portal-mpicker-tag-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--faint);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .portal-mpicker-tag-remove {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1;
+        padding: 0 2px;
+      }
+      .portal-mpicker-tag-remove:hover {
+        color: var(--text);
+      }
 
-    /* ── Works panel ───────────────────────────────────────────────────────── */
-    .works-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px; }
-    .work-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; overflow: hidden; transition: border-color .15s;
-    }
-    .work-card:hover { border-color: #444; }
-    .work-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--faint); display: flex; align-items: center; justify-content: center; font-size: 24px; }
-    .work-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .work-info { padding: 10px 12px; }
-    .work-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
-    .work-role { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-    .work-year { font-size: 10px; color: var(--muted); margin-top: 1px; }
-    .btn-edit-request {
-      width: 100%; margin-top: 8px; padding: 6px 0; border-radius: 6px; font-size: 11px; font-weight: 600;
-      background: transparent; border: 1px solid var(--border); color: var(--muted); transition: all .15s;
-    }
-    .btn-edit-request:hover { border-color: #555; color: var(--text); }
+      /* ── Works panel ───────────────────────────────────────────────────────── */
+      .works-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 14px;
+      }
+      .work-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        transition: border-color 0.15s;
+      }
+      .work-card:hover {
+        border-color: #444;
+      }
+      .work-poster {
+        width: 100%;
+        aspect-ratio: 2/3;
+        object-fit: cover;
+        background: var(--faint);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+      }
+      .work-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .work-info {
+        padding: 10px 12px;
+      }
+      .work-title {
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 2px;
+      }
+      .work-role {
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .work-year {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .btn-edit-request {
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px 0;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        transition: all 0.15s;
+      }
+      .btn-edit-request:hover {
+        border-color: #555;
+        color: var(--text);
+      }
 
-    /* ── Work edit request modal ───────────────────────────────────────────── */
-    #work-edit-modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 9999;
-      display: none; align-items: center; justify-content: center; padding: 20px;
-    }
-    #work-edit-modal-overlay.open { display: flex; }
-    .work-edit-modal {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-      width: 100%; max-width: 480px; padding: 32px;
-    }
-    .work-edit-modal-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: -.02em; }
-    .work-edit-modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
-  </style>
-</head>
-<body>
+      /* ── Work edit request modal ───────────────────────────────────────────── */
+      #work-edit-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      #work-edit-modal-overlay.open {
+        display: flex;
+      }
+      .work-edit-modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 480px;
+        padding: 32px;
+      }
+      .work-edit-modal-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        letter-spacing: -0.02em;
+      }
+      .work-edit-modal-sub {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ── Back to Site ──────────────────────────────────────────────────────────── -->
+    <a href="/" class="back-to-site-btn" id="back-to-site-btn">
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="15 18 9 12 15 6" />
+      </svg>
+      Back to Site
+    </a>
 
-<!-- ── Back to Site ──────────────────────────────────────────────────────────── -->
-<a href="/" class="back-to-site-btn" id="back-to-site-btn">
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-  Back to Site
-</a>
+    <!-- ── AUTH SCREEN ─────────────────────────────────────────────────────────── -->
+    <div id="auth-screen">
+      <div class="auth-card" id="auth-card">
+        <!-- Step: Login -->
+        <div id="step-login">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-title">Sign in</div>
+          <div class="auth-sub">Access your KFS member account</div>
 
-<!-- ── AUTH SCREEN ─────────────────────────────────────────────────────────── -->
-<div id="auth-screen">
-  <div class="auth-card" id="auth-card">
-    <!-- Step: Login -->
-    <div id="step-login">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div class="auth-title">Sign in</div>
-      <div class="auth-sub">Access your KFS member account</div>
-
-      <div class="form-group">
-        <label>Username</label>
-        <input id="login-username" type="text" autocomplete="username" placeholder="firstname.lastname" />
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" />
-      </div>
-      <button class="btn-primary" id="login-btn">Sign in</button>
-      <div id="login-err" class="err-msg" style="display:none"></div>
-      <div class="lockout-bar-track" id="login-lockout-bar-track"><div class="lockout-bar-fill" id="login-lockout-bar-fill"></div></div>
-      <button class="fp-link" id="forgot-password-link">Forgot password?</button>
-
-      <div class="auth-divider"><span>or sign in with Google</span></div>
-
-      <div id="google-signin-container" style="display:flex;justify-content:center;margin-bottom:8px"></div>
-      <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:16px">Make sure you login with your KIIT mail ID</div>
-      <div id="google-signin-err" class="err-msg" style="display:none"></div>
-    </div>
-
-    <!-- Step: TOTP -->
-    <div id="step-totp" style="display:none">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div class="auth-title">Two-factor code</div>
-      <div class="auth-sub">Enter the 6-digit code from your authenticator app</div>
-      <div class="form-group">
-        <label>TOTP Code</label>
-        <input id="totp-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
-      </div>
-      <button class="btn-primary" id="totp-btn">Verify</button>
-      <div id="totp-err" class="err-msg" style="display:none"></div>
-      <button class="btn-ghost" id="back-to-login-btn">← Back</button>
-    </div>
-
-    <!-- Step: Forgot Password — enter username -->
-    <div id="step-fp-username" style="display:none">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div class="auth-title">Reset your password</div>
-      <div class="auth-sub">Enter your username and we'll send a verification code to your email on file.</div>
-      <div class="form-group">
-        <label>Username</label>
-        <input id="fp-username" type="text" autocomplete="username" placeholder="firstname.lastname" />
-      </div>
-      <button class="btn-primary" id="fp-start-btn">Send code</button>
-      <div id="fp-username-err" class="err-msg" style="display:none"></div>
-      <div class="lockout-bar-track" id="fp-username-lockout-bar-track"><div class="lockout-bar-fill" id="fp-username-lockout-bar-fill"></div></div>
-      <button class="btn-ghost" id="fp-back-to-login-btn">← Back to sign in</button>
-    </div>
-
-    <!-- Step: Forgot Password — enter OTP -->
-    <div id="step-fp-otp" style="display:none">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div class="auth-title">Enter verification code</div>
-      <div class="auth-sub" id="fp-otp-sub">We've sent a 6-digit code to your phone.</div>
-      <div class="fp-channel-badge" id="fp-channel-badge" style="display:none">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        <span id="fp-channel-text">Sent</span>
-      </div>
-      <div class="form-group">
-        <label>6-digit code</label>
-        <input id="fp-otp-input" class="otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code" />
-      </div>
-      <button class="btn-primary" id="fp-verify-btn">Verify code</button>
-      <div id="fp-otp-err" class="err-msg" style="display:none"></div>
-      <button class="fp-resend" id="fp-resend-btn">Resend code</button>
-      <button class="btn-ghost" id="fp-otp-back-btn">← Start over</button>
-    </div>
-
-    <!-- Step: Forgot Password — set new password -->
-    <div id="step-fp-reset" style="display:none">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div class="auth-title">Set a new password</div>
-      <div class="auth-sub">Choose a strong password you haven't used before.</div>
-      <div class="form-group">
-        <label>New password</label>
-        <input id="fp-new-password" type="password" autocomplete="new-password" placeholder="••••••••" />
-        <div class="pw-strength" id="fp-pw-strength">
-          <div class="pw-strength-bar"></div><div class="pw-strength-bar"></div><div class="pw-strength-bar"></div>
-        </div>
-        <div class="pw-hint">At least 8 characters, with 1 uppercase letter, 1 number, and 1 special character.</div>
-      </div>
-      <div class="form-group">
-        <label>Confirm new password</label>
-        <input id="fp-confirm-password" type="password" autocomplete="new-password" placeholder="••••••••" />
-      </div>
-      <button class="btn-primary" id="fp-reset-btn">Update password</button>
-      <div id="fp-reset-err" class="err-msg" style="display:none"></div>
-    </div>
-
-    <!-- Step: Forgot Password — success -->
-    <div id="step-fp-success" style="display:none">
-      <div class="auth-logo">KFS <span>Member Portal</span></div>
-      <div style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);margin-bottom:20px">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>
-      <div class="auth-title">Password updated</div>
-      <div class="auth-sub">Your password has been changed. You've been signed out of all other devices for security.</div>
-      <button class="btn-primary" id="fp-done-btn">Back to sign in</button>
-    </div>
-
-    <!-- Step: Change Password (forced on first login) -->
-    <div id="step-change-pw" style="display:none">
-      <div class="step-indicator">
-        <div class="step-dot done"></div>
-        <div class="step-dot current"></div>
-        <div class="step-dot"></div>
-      </div>
-      <div class="auth-title">Set your password</div>
-      <div class="auth-sub">Your temporary password must be changed before continuing</div>
-      <div class="form-group">
-        <label>Current (Temporary) Password</label>
-        <input id="cp-current" type="password" placeholder="••••••••" />
-      </div>
-      <div class="form-group">
-        <label>New Password</label>
-        <input id="cp-new" type="password" placeholder="Min 8 chars, uppercase, number, special" />
-      </div>
-      <div class="form-group">
-        <label>Confirm New Password</label>
-        <input id="cp-confirm" type="password" placeholder="••••••••" />
-      </div>
-      <button class="btn-primary" id="cp-btn">Set Password</button>
-      <div id="cp-err" class="err-msg" style="display:none"></div>
-    </div>
-
-    <!-- Step: 2FA Setup (forced on first login) -->
-    <div id="step-2fa-setup" style="display:none">
-      <div class="step-indicator">
-        <div class="step-dot done"></div>
-        <div class="step-dot done"></div>
-        <div class="step-dot current"></div>
-      </div>
-      <div class="auth-title">Set up 2FA</div>
-      <div class="auth-sub">Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</div>
-      <div class="qr-box" id="qr-box"><div class="spinner"></div></div>
-      <div class="form-group" style="margin-top:20px">
-        <label>Enter the 6-digit code to confirm</label>
-        <input id="setup-totp-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" />
-      </div>
-      <button class="btn-primary" id="setup-totp-btn">Enable 2FA & Continue</button>
-      <div id="setup-totp-err" class="err-msg" style="display:none"></div>
-      <button class="btn-ghost" id="skip-2fa-btn" style="width:100%;text-align:center;margin-top:8px">Skip for now</button>
-      <div style="font-size:11px;color:var(--faint);text-align:center;margin-top:6px">You can turn this on anytime from Security settings</div>
-    </div>
-  </div>
-</div>
-
-<!-- ── APP SCREEN ──────────────────────────────────────────────────────────── -->
-<div id="app-screen">
-  <!-- Mobile topbar -->
-  <div class="mobile-topbar">
-    <span style="font-size:15px;font-weight:700">KFS <span style="color:var(--muted);font-weight:400">Portal</span></span>
-    <button class="btn-ghost" id="mobile-logout-btn" style="margin:0">Sign out</button>
-  </div>
-  <!-- Mobile nav -->
-  <div class="mobile-nav" id="mobile-nav">
-    <div class="nav-item active" data-panel="profile"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span> Profile</div>
-    <div class="nav-item" data-panel="movies"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> My Movies</div>
-    <div class="nav-item" data-panel="works"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span> My Works</div>
-    <div class="nav-item" data-panel="security"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Security</div>
-    <div class="nav-item" data-panel="activity"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity</div>
-    <div class="nav-item" data-panel="collab"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collab</div>
-  </div>
-
-  <div class="layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-logo">KFS <span>Portal</span></div>
-      <nav id="sidebar-nav">
-        <div class="nav-item active" data-panel="profile"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span> Profile</div>
-        <div class="nav-item" data-panel="movies"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> My Movies</div>
-        <div class="nav-item" data-panel="works"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span> My Works</div>
-        <div class="nav-item" data-panel="security"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Security</div>
-        <div class="nav-item" data-panel="activity"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span> Activity</div>
-        <div class="nav-item" data-panel="collab"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Collab</div>
-      </nav>
-      <div class="sidebar-footer">
-        <!-- Notification Bell -->
-        <div class="notif-bell-wrap" id="notif-bell-wrap">
-          <button class="notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifPanel()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Notifications
+          <div class="form-group">
+            <label>Username</label>
+            <input
+              id="login-username"
+              type="text"
+              autocomplete="username"
+              placeholder="firstname.lastname"
+            />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input
+              id="login-password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+            />
+          </div>
+          <button class="btn-primary" id="login-btn">Sign in</button>
+          <div id="login-err" class="err-msg" style="display: none"></div>
+          <div class="lockout-bar-track" id="login-lockout-bar-track">
+            <div class="lockout-bar-fill" id="login-lockout-bar-fill"></div>
+          </div>
+          <button class="fp-link" id="forgot-password-link">
+            Forgot password?
           </button>
-          <span class="notif-badge" id="notif-badge"></span>
+
+          <div class="auth-divider"><span>or sign in with Google</span></div>
+
+          <div
+            id="google-signin-container"
+            style="display: flex; justify-content: center; margin-bottom: 8px"
+          ></div>
+          <div
+            style="
+              text-align: center;
+              font-size: 11px;
+              color: var(--muted);
+              margin-bottom: 16px;
+            "
+          >
+            Ensure that you login into your KIIT EMAIL account
+          </div>
+          <div
+            id="google-signin-err"
+            class="err-msg"
+            style="display: none"
+          ></div>
         </div>
 
-        <!-- Slide-in notifications panel -->
-        <div class="notif-panel-backdrop" id="notif-panel-backdrop" onclick="closeNotifPanel()"></div>
-        <div class="notif-panel" id="notif-panel">
-          <div class="notif-panel-header">
-            <span class="notif-panel-title">Notifications</span>
-            <div class="notif-panel-actions">
-              <button class="notif-read-all" onclick="markAllNotifsRead()">Mark all read</button>
-              <button class="notif-panel-close" onclick="closeNotifPanel()" aria-label="Close">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <!-- Step: TOTP -->
+        <div id="step-totp" style="display: none">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-title">Two-factor code</div>
+          <div class="auth-sub">
+            Enter the 6-digit code from your authenticator app
+          </div>
+          <div class="form-group">
+            <label>TOTP Code</label>
+            <input
+              id="totp-input"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="000000"
+              autocomplete="one-time-code"
+            />
+          </div>
+          <button class="btn-primary" id="totp-btn">Verify</button>
+          <div id="totp-err" class="err-msg" style="display: none"></div>
+          <button class="btn-ghost" id="back-to-login-btn">← Back</button>
+        </div>
+
+        <!-- Step: Forgot Password — enter username -->
+        <div id="step-fp-username" style="display: none">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-title">Reset your password</div>
+          <div class="auth-sub">
+            Enter your username and we'll send a verification code to your email
+            on file.
+          </div>
+          <div class="form-group">
+            <label>Username</label>
+            <input
+              id="fp-username"
+              type="text"
+              autocomplete="username"
+              placeholder="firstname.lastname"
+            />
+          </div>
+          <button class="btn-primary" id="fp-start-btn">Send code</button>
+          <div id="fp-username-err" class="err-msg" style="display: none"></div>
+          <div class="lockout-bar-track" id="fp-username-lockout-bar-track">
+            <div
+              class="lockout-bar-fill"
+              id="fp-username-lockout-bar-fill"
+            ></div>
+          </div>
+          <button class="btn-ghost" id="fp-back-to-login-btn">
+            ← Back to sign in
+          </button>
+        </div>
+
+        <!-- Step: Forgot Password — enter OTP -->
+        <div id="step-fp-otp" style="display: none">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-title">Enter verification code</div>
+          <div class="auth-sub" id="fp-otp-sub">
+            We've sent a 6-digit code to your phone.
+          </div>
+          <div
+            class="fp-channel-badge"
+            id="fp-channel-badge"
+            style="display: none"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span id="fp-channel-text">Sent</span>
+          </div>
+          <div class="form-group">
+            <label>6-digit code</label>
+            <input
+              id="fp-otp-input"
+              class="otp-input"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="••••••"
+              autocomplete="one-time-code"
+            />
+          </div>
+          <button class="btn-primary" id="fp-verify-btn">Verify code</button>
+          <div id="fp-otp-err" class="err-msg" style="display: none"></div>
+          <button class="fp-resend" id="fp-resend-btn">Resend code</button>
+          <button class="btn-ghost" id="fp-otp-back-btn">← Start over</button>
+        </div>
+
+        <!-- Step: Forgot Password — set new password -->
+        <div id="step-fp-reset" style="display: none">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-title">Set a new password</div>
+          <div class="auth-sub">
+            Choose a strong password you haven't used before.
+          </div>
+          <div class="form-group">
+            <label>New password</label>
+            <input
+              id="fp-new-password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="••••••••"
+            />
+            <div class="pw-strength" id="fp-pw-strength">
+              <div class="pw-strength-bar"></div>
+              <div class="pw-strength-bar"></div>
+              <div class="pw-strength-bar"></div>
+            </div>
+            <div class="pw-hint">
+              At least 8 characters, with 1 uppercase letter, 1 number, and 1
+              special character.
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Confirm new password</label>
+            <input
+              id="fp-confirm-password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="••••••••"
+            />
+          </div>
+          <button class="btn-primary" id="fp-reset-btn">Update password</button>
+          <div id="fp-reset-err" class="err-msg" style="display: none"></div>
+        </div>
+
+        <!-- Step: Forgot Password — success -->
+        <div id="step-fp-success" style="display: none">
+          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 56px;
+              height: 56px;
+              border-radius: 50%;
+              background: rgba(34, 197, 94, 0.1);
+              border: 1px solid rgba(34, 197, 94, 0.3);
+              margin-bottom: 20px;
+            "
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#22c55e"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div class="auth-title">Password updated</div>
+          <div class="auth-sub">
+            Your password has been changed. You've been signed out of all other
+            devices for security.
+          </div>
+          <button class="btn-primary" id="fp-done-btn">Back to sign in</button>
+        </div>
+
+        <!-- Step: Change Password (forced on first login) -->
+        <div id="step-change-pw" style="display: none">
+          <div class="step-indicator">
+            <div class="step-dot done"></div>
+            <div class="step-dot current"></div>
+            <div class="step-dot"></div>
+          </div>
+          <div class="auth-title">Set your password</div>
+          <div class="auth-sub">
+            Your temporary password must be changed before continuing
+          </div>
+          <div class="form-group">
+            <label>Current (Temporary) Password</label>
+            <input id="cp-current" type="password" placeholder="••••••••" />
+          </div>
+          <div class="form-group">
+            <label>New Password</label>
+            <input
+              id="cp-new"
+              type="password"
+              placeholder="Min 8 chars, uppercase, number, special"
+            />
+          </div>
+          <div class="form-group">
+            <label>Confirm New Password</label>
+            <input id="cp-confirm" type="password" placeholder="••••••••" />
+          </div>
+          <button class="btn-primary" id="cp-btn">Set Password</button>
+          <div id="cp-err" class="err-msg" style="display: none"></div>
+        </div>
+
+        <!-- Step: 2FA Setup (forced on first login) -->
+        <div id="step-2fa-setup" style="display: none">
+          <div class="step-indicator">
+            <div class="step-dot done"></div>
+            <div class="step-dot done"></div>
+            <div class="step-dot current"></div>
+          </div>
+          <div class="auth-title">Set up 2FA</div>
+          <div class="auth-sub">
+            Scan the QR code with your authenticator app (Google Authenticator,
+            Authy, etc.)
+          </div>
+          <div class="qr-box" id="qr-box"><div class="spinner"></div></div>
+          <div class="form-group" style="margin-top: 20px">
+            <label>Enter the 6-digit code to confirm</label>
+            <input
+              id="setup-totp-input"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="000000"
+            />
+          </div>
+          <button class="btn-primary" id="setup-totp-btn">
+            Enable 2FA & Continue
+          </button>
+          <div id="setup-totp-err" class="err-msg" style="display: none"></div>
+          <button
+            class="btn-ghost"
+            id="skip-2fa-btn"
+            style="width: 100%; text-align: center; margin-top: 8px"
+          >
+            Skip for now
+          </button>
+          <div
+            style="
+              font-size: 11px;
+              color: var(--faint);
+              text-align: center;
+              margin-top: 6px;
+            "
+          >
+            You can turn this on anytime from Security settings
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── APP SCREEN ──────────────────────────────────────────────────────────── -->
+    <div id="app-screen">
+      <!-- Mobile topbar -->
+      <div class="mobile-topbar">
+        <span style="font-size: 15px; font-weight: 700"
+          >KFS
+          <span style="color: var(--muted); font-weight: 400"
+            >Portal</span
+          ></span
+        >
+        <button class="btn-ghost" id="mobile-logout-btn" style="margin: 0">
+          Sign out
+        </button>
+      </div>
+      <!-- Mobile nav -->
+      <div class="mobile-nav" id="mobile-nav">
+        <div class="nav-item active" data-panel="profile">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg
+          ></span>
+          Profile
+        </div>
+        <div class="nav-item" data-panel="movies">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="2" y="2" width="20" height="20" rx="2.18" />
+              <line x1="7" y1="2" x2="7" y2="22" />
+              <line x1="17" y1="2" x2="17" y2="22" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <line x1="2" y1="7" x2="7" y2="7" />
+              <line x1="2" y1="17" x2="7" y2="17" />
+              <line x1="17" y1="17" x2="22" y2="17" />
+              <line x1="17" y1="7" x2="22" y2="7" /></svg
+          ></span>
+          My Movies
+        </div>
+        <div class="nav-item" data-panel="works">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" /></svg
+          ></span>
+          My Works
+        </div>
+        <div class="nav-item" data-panel="security">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
+          ></span>
+          Security
+        </div>
+        <div class="nav-item" data-panel="activity">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
+          ></span>
+          Activity
+        </div>
+        <div class="nav-item" data-panel="collab">
+          <span class="nav-icon"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
+          ></span>
+          Collab
+        </div>
+      </div>
+
+      <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="sidebar-logo">KFS <span>Portal</span></div>
+          <nav id="sidebar-nav">
+            <div class="nav-item active" data-panel="profile">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg
+              ></span>
+              Profile
+            </div>
+            <div class="nav-item" data-panel="movies">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="2" y="2" width="20" height="20" rx="2.18" />
+                  <line x1="7" y1="2" x2="7" y2="22" />
+                  <line x1="17" y1="2" x2="17" y2="22" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <line x1="2" y1="7" x2="7" y2="7" />
+                  <line x1="2" y1="17" x2="7" y2="17" />
+                  <line x1="17" y1="17" x2="22" y2="17" />
+                  <line x1="17" y1="7" x2="22" y2="7" /></svg
+              ></span>
+              My Movies
+            </div>
+            <div class="nav-item" data-panel="works">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="23 7 16 12 23 17 23 7" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" /></svg
+              ></span>
+              My Works
+            </div>
+            <div class="nav-item" data-panel="security">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
+              ></span>
+              Security
+            </div>
+            <div class="nav-item" data-panel="activity">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
+              ></span>
+              Activity
+            </div>
+            <div class="nav-item" data-panel="collab">
+              <span class="nav-icon"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
+              ></span>
+              Collab
+            </div>
+          </nav>
+          <div class="sidebar-footer">
+            <!-- Notification Bell -->
+            <div class="notif-bell-wrap" id="notif-bell-wrap">
+              <button
+                class="notif-bell-btn"
+                id="notif-bell-btn"
+                onclick="toggleNotifPanel()"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                Notifications
               </button>
+              <span class="notif-badge" id="notif-badge"></span>
+            </div>
+
+            <!-- Slide-in notifications panel -->
+            <div
+              class="notif-panel-backdrop"
+              id="notif-panel-backdrop"
+              onclick="closeNotifPanel()"
+            ></div>
+            <div class="notif-panel" id="notif-panel">
+              <div class="notif-panel-header">
+                <span class="notif-panel-title">Notifications</span>
+                <div class="notif-panel-actions">
+                  <button class="notif-read-all" onclick="markAllNotifsRead()">
+                    Mark all read
+                  </button>
+                  <button
+                    class="notif-panel-close"
+                    onclick="closeNotifPanel()"
+                    aria-label="Close"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="notif-panel-list" id="notif-list">
+                <div class="notif-empty">
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  <div class="notif-empty-title">All caught up</div>
+                  <div class="notif-empty-sub">No new notifications</div>
+                </div>
+              </div>
+            </div>
+            <div class="member-chip" id="member-chip">
+              <div class="member-avatar" id="sidebar-avatar">?</div>
+              <div>
+                <div class="member-chip-name" id="sidebar-name">—</div>
+                <div class="member-chip-role" id="sidebar-role">—</div>
+              </div>
+            </div>
+            <button
+              class="btn-ghost"
+              style="width: 100%; text-align: left; padding: 8px 12px"
+              id="sidebar-logout-btn"
+            >
+              Sign out
+            </button>
+          </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="main">
+          <!-- ── PROFILE PANEL ────────────────────────────────────────────────── -->
+          <div class="panel active" id="panel-profile">
+            <div class="panel-title">Profile</div>
+            <div class="panel-sub">Manage your public KFS profile</div>
+
+            <!-- Recovery contact info banner — dismissible, shown only if neither email nor phone on file -->
+            <div class="recovery-banner" id="recovery-banner">
+              <div class="recovery-banner-icon">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                  <path
+                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                  />
+                </svg>
+              </div>
+              <div class="recovery-banner-body">
+                <div class="recovery-banner-title">Add a recovery email</div>
+                <div class="recovery-banner-desc">
+                  This lets you reset your password yourself if you ever get
+                  locked out — no need to wait on an admin.
+                </div>
+                <div class="recovery-banner-actions">
+                  <button class="rb-primary" id="recovery-banner-add-btn">
+                    Add now
+                  </button>
+                  <button class="rb-dismiss" id="recovery-banner-dismiss-btn">
+                    Remind me later
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div
+              id="profile-pending-banner"
+              class="pending-banner"
+              style="display: none"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="
+                  flex-shrink: 0;
+                  margin-right: 8px;
+                  vertical-align: middle;
+                "
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              You have a profile update pending admin review.
+            </div>
+
+            <div class="card">
+              <div class="card-title">Photo</div>
+              <div class="avatar-wrap">
+                <div class="avatar-lg" id="profile-photo-preview">
+                  <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                </div>
+                <label
+                  class="avatar-edit-btn"
+                  for="profile-photo-input"
+                  title="Change photo"
+                  ><svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"
+                    /></svg
+                ></label>
+                <input
+                  type="file"
+                  id="profile-photo-input"
+                  accept="image/jpeg,image/png,image/webp"
+                  style="display: none"
+                />
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Basic Info</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Name</label>
+                  <input id="pf-name" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>Roll Number</label>
+                  <input id="pf-roll" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>Mobile</label>
+                  <input id="pf-mobile" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input
+                    id="pf-email"
+                    type="email"
+                    placeholder="your@kiit.ac.in"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Batch</label>
+                  <input
+                    id="pf-batch"
+                    type="text"
+                    placeholder="e.g. 2022–2026"
+                  />
+                </div>
+                <div class="form-group">
+                  <label
+                    >Domain / Role
+                    <span
+                      style="
+                        color: var(--muted);
+                        font-weight: 400;
+                        text-transform: none;
+                        letter-spacing: 0;
+                      "
+                      >(set by admin)</span
+                    ></label
+                  >
+                  <input
+                    id="pf-domain"
+                    type="text"
+                    readonly
+                    style="opacity: 0.5; cursor: not-allowed"
+                    title="Contact an admin to update your domain"
+                  />
+                </div>
+                <div class="form-group">
+                  <label
+                    >Role Title
+                    <span
+                      style="
+                        color: var(--muted);
+                        font-weight: 400;
+                        text-transform: none;
+                        letter-spacing: 0;
+                      "
+                      >(set by admin)</span
+                    ></label
+                  >
+                  <input
+                    id="pf-role"
+                    type="text"
+                    readonly
+                    style="opacity: 0.5; cursor: not-allowed"
+                    title="Contact an admin to update your role title"
+                  />
+                </div>
+                <div class="form-group col-span-2">
+                  <label>Bio</label>
+                  <textarea
+                    id="pf-bio"
+                    rows="3"
+                    placeholder="A short bio…"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Social Links</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>GitHub</label>
+                  <div class="input-group">
+                    <span class="input-prefix">@</span>
+                    <input id="pf-github" type="text" placeholder="username" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>LinkedIn</label>
+                  <input
+                    id="pf-linkedin"
+                    type="url"
+                    placeholder="https://linkedin.com/in/…"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Instagram</label>
+                  <div class="input-group">
+                    <span class="input-prefix">@</span>
+                    <input
+                      id="pf-instagram"
+                      type="text"
+                      placeholder="username"
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>X / Twitter</label>
+                  <div class="input-group">
+                    <span class="input-prefix">@</span>
+                    <input id="pf-twitter" type="text" placeholder="username" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>YouTube</label>
+                  <input
+                    id="pf-youtube"
+                    type="url"
+                    placeholder="https://youtube.com/@…"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Portfolio / Website</label>
+                  <input id="pf-website" type="url" placeholder="https://…" />
+                </div>
+              </div>
+              <div
+                id="social-link-err"
+                class="err-msg"
+                style="display: none"
+              ></div>
+            </div>
+
+            <button
+              class="btn-primary"
+              id="profile-save-btn"
+              style="max-width: 200px"
+            >
+              Save Changes
+            </button>
+            <div id="profile-msg" class="ok-msg" style="display: none"></div>
+            <div id="profile-err" class="err-msg" style="display: none"></div>
+          </div>
+
+          <!-- ── MY MOVIES PANEL ──────────────────────────────────────────────── -->
+          <div class="panel" id="panel-movies">
+            <div class="panel-title">My Movies</div>
+            <div class="panel-sub">
+              Submit film projects for admin review and publication on /films
+            </div>
+
+            <button
+              class="btn-primary"
+              id="new-movie-btn"
+              style="max-width: 200px; margin-bottom: 24px"
+            >
+              + Submit Movie
+            </button>
+
+            <div id="movie-form" style="display: none">
+              <div class="card">
+                <div class="card-title" id="movie-form-title">
+                  New Submission
+                </div>
+                <input type="hidden" id="movie-edit-id" />
+
+                <div class="form-group">
+                  <label>Movie Poster</label>
+                  <input
+                    type="file"
+                    id="mf-poster"
+                    accept="image/*"
+                    style="border: none; padding: 0; background: transparent"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Title *</label>
+                  <input id="mf-title" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>Release Year</label>
+                  <input id="mf-year" type="text" placeholder="2024" />
+                </div>
+                <div style="display: flex; gap: 12px">
+                  <div class="form-group" style="flex: 1">
+                    <label
+                      >Runtime
+                      <span style="font-weight: 400; color: var(--muted)"
+                        >(minutes)</span
+                      ></label
+                    >
+                    <input
+                      id="mf-runtime"
+                      type="number"
+                      placeholder="e.g. 18"
+                      min="1"
+                    />
+                  </div>
+                  <div class="form-group" style="flex: 1">
+                    <label>Language</label>
+                    <input
+                      id="mf-language"
+                      type="text"
+                      placeholder="e.g. Hindi, English"
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label
+                    >Genre Tags
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >— type and press Enter or comma to add (e.g. Drama, Short
+                      Film, Rom-Com)</span
+                    ></label
+                  >
+                  <div class="mf-tag-input-wrap" id="mf-genre-wrap">
+                    <input type="hidden" id="mf-genre" />
+                    <input
+                      class="mf-tag-bare-input"
+                      id="mf-genre-input"
+                      placeholder="Add genre…"
+                      autocomplete="off"
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
+                  <textarea
+                    id="mf-desc"
+                    rows="3"
+                    placeholder="A brief synopsis or description of the film..."
+                  ></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Director</label>
+                  <div class="portal-mpick" id="mfpick-director"></div>
+                </div>
+                <div class="form-group">
+                  <label>Producer</label>
+                  <div class="portal-mpick" id="mfpick-producer"></div>
+                </div>
+                <div class="form-group">
+                  <label>DOP (Director of Photography)</label>
+                  <div class="portal-mpick" id="mfpick-dop"></div>
+                </div>
+                <div class="form-group">
+                  <label>Script Writer</label>
+                  <div class="portal-mpick" id="mfpick-writer"></div>
+                </div>
+                <div class="form-group">
+                  <label>Video Editor</label>
+                  <div class="portal-mpick" id="mfpick-editor"></div>
+                </div>
+                <div class="form-group">
+                  <label>Sound Design</label>
+                  <div class="portal-mpick" id="mfpick-sound"></div>
+                </div>
+                <div class="form-group">
+                  <label>Management</label>
+                  <div class="portal-mpick" id="mfpick-management"></div>
+                </div>
+                <div class="form-group">
+                  <label>Graphic Design</label>
+                  <div class="portal-mpick" id="mfpick-gd"></div>
+                </div>
+                <div class="form-group">
+                  <label
+                    >Actors
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(comma separated or pick)</span
+                    ></label
+                  >
+                  <div class="portal-mpick" id="mfpick-actors"></div>
+                </div>
+                <div class="form-group">
+                  <label
+                    >Support Crew
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(comma separated or pick)</span
+                    ></label
+                  >
+                  <div class="portal-mpick" id="mfpick-support"></div>
+                </div>
+                <div class="form-group">
+                  <label
+                    >Trailer URL
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(YouTube link)</span
+                    ></label
+                  >
+                  <input
+                    id="mf-trailer"
+                    type="text"
+                    placeholder="https://youtube.com/watch?v=... or youtu.be/..."
+                  />
+                </div>
+                <div class="form-group">
+                  <label
+                    >▶ Watch Now URL
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(full film link — paste a YouTube link to auto-fetch
+                      runtime)</span
+                    ></label
+                  >
+                  <input
+                    id="mf-watch"
+                    type="text"
+                    placeholder="https://youtube.com/watch?v=..."
+                  />
+                </div>
+                <div class="form-group">
+                  <label
+                    >Spotify Soundtrack URL
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(album, playlist, or track)</span
+                    ></label
+                  >
+                  <input
+                    id="mf-spotify"
+                    type="text"
+                    placeholder="https://open.spotify.com/album/2026"
+                  />
+                </div>
+                <div class="form-group">
+                  <label
+                    >Apple Music Soundtrack URL
+                    <span style="font-weight: 400; color: var(--muted)"
+                      >(album, playlist, or track)</span
+                    ></label
+                  >
+                  <input
+                    id="mf-apple-music"
+                    type="text"
+                    placeholder="https://music.apple.com/2026/album/2026"
+                  />
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 8px">
+                  <button
+                    class="btn-primary"
+                    id="movie-submit-btn"
+                    style="max-width: 180px"
+                  >
+                    Submit for Review
+                  </button>
+                  <button class="btn-sm btn-danger" id="cancel-movie-btn">
+                    Cancel
+                  </button>
+                </div>
+                <div
+                  id="movie-form-err"
+                  class="err-msg"
+                  style="display: none"
+                ></div>
+                <div
+                  id="movie-form-ok"
+                  class="ok-msg"
+                  style="display: none"
+                ></div>
+              </div>
+            </div>
+
+            <div id="movies-list"></div>
+          </div>
+
+          <!-- ── SECURITY PANEL ───────────────────────────────────────────────── -->
+          <div class="panel" id="panel-security">
+            <div class="panel-title">Security</div>
+            <div class="panel-sub">
+              Manage your password, 2FA, and active sessions
+            </div>
+
+            <!-- Change password -->
+            <div class="card">
+              <div class="card-title">Change Password</div>
+              <div class="form-grid" style="max-width: 500px">
+                <div class="form-group col-span-2">
+                  <label>Current Password</label>
+                  <input
+                    id="sec-cur-pw"
+                    type="password"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>New Password</label>
+                  <input
+                    id="sec-new-pw"
+                    type="password"
+                    placeholder="Min 8 chars"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Confirm New Password</label>
+                  <input
+                    id="sec-confirm-pw"
+                    type="password"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+              <button
+                class="btn-primary"
+                id="sec-change-pw-btn"
+                style="max-width: 200px"
+              >
+                Update Password
+              </button>
+              <div id="sec-pw-msg" class="ok-msg" style="display: none"></div>
+              <div id="sec-pw-err" class="err-msg" style="display: none"></div>
+            </div>
+
+            <!-- 2FA -->
+            <div class="card" id="twofa-card">
+              <div class="card-title">Two-Factor Authentication</div>
+              <div id="twofa-status"></div>
+            </div>
+
+            <!-- Sessions -->
+            <div class="card">
+              <div class="card-title">Active Sessions</div>
+              <div id="sessions-list">
+                <div style="color: var(--muted); font-size: 13px">Loading…</div>
+              </div>
+              <button
+                class="btn-sm btn-danger"
+                style="margin-top: 16px"
+                id="revoke-sessions-btn"
+              >
+                Revoke All Sessions
+              </button>
+              <div id="sessions-msg" class="ok-msg" style="display: none"></div>
             </div>
           </div>
-          <div class="notif-panel-list" id="notif-list">
-            <div class="notif-empty">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <div class="notif-empty-title">All caught up</div>
-              <div class="notif-empty-sub">No new notifications</div>
+
+          <!-- ── MY WORKS PANEL ──────────────────────────────────────────────── -->
+          <div class="panel" id="panel-works">
+            <div class="panel-title">My Works</div>
+            <div class="panel-sub">
+              Films from the KFS filmography where you appear — request edits if
+              something's wrong
+            </div>
+            <div id="works-list">
+              <div style="color: var(--muted); font-size: 13px">Loading…</div>
             </div>
           </div>
-        </div>
-        <div class="member-chip" id="member-chip">
-          <div class="member-avatar" id="sidebar-avatar">?</div>
-          <div>
-            <div class="member-chip-name" id="sidebar-name">—</div>
-            <div class="member-chip-role" id="sidebar-role">—</div>
-          </div>
-        </div>
-        <button class="btn-ghost" style="width:100%;text-align:left;padding:8px 12px" id="sidebar-logout-btn">Sign out</button>
-      </div>
-    </aside>
 
-    <!-- Main -->
-    <main class="main">
-
-      <!-- ── PROFILE PANEL ────────────────────────────────────────────────── -->
-      <div class="panel active" id="panel-profile">
-        <div class="panel-title">Profile</div>
-        <div class="panel-sub">Manage your public KFS profile</div>
-
-        <!-- Recovery contact info banner — dismissible, shown only if neither email nor phone on file -->
-        <div class="recovery-banner" id="recovery-banner">
-          <div class="recovery-banner-icon">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-          </div>
-          <div class="recovery-banner-body">
-            <div class="recovery-banner-title">Add a recovery email</div>
-            <div class="recovery-banner-desc">This lets you reset your password yourself if you ever get locked out — no need to wait on an admin.</div>
-            <div class="recovery-banner-actions">
-              <button class="rb-primary" id="recovery-banner-add-btn">Add now</button>
-              <button class="rb-dismiss" id="recovery-banner-dismiss-btn">Remind me later</button>
+          <!-- ── ACTIVITY PANEL ────────────────────────────────────────────────── -->
+          <div class="panel" id="panel-activity">
+            <div class="panel-title">Activity</div>
+            <div class="panel-sub">Your recent actions and security events</div>
+            <div class="card">
+              <div id="activity-list">
+                <div style="color: var(--muted); font-size: 13px">Loading…</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div id="profile-pending-banner" class="pending-banner" style="display:none">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:8px;vertical-align:middle"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          You have a profile update pending admin review.
-        </div>
+          <!-- ── COLLABORATE PANEL ─────────────────────────────────────────────── -->
+          <div class="panel" id="panel-collab">
+            <div class="panel-title">Open Calls</div>
+            <div class="panel-sub">
+              Post a collaboration request — find teammates, crew, or
+              contributors for your next project
+            </div>
 
+            <button
+              class="btn-primary"
+              id="new-collab-btn"
+              style="max-width: 220px; margin-bottom: 24px"
+            >
+              + Post a Collab Request
+            </button>
 
-        <div class="card">
-          <div class="card-title">Photo</div>
-          <div class="avatar-wrap">
-            <div class="avatar-lg" id="profile-photo-preview"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
-            <label class="avatar-edit-btn" for="profile-photo-input" title="Change photo"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></label>
-            <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
+            <!-- Collab Form -->
+            <div id="collab-form" style="display: none">
+              <div class="card">
+                <div class="card-title">New Collaboration Post</div>
+
+                <div class="collab-split" style="margin-bottom: 18px">
+                  <div class="form-group">
+                    <label>Project Title <span class="req">*</span></label>
+                    <input
+                      id="cf-title"
+                      type="text"
+                      placeholder="e.g. Short Film — Ek Raat"
+                      maxlength="120"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Role Needed <span class="req">*</span></label>
+                    <input
+                      id="cf-role"
+                      type="text"
+                      placeholder="e.g. DOP, Sound Designer, Editor"
+                      maxlength="100"
+                    />
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 18px">
+                  <label>Domain / Category</label>
+                  <input
+                    id="cf-domain"
+                    type="text"
+                    placeholder="e.g. Short Film, Documentary, Music Video, Photography"
+                    maxlength="80"
+                  />
+                </div>
+
+                <div class="form-group" style="margin-bottom: 18px">
+                  <label>Skills Required</label>
+                  <input
+                    id="cf-skills"
+                    type="text"
+                    placeholder="e.g. Premiere Pro, DSLR, Lighting, Location Sound"
+                    maxlength="200"
+                  />
+                </div>
+
+                <div class="form-group" style="margin-bottom: 18px">
+                  <label>Description <span class="req">*</span></label>
+                  <textarea
+                    id="cf-description"
+                    rows="4"
+                    placeholder="Describe the project, what you're looking for, and any relevant context…"
+                    maxlength="1000"
+                  ></textarea>
+                  <div class="char-counter">
+                    <span id="cf-desc-count">0</span>/1000
+                  </div>
+                </div>
+
+                <div class="collab-split" style="margin-bottom: 18px">
+                  <div class="form-group">
+                    <label>Timeline</label>
+                    <input
+                      id="cf-timeline"
+                      type="text"
+                      placeholder="e.g. 2 weekends, 3 days shoot"
+                      maxlength="100"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label
+                      >Needed By (Fulfillment Date)
+                      <span class="req">*</span></label
+                    >
+                    <input id="cf-date" type="date" />
+                  </div>
+                </div>
+
+                <hr class="divider" />
+
+                <div class="card-title" style="margin-bottom: 16px">
+                  Contact Info
+                </div>
+                <div class="collab-split" style="margin-bottom: 18px">
+                  <div class="form-group">
+                    <label>Email <span class="req">*</span></label>
+                    <input
+                      id="cf-email"
+                      type="email"
+                      placeholder="your@kiit.ac.in"
+                      maxlength="120"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Phone <span class="req">*</span></label>
+                    <input
+                      id="cf-phone"
+                      type="tel"
+                      placeholder="+91 9XXXXXXXX0"
+                      maxlength="20"
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 8px;
+                    align-items: center;
+                  "
+                >
+                  <button
+                    class="btn-primary"
+                    id="collab-submit-btn"
+                    style="max-width: 180px"
+                  >
+                    Post Request
+                  </button>
+                  <button class="btn-sm btn-danger" id="cancel-collab-btn">
+                    Cancel
+                  </button>
+                </div>
+                <div
+                  id="collab-form-err"
+                  class="err-msg"
+                  style="display: none"
+                ></div>
+                <div
+                  id="collab-form-ok"
+                  class="ok-msg"
+                  style="display: none"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Posted collabs list -->
+            <div id="collab-list"></div>
           </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Basic Info</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Name</label>
-              <input id="pf-name" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Roll Number</label>
-              <input id="pf-roll" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Mobile</label>
-              <input id="pf-mobile" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Email</label>
-              <input id="pf-email" type="email" placeholder="your@kiit.ac.in" />
-            </div>
-            <div class="form-group">
-              <label>Batch</label>
-              <input id="pf-batch" type="text" placeholder="e.g. 2022–2026" />
-            </div>
-            <div class="form-group">
-              <label>Domain / Role <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(set by admin)</span></label>
-              <input id="pf-domain" type="text" readonly style="opacity:.5;cursor:not-allowed" title="Contact an admin to update your domain" />
-            </div>
-            <div class="form-group">
-              <label>Role Title <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(set by admin)</span></label>
-              <input id="pf-role" type="text" readonly style="opacity:.5;cursor:not-allowed" title="Contact an admin to update your role title" />
-            </div>
-            <div class="form-group col-span-2">
-              <label>Bio</label>
-              <textarea id="pf-bio" rows="3" placeholder="A short bio…"></textarea>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Social Links</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>GitHub</label>
-              <div class="input-group">
-                <span class="input-prefix">@</span>
-                <input id="pf-github" type="text" placeholder="username" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>LinkedIn</label>
-              <input id="pf-linkedin" type="url" placeholder="https://linkedin.com/in/…" />
-            </div>
-            <div class="form-group">
-              <label>Instagram</label>
-              <div class="input-group">
-                <span class="input-prefix">@</span>
-                <input id="pf-instagram" type="text" placeholder="username" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>X / Twitter</label>
-              <div class="input-group">
-                <span class="input-prefix">@</span>
-                <input id="pf-twitter" type="text" placeholder="username" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>YouTube</label>
-              <input id="pf-youtube" type="url" placeholder="https://youtube.com/@…" />
-            </div>
-            <div class="form-group">
-              <label>Portfolio / Website</label>
-              <input id="pf-website" type="url" placeholder="https://…" />
-            </div>
-          </div>
-          <div id="social-link-err" class="err-msg" style="display:none"></div>
-        </div>
-
-        <button class="btn-primary" id="profile-save-btn" style="max-width:200px">Save Changes</button>
-        <div id="profile-msg" class="ok-msg" style="display:none"></div>
-        <div id="profile-err" class="err-msg" style="display:none"></div>
-      </div>
-
-      <!-- ── MY MOVIES PANEL ──────────────────────────────────────────────── -->
-      <div class="panel" id="panel-movies">
-        <div class="panel-title">My Movies</div>
-        <div class="panel-sub">Submit film projects for admin review and publication on /films</div>
-
-        <button class="btn-primary" id="new-movie-btn" style="max-width:200px;margin-bottom:24px">+ Submit Movie</button>
-
-        <div id="movie-form" style="display:none">
-          <div class="card">
-            <div class="card-title" id="movie-form-title">New Submission</div>
-            <input type="hidden" id="movie-edit-id" />
-
-            <div class="form-group">
-              <label>Movie Poster</label>
-              <input type="file" id="mf-poster" accept="image/*" style="border:none;padding:0;background:transparent" />
-            </div>
-            <div class="form-group">
-              <label>Title *</label>
-              <input id="mf-title" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Release Year</label>
-              <input id="mf-year" type="text" placeholder="2024" />
-            </div>
-            <div style="display:flex;gap:12px">
-              <div class="form-group" style="flex:1">
-                <label>Runtime <span style="font-weight:400;color:var(--muted)">(minutes)</span></label>
-                <input id="mf-runtime" type="number" placeholder="e.g. 18" min="1" />
-              </div>
-              <div class="form-group" style="flex:1">
-                <label>Language</label>
-                <input id="mf-language" type="text" placeholder="e.g. Hindi, English" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Genre Tags <span style="font-weight:400;color:var(--muted)">— type and press Enter or comma to add (e.g. Drama, Short Film, Rom-Com)</span></label>
-              <div class="mf-tag-input-wrap" id="mf-genre-wrap">
-                <input type="hidden" id="mf-genre" />
-                <input class="mf-tag-bare-input" id="mf-genre-input" placeholder="Add genre…" autocomplete="off" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Description</label>
-              <textarea id="mf-desc" rows="3" placeholder="A brief synopsis or description of the film..."></textarea>
-            </div>
-            <div class="form-group"><label>Director</label><div class="portal-mpick" id="mfpick-director"></div></div>
-            <div class="form-group"><label>Producer</label><div class="portal-mpick" id="mfpick-producer"></div></div>
-            <div class="form-group"><label>DOP (Director of Photography)</label><div class="portal-mpick" id="mfpick-dop"></div></div>
-            <div class="form-group"><label>Script Writer</label><div class="portal-mpick" id="mfpick-writer"></div></div>
-            <div class="form-group"><label>Video Editor</label><div class="portal-mpick" id="mfpick-editor"></div></div>
-            <div class="form-group"><label>Sound Design</label><div class="portal-mpick" id="mfpick-sound"></div></div>
-            <div class="form-group"><label>Management</label><div class="portal-mpick" id="mfpick-management"></div></div>
-            <div class="form-group"><label>Graphic Design</label><div class="portal-mpick" id="mfpick-gd"></div></div>
-            <div class="form-group"><label>Actors <span style="font-weight:400;color:var(--muted)">(comma separated or pick)</span></label><div class="portal-mpick" id="mfpick-actors"></div></div>
-            <div class="form-group"><label>Support Crew <span style="font-weight:400;color:var(--muted)">(comma separated or pick)</span></label><div class="portal-mpick" id="mfpick-support"></div></div>
-            <div class="form-group">
-              <label>Trailer URL <span style="font-weight:400;color:var(--muted)">(YouTube link)</span></label>
-              <input id="mf-trailer" type="text" placeholder="https://youtube.com/watch?v=... or youtu.be/..." />
-            </div>
-            <div class="form-group">
-              <label>▶ Watch Now URL <span style="font-weight:400;color:var(--muted)">(full film link — paste a YouTube link to auto-fetch runtime)</span></label>
-              <input id="mf-watch" type="text" placeholder="https://youtube.com/watch?v=..." />
-            </div>
-            <div class="form-group">
-              <label>Spotify Soundtrack URL <span style="font-weight:400;color:var(--muted)">(album, playlist, or track)</span></label>
-              <input id="mf-spotify" type="text" placeholder="https://open.spotify.com/album/2026" />
-            </div>
-            <div class="form-group">
-              <label>Apple Music Soundtrack URL <span style="font-weight:400;color:var(--muted)">(album, playlist, or track)</span></label>
-              <input id="mf-apple-music" type="text" placeholder="https://music.apple.com/2026/album/2026" />
-            </div>
-            <div style="display:flex;gap:12px;margin-top:8px">
-              <button class="btn-primary" id="movie-submit-btn" style="max-width:180px">Submit for Review</button>
-              <button class="btn-sm btn-danger" id="cancel-movie-btn">Cancel</button>
-            </div>
-            <div id="movie-form-err" class="err-msg" style="display:none"></div>
-            <div id="movie-form-ok"  class="ok-msg"  style="display:none"></div>
-          </div>
-        </div>
-
-        <div id="movies-list"></div>
-      </div>
-
-      <!-- ── SECURITY PANEL ───────────────────────────────────────────────── -->
-      <div class="panel" id="panel-security">
-        <div class="panel-title">Security</div>
-        <div class="panel-sub">Manage your password, 2FA, and active sessions</div>
-
-        <!-- Change password -->
-        <div class="card">
-          <div class="card-title">Change Password</div>
-          <div class="form-grid" style="max-width:500px">
-            <div class="form-group col-span-2">
-              <label>Current Password</label>
-              <input id="sec-cur-pw" type="password" placeholder="••••••••" />
-            </div>
-            <div class="form-group">
-              <label>New Password</label>
-              <input id="sec-new-pw" type="password" placeholder="Min 8 chars" />
-            </div>
-            <div class="form-group">
-              <label>Confirm New Password</label>
-              <input id="sec-confirm-pw" type="password" placeholder="••••••••" />
-            </div>
-          </div>
-          <button class="btn-primary" id="sec-change-pw-btn" style="max-width:200px">Update Password</button>
-          <div id="sec-pw-msg" class="ok-msg" style="display:none"></div>
-          <div id="sec-pw-err" class="err-msg" style="display:none"></div>
-        </div>
-
-        <!-- 2FA -->
-        <div class="card" id="twofa-card">
-          <div class="card-title">Two-Factor Authentication</div>
-          <div id="twofa-status"></div>
-        </div>
-
-        <!-- Sessions -->
-        <div class="card">
-          <div class="card-title">Active Sessions</div>
-          <div id="sessions-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
-          <button class="btn-sm btn-danger" style="margin-top:16px" id="revoke-sessions-btn">Revoke All Sessions</button>
-          <div id="sessions-msg" class="ok-msg" style="display:none"></div>
-        </div>
-      </div>
-
-      <!-- ── MY WORKS PANEL ──────────────────────────────────────────────── -->
-      <div class="panel" id="panel-works">
-        <div class="panel-title">My Works</div>
-        <div class="panel-sub">Films from the KFS filmography where you appear — request edits if something's wrong</div>
-        <div id="works-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
-      </div>
-
-      <!-- ── ACTIVITY PANEL ────────────────────────────────────────────────── -->
-      <div class="panel" id="panel-activity">
-        <div class="panel-title">Activity</div>
-        <div class="panel-sub">Your recent actions and security events</div>
-        <div class="card">
-          <div id="activity-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
-        </div>
-      </div>
-
-      <!-- ── COLLABORATE PANEL ─────────────────────────────────────────────── -->
-      <div class="panel" id="panel-collab">
-        <div class="panel-title">Open Calls</div>
-        <div class="panel-sub">Post a collaboration request — find teammates, crew, or contributors for your next project</div>
-
-        <button class="btn-primary" id="new-collab-btn" style="max-width:220px;margin-bottom:24px">+ Post a Collab Request</button>
-
-        <!-- Collab Form -->
-        <div id="collab-form" style="display:none">
-          <div class="card">
-            <div class="card-title">New Collaboration Post</div>
-
-            <div class="collab-split" style="margin-bottom:18px">
-              <div class="form-group">
-                <label>Project Title <span class="req">*</span></label>
-                <input id="cf-title" type="text" placeholder="e.g. Short Film — Ek Raat" maxlength="120" />
-              </div>
-              <div class="form-group">
-                <label>Role Needed <span class="req">*</span></label>
-                <input id="cf-role" type="text" placeholder="e.g. DOP, Sound Designer, Editor" maxlength="100" />
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom:18px">
-              <label>Domain / Category</label>
-              <input id="cf-domain" type="text" placeholder="e.g. Short Film, Documentary, Music Video, Photography" maxlength="80" />
-            </div>
-
-            <div class="form-group" style="margin-bottom:18px">
-              <label>Skills Required</label>
-              <input id="cf-skills" type="text" placeholder="e.g. Premiere Pro, DSLR, Lighting, Location Sound" maxlength="200" />
-            </div>
-
-            <div class="form-group" style="margin-bottom:18px">
-              <label>Description <span class="req">*</span></label>
-              <textarea id="cf-description" rows="4" placeholder="Describe the project, what you're looking for, and any relevant context…" maxlength="1000"></textarea>
-              <div class="char-counter"><span id="cf-desc-count">0</span>/1000</div>
-            </div>
-
-            <div class="collab-split" style="margin-bottom:18px">
-              <div class="form-group">
-                <label>Timeline</label>
-                <input id="cf-timeline" type="text" placeholder="e.g. 2 weekends, 3 days shoot" maxlength="100" />
-              </div>
-              <div class="form-group">
-                <label>Needed By (Fulfillment Date) <span class="req">*</span></label>
-                <input id="cf-date" type="date" />
-              </div>
-            </div>
-
-            <hr class="divider" />
-
-            <div class="card-title" style="margin-bottom:16px">Contact Info</div>
-            <div class="collab-split" style="margin-bottom:18px">
-              <div class="form-group">
-                <label>Email <span class="req">*</span></label>
-                <input id="cf-email" type="email" placeholder="your@kiit.ac.in" maxlength="120" />
-              </div>
-              <div class="form-group">
-                <label>Phone <span class="req">*</span></label>
-                <input id="cf-phone" type="tel" placeholder="+91 9XXXXXXXX0" maxlength="20" />
-              </div>
-            </div>
-
-            <div style="display:flex;gap:12px;margin-top:8px;align-items:center">
-              <button class="btn-primary" id="collab-submit-btn" style="max-width:180px">Post Request</button>
-              <button class="btn-sm btn-danger" id="cancel-collab-btn">Cancel</button>
-            </div>
-            <div id="collab-form-err" class="err-msg" style="display:none"></div>
-            <div id="collab-form-ok"  class="ok-msg"  style="display:none"></div>
-          </div>
-        </div>
-
-        <!-- Posted collabs list -->
-        <div id="collab-list"></div>
-      </div>
-
-    </main>
-  </div>
-</div>
-
-
-<div id="collab-edit-modal-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:20px">
-  <div style="background:#111;border:1px solid #1e1e1e;border-radius:16px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:32px">
-    <div style="font-size:18px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px">Edit Collab Post</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Update your collaboration request — changes go live immediately</div>
-
-    <div class="collab-split" style="margin-bottom:18px">
-      <div class="form-group">
-        <label>Project Title <span class="req">*</span></label>
-        <input id="ce-title" type="text" placeholder="e.g. Short Film — Ek Raat" maxlength="120" />
-      </div>
-      <div class="form-group">
-        <label>Role Needed <span class="req">*</span></label>
-        <input id="ce-role" type="text" placeholder="e.g. DOP, Sound Designer, Editor" maxlength="100" />
+        </main>
       </div>
     </div>
 
-    <div class="form-group" style="margin-bottom:18px">
-      <label>Domain / Category</label>
-      <input id="ce-domain" type="text" placeholder="e.g. Short Film, Documentary, Music Video" maxlength="80" />
-    </div>
+    <div
+      id="collab-edit-modal-overlay"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 400;
+        background: rgba(0, 0, 0, 0.7);
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      "
+    >
+      <div
+        style="
+          background: #111;
+          border: 1px solid #1e1e1e;
+          border-radius: 16px;
+          width: 100%;
+          max-width: 640px;
+          max-height: 90vh;
+          overflow-y: auto;
+          padding: 32px;
+        "
+      >
+        <div
+          style="
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+          "
+        >
+          Edit Collab Post
+        </div>
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 24px">
+          Update your collaboration request — changes go live immediately
+        </div>
 
-    <div class="form-group" style="margin-bottom:18px">
-      <label>Skills Required</label>
-      <input id="ce-skills" type="text" placeholder="e.g. Premiere Pro, DSLR, Lighting" maxlength="200" />
-    </div>
+        <div class="collab-split" style="margin-bottom: 18px">
+          <div class="form-group">
+            <label>Project Title <span class="req">*</span></label>
+            <input
+              id="ce-title"
+              type="text"
+              placeholder="e.g. Short Film — Ek Raat"
+              maxlength="120"
+            />
+          </div>
+          <div class="form-group">
+            <label>Role Needed <span class="req">*</span></label>
+            <input
+              id="ce-role"
+              type="text"
+              placeholder="e.g. DOP, Sound Designer, Editor"
+              maxlength="100"
+            />
+          </div>
+        </div>
 
-    <div class="form-group" style="margin-bottom:18px">
-      <label>Description <span class="req">*</span></label>
-      <textarea id="ce-description" rows="4" placeholder="Describe the project and what you're looking for…" maxlength="1000"></textarea>
-      <div class="char-counter"><span id="ce-desc-count">0</span>/1000</div>
-    </div>
+        <div class="form-group" style="margin-bottom: 18px">
+          <label>Domain / Category</label>
+          <input
+            id="ce-domain"
+            type="text"
+            placeholder="e.g. Short Film, Documentary, Music Video"
+            maxlength="80"
+          />
+        </div>
 
-    <div class="collab-split" style="margin-bottom:18px">
-      <div class="form-group">
-        <label>Timeline</label>
-        <input id="ce-timeline" type="text" placeholder="e.g. 2 weekends, 3 days shoot" maxlength="100" />
+        <div class="form-group" style="margin-bottom: 18px">
+          <label>Skills Required</label>
+          <input
+            id="ce-skills"
+            type="text"
+            placeholder="e.g. Premiere Pro, DSLR, Lighting"
+            maxlength="200"
+          />
+        </div>
+
+        <div class="form-group" style="margin-bottom: 18px">
+          <label>Description <span class="req">*</span></label>
+          <textarea
+            id="ce-description"
+            rows="4"
+            placeholder="Describe the project and what you're looking for…"
+            maxlength="1000"
+          ></textarea>
+          <div class="char-counter"><span id="ce-desc-count">0</span>/1000</div>
+        </div>
+
+        <div class="collab-split" style="margin-bottom: 18px">
+          <div class="form-group">
+            <label>Timeline</label>
+            <input
+              id="ce-timeline"
+              type="text"
+              placeholder="e.g. 2 weekends, 3 days shoot"
+              maxlength="100"
+            />
+          </div>
+          <div class="form-group">
+            <label
+              >Needed By (Fulfillment Date) <span class="req">*</span></label
+            >
+            <input id="ce-date" type="date" />
+          </div>
+        </div>
+
+        <hr class="divider" />
+
+        <div
+          style="
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 16px;
+          "
+        >
+          Contact Info
+        </div>
+        <div class="collab-split" style="margin-bottom: 18px">
+          <div class="form-group">
+            <label>Email <span class="req">*</span></label>
+            <input
+              id="ce-email"
+              type="email"
+              placeholder="your@kiit.ac.in"
+              maxlength="120"
+            />
+          </div>
+          <div class="form-group">
+            <label>Phone <span class="req">*</span></label>
+            <input
+              id="ce-phone"
+              type="tel"
+              placeholder="+91 9XXXXXXXX0"
+              maxlength="20"
+            />
+          </div>
+        </div>
+
+        <div
+          style="display: flex; gap: 12px; margin-top: 8px; align-items: center"
+        >
+          <button
+            class="btn-primary"
+            id="collab-edit-submit-btn"
+            style="max-width: 180px"
+          >
+            Save Changes
+          </button>
+          <button class="btn-sm btn-danger" id="collab-edit-cancel-btn">
+            Cancel
+          </button>
+        </div>
+        <div id="collab-edit-err" class="err-msg" style="display: none"></div>
+        <div id="collab-edit-ok" class="ok-msg" style="display: none"></div>
       </div>
-      <div class="form-group">
-        <label>Needed By (Fulfillment Date) <span class="req">*</span></label>
-        <input id="ce-date" type="date" />
+    </div>
+
+    <div
+      id="work-edit-modal-overlay"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.75);
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      "
+    >
+      <div class="work-edit-modal">
+        <div class="work-edit-modal-title">Request an Edit</div>
+        <div class="work-edit-modal-sub" id="work-edit-movie-name"></div>
+        <div class="form-group">
+          <label>Describe what needs to be changed</label>
+          <textarea
+            id="work-edit-desc"
+            rows="4"
+            placeholder="e.g. My credit is misspelled — should be 'Rahul Sharma' not 'Rahul Sherma'. Also I was the DOP, not just crew."
+          ></textarea>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 8px">
+          <button
+            class="btn-primary"
+            id="work-edit-submit-btn"
+            style="max-width: 160px"
+          >
+            Submit Request
+          </button>
+          <button class="btn-sm btn-danger" id="work-edit-cancel-btn">
+            Cancel
+          </button>
+        </div>
+        <div id="work-edit-msg" class="ok-msg" style="display: none"></div>
+        <div id="work-edit-err" class="err-msg" style="display: none"></div>
       </div>
     </div>
 
-    <hr class="divider" />
-
-    <div style="font-size:14px;font-weight:600;letter-spacing:-.01em;margin-bottom:16px">Contact Info</div>
-    <div class="collab-split" style="margin-bottom:18px">
-      <div class="form-group">
-        <label>Email <span class="req">*</span></label>
-        <input id="ce-email" type="email" placeholder="your@kiit.ac.in" maxlength="120" />
+    <!-- ── Recovery contact info modal ───────────────────────────────────────────── -->
+    <div id="contact-info-modal-overlay">
+      <div class="contact-info-modal">
+        <div class="auth-title" style="font-size: 18px; margin-bottom: 6px">
+          Recovery contact info
+        </div>
+        <div class="auth-sub" style="margin-bottom: 24px; font-size: 13px">
+          We'll use your email only to send you a verification code if you ever
+          forget your password.
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input id="ci-email" type="email" placeholder="your@kiit.ac.in" />
+        </div>
+        <div class="form-group">
+          <label>Phone (for records)</label>
+          <input id="ci-phone" type="tel" placeholder="+91 9XXXXXXXX0" />
+        </div>
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 18px">
+          Email is required for password recovery. Phone is optional and kept
+          for records only.
+        </div>
+        <button class="btn-primary" id="ci-save-btn">Save</button>
+        <div id="ci-err" class="err-msg" style="display: none"></div>
+        <div id="ci-ok" class="ok-msg" style="display: none"></div>
+        <button
+          class="btn-ghost"
+          id="ci-cancel-btn"
+          style="width: 100%; text-align: center"
+        >
+          Cancel
+        </button>
       </div>
-      <div class="form-group">
-        <label>Phone <span class="req">*</span></label>
-        <input id="ce-phone" type="tel" placeholder="+91 9XXXXXXXX0" maxlength="20" />
-      </div>
     </div>
 
-    <div style="display:flex;gap:12px;margin-top:8px;align-items:center">
-      <button class="btn-primary" id="collab-edit-submit-btn" style="max-width:180px">Save Changes</button>
-      <button class="btn-sm btn-danger" id="collab-edit-cancel-btn">Cancel</button>
-    </div>
-    <div id="collab-edit-err" class="err-msg" style="display:none"></div>
-    <div id="collab-edit-ok"  class="ok-msg"  style="display:none"></div>
-  </div>
-</div>
-
-
-  <div id="work-edit-modal-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);align-items:center;justify-content:center;padding:20px">
-  <div class="work-edit-modal">
-    <div class="work-edit-modal-title">Request an Edit</div>
-    <div class="work-edit-modal-sub" id="work-edit-movie-name"></div>
-    <div class="form-group">
-      <label>Describe what needs to be changed</label>
-      <textarea id="work-edit-desc" rows="4" placeholder="e.g. My credit is misspelled — should be 'Rahul Sharma' not 'Rahul Sherma'. Also I was the DOP, not just crew."></textarea>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:8px">
-      <button class="btn-primary" id="work-edit-submit-btn" style="max-width:160px">Submit Request</button>
-      <button class="btn-sm btn-danger" id="work-edit-cancel-btn">Cancel</button>
-    </div>
-    <div id="work-edit-msg" class="ok-msg" style="display:none"></div>
-    <div id="work-edit-err" class="err-msg" style="display:none"></div>
-  </div>
-</div>
-
-<!-- ── Recovery contact info modal ───────────────────────────────────────────── -->
-<div id="contact-info-modal-overlay">
-  <div class="contact-info-modal">
-    <div class="auth-title" style="font-size:18px;margin-bottom:6px">Recovery contact info</div>
-    <div class="auth-sub" style="margin-bottom:24px;font-size:13px">We'll use your email only to send you a verification code if you ever forget your password.</div>
-    <div class="form-group">
-      <label>Email</label>
-      <input id="ci-email" type="email" placeholder="your@kiit.ac.in" />
-    </div>
-    <div class="form-group">
-      <label>Phone (for records)</label>
-      <input id="ci-phone" type="tel" placeholder="+91 9XXXXXXXX0" />
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Email is required for password recovery. Phone is optional and kept for records only.</div>
-    <button class="btn-primary" id="ci-save-btn">Save</button>
-    <div id="ci-err" class="err-msg" style="display:none"></div>
-    <div id="ci-ok" class="ok-msg" style="display:none"></div>
-    <button class="btn-ghost" id="ci-cancel-btn" style="width:100%;text-align:center">Cancel</button>
-  </div>
-</div>
-
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="/membersaccess.js" defer></script>
-
-</body>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="/membersaccess.js" defer></script>
+  </body>
 </html>
