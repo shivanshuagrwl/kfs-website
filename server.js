@@ -446,7 +446,7 @@ app.use(helmet({
       // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
-      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
+      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com", "https://accounts.google.com/gsi/client"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:",
@@ -462,6 +462,7 @@ app.use(helmet({
         "https://*.supabase.co",         // Supabase realtime + API calls
         "https://api.razorpay.com",      // Razorpay order/payment API
         "https://lumberjack.razorpay.com", // Razorpay analytics/logging
+        "https://accounts.google.com/gsi/", // Google Identity Services background calls
       ],
       frameSrc: [
         "https://www.youtube.com",       // YouTube embeds
@@ -469,12 +470,18 @@ app.use(helmet({
         "https://embed.music.apple.com", // Apple Music embeds
         "https://api.razorpay.com",      // Razorpay checkout iframe
         "https://*.razorpay.com",        // Razorpay checkout modal
+        "https://accounts.google.com/gsi/", // Google Sign-In button/One Tap iframe
+        "https://accounts.google.com/o/oauth2/", // Google Sign-In popup fallback (non-FedCM browsers)
       ],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
     },
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  // Google Sign-In's popup-based fallback (used when the browser doesn't support FedCM)
+  // needs to postMessage back to the opener window. The helmet default ("same-origin")
+  // blocks that handshake, leaving the popup blank/unresponsive.
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 
 // Fix 3: Add body size limit to prevent large payload DoS attacks (was unlimited)
