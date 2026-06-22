@@ -4507,7 +4507,8 @@ app.post(
 
     let answers = {};
     try {
-      answers = JSON.parse(req.body.answers || "{}");
+      const raw = req.body.answers;
+      answers = (typeof raw === "object" && raw !== null) ? raw : JSON.parse(raw || "{}");
     } catch {
       return res.status(400).json({ error: "Invalid answers payload" });
     }
