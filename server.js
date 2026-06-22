@@ -10853,7 +10853,7 @@ async function initMemberDB() {
         "[initMemberDB] member_grievances table not found. Run this SQL in Supabase:\n\n" +
         "  CREATE TABLE IF NOT EXISTS member_grievances (\n" +
         "    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),\n" +
-        "    account_id   UUID        NOT NULL REFERENCES member_accounts(id) ON DELETE CASCADE,\n" +
+        "    account_id   BIGINT      NOT NULL REFERENCES member_accounts(id) ON DELETE CASCADE,\n" +
         "    member_id    UUID        REFERENCES members(id) ON DELETE SET NULL,\n" +
         "    member_name  TEXT,\n" +
         "    subject      TEXT        NOT NULL,\n" +

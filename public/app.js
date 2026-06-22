@@ -7911,18 +7911,41 @@ async function rfStartPayment(section) {
   btn.disabled = true;
   btn.innerHTML = 'Opening payment…';
 
-  // Ensure Razorpay SDK is loaded (it may not be ready yet if loaded with defer)
+  // Ensure Razorpay SDK is loaded before trying to instantiate it.
+  // The <script> tag in index.html has no defer/async so it executes
+  // synchronously at parse time — by the time any user clicks a button
+  // the script has long since run and addEventListener('load') on it
+  // will NEVER fire (the load event already happened). We must therefore
+  // distinguish three states:
+  //   1. Already executed → typeof Razorpay !== 'undefined' → skip
+  //   2. Tag present but still fetching (slow network) → await its events
+  //   3. Tag absent entirely → inject a new one and await it
   if (typeof Razorpay === 'undefined') {
     await new Promise((resolve, reject) => {
       const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
       if (existing) {
-        // Script tag exists but hasn't fired onload yet — wait for it
-        existing.addEventListener('load', resolve);
-        existing.addEventListener('error', () => reject(new Error('Razorpay SDK failed to load')));
+        // Tag is in the DOM. If readyState is 'complete' the script already
+        // ran but Razorpay is still undefined — that means it errored out.
+        if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
+          reject(new Error('Razorpay SDK failed to load — check network / CSP'));
+          return;
+        }
+        // Tag is still in-flight; wait for it to finish.
+        existing.addEventListener('load', () => {
+          typeof Razorpay !== 'undefined'
+            ? resolve()
+            : reject(new Error('Razorpay SDK loaded but Razorpay constructor not found'));
+        });
+        existing.addEventListener('error', () => reject(new Error('Razorpay SDK network error')));
       } else {
+        // No tag at all — inject one dynamically.
         const s = document.createElement('script');
         s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-        s.onload = resolve;
+        s.onload = () => {
+          typeof Razorpay !== 'undefined'
+            ? resolve()
+            : reject(new Error('Razorpay SDK loaded but Razorpay constructor not found'));
+        };
         s.onerror = () => reject(new Error('Razorpay SDK failed to load'));
         document.head.appendChild(s);
       }
