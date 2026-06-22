@@ -6970,7 +6970,14 @@ const FB_SUBMIT_END = '__submit__';
 // and new sections-based forms into one uniform {version, sections} shape.
 function clientParseFormSchema(rawQuestions) {
   let parsed;
-  try { parsed = JSON.parse(rawQuestions || '[]'); } catch (e) { parsed = []; }
+  try {
+    // rawQuestions may already be a parsed object (Supabase returns TEXT as string, but guard anyway)
+    if (typeof rawQuestions === 'object' && rawQuestions !== null) {
+      parsed = rawQuestions;
+    } else {
+      parsed = JSON.parse(rawQuestions || '[]');
+    }
+  } catch (e) { parsed = []; }
   if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sections)) {
     return { version: 2, sections: parsed.sections };
   }
@@ -7905,11 +7912,28 @@ function rfGoBack() {
   renderRFCurrentSection();
 }
 
+function rfShowPaymentError(msg) {
+  // Show persistent error that doesn't auto-dismiss (unlike rfShowTransientError)
+  let errEl = document.getElementById('rf-payment-error');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.id = 'rf-payment-error';
+    errEl.style.cssText = 'color:#ff453a;font-size:13px;text-align:center;margin:0 24px 12px;padding:10px 14px;background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.25);border-radius:8px;font-weight:600';
+    const feeNote = document.getElementById('rf-fee-note');
+    if (feeNote && feeNote.parentNode) feeNote.parentNode.insertBefore(errEl, feeNote.nextSibling);
+  }
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+}
+
 async function rfStartPayment(section) {
   const btn = document.getElementById('rf-submit-btn');
   const origHtml = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = 'Opening payment…';
+  // Clear any previous payment error
+  const prevPayErr = document.getElementById('rf-payment-error');
+  if (prevPayErr) prevPayErr.style.display = 'none';
 
   // Ensure Razorpay SDK is loaded before trying to instantiate it.
   // The <script> tag in index.html has no defer/async so it executes
@@ -7960,7 +7984,9 @@ async function rfStartPayment(section) {
     });
     const orderData = await orderRes.json();
     if (!orderRes.ok) {
-      rfShowTransientError(orderData.error || 'Could not start payment');
+      const errMsg = orderData.error || 'Could not start payment';
+      rfShowPaymentError(errMsg);
+      rfShowTransientError(errMsg);
       btn.disabled = false; btn.innerHTML = origHtml;
       return;
     }

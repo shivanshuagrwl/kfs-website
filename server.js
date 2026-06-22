@@ -4311,7 +4311,12 @@ const SUBMIT_END = "__submit__";
 function parseFormSchema(rawQuestions) {
   let parsed;
   try {
-    parsed = JSON.parse(rawQuestions || "[]");
+    // rawQuestions may already be a parsed object (Supabase JSONB auto-parse)
+    if (typeof rawQuestions === "object" && rawQuestions !== null) {
+      parsed = rawQuestions;
+    } else {
+      parsed = JSON.parse(rawQuestions || "[]");
+    }
   } catch {
     parsed = [];
   }
