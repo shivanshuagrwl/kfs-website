@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner'];
+const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -64,6 +64,11 @@ function hasPermission(section) {
   if (!currentAdminPermissions || currentAdminPermissions.length === 0) return false;
   // 'scanner' is gated by 'events' permission — same role, different UI section
   const effectiveSection = section === 'scanner' ? 'events' : section;
+  // 'grievances' is accessible with either the dedicated 'grievances' permission
+  // or the broader 'members' permission (mirrors server-side requireGrievanceAccess)
+  if (effectiveSection === 'grievances') {
+    return currentAdminPermissions.includes('grievances') || currentAdminPermissions.includes('members');
+  }
   return currentAdminPermissions.includes(effectiveSection);
 }
 let allEvents = [];
@@ -2956,7 +2961,7 @@ async function loadAdminData(name) {
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
-    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate','easter-eggs':'Easter Eggs'};
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate','easter-eggs':'Easter Eggs','grievances':'Grievances'};
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
     tbody.innerHTML = admins.map(a => {
@@ -3052,6 +3057,7 @@ async function loadAdminData(name) {
   else if (name==='member-profile-changes') { loadMemberProfileChanges('pending'); }
   else if (name==='member-movie-submissions') { loadMemberMovieSubmissions('pending'); }
   else if (name==='work-edit-requests') { loadWorkEditRequests('pending'); }
+  else if (name==='grievances') { loadAdminGrievances(); }
 }
 
 function openBlogModal(blog=null) {
@@ -12566,6 +12572,99 @@ async function reviewWorkEditRequest(requestId, action) {
   if (action === 'reject') notes = prompt('Reason for rejection (optional):') || '';
   await apiFetch(`/api/admin/work-edit-requests/${requestId}/review`, 'POST', { action, notes });
   loadWorkEditRequests('pending');
+}
+
+// ── Grievances & Suggestions ────────────────────────────────────────────────
+
+let _grievancesCache = [];
+
+function _adminGrvTypeLabel(type) {
+  if (type === 'suggestion') return '💡 Suggestion';
+  if (type === 'grievance')  return '🚨 Grievance';
+  return '💬 General';
+}
+
+async function loadAdminGrievances(status) {
+  if (status === undefined) {
+    const activeBtn = document.querySelector('#section-grievances .btn-primary[id^="grv-filter-"]');
+    status = activeBtn ? activeBtn.id.replace('grv-filter-', '') : '';
+  }
+  const tbody = document.getElementById('admin-grievances-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
+
+  ['all', 'open', 'in_progress', 'resolved'].forEach(s => {
+    const btn = document.getElementById(`grv-filter-${s}`);
+    if (!btn) return;
+    if (s === (status || 'all')) {
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px';
+    } else {
+      btn.className = 'btn';
+      btn.style.cssText = 'font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+    }
+  });
+
+  const type = document.getElementById('grv-admin-type-filter')?.value || '';
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.set('status', status);
+  if (type) params.set('type', type);
+
+  const data = await apiFetch(`/api/admin/grievances?${params.toString()}`);
+  _grievancesCache = data || [];
+  if (!_grievancesCache.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No grievances or suggestions found.</td></tr>`;
+    return;
+  }
+
+  const statusColors = { open: '#fbbf24', in_progress: '#60a5fa', resolved: '#4ade80' };
+  const statusLabels = { open: 'Open', in_progress: 'In Progress', resolved: 'Resolved' };
+
+  tbody.innerHTML = _grievancesCache.map(g => {
+    const date = new Date(g.created_at).toLocaleDateString('en-IN');
+    const subj = g.subject && g.subject.length > 60 ? g.subject.slice(0, 60) + '…' : (g.subject || '—');
+    const who = g.anonymous ? 'Anonymous' : (g.member_name || '—');
+    const color = statusColors[g.status] || '#888';
+    return `<tr>
+      <td style="color:var(--grey);font-size:12px">${date}</td>
+      <td style="font-weight:500">${escapeHtml(who)}</td>
+      <td style="font-size:12px">${_adminGrvTypeLabel(g.type)}</td>
+      <td style="font-size:13px;max-width:220px">${escapeHtml(subj)}</td>
+      <td><span class="tag" style="border-color:${color};color:${color}">${statusLabels[g.status] || g.status}</span></td>
+      <td><button class="btn-sm" onclick="openGrievanceModal('${g.id}')">View</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openGrievanceModal(id) {
+  const g = _grievancesCache.find(x => String(x.id) === String(id));
+  if (!g) return;
+  document.getElementById('grievance-modal-id').value = g.id;
+  document.getElementById('grievance-modal-member').textContent = g.anonymous ? 'Anonymous' : (g.member_name || '—');
+  document.getElementById('grievance-modal-type').textContent = _adminGrvTypeLabel(g.type);
+  document.getElementById('grievance-modal-subject').textContent = g.subject || '';
+  document.getElementById('grievance-modal-body').textContent = g.body || '';
+  document.getElementById('grievance-modal-status').value = g.status || 'open';
+  document.getElementById('grievance-modal-note').value = g.admin_note || '';
+  document.getElementById('grievance-modal').classList.add('open');
+}
+
+function closeGrievanceModal() {
+  document.getElementById('grievance-modal').classList.remove('open');
+}
+
+async function saveGrievanceStatus() {
+  const id = document.getElementById('grievance-modal-id').value;
+  const status = document.getElementById('grievance-modal-status').value;
+  const admin_note = document.getElementById('grievance-modal-note').value;
+  const saveBtn = document.querySelector('#grievance-modal .btn-success');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  const result = await apiFetch(`/api/admin/grievances/${id}`, 'PATCH', { status, admin_note });
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+  if (result && result.success) {
+    closeGrievanceModal();
+    loadAdminGrievances();
+  }
 }
 
 // ── SITE CREDITS ────────────────────────────────────────────────────────────

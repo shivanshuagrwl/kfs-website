@@ -804,6 +804,9 @@ body.light-mode .hero-logo{content:url('/images/KFS_LOGO_DARK.png')}
 /* ── SECTIONS ─────────────────────────────────────────────────────────── */
 .section{padding:52px 40px}
 .section-inner{max-width:1200px;margin:0 auto}.section-header{text-align:left}
+/* Testimonials heading sits outside the carousel's full-bleed track — pin it
+   explicitly left so it always matches the other section headings. */
+#testimonials-section .section-header,#testimonials-section .section-label,#testimonials-section .section-title{text-align:left!important;margin-left:0}
 .section-label{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
 .section-title{font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 16px rgba(255,255,255,.07))}
 .section-divider{width:100%;height:1px;background:var(--border);margin:0}
@@ -2635,9 +2638,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="analytics" checked> Traffic Analytics</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="review-analytics" checked> Review Analytics</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="reg-analytics" checked> Reg. Analytics</label>
-        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="wrapped" checked> Wrapped</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="collaborate" checked> Collaborate</label>
-        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="themes" checked> Event Themes</label>
+        <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="themes" checked> Event Themes</label>
+        <label class="perm-check-item"><input type="checkbox" class="new-admin-perm" value="grievances" checked> Grievances &amp; Suggestions</label>
       </div>
     </div>
     <p id="add-admin-error" style="color:#ff4444;font-size:13px;margin:0 0 12px"></p></div>
@@ -2682,7 +2686,8 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="reg-analytics"> Reg. Analytics</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="wrapped"> Wrapped</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="collaborate"> Collaborate</label>
-      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="themes"> Event Themes</label>
+      <label class="perm-check-item" style="border-right:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="themes"> Event Themes</label>
+      <label class="perm-check-item"><input type="checkbox" class="edit-perm-cb" value="grievances"> Grievances &amp; Suggestions</label>
     </div>
     <p id="edit-perms-error" style="color:#ff4444;font-size:13px;margin:0 0 4px"></p></div>
     <div class="modal-footer" style="padding:16px 28px;margin:0;border-top:1px solid var(--border)"><button data-action="closeEditPermsModal" class="btn btn-secondary" style="border-radius:12px">Cancel</button><button data-action="savePermissions" class="btn btn-primary" style="border-radius:12px" id="save-perms-btn">Save Permissions</button></div>
@@ -2907,7 +2912,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
   <div class="section-divider" id="spotlight-divider" style="margin:0 40px;display:none"></div>
 
-  <section class="section">
+  <section class="section" id="testimonials-section">
     <div class="section-inner">
       <div class="section-header">
         <p class="section-label">Voices</p>
@@ -3750,6 +3755,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <div data-action="showAdminSection" data-args='["member-profile-changes"]' class="admin-sidebar-item" data-section="member-profile-changes"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> Profile Changes</div>
     <div data-action="showAdminSection" data-args='["member-movie-submissions"]' class="admin-sidebar-item" data-section="member-movie-submissions"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> Movie Submissions</div>
     <div data-action="showAdminSection" data-args='["work-edit-requests"]' class="admin-sidebar-item" data-section="work-edit-requests"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> Work Edit Requests</div>
+    <div data-action="showAdminSection" data-args='["grievances"]' class="admin-sidebar-item" data-section="grievances"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Grievances &amp; Suggestions</div>
     <div class="admin-sidebar-group">System</div>
     <div data-action="showAdminSection" data-args='["credits"]' class="admin-sidebar-item" data-section="credits"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><polyline points="16 3 18 5 22 1"/></svg></span> Site Credits</div>
     <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
@@ -5009,6 +5015,53 @@ KFS — KIIT Film Society"></textarea>
       </div>
     </div>
 
+    <!-- MEMBER PORTAL — GRIEVANCES & SUGGESTIONS -->
+    <div class="admin-section" id="section-grievances">
+      <div class="admin-header">
+        <div><h2>Grievances &amp; Suggestions</h2><p>Feedback members submit through the Member Portal</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select id="grv-admin-type-filter" onchange="loadAdminGrievances()" style="font-size:12px;padding:8px 12px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">
+            <option value="">All Types</option>
+            <option value="suggestion">💡 Suggestion</option>
+            <option value="grievance">🚨 Grievance</option>
+            <option value="general">💬 General</option>
+          </select>
+          <button onclick="loadAdminGrievances('')" id="grv-filter-all" class="btn btn-primary" style="font-size:12px;padding:8px 16px;border-radius:20px">All</button>
+          <button onclick="loadAdminGrievances('open')" id="grv-filter-open" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">Open</button>
+          <button onclick="loadAdminGrievances('in_progress')" id="grv-filter-in_progress" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">In Progress</button>
+          <button onclick="loadAdminGrievances('resolved')" id="grv-filter-resolved" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">Resolved</button>
+        </div>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Date</th><th>Member</th><th>Type</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="admin-grievances-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="modal-overlay" id="grievance-modal">
+  <div class="modal">
+    <h3>Grievance / Suggestion</h3>
+    <input type="hidden" id="grievance-modal-id">
+    <div class="form-group"><label>From</label><div id="grievance-modal-member" style="font-size:13px;color:var(--grey)"></div></div>
+    <div class="form-group"><label>Type</label><div id="grievance-modal-type" style="font-size:13px;color:var(--grey)"></div></div>
+    <div class="form-group"><label>Subject</label><div id="grievance-modal-subject" style="font-size:14px;font-weight:500"></div></div>
+    <div class="form-group"><label>Details</label><div id="grievance-modal-body" style="font-size:13px;color:var(--grey);white-space:pre-wrap;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px"></div></div>
+    <div class="form-group"><label>Status</label>
+      <select id="grievance-modal-status">
+        <option value="open">Open</option>
+        <option value="in_progress">In Progress</option>
+        <option value="resolved">Resolved</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Admin Note (member can see this)</label><textarea id="grievance-modal-note" placeholder="Optional note for the member…"></textarea></div>
+    <div class="modal-actions">
+      <button onclick="closeGrievanceModal()" class="btn-sm">Cancel</button>
+      <button onclick="saveGrievanceStatus()" class="btn-sm btn-success">Save</button>
+    </div>
   </div>
 </div>
 <div class="modal-overlay" id="blog-modal">

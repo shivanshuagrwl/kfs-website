@@ -4524,7 +4524,12 @@ app.post(
     }
 
     try {
-      const receiptId = `kfs_evtreg_${req.params.id}_${Date.now()}`;
+      // NOTE: Razorpay's `receipt` field has a hard 40-character limit.
+      // Event IDs can be full UUIDs (36 chars), so "kfs_evtreg_<uuid>_<timestamp>"
+      // (~61 chars) was silently rejected by Razorpay's API on every request,
+      // which surfaced to users as "Could not initiate payment. Please try again."
+      // Keep it short — same safe pattern as the donation flow's receipt ID.
+      const receiptId = `kfs_evt_${Date.now()}`;
       const order = await createRazorpayOrder(requiredAmountPaise, receiptId);
       return res.json({
         order_id: order.id,
