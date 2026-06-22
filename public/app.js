@@ -7261,6 +7261,9 @@ function renderFBSections() {
     const nextOptions = `<option value="">Next section (in order)</option>` +
       otherSections.map(({ s, si }) => `<option value="${s.id}" ${section.next_section === s.id ? 'selected' : ''}>${esc(s.title) || 'Section ' + (si + 1)}</option>`).join('') +
       `<option value="${FB_SUBMIT_END}" ${section.next_section === FB_SUBMIT_END ? 'selected' : ''}>End form (Submit)</option>`;
+    // If any question in this section has branching enabled, the section-level
+    // "Leads to" is overridden per-answer — disable it to avoid confusion.
+    const hasBranchQuestion = (section.questions || []).some(q => q.type === 'radio' && q.branch && q.branch.enabled);
 
     const questionsHtml = (section.questions || []).map((q, qIdx) => {
       const branchEnabled = q.type === 'radio' && q.branch && q.branch.enabled;
@@ -7349,9 +7352,10 @@ function renderFBSections() {
             <span>₹</span>
             <input type="number" min="1" step="1" value="${esc(section.amount_rupees)}" placeholder="Amount" oninput="syncFBSectionAmount(${sIdx},this.value)">
           </div>` : ''}
-        <div class="fb-next-row">
+        <div class="fb-next-row" ${hasBranchQuestion ? 'title="Controlled per-answer by the branch question above"' : ''}>
           Leads to
-          <select class="fb-next-select" onchange="syncFBSectionNext(${sIdx},this.value)">${nextOptions}</select>
+          <select class="fb-next-select" onchange="syncFBSectionNext(${sIdx},this.value)" ${hasBranchQuestion ? 'disabled style="opacity:.4;cursor:not-allowed"' : ''}>${nextOptions}</select>
+          ${hasBranchQuestion ? '<span class="fb-next-branch-hint">Set per answer ↑</span>' : ''}
         </div>
       </div>
     </div>`;
