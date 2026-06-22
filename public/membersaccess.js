@@ -376,6 +376,19 @@ function wireStaticButtons() {
   const editOverlay = $id('collab-edit-modal-overlay');
   if (editOverlay) editOverlay.addEventListener('click', e => { if (e.target === editOverlay) closeCollabEditModal(); });
 
+  // Grievance / Suggestion
+  on('grv-submit-btn', 'click', submitGrievance);
+  const grvBody = $id('grv-body');
+  if (grvBody) grvBody.addEventListener('input', () => { const cnt = $id('grv-body-count'); if (cnt) cnt.textContent = grvBody.value.length; });
+  document.querySelectorAll('.grv-type-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.grv-type-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const typeEl = $id('grv-type-value');
+      if (typeEl) typeEl.value = tab.dataset.grvType || 'general';
+    });
+  });
+
 
   // Work edit modal
   on('work-edit-submit-btn', 'click', submitWorkEditRequest);
@@ -1022,6 +1035,7 @@ function switchPanel(el) {
   if (panel === 'movies')   loadMovies();
   if (panel === 'works')    loadMyWorks();
   if (panel === 'collab')   loadMyCollabs();
+  if (panel === 'grievance') loadMyGrievances();
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -1914,4 +1928,108 @@ function handleEnterKey(e) {
   else if (fpUserStep   && fpUserStep.style.display   === 'block') fpSubmitUsername();
   else if (fpOtpStep    && fpOtpStep.style.display    === 'block') fpSubmitOtp();
   else if (fpResetStep  && fpResetStep.style.display  === 'block') fpSubmitNewPassword();
+}
+
+// ── Grievance / Suggestion ────────────────────────────────────────────────────
+
+async function submitGrievance() {
+  const subject  = ($id('grv-subject')?.value || '').trim();
+  const body     = ($id('grv-body')?.value    || '').trim();
+  const type     = ($id('grv-type-value')?.value || 'general');
+  const anon     = !!$id('grv-anon')?.checked;
+
+  if (!subject) { showMsg('grv-form-err', 'Please add a subject.', false); return; }
+  if (!body)    { showMsg('grv-form-err', 'Please add some details.', false); return; }
+  if (body.length < 10) { showMsg('grv-form-err', 'Details are too short — please be more descriptive.', false); return; }
+
+  const btn = $id('grv-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  hideEl('grv-form-err'); hideEl('grv-form-ok');
+  try {
+    await api('POST', '/api/member/grievances', { subject, body, type, anonymous: anon });
+    showMsg('grv-form-ok', '✅ Submitted! We\'ll review it and update the status here.');
+    // Reset form
+    const subj = $id('grv-subject'); if (subj) subj.value = '';
+    const bod  = $id('grv-body');   if (bod)  { bod.value = ''; const cnt = $id('grv-body-count'); if (cnt) cnt.textContent = '0'; }
+    const anonEl = $id('grv-anon'); if (anonEl) anonEl.checked = false;
+    // Reset type tab to suggestion
+    document.querySelectorAll('.grv-type-tab').forEach(t => t.classList.remove('active'));
+    const defTab = $id('grv-tab-suggestion'); if (defTab) defTab.classList.add('active');
+    const typeEl = $id('grv-type-value'); if (typeEl) typeEl.value = 'suggestion';
+    // Reload list
+    await loadMyGrievances();
+  } catch (e) {
+    showMsg('grv-form-err', e.message || 'Could not submit — please try again.', false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit';
+  }
+}
+
+function _grvStatusBanner(status, adminNote) {
+  const cfg = {
+    open:        { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>', text: 'Received — pending review by the team.' },
+    in_progress: { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', text: 'Being worked on — your issue is actively being addressed.' },
+    resolved:    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>', text: 'Resolved — this has been addressed.' },
+  };
+  const c = cfg[status] || cfg.open;
+  return `
+    <div class="grv-status-banner ${status || 'open'}">
+      ${c.icon}
+      <div>
+        <div>${c.text}</div>
+        ${adminNote ? `<div class="grv-admin-note">Admin note: ${escHtml(adminNote)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function _grvBadgeClass(status) {
+  if (status === 'resolved')    return 'badge-resolved';
+  if (status === 'in_progress') return 'badge-in-progress';
+  return 'badge-open';
+}
+
+function _grvBadgeLabel(status) {
+  if (status === 'resolved')    return 'Resolved';
+  if (status === 'in_progress') return 'In Progress';
+  return 'Open';
+}
+
+function _grvTypeLabel(type) {
+  if (type === 'suggestion') return '💡 Suggestion';
+  if (type === 'grievance')  return '🚨 Grievance';
+  return '💬 General';
+}
+
+async function loadMyGrievances() {
+  const list = $id('grv-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try {
+    const items = await api('GET', '/api/member/grievances');
+    if (!items.length) {
+      list.innerHTML = `
+        <div class="grv-empty">
+          <div class="grv-empty-icon">💬</div>
+          <div class="grv-empty-title">Nothing submitted yet</div>
+          <div class="grv-empty-sub">Use the form above to share feedback or raise a concern.</div>
+        </div>`;
+      return;
+    }
+    list.innerHTML = items.map(g => `
+      <div class="grv-card">
+        <div class="grv-card-header">
+          <div class="grv-card-subject">${escHtml(g.subject)}</div>
+          <span class="badge ${_grvBadgeClass(g.status)}">${_grvBadgeLabel(g.status)}</span>
+        </div>
+        <div class="grv-card-body">${escHtml(g.body)}</div>
+        <div class="grv-card-meta">
+          <span class="grv-card-type-chip">${_grvTypeLabel(g.type)}</span>
+          <span class="grv-card-time">${relTime(g.created_at)}</span>
+          ${g.anonymous ? '<span class="grv-card-time">· Anonymous</span>' : ''}
+        </div>
+        ${_grvStatusBanner(g.status, g.admin_note)}
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+  }
 }

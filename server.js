@@ -10846,6 +10846,36 @@ async function initMemberDB() {
       console.log("[initMemberDB] member_notifications table OK");
     }
 
+    // Check member_grievances table
+    const { error: grvErr } = await supabase.from("member_grievances").select("id", { count: "exact", head: true }).limit(1);
+    if (grvErr) {
+      console.warn(
+        "[initMemberDB] member_grievances table not found. Run this SQL in Supabase:\n\n" +
+        "  CREATE TABLE IF NOT EXISTS member_grievances (\n" +
+        "    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),\n" +
+        "    account_id   UUID        NOT NULL REFERENCES member_accounts(id) ON DELETE CASCADE,\n" +
+        "    member_id    UUID        REFERENCES members(id) ON DELETE SET NULL,\n" +
+        "    member_name  TEXT,\n" +
+        "    subject      TEXT        NOT NULL,\n" +
+        "    body         TEXT        NOT NULL,\n" +
+        "    type         TEXT        NOT NULL DEFAULT 'general' CHECK (type IN ('suggestion','grievance','general')),\n" +
+        "    anonymous    BOOLEAN     NOT NULL DEFAULT FALSE,\n" +
+        "    status       TEXT        NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved')),\n" +
+        "    admin_note   TEXT,\n" +
+        "    reviewed_by  TEXT,\n" +
+        "    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n" +
+        "    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()\n" +
+        "  );\n" +
+        "  CREATE INDEX IF NOT EXISTS member_grievances_account_id_idx ON member_grievances(account_id);\n" +
+        "  CREATE INDEX IF NOT EXISTS member_grievances_status_idx     ON member_grievances(status);\n" +
+        "  CREATE INDEX IF NOT EXISTS member_grievances_created_at_idx ON member_grievances(created_at DESC);\n\n" +
+        "  -- RLS: disable (server uses service_role key which bypasses RLS anyway)\n" +
+        "  ALTER TABLE member_grievances DISABLE ROW LEVEL SECURITY;"
+      );
+    } else {
+      console.log("[initMemberDB] member_grievances table OK");
+    }
+
     console.log("[initMemberDB] Member portal tables OK");
   } catch (e) {
     console.error("[initMemberDB] error:", e.message);
@@ -10979,6 +11009,130 @@ app.post("/api/admin/work-edit-requests/:id/review", requireSection("members"), 
 
   logActivity(req.admin.id, req.admin.name, action, "work_edit_request", req_.movie_title || req_.movie_id).catch(() => {});
   res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-26 — Member Grievances / Suggestions
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Member: submit a grievance/suggestion
+app.post("/api/member/grievances", memberAuthMiddleware, async (req, res) => {
+  const { subject, body, type, anonymous } = req.body;
+  if (!subject || !subject.trim()) return res.status(400).json({ error: "Subject is required" });
+  if (!body    || !body.trim())    return res.status(400).json({ error: "Details are required" });
+  if (body.trim().length < 10)     return res.status(400).json({ error: "Details are too short" });
+
+  const validTypes = ["suggestion", "grievance", "general"];
+  const entryType = validTypes.includes(type) ? type : "general";
+
+  const { data: memberRow } = await supabase
+    .from("members").select("id, name").eq("id", req.member.memberId).maybeSingle();
+
+  const { data, error } = await supabase
+    .from("member_grievances")
+    .insert([{
+      account_id:  req.member.id,
+      member_id:   req.member.memberId,
+      member_name: anonymous ? null : (memberRow?.name || null),
+      subject:     subject.trim().slice(0, 160),
+      body:        body.trim().slice(0, 2000),
+      type:        entryType,
+      anonymous:   !!anonymous,
+      status:      "open",
+    }])
+    .select().single();
+
+  if (error) {
+    if (error.code === "42P01") return res.status(503).json({ error: "member_grievances table not yet created — run DB migration" });
+    console.error("[grievance submit]", error.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  await logMemberActivity(req.member.id, req.member.memberId, "grievance_submitted", { id: data.id, type: entryType, anonymous: !!anonymous }, req.ip);
+  res.json({ success: true, id: data.id });
+});
+
+// Member: list own grievances
+app.get("/api/member/grievances", memberAuthMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("member_grievances")
+    .select("id, subject, body, type, anonymous, status, admin_note, created_at, updated_at")
+    .eq("account_id", req.member.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    if (error.code === "42P01") return res.json([]); // table not yet created — return empty gracefully
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.json(data || []);
+});
+
+// Admin: list all grievances (requires 'members' or 'grievances' permission)
+function requireGrievanceAccess(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token" });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    if (decoded.jti && _revokedJtis.has(decoded.jti)) return res.status(401).json({ error: "Token revoked" });
+    req.admin = decoded;
+    if (decoded.role === "master") return next();
+    const perms = decoded.permissions || [];
+    // accessible if admin has 'members' OR 'grievances' permission
+    if (perms.includes("members") || perms.includes("grievances")) return next();
+    return res.status(403).json({ error: "No permission for grievances" });
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
+
+app.get("/api/admin/grievances", requireGrievanceAccess, async (req, res) => {
+  const status = req.query.status; // open | in_progress | resolved | (empty = all)
+  const type   = req.query.type;   // suggestion | grievance | general | (empty = all)
+
+  let q = supabase
+    .from("member_grievances")
+    .select("id, subject, body, type, anonymous, status, admin_note, member_name, member_id, account_id, created_at, updated_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (status) q = q.eq("status", status);
+  if (type)   q = q.eq("type", type);
+
+  const { data, error } = await q;
+  if (error) {
+    if (error.code === "42P01") return res.json([]);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.json(data || []);
+});
+
+// Admin: update status + optional note on a grievance
+app.patch("/api/admin/grievances/:id", requireGrievanceAccess, async (req, res) => {
+  const { status, admin_note } = req.body;
+  const validStatuses = ["open", "in_progress", "resolved"];
+  if (status && !validStatuses.includes(status))
+    return res.status(400).json({ error: "Invalid status — use open | in_progress | resolved" });
+
+  const updates = { updated_at: new Date().toISOString() };
+  if (status)     updates.status     = status;
+  if (admin_note !== undefined) updates.admin_note = admin_note ? admin_note.trim().slice(0, 500) : null;
+  if (status)     updates.reviewed_by = req.admin.username || req.admin.name;
+
+  const { data, error } = await supabase
+    .from("member_grievances")
+    .update(updates)
+    .eq("id", req.params.id)
+    .select().single();
+
+  if (error) {
+    if (error.code === "42P01") return res.status(503).json({ error: "member_grievances table not yet created" });
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  if (!data) return res.status(404).json({ error: "Grievance not found" });
+
+  logActivity(req.admin.id, req.admin.name || req.admin.username, "grievance_status_update", "grievance", data.subject, data.id).catch(() => {});
+  res.json({ success: true, grievance: data });
 });
 
 // ── SCANNER PAGE — must be above the catch-all ────────────────────────────────
