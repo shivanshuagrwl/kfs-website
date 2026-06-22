@@ -807,6 +807,7 @@ body.light-mode .hero-logo{content:url('/images/KFS_LOGO_DARK.png')}
 /* Testimonials heading sits outside the carousel's full-bleed track — pin it
    explicitly left so it always matches the other section headings. */
 #testimonials-section .section-header,#testimonials-section .section-label,#testimonials-section .section-title{text-align:left!important;margin-left:0}
+#testimonials-section .section-inner{max-width:none;padding:0}
 .section-label{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey);margin-bottom:24px}
 .section-title{font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.03em;line-height:1;background:linear-gradient(160deg,#ffffff 0%,#888888 60%,#444444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 16px rgba(255,255,255,.07))}
 .section-divider{width:100%;height:1px;background:var(--border);margin:0}
@@ -884,6 +885,8 @@ body.light-mode .achievement-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1),0 0
   .apple-section .section-header{padding:40px 20px 16px}
   .apple-section .section-cta{padding:12px 20px 40px}
   .home-carousel{padding:0 20px 20px;scroll-padding-left:20px}
+  #home-events{padding:0 20px!important}
+  #home-events+div{padding:0 20px 40px!important}
 }
 /* Blog carousel card */
 .hc-blog-card{flex:0 0 78vw;scroll-snap-align:start;border-radius:12px;overflow:hidden;
@@ -2871,16 +2874,16 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
   <div class="section-divider" style="margin:0 40px"></div>
 
-  <section class="section">
+  <section class="section apple-section">
     <div class="section-inner">
       <div class="section-header">
         <p class="section-label">What's On</p>
         <h2 class="section-title">Upcoming Events</h2>
       </div>
-      <div id="home-events" style="margin-top:40px">
+      <div id="home-events" style="margin-top:40px;padding:0 40px">
         <div class="loading">Loading events...</div>
       </div>
-      <div style="margin-top:40px">
+      <div style="margin-top:40px;padding:0 40px 48px">
         <a class="btn btn-secondary" data-nav-page="events">All Events →</a>
       </div>
     </div>
