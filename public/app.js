@@ -7714,6 +7714,13 @@ async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', ev
   document.getElementById('rf-fee-note').style.display = 'none';
   document.getElementById('rf-back-btn').style.display = 'none';
   document.getElementById('reg-form-overlay').classList.add('open');
+  // Fresh registration session — T&C must be re-accepted.
+  const tcCb = document.getElementById('rf-tc-checkbox');
+  if (tcCb) { tcCb.checked = false; tcCb.classList.remove('shake'); }
+  const tcErr = document.getElementById('rf-tc-error');
+  if (tcErr) tcErr.classList.remove('visible');
+  const tcRow = document.getElementById('rf-tc-row');
+  if (tcRow) tcRow.classList.remove('visible');
   const banner0 = document.getElementById('rf-test-mode-banner');
   if (banner0) banner0.remove();
 
@@ -7762,9 +7769,14 @@ function updateRFPrimaryButton() {
   const section = rfGetCurrentSection();
   const btn = document.getElementById('rf-submit-btn');
   const feeNote = document.getElementById('rf-fee-note');
+  const tcRow = document.getElementById('rf-tc-row');
   if (!section || !btn) return;
   btn.disabled = false;
-  if (section.is_paid && Number(section.amount_paise) > 0) {
+  const isPaidSection = section.is_paid && Number(section.amount_paise) > 0;
+  // T&C consent row + compulsory checkbox only ever appears on a paid step —
+  // free sections don't need it.
+  if (tcRow) tcRow.classList.toggle('visible', !!isPaidSection);
+  if (isPaidSection) {
     const rupees = Math.round(Number(section.amount_paise) / 100);
     btn.innerHTML = `Pay ₹${rupees.toLocaleString('en-IN')} &amp; Continue <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
     feeNote.style.display = 'block';
@@ -7806,6 +7818,12 @@ function renderRFCurrentSection() {
 
   const errEl = document.getElementById('rf-submit-error');
   if (errEl) errEl.style.display = 'none';
+
+  // Clear any stale T&C validation state from a previous step.
+  const tcErrEl = document.getElementById('rf-tc-error');
+  if (tcErrEl) tcErrEl.classList.remove('visible');
+  const tcCbEl = document.getElementById('rf-tc-checkbox');
+  if (tcCbEl) tcCbEl.classList.remove('shake');
 }
 
 function restoreRFAnswersIntoDom(questions) {
@@ -7878,9 +7896,30 @@ async function rfPrimaryAction() {
     rfShowTransientError('Please fill all required fields');
     return;
   }
+
+  const isPaidSection = section.is_paid && Number(section.amount_paise) > 0;
+
+  // COMPULSORY T&C GATE — a paid section can never proceed to Razorpay unless
+  // the participant has explicitly checked the consent box. This is enforced
+  // here (not just visually) so it can't be bypassed by skipping the checkbox.
+  if (isPaidSection) {
+    const tcCheckbox = document.getElementById('rf-tc-checkbox');
+    if (!tcCheckbox || !tcCheckbox.checked) {
+      const tcErr = document.getElementById('rf-tc-error');
+      if (tcErr) tcErr.classList.add('visible');
+      if (tcCheckbox) {
+        tcCheckbox.classList.remove('shake');
+        void tcCheckbox.offsetWidth; // restart animation if triggered twice in a row
+        tcCheckbox.classList.add('shake');
+        tcCheckbox.focus();
+      }
+      return;
+    }
+  }
+
   Object.assign(_rfAnswers, collected);
 
-  if (section.is_paid && Number(section.amount_paise) > 0) {
+  if (isPaidSection) {
     await rfStartPayment(section);
     return;
   }
@@ -8398,6 +8437,47 @@ function closeRegForm() {
   const hdr = document.querySelector('.reg-form-header');
   if (hdr) hdr.style.display = '';
 }
+
+// ── T&C modal (full Terms & Conditions, opened from the registration form) ──
+function openTCModal() {
+  const overlay = document.getElementById('tc-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeTCModal() {
+  const overlay = document.getElementById('tc-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+// "I Understand & Accept" — ticks the consent checkbox for the participant
+// and clears any pending validation error, then dismisses the modal.
+function acceptTCAndClose() {
+  const cb = document.getElementById('rf-tc-checkbox');
+  if (cb) {
+    cb.checked = true;
+    cb.classList.remove('shake');
+  }
+  const err = document.getElementById('rf-tc-error');
+  if (err) err.classList.remove('visible');
+  closeTCModal();
+}
+// Escape key closes the T&C modal (mirrors the donation T&C modal behaviour)
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('tc-modal-overlay');
+    if (overlay && overlay.classList.contains('open')) closeTCModal();
+  }
+});
+// Clear the "please accept" error the moment the participant ticks the box
+// themselves (rather than via the modal's Accept button).
+document.getElementById('rf-tc-checkbox')?.addEventListener('change', function() {
+  if (this.checked) {
+    document.getElementById('rf-tc-error')?.classList.remove('visible');
+    this.classList.remove('shake');
+  }
+});
 
 // Load SheetJS for Excel export
 (function() {

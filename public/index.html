@@ -509,6 +509,56 @@ body.light-mode .fb-add-section-btn:hover{border-color:rgba(0,0,0,.35);color:rgb
 .reg-back-btn:hover{border-color:var(--grey)}
 .reg-fee-note{font-size:12.5px;color:var(--grey);text-align:center;padding:0 24px 12px;flex-shrink:0;line-height:1.5}
 .reg-fee-note strong{color:var(--white)}
+/* ── T&C CHECKBOX ROW (shown only on paid sections) ── */
+.reg-tc-row{display:none;align-items:flex-start;gap:12px;padding:0 24px 16px;flex-shrink:0}
+.reg-tc-row.visible{display:flex}
+.reg-tc-checkbox-wrap{position:relative;flex-shrink:0;margin-top:1px}
+.reg-tc-checkbox{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:5px;border:2px solid rgba(245,245,245,.35);background:transparent;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .2s;display:block}
+.reg-tc-checkbox:checked{border-color:#fff;background:#fff}
+.reg-tc-checkbox:checked::after{content:"";position:absolute;top:3px;left:6px;width:5px;height:9px;border:2px solid #111;border-top:none;border-left:none;transform:rotate(45deg)}
+.reg-tc-checkbox.shake{animation:tc-shake .35s ease}
+@keyframes tc-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.reg-tc-label{font-size:12.5px;color:var(--grey);line-height:1.6;cursor:pointer;user-select:none}
+.reg-tc-label a{color:var(--white);text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(245,245,245,.3);transition:text-decoration-color .2s}
+.reg-tc-label a:hover{text-decoration-color:rgba(245,245,245,.8)}
+.reg-tc-error{display:none;font-size:12px;color:#ff453a;font-weight:600;padding:0 24px 10px;flex-shrink:0;text-align:center}
+.reg-tc-error.visible{display:block}
+body.light-mode .reg-tc-checkbox{border-color:#bbb}
+body.light-mode .reg-tc-checkbox:checked{border-color:#111;background:#111}
+body.light-mode .reg-tc-checkbox:checked::after{border-color:#fff}
+body.light-mode .reg-tc-label{color:#666}
+body.light-mode .reg-tc-label a{color:#111}
+/* ── T&C FULL MODAL ── */
+.tc-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:3500;display:flex;align-items:flex-end;justify-content:center;padding:0;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(10px)}
+.tc-modal-overlay.open{opacity:1;pointer-events:auto}
+.tc-modal-panel{background:var(--black);border:1px solid var(--border);border-radius:22px 22px 0 0;width:100%;max-width:680px;max-height:92dvh;display:flex;flex-direction:column;transform:translateY(40px);transition:transform .35s var(--ease)}
+.tc-modal-overlay.open .tc-modal-panel{transform:translateY(0)}
+@media(min-width:640px){.tc-modal-panel{border-radius:22px;margin:auto;max-height:88dvh}}
+.tc-modal-header{padding:20px 24px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:16px}
+.tc-modal-header-left{display:flex;flex-direction:column;gap:4px}
+.tc-modal-eyebrow{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey)}
+.tc-modal-title{font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.tc-modal-close{flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.tc-modal-close:hover{color:var(--white);border-color:var(--grey)}
+.tc-modal-body{overflow-y:auto;flex:1;padding:24px;-webkit-overflow-scrolling:touch}
+.tc-modal-body::-webkit-scrollbar{width:4px}
+.tc-modal-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.tc-section-heading{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--white);margin:28px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.tc-section-heading:first-child{margin-top:0}
+.tc-body-text{font-size:13.5px;color:var(--grey);line-height:1.75;margin-bottom:12px}
+.tc-list{margin:0 0 12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.tc-list li{font-size:13px;color:var(--grey);line-height:1.6;display:flex;align-items:flex-start;gap:8px}
+.tc-list li::before{content:"";display:block;width:4px;height:4px;border-radius:50%;background:rgba(245,245,245,.3);flex-shrink:0;margin-top:7px}
+.tc-modal-footer{padding:16px 24px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end}
+.tc-modal-accept-btn{padding:12px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
+.tc-modal-accept-btn:hover{opacity:.88;transform:scale(.98)}
+body.light-mode .tc-modal-panel{background:#f8f8f8;border-color:#ddd}
+body.light-mode .tc-modal-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.1)}
+body.light-mode .tc-section-heading{color:#111;border-bottom-color:#ddd}
+body.light-mode .tc-body-text{color:#555}
+body.light-mode .tc-list li{color:#555}
+body.light-mode .tc-list li::before{background:rgba(0,0,0,.25)}
+body.light-mode .tc-modal-accept-btn{background:#111;color:#fff}
 body.light-mode .reg-back-btn{color:#111;border-color:#ddd}
 body.light-mode .reg-progress-dot{background:rgba(0,0,0,.1)}
 body.light-mode .reg-progress-dot.done{background:rgba(0,0,0,.45)}
@@ -5564,6 +5614,15 @@ KFS — KIIT Film Society"></textarea>
     <div class="reg-progress" id="rf-progress" style="display:none"></div>
     <div class="reg-form-body" id="rf-body"></div>
     <div class="reg-fee-note" id="rf-fee-note" style="display:none"></div>
+    <div class="reg-tc-row" id="rf-tc-row">
+      <div class="reg-tc-checkbox-wrap">
+        <input type="checkbox" class="reg-tc-checkbox" id="rf-tc-checkbox">
+      </div>
+      <label class="reg-tc-label" for="rf-tc-checkbox">
+        I have read and agree to the <a href="#" data-action="openTCModal">Terms &amp; Conditions</a> of KFS event registration, including the <strong style="color:var(--white)">strict no-refund policy</strong>.
+      </label>
+    </div>
+    <div class="reg-tc-error" id="rf-tc-error">Please accept the Terms &amp; Conditions before proceeding to payment.</div>
     <div class="reg-nav-row" id="rf-submit-row">
       <button data-action="rfGoBack" class="reg-back-btn" id="rf-back-btn" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -5657,6 +5716,149 @@ KFS — KIIT Film Society"></textarea>
 </div>
 
 <!-- Razorpay SDK loaded statically in <head> for SRI eligibility -->
+
+<!-- ── TERMS & CONDITIONS MODAL (reg form) ── -->
+<div class="tc-modal-overlay" id="tc-modal-overlay" data-action="closeTCModal" data-backdrop="true">
+  <div class="tc-modal-panel" role="dialog" aria-modal="true" aria-labelledby="tc-modal-heading">
+    <div class="tc-modal-header">
+      <div class="tc-modal-header-left">
+        <div class="tc-modal-eyebrow">KFS Event Registration</div>
+        <div class="tc-modal-title" id="tc-modal-heading">Terms &amp; Conditions</div>
+      </div>
+      <button class="tc-modal-close" data-action="closeTCModal" aria-label="Close">✕</button>
+    </div>
+    <div class="tc-modal-body" id="tc-modal-body">
+      <!-- ── Section 1 ── -->
+      <div class="tc-section">
+        <h4>1. Registration is Subject to Approval</h4>
+        <p>Submission of a registration form and successful payment does not automatically guarantee participation in the event.</p>
+        <p>KFS reserves the absolute right to verify, review, approve, reject, suspend, or cancel any registration before, during, or after the event if the participant is found to be in violation of KFS policies, event guidelines, university regulations, applicable laws, or community standards.</p>
+        <p>KFS may refuse participation without prior notice if deemed necessary for safety, fairness, security, operational requirements, or the integrity of the event.</p>
+      </div>
+      <!-- ── Section 2 ── -->
+      <div class="tc-section tc-section--alert">
+        <h4>2. Registration Fees are Voluntary and Non-Refundable</h4>
+        <p>All registration fees, participation fees, ticket purchases, passes, and related payments are <strong>final and non-refundable</strong>. Once a payment is successfully processed:</p>
+        <ul>
+          <li>It cannot be cancelled.</li>
+          <li>It cannot be refunded.</li>
+          <li>It cannot be transferred to another individual.</li>
+          <li>It cannot be converted into credits for future events.</li>
+        </ul>
+        <p>The participant is responsible for reviewing all event details before completing payment.</p>
+      </div>
+      <!-- ── Section 3 ── -->
+      <div class="tc-section tc-section--alert">
+        <h4>3. Strict No-Refund Policy</h4>
+        <p>The no-refund policy applies under <strong>all circumstances</strong>, including but not limited to:</p>
+        <ul>
+          <li>Change of mind after registration.</li>
+          <li>Scheduling conflicts or inability to attend.</li>
+          <li>Failure to read event rules or eligibility requirements.</li>
+          <li>Technical issues, internet connectivity problems, or browser-related errors on the participant's device.</li>
+          <li>Incorrect information submitted during registration.</li>
+          <li>Disqualification due to rule violations or misconduct.</li>
+          <li>Event schedule modifications.</li>
+          <li>Failure to receive emails due to spam filters or incorrect email addresses.</li>
+          <li>Rejection of registration for violation of KFS guidelines.</li>
+          <li>Failure to carry required identification documents.</li>
+          <li>Failure to appear at the designated reporting time.</li>
+        </ul>
+      </div>
+      <!-- ── Section 4 ── -->
+      <div class="tc-section">
+        <h4>4. Registration Cancellation by KFS</h4>
+        <p>KFS reserves the right to cancel, suspend, or void any registration — even after payment — if the participant:</p>
+        <ul>
+          <li>Provides false, misleading, or fraudulent information.</li>
+          <li>Violates event rules or KIIT University regulations.</li>
+          <li>Engages in harassment, abuse, discrimination, bullying, or misconduct.</li>
+          <li>Threatens event safety, engages in cheating, impersonation, or unauthorized access.</li>
+          <li>Damages property or disrupts event operations.</li>
+        </ul>
+        <p>In such cases, registration may be terminated immediately without compensation, refund, or liability. The decision of KFS shall be final and binding.</p>
+      </div>
+      <!-- ── Section 5 ── -->
+      <div class="tc-section">
+        <h4>5. Eligibility Requirements</h4>
+        <p>Participants must satisfy all eligibility requirements specified for the event. KFS reserves the right to request valid student ID, government-issued ID, university credentials, proof of age, or additional verification documents. Failure to provide requested documentation may result in cancellation without refund.</p>
+      </div>
+      <!-- ── Section 6 ── -->
+      <div class="tc-section">
+        <h4>6. Code of Conduct</h4>
+        <p>All participants must follow organiser instructions, respect fellow attendees, maintain professional conduct, and comply with venue regulations. Immediate removal (without refund) may result from harassment, physical altercations, substance abuse, property damage, unauthorised recording, or offensive conduct.</p>
+      </div>
+      <!-- ── Section 7 ── -->
+      <div class="tc-section">
+        <h4>7. Safety &amp; Security</h4>
+        <p>KFS may conduct identity verification, inspect belongings, restrict prohibited items, remove safety risks, and coordinate with university or law enforcement when necessary. Non-cooperation with security procedures may result in denied entry.</p>
+      </div>
+      <!-- ── Section 8 ── -->
+      <div class="tc-section">
+        <h4>8. Photography, Videography &amp; Media Consent</h4>
+        <p>By attending, you grant KFS permission to photograph, record, or livestream your presence and use your likeness for promotional, archival, or publication purposes without additional notice or compensation. Participants who do not wish to appear in media should contact organisers in advance; complete exclusion cannot be guaranteed.</p>
+      </div>
+      <!-- ── Section 9 ── -->
+      <div class="tc-section">
+        <h4>9. Intellectual Property</h4>
+        <p>Participants retain ownership of original creative works submitted. By participating, you grant KFS a non-exclusive right to display, promote, and archive submitted content for event-related purposes. Participants warrant they hold all necessary rights to submitted content.</p>
+      </div>
+      <!-- ── Section 10 ── -->
+      <div class="tc-section">
+        <h4>10. Payment Gateway — Razorpay</h4>
+        <p>Payments are processed by Razorpay Payments Pvt. Ltd. KFS does not store card numbers, CVV information, or banking credentials. KFS is not liable for payment failures, gateway downtime, bank-side declines, or network interruptions. Payment concerns should be directed to Razorpay support.</p>
+      </div>
+      <!-- ── Section 11 ── -->
+      <div class="tc-section">
+        <h4>11. Event Modifications</h4>
+        <p>KFS reserves the right to modify schedules, change venues, adjust event formats, alter competition structures, or change judges, speakers, and hosts. Such changes shall not constitute grounds for refunds.</p>
+      </div>
+      <!-- ── Section 12 ── -->
+      <div class="tc-section">
+        <h4>12. Force Majeure</h4>
+        <p>KFS shall not be liable for cancellations, postponements, or interruptions caused by natural disasters, extreme weather, government restrictions, public health emergencies, technical failures, security threats, civil disturbances, or venue unavailability. Refunds are not guaranteed in force majeure situations.</p>
+      </div>
+      <!-- ── Section 13 ── -->
+      <div class="tc-section">
+        <h4>13. Data Privacy</h4>
+        <p>Information collected during registration (name, email, roll number, contact details, university information) is used solely for event administration, verification, communication, security, and certification. KFS does not sell participant data. Information may be shared with payment processors, university authorities, venue management, or law enforcement only when legally required.</p>
+      </div>
+      <!-- ── Section 14 ── -->
+      <div class="tc-section">
+        <h4>14. Limitation of Liability</h4>
+        <p>Participation is voluntary and at the participant's own risk. KFS, its organisers, volunteers, sponsors, and affiliates are not liable for personal injury, loss of belongings, theft, property damage, travel or accommodation expenses, or any indirect losses arising from participation. Participants are responsible for safeguarding personal property.</p>
+      </div>
+      <!-- ── Section 15 ── -->
+      <div class="tc-section">
+        <h4>15. Final Authority</h4>
+        <p>All interpretations of event rules, participant eligibility, registrations, disqualifications, disputes, and operational decisions shall be determined solely by KFS. All decisions are final, binding, and not subject to appeal.</p>
+      </div>
+      <!-- ── Section 16 ── -->
+      <div class="tc-section">
+        <h4>16. Contact</h4>
+        <p>For registration-related queries, contact KFS through official communication channels listed on the website.</p>
+        <p style="margin-top:12px;font-style:italic">By completing registration and payment, you confirm that you have read, understood, and agreed to all Terms &amp; Conditions stated above.</p>
+      </div>
+      <!-- ── Section 17 ── -->
+      <div class="tc-section tc-section--alert">
+        <h4>17. Electronic Consent &amp; Binding Acceptance</h4>
+        <p>Checking the consent checkbox on the registration form and proceeding to payment constitutes your <strong>explicit electronic consent</strong> to these Terms &amp; Conditions in their entirety. This action is treated as the equivalent of a physical signature and forms a legally binding acceptance between you and KFS.</p>
+        <p>If you do not agree with any part of these Terms, do not check the box and do not proceed with payment — your registration will not be processed and no fee will be charged.</p>
+      </div>
+      <!-- ── Section 18 ── -->
+      <div class="tc-section">
+        <h4>18. Governing Law &amp; Jurisdiction</h4>
+        <p>These Terms &amp; Conditions shall be governed by and construed in accordance with the laws of India. Any disputes arising out of or in connection with event registration shall be subject to the exclusive jurisdiction of the competent courts in Bhubaneswar, Odisha.</p>
+      </div>
+    </div>
+    <div class="tc-modal-footer">
+      <button class="tc-modal-accept-btn" data-action="acceptTCAndClose">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        I Understand &amp; Accept
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ── STYLED CONFIRMATION MODAL (replaces confirm()) ── -->
 <div class="modal-overlay" id="kfs-confirm-modal" style="z-index:9999;display:none;align-items:center;justify-content:center">
