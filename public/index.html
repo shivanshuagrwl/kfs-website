@@ -418,7 +418,6 @@ body.light-mode .fb-response-chip-dot{background:rgba(0,0,0,.2)}
 .fb-pay-amount input{width:64px;background:transparent;border:none;color:var(--white);font:inherit;font-size:13px;outline:none}
 .fb-next-row{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(245,245,245,.45);margin-left:auto}
 .fb-next-select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 10px;color:rgba(245,245,245,.85);font:inherit;font-size:12px;outline:none;cursor:pointer;max-width:220px}
-.fb-next-branch-hint{font-size:11px;color:rgba(245,245,245,.35);font-style:italic;white-space:nowrap}
 
 /* Branching (per-option "go to section") */
 .fb-branch-toggle-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:rgba(245,245,245,.45);margin-top:2px;font-weight:500}
@@ -446,7 +445,6 @@ body.light-mode .fb-pay-amount input{color:#111}
 body.light-mode .fb-pay-amount span{color:rgba(0,0,0,.4)}
 body.light-mode .fb-next-row{color:rgba(0,0,0,.45)}
 body.light-mode .fb-next-select{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12);color:#111}
-body.light-mode .fb-next-branch-hint{color:rgba(0,0,0,.35)}
 body.light-mode .fb-branch-toggle-row{color:rgba(0,0,0,.45)}
 body.light-mode .fb-branch-options{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,.07)}
 body.light-mode .fb-branch-option-label{color:rgba(0,0,0,.6)}
@@ -2585,7 +2583,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
-<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
 
@@ -2870,8 +2868,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
   <section class="section">
     <div class="section-inner">
-      <p class="section-label">What's On</p>
-      <h2 class="section-title">Upcoming Events</h2>
+      <div class="section-header">
+        <p class="section-label">What's On</p>
+        <h2 class="section-title">Upcoming Events</h2>
+      </div>
       <div id="home-events" style="margin-top:40px">
         <div class="loading">Loading events...</div>
       </div>
@@ -2909,8 +2909,10 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 
   <section class="section">
     <div class="section-inner">
-      <p class="section-label">Voices</p>
-      <h2 class="section-title">What our<br>members say</h2>
+      <div class="section-header">
+        <p class="section-label">Voices</p>
+        <h2 class="section-title">What our<br>members say</h2>
+      </div>
     </div>
     <div class="testimonials-track" id="testimonials-track">
       <div class="testimonials-inner" id="testimonials-inner">

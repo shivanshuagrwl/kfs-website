@@ -7753,7 +7753,7 @@ function updateRFPrimaryButton() {
   btn.disabled = false;
   if (section.is_paid && Number(section.amount_paise) > 0) {
     const rupees = Math.round(Number(section.amount_paise) / 100);
-    btn.innerHTML = `Pay ₹${rupees.toLocaleString('en-IN')} &amp; Continue <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+    btn.innerHTML = `Pay ₹${rupees.toLocaleString('en-IN')} &amp; Continue <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
     feeNote.style.display = 'block';
     feeNote.innerHTML = `A payment of <strong>₹${rupees.toLocaleString('en-IN')}</strong> is required to complete this step.`;
   } else {
@@ -7910,6 +7910,25 @@ async function rfStartPayment(section) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = 'Opening payment…';
+
+  // Ensure Razorpay SDK is loaded (it may not be ready yet if loaded with defer)
+  if (typeof Razorpay === 'undefined') {
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existing) {
+        // Script tag exists but hasn't fired onload yet — wait for it
+        existing.addEventListener('load', resolve);
+        existing.addEventListener('error', () => reject(new Error('Razorpay SDK failed to load')));
+      } else {
+        const s = document.createElement('script');
+        s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Razorpay SDK failed to load'));
+        document.head.appendChild(s);
+      }
+    }).catch(err => { throw err; });
+  }
+
   try {
     const orderRes = await fetch('/api/events/' + _rfEventId + '/form/create-order', {
       method: 'POST', credentials: 'include',
