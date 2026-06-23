@@ -2060,3 +2060,602 @@ async function loadMyGrievances() {
     list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KFS Studio Wall — Client
+// Routes: /api/member/studio/* (member-auth-gated, CSRF applied by server)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SW = {
+  feedPage:             1,
+  feedTag:              null,
+  feedExhausted:        false,
+  feedLoading:          false,
+  myReactions:          new Map(), // projectId → reactionType | null
+  editingProjectId:     null,
+  collabPickerSelected: [],
+  detailProjectId:      null,
+};
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+
+function swEsc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function swFmtNum(n) {
+  const num = Number(n) || 0;
+  if (num >= 1_000_000) return (num/1_000_000).toFixed(1).replace(/\.0$/,'')+'M';
+  if (num >= 1000)      return (num/1000).toFixed(1).replace(/\.0$/,'')+'k';
+  return String(num);
+}
+
+function swRelTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff/60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h/24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString('en-GB', { month:'short', year:'numeric' });
+}
+
+function swVideoEmbedUrl(url, provider) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (provider === 'youtube' || u.hostname.includes('youtube') || u.hostname.includes('youtu.be')) {
+      const vid = u.searchParams.get('v') || u.pathname.split('/').pop();
+      return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1`;
+    }
+    if (provider === 'vimeo' || u.hostname.includes('vimeo')) {
+      return `https://player.vimeo.com/video/${u.pathname.split('/').pop()}?title=0&byline=0&portrait=0`;
+    }
+  } catch {}
+  return null;
+}
+
+function swAvatar(name, photo, size = 32) {
+  // server stores field as `photo`, not `photo_url`
+  if (photo) {
+    return `<img src="${swEsc(photo)}" alt="${swEsc(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#1a1a1a">`;
+  }
+  const initials = (name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#1e1e1e;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.36)}px;font-weight:600;color:#666;flex-shrink:0;letter-spacing:-.01em">${swEsc(initials)}</div>`;
+}
+
+// SVG icon set — no emojis
+const SW_ICONS = {
+  eye:      `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  heart:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  heartF:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  comment:  `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  play:     `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+  trash:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
+  edit:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  close:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  user:     `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
+  pin:      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  eyeLg:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  heartLg:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  postsLg:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`,
+};
+
+const SW_REACTIONS = [
+  { type:'wow',        label:'Wow',        icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
+  { type:'inspiring',  label:'Inspiring',  icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
+  { type:'fire',       label:'Fire',       icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
+  { type:'mind_blown', label:'Mind Blown', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
+];
+
+// ── Feed card ─────────────────────────────────────────────────────────────
+
+function swFeedCard(p) {
+  const author = p.members || {};
+  const myRxn  = SW.myReactions.get(p.id) || p.my_reaction || null;
+  const hasVideo = !!p.video_url;
+  const hasCover = !!p.cover_image;
+
+  return `<div class="sw-card" data-project-id="${swEsc(p.id)}" role="button" tabindex="0"
+      onclick="swOpenDetail('${swEsc(p.id)}')" onkeydown="if(event.key==='Enter')swOpenDetail('${swEsc(p.id)}')">
+    <div class="sw-card-media">
+      ${hasCover ? `<img src="${swEsc(p.cover_image)}" alt="${swEsc(p.title)}" class="sw-card-img" loading="lazy">`
+        : hasVideo ? `<div class="sw-card-no-cover sw-card-video-placeholder">${SW_ICONS.play}</div>`
+        : `<div class="sw-card-no-cover"></div>`}
+      ${p.domain ? `<div class="sw-card-domain-pill">${swEsc(p.domain)}</div>` : ''}
+      ${hasVideo ? `<div class="sw-card-video-badge">${SW_ICONS.play}</div>` : ''}
+    </div>
+    <div class="sw-card-body">
+      <div class="sw-card-author-row">${swAvatar(author.name, author.photo, 22)}<span class="sw-card-author-name">${swEsc(author.name||'Member')}</span></div>
+      <div class="sw-card-title">${swEsc(p.title)}</div>
+      ${p.description ? `<div class="sw-card-desc">${swEsc(p.description)}</div>` : ''}
+      ${p.tags?.length ? `<div class="sw-card-tags">${p.tags.map(t=>`<span class="sw-tag">${swEsc(t)}</span>`).join('')}</div>` : ''}
+      <div class="sw-card-stats">
+        <span class="sw-stat">${SW_ICONS.eye}&nbsp;${swFmtNum(p.views_count)}</span>
+        <span class="sw-stat ${myRxn?'sw-stat-active':''}">${myRxn?SW_ICONS.heartF:SW_ICONS.heart}&nbsp;${swFmtNum(p.reactions_count)}</span>
+        <span class="sw-stat">${SW_ICONS.comment}&nbsp;${swFmtNum(p.comments_count)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Feed Load ─────────────────────────────────────────────────────────────
+
+async function swLoadFeed(reset = false) {
+  if (SW.feedLoading) return;
+  if (!reset && SW.feedExhausted) return;
+  if (reset) {
+    SW.feedPage = 1;
+    SW.feedExhausted = false;
+    const grid = $id('studio-feed');
+    if (grid) grid.innerHTML = '<div class="sw-loading">Loading…</div>';
+  }
+  SW.feedLoading = true;
+  try {
+    let url = `/api/member/studio/feed?page=${SW.feedPage}`;
+    if (SW.feedTag) url += `&tag=${encodeURIComponent(SW.feedTag)}`;
+    const resp = await api('GET', url);
+    // server returns { feed, page, has_more }
+    const data = resp.feed || resp; // fallback to flat array
+    const hasMore = resp.has_more ?? (data.length === 20);
+
+    const grid = $id('studio-feed');
+    if (!grid) return;
+    if (reset) grid.innerHTML = '';
+
+    if (!data.length && SW.feedPage === 1) {
+      grid.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon">${SW_ICONS.postsLg}</div><div class="sw-empty-title">No posts yet</div><div class="sw-empty-sub">Be the first to share your work.</div></div>`;
+      const btn = $id('studio-feed-more'); if (btn) btn.style.display = 'none';
+      return;
+    }
+
+    if (!hasMore) {
+      SW.feedExhausted = true;
+      const btn = $id('studio-feed-more'); if (btn) btn.style.display = 'none';
+    } else {
+      const btn = $id('studio-feed-more'); if (btn) btn.style.display = '';
+    }
+
+    // Sync my_reaction into SW.myReactions map
+    data.forEach(p => { if (p.my_reaction) SW.myReactions.set(p.id, p.my_reaction); });
+
+    grid.insertAdjacentHTML('beforeend', data.map(swFeedCard).join(''));
+    SW.feedPage++;
+  } catch (e) {
+    const grid = $id('studio-feed');
+    if (grid && reset) grid.innerHTML = `<div class="sw-error">Could not load feed. <button class="btn-ghost" onclick="swLoadFeed(true)" style="font-size:12px;padding:4px 10px;margin-left:6px">Retry</button></div>`;
+  } finally {
+    SW.feedLoading = false;
+  }
+}
+
+// ── My Posts ──────────────────────────────────────────────────────────────
+
+async function swLoadMyPosts() {
+  const list = $id('studio-my-posts-list');
+  if (!list) return;
+  list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  try {
+    const data = await api('GET', '/api/member/studio/mine');
+    if (!data.length) {
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon">${SW_ICONS.postsLg}</div><div class="sw-empty-title">No posts yet</div><div class="sw-empty-sub">Post your first project to the Studio Wall.</div></div>`;
+      return;
+    }
+    list.innerHTML = data.map(p => `
+      <div class="sw-my-post-row">
+        <div class="sw-my-post-info">
+          ${p.cover_image ? `<img src="${swEsc(p.cover_image)}" alt="" class="sw-my-post-thumb">` : `<div class="sw-my-post-thumb sw-my-post-thumb-blank">${SW_ICONS.play}</div>`}
+          <div class="sw-my-post-text">
+            <div class="sw-my-post-title">${swEsc(p.title)}</div>
+            <div class="sw-my-post-meta">
+              <span class="sw-stat">${SW_ICONS.eye}&nbsp;${swFmtNum(p.views_count)}</span>
+              <span class="sw-stat">${SW_ICONS.heart}&nbsp;${swFmtNum(p.reactions_count)}</span>
+              <span class="sw-stat">${SW_ICONS.comment}&nbsp;${swFmtNum(p.comments_count)}</span>
+              ${p.status==='hidden'?'<span class="sw-badge-hidden">Hidden</span>':''}
+            </div>
+          </div>
+        </div>
+        <div class="sw-my-post-actions">
+          <button class="sw-action-btn" title="Edit" onclick="swOpenEditModal('${swEsc(p.id)}')">${SW_ICONS.edit}</button>
+          <button class="sw-action-btn sw-action-btn-danger" title="Delete" onclick="swDeletePost('${swEsc(p.id)}','${swEsc(p.title)}')">${SW_ICONS.trash}</button>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${swEsc(e.message)}</span>`;
+  }
+}
+
+// ── Analytics — views + reactions only ────────────────────────────────────
+
+async function swLoadAnalytics() {
+  const wrap = $id('studio-analytics-list');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="sw-loading">Loading…</div>';
+  try {
+    const data = await api('GET', '/api/member/studio/my-analytics');
+    if (!data.length) {
+      wrap.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div class="sw-empty-title">No data yet</div><div class="sw-empty-sub">Post work to start seeing your numbers.</div></div>`;
+      return;
+    }
+    const totalViews     = data.reduce((s,p)=>s+(p.views_count||0),0);
+    const totalReactions = data.reduce((s,p)=>s+(p.reactions_count||0),0);
+    const maxViews       = Math.max(...data.map(p=>p.views_count||0),1);
+    const maxReactions   = Math.max(...data.map(p=>p.reactions_count||0),1);
+
+    wrap.innerHTML = `
+      <div class="sw-analytics-kpis">
+        <div class="sw-analytics-kpi">
+          <div class="sw-analytics-kpi-icon sw-analytics-kpi-icon--views">${SW_ICONS.eyeLg}</div>
+          <div class="sw-analytics-kpi-body"><div class="sw-analytics-kpi-val">${swFmtNum(totalViews)}</div><div class="sw-analytics-kpi-label">Total Views</div></div>
+        </div>
+        <div class="sw-analytics-kpi">
+          <div class="sw-analytics-kpi-icon sw-analytics-kpi-icon--reactions">${SW_ICONS.heartLg}</div>
+          <div class="sw-analytics-kpi-body"><div class="sw-analytics-kpi-val">${swFmtNum(totalReactions)}</div><div class="sw-analytics-kpi-label">Total Reactions</div></div>
+        </div>
+        <div class="sw-analytics-kpi">
+          <div class="sw-analytics-kpi-icon sw-analytics-kpi-icon--posts">${SW_ICONS.postsLg}</div>
+          <div class="sw-analytics-kpi-body"><div class="sw-analytics-kpi-val">${data.length}</div><div class="sw-analytics-kpi-label">Published</div></div>
+        </div>
+      </div>
+      <div class="sw-analytics-section-label">Per post</div>
+      <div class="sw-analytics-rows">
+        ${data.map(p=>{
+          const v = p.views_count||0, r = p.reactions_count||0;
+          const vPct = Math.round((v/maxViews)*100), rPct = Math.round((r/maxReactions)*100);
+          return `<div class="sw-analytics-row">
+            <div class="sw-analytics-row-head"><div class="sw-analytics-row-title" title="${swEsc(p.title)}">${swEsc(p.title)}</div></div>
+            <div class="sw-analytics-metric-row">
+              <div class="sw-analytics-metric-label"><span class="sw-analytics-metric-icon">${SW_ICONS.eye}</span><span class="sw-analytics-metric-num">${swFmtNum(v)}</span><span class="sw-analytics-metric-name">views</span></div>
+              <div class="sw-analytics-bar-track"><div class="sw-analytics-bar-fill sw-analytics-bar-fill--views" style="width:${vPct}%"></div></div>
+            </div>
+            <div class="sw-analytics-metric-row">
+              <div class="sw-analytics-metric-label"><span class="sw-analytics-metric-icon">${SW_ICONS.heart}</span><span class="sw-analytics-metric-num">${swFmtNum(r)}</span><span class="sw-analytics-metric-name">reactions</span></div>
+              <div class="sw-analytics-bar-track"><div class="sw-analytics-bar-fill sw-analytics-bar-fill--reactions" style="width:${rPct}%"></div></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch (e) {
+    wrap.innerHTML = `<span style="color:var(--danger);font-size:13px">${swEsc(e.message)}</span>`;
+  }
+}
+
+// ── Detail Modal ──────────────────────────────────────────────────────────
+
+async function swOpenDetail(projectId) {
+  SW.detailProjectId = projectId;
+  const overlay = $id('studio-detail-modal-overlay');
+  const body    = $id('studio-detail-body');
+  if (!overlay||!body) return;
+  body.innerHTML = '<div class="sw-loading" style="padding:60px 0;text-align:center">Loading…</div>';
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  try {
+    const p = await api('GET', `/api/member/studio/projects/${projectId}`);
+    const author   = p.members || {};
+    const collabs  = (p.project_collaborators||[]).map(c=>c.members).filter(Boolean);
+    const myRxn    = SW.myReactions.get(p.id) || p.my_reaction || null;
+    SW.myReactions.set(p.id, myRxn);
+    const embedUrl = swVideoEmbedUrl(p.video_url, p.video_provider);
+
+    // Fetch comments
+    const cResp = await api('GET', `/api/member/studio/projects/${projectId}/comments`);
+    const comments = cResp.comments || cResp || [];
+
+    body.innerHTML = `
+      ${p.cover_image && !embedUrl ? `<img src="${swEsc(p.cover_image)}" alt="${swEsc(p.title)}" class="studio-detail-cover">` : ''}
+      ${embedUrl ? `<div class="studio-detail-video-wrap"><iframe src="${swEsc(embedUrl)}" allowfullscreen loading="lazy"></iframe></div>` : ''}
+      <div class="studio-detail-content">
+        <div class="studio-detail-author-row">
+          ${swAvatar(author.name, author.photo, 34)}
+          <div><div class="studio-detail-author-name">${swEsc(author.name||'Member')}</div>${author.role?`<div class="studio-detail-author-role">${swEsc(author.role)}</div>`:''}</div>
+          ${p.domain?`<span class="studio-detail-domain-pill" style="margin-left:auto">${swEsc(p.domain)}</span>`:''}
+        </div>
+        <div class="studio-detail-title">${swEsc(p.title)}</div>
+        ${p.description?`<div class="studio-detail-desc">${swEsc(p.description)}</div>`:''}
+        <div class="studio-detail-meta">
+          <span class="studio-detail-stat">${SW_ICONS.eye}&nbsp;${swFmtNum(p.views_count)}</span>
+          <span class="studio-detail-stat">${SW_ICONS.heart}&nbsp;${swFmtNum(p.reactions_count)}</span>
+          <span class="studio-detail-stat">${SW_ICONS.comment}&nbsp;${swFmtNum(p.comments_count)}</span>
+        </div>
+        ${p.tags?.length?`<div class="studio-detail-tags">${p.tags.map(t=>`<span class="sw-tag">${swEsc(t)}</span>`).join('')}</div>`:''}
+        ${collabs.length?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">${SW_ICONS.user}&nbsp;With</span>${collabs.map(c=>`<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#bbb">${swAvatar(c.name,c.photo,20)}&nbsp;${swEsc(c.name)}</span>`).join('')}</div>`:''}
+        <div class="studio-reactions" id="detail-reactions-${swEsc(p.id)}">
+          ${SW_REACTIONS.map(r=>`<button class="studio-rxn-btn ${myRxn===r.type?'active':''}" data-rxn="${swEsc(r.type)}" data-project="${swEsc(p.id)}" onclick="swToggleReaction('${swEsc(p.id)}','${swEsc(r.type)}')" title="${swEsc(r.label)}">${r.icon}<span class="sw-rxn-label">${swEsc(r.label)}</span></button>`).join('')}
+        </div>
+        <div class="studio-comments-section">
+          <div class="studio-comments-title">Comments</div>
+          <div class="studio-comment-input-row">
+            <input id="sw-comment-input" type="text" placeholder="Add a comment…" class="studio-comment-input" maxlength="1000" onkeydown="if(event.key==='Enter')swPostComment('${swEsc(p.id)}',null)">
+            <button class="btn-primary studio-comment-post-btn" onclick="swPostComment('${swEsc(p.id)}',null)">Post</button>
+          </div>
+          <div id="sw-comments-list">${swRenderComments(comments, p.id)}</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--muted);font-size:14px">${swEsc(e.message)}</div>`;
+  }
+}
+
+function swRenderComments(comments, projectId) {
+  // server nests replies under each comment's `.replies` array
+  if (!comments.length) return `<div style="color:var(--muted);font-size:13px;padding:16px 0">No comments yet.</div>`;
+
+  function renderOne(c, nested=false) {
+    const a = c.members||{};
+    return `<div class="studio-comment ${nested?'studio-comment-nested':''}">
+      <div class="studio-comment-header">
+        ${swAvatar(a.name,a.photo,22)}
+        <span class="studio-comment-author">${swEsc(a.name||'Member')}</span>
+        <span class="studio-comment-time">${swRelTime(c.created_at)}</span>
+        ${c.is_pinned?`<span class="studio-comment-pinned-badge">${SW_ICONS.pin}&nbsp;Pinned</span>`:''}
+      </div>
+      <div class="studio-comment-body">${swEsc(c.body)}</div>
+      <button class="studio-comment-reply-btn" onclick="swShowReplyInput('${swEsc(c.id)}','${swEsc(projectId)}')">Reply</button>
+      <div id="sw-reply-input-${swEsc(c.id)}"></div>
+      ${(c.replies||[]).map(r=>renderOne(r,true)).join('')}
+    </div>`;
+  }
+
+  return comments.map(c=>renderOne(c,false)).join('');
+}
+
+function swShowReplyInput(commentId, projectId) {
+  const wrap = $id(`sw-reply-input-${commentId}`);
+  if (!wrap) return;
+  if (wrap.innerHTML) { wrap.innerHTML=''; return; }
+  wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px">
+    <input id="sw-reply-text-${swEsc(commentId)}" type="text" placeholder="Reply…" class="studio-comment-input" maxlength="1000"
+      onkeydown="if(event.key==='Enter')swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">
+    <button class="btn-primary studio-comment-post-btn" onclick="swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">Reply</button>
+  </div>`;
+  $id(`sw-reply-text-${commentId}`)?.focus();
+}
+
+async function swPostComment(projectId, parentId) {
+  const inputId = parentId ? `sw-reply-text-${parentId}` : 'sw-comment-input';
+  const input   = $id(inputId);
+  if (!input) return;
+  const body = input.value.trim();
+  if (!body) return;
+  try {
+    await api('POST', `/api/member/studio/projects/${projectId}/comments`, { body, parent_id: parentId||null });
+    input.value = '';
+    const cResp = await api('GET', `/api/member/studio/projects/${projectId}/comments`);
+    const comments = cResp.comments || cResp || [];
+    const list = $id('sw-comments-list');
+    if (list) list.innerHTML = swRenderComments(comments, projectId);
+    if (parentId) { const w=$id(`sw-reply-input-${parentId}`); if(w)w.innerHTML=''; }
+  } catch (e) { alert(e.message||'Could not post comment.'); }
+}
+
+// ── Reactions ─────────────────────────────────────────────────────────────
+
+async function swToggleReaction(projectId, reactionType) {
+  const current = SW.myReactions.get(projectId)||null;
+  SW.myReactions.set(projectId, current===reactionType ? null : reactionType);
+  swUpdateReactionUI(projectId);
+  try {
+    const resp = await api('POST', `/api/member/studio/projects/${projectId}/react`, { reaction_type: reactionType });
+    // Server returns { active, reaction_type }; sync state with server truth
+    SW.myReactions.set(projectId, resp.active ? resp.reaction_type : null);
+    swUpdateReactionUI(projectId);
+  } catch {
+    SW.myReactions.set(projectId, current);
+    swUpdateReactionUI(projectId);
+  }
+}
+
+function swUpdateReactionUI(projectId) {
+  const myRxn = SW.myReactions.get(projectId)||null;
+  $id(`detail-reactions-${projectId}`)?.querySelectorAll('.studio-rxn-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.rxn === myRxn);
+  });
+}
+
+// ── Create / Edit Modal ────────────────────────────────────────────────────
+
+async function swOpenNewPostModal() {
+  SW.editingProjectId = null;
+  const t = $id('studio-modal-title-text'); if(t) t.textContent='New Post';
+  const s = $id('sw-submit-btn'); if(s) s.textContent='Publish';
+  swResetPostModal();
+  const o = $id('studio-post-modal-overlay'); if(o){o.style.display='flex';document.body.style.overflow='hidden';}
+}
+
+async function swOpenEditModal(projectId) {
+  try {
+    const p = await api('GET', `/api/member/studio/projects/${projectId}`);
+    SW.editingProjectId = projectId;
+    const t=$id('studio-modal-title-text'); if(t)t.textContent='Edit Post';
+    const s=$id('sw-submit-btn'); if(s)s.textContent='Save Changes';
+    swResetPostModal();
+    const f=id=>$id(id);
+    if(f('sw-title'))          f('sw-title').value           = p.title||'';
+    if(f('sw-desc'))           f('sw-desc').value            = p.description||'';
+    if(f('sw-video-url'))      f('sw-video-url').value       = p.video_url||'';
+    if(f('sw-video-provider')) f('sw-video-provider').value  = p.video_provider||'';
+    if(f('sw-domain'))         f('sw-domain').value          = p.domain||'';
+    if(f('sw-tags'))           f('sw-tags').value            = (p.tags||[]).join(', ');
+    if(f('sw-desc-count'))     f('sw-desc-count').textContent= (p.description||'').length;
+    if(p.cover_image){const pv=$id('sw-cover-preview'),img=$id('sw-cover-img');if(pv&&img){img.src=p.cover_image;pv.style.display='';}}
+    SW.collabPickerSelected=(p.project_collaborators||[]).map(c=>c.members).filter(Boolean)
+      .map(m=>({id:m.id,name:m.name,photo:m.photo||null}));
+    swRenderCollabPicker();
+    const o=$id('studio-post-modal-overlay'); if(o){o.style.display='flex';document.body.style.overflow='hidden';}
+  } catch(e){alert('Could not load post for editing: '+e.message);}
+}
+
+function swResetPostModal() {
+  ['sw-title','sw-desc','sw-video-url','sw-domain','sw-tags'].forEach(id=>{const el=$id(id);if(el)el.value='';});
+  const p=$id('sw-video-provider');if(p)p.value='';
+  const cv=$id('sw-cover');if(cv)cv.value='';
+  const pv=$id('sw-cover-preview');if(pv)pv.style.display='none';
+  const cnt=$id('sw-desc-count');if(cnt)cnt.textContent='0';
+  const err=$id('sw-err');if(err)err.style.display='none';
+  SW.collabPickerSelected=[];
+  swRenderCollabPicker();
+}
+
+async function swSubmitPost() {
+  const title    = ($id('sw-title')?.value||'').trim();
+  const desc     = ($id('sw-desc')?.value||'').trim();
+  const videoUrl = ($id('sw-video-url')?.value||'').trim();
+  const provider = $id('sw-video-provider')?.value||'';
+  const domain   = ($id('sw-domain')?.value||'').trim();
+  const tagsRaw  = ($id('sw-tags')?.value||'').trim();
+  const coverFile= $id('sw-cover')?.files?.[0]||null;
+  const errEl=$id('sw-err'), btn=$id('sw-submit-btn');
+
+  const showErr=msg=>{if(errEl){errEl.textContent=msg;errEl.style.display='';}};
+  if(!title){showErr('Title is required.');return;}
+  if(btn){btn.disabled=true;btn.textContent=SW.editingProjectId?'Saving…':'Publishing…';}
+  if(errEl)errEl.style.display='none';
+
+  try {
+    const tags=tagsRaw?tagsRaw.split(',').map(t=>t.trim()).filter(Boolean):[];
+    const collabIds=SW.collabPickerSelected.map(m=>m.id);
+    const fd=new FormData();
+    fd.append('title',title);
+    fd.append('description',desc);
+    fd.append('video_url',videoUrl);
+    if(provider)fd.append('video_provider',provider);
+    fd.append('domain',domain);
+    fd.append('tags',JSON.stringify(tags));
+    fd.append('collab_ids',JSON.stringify(collabIds));
+    if(coverFile)fd.append('cover_image',coverFile);
+
+    if(SW.editingProjectId){
+      await api('PUT',`/api/member/studio/projects/${SW.editingProjectId}`,fd,true);
+    } else {
+      await api('POST','/api/member/studio/projects',fd,true);
+    }
+    swClosePostModal();
+    await swLoadFeed(true);
+    await swLoadMyPosts();
+  } catch(e){
+    showErr(e.message||'Could not save post. Please try again.');
+  } finally {
+    if(btn){btn.disabled=false;btn.textContent=SW.editingProjectId?'Save Changes':'Publish';}
+  }
+}
+
+async function swDeletePost(projectId,title) {
+  if(!confirm(`Delete "${title}"? This cannot be undone.`))return;
+  try {
+    await api('DELETE',`/api/member/studio/projects/${projectId}`);
+    await swLoadMyPosts();
+    await swLoadFeed(true);
+  } catch(e){alert('Could not delete: '+e.message);}
+}
+
+function swClosePostModal() {
+  const o=$id('studio-post-modal-overlay');if(o)o.style.display='none';
+  document.body.style.overflow='';
+  swResetPostModal();
+}
+
+function swCloseDetailModal() {
+  const o=$id('studio-detail-modal-overlay');if(o)o.style.display='none';
+  document.body.style.overflow='';
+  SW.detailProjectId=null;
+}
+
+// ── Collaborator Picker ────────────────────────────────────────────────────
+
+let _swCollabTimer=null;
+
+function swRenderCollabPicker() {
+  const wrap=$id('sw-collab-picker');if(!wrap)return;
+  const chips=SW.collabPickerSelected.map(m=>`<span class="sw-collab-chip">${swAvatar(m.name,m.photo,18)}<span>${swEsc(m.name)}</span><button onclick="swRemoveCollab('${swEsc(m.id)}')" title="Remove">${SW_ICONS.close}</button></span>`).join('');
+  wrap.innerHTML=`<div class="sw-collab-wrap">${chips}<input id="sw-collab-input" type="text" placeholder="Search members…" class="sw-collab-input" autocomplete="off" oninput="swCollabSearch(this.value)"></div><div id="sw-collab-dropdown" class="sw-collab-dropdown" style="display:none"></div>`;
+}
+
+async function swCollabSearch(q) {
+  clearTimeout(_swCollabTimer);
+  const dd=$id('sw-collab-dropdown');if(!dd)return;
+  if(!q||q.length<2){dd.style.display='none';return;}
+  _swCollabTimer=setTimeout(async()=>{
+    try {
+      const results=await api('GET',`/api/member/studio/members-search?q=${encodeURIComponent(q)}`);
+      const filtered=results.filter(m=>!SW.collabPickerSelected.find(s=>s.id===m.id));
+      if(!filtered.length){dd.style.display='none';return;}
+      dd.style.display='';
+      dd.innerHTML=filtered.map(m=>`<div class="sw-collab-option" onclick="swAddCollab('${swEsc(m.id)}','${swEsc(m.name)}','${swEsc(m.photo_url||'')}')">
+        ${swAvatar(m.name,m.photo_url,24)}<span>${swEsc(m.name)}</span></div>`).join('');
+    } catch{dd.style.display='none';}
+  },250);
+}
+
+function swAddCollab(id,name,photo) {
+  if(!SW.collabPickerSelected.find(m=>m.id===id)) SW.collabPickerSelected.push({id,name,photo:photo||null});
+  swRenderCollabPicker();
+}
+
+function swRemoveCollab(id) {
+  SW.collabPickerSelected=SW.collabPickerSelected.filter(m=>m.id!==id);
+  swRenderCollabPicker();
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+
+function swSwitchTab(tabName) {
+  document.querySelectorAll('.studio-tab').forEach(t=>t.classList.toggle('active',t.dataset.studioTab===tabName));
+  document.querySelectorAll('.studio-tab-panel').forEach(p=>p.classList.toggle('active',p.id===`studio-tab-${tabName}`));
+  if(tabName==='my-posts')  swLoadMyPosts();
+  if(tabName==='analytics') swLoadAnalytics();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+
+function initStudioWall() {
+  document.querySelectorAll('.studio-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>swSwitchTab(btn.dataset.studioTab));
+  });
+
+  $id('studio-new-post-btn')?.addEventListener('click', swOpenNewPostModal);
+  $id('studio-new-post-btn2')?.addEventListener('click', swOpenNewPostModal);
+  $id('studio-post-modal-close')?.addEventListener('click', swClosePostModal);
+  $id('studio-post-modal-cancel')?.addEventListener('click', swClosePostModal);
+  $id('studio-post-modal-overlay')?.addEventListener('click',e=>{if(e.target===$id('studio-post-modal-overlay'))swClosePostModal();});
+  $id('studio-detail-close')?.addEventListener('click', swCloseDetailModal);
+  $id('studio-detail-modal-overlay')?.addEventListener('click',e=>{if(e.target===$id('studio-detail-modal-overlay'))swCloseDetailModal();});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if($id('studio-detail-modal-overlay')?.style.display==='flex')swCloseDetailModal();
+      if($id('studio-post-modal-overlay')?.style.display==='flex')swClosePostModal();
+    }
+  });
+  $id('sw-submit-btn')?.addEventListener('click', swSubmitPost);
+  $id('sw-cover')?.addEventListener('change',e=>{
+    const f=e.target.files?.[0];if(!f)return;
+    const pv=$id('sw-cover-preview'),img=$id('sw-cover-img');
+    if(!pv||!img)return;
+    img.src=URL.createObjectURL(f);pv.style.display='';
+  });
+  $id('sw-desc')?.addEventListener('input',e=>{const c=$id('sw-desc-count');if(c)c.textContent=e.target.value.length;});
+
+  let _tagTimer=null;
+  $id('studio-tag-filter')?.addEventListener('input',e=>{
+    clearTimeout(_tagTimer);
+    _tagTimer=setTimeout(()=>{SW.feedTag=e.target.value.trim().toLowerCase()||null;swLoadFeed(true);},400);
+  });
+  $id('studio-load-more-btn')?.addEventListener('click',()=>swLoadFeed(false));
+
+  // Load feed when Studio panel becomes active
+  const panelEl=$id('panel-studio');
+  if(panelEl){
+    const obs=new MutationObserver(muts=>{
+      muts.forEach(m=>{if(m.attributeName==='class'&&panelEl.classList.contains('active'))swLoadFeed(true);});
+    });
+    obs.observe(panelEl,{attributes:true});
+  }
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',initStudioWall);
+}else{
+  initStudioWall();
+}

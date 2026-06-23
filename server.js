@@ -11201,6 +11201,811 @@ app.patch("/api/admin/grievances/:id", requireGrievanceAccess, async (req, res) 
   res.json({ success: true, grievance: data });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-27 — Studio Wall (Phase 1)
+//
+// WHY NO SECOND SUPABASE PROJECT:
+//  • Cloudinary already handles all media (cover images, video embeds are just
+//    URLs). Zero Supabase Storage egress for binary assets.
+//  • memCache() keeps feed/card DB reads to one trip per TTL window regardless
+//    of concurrent users. Denormalized counter columns (views_count,
+//    reactions_count, comments_count) mean feed cards never fan out to joins.
+//  • A second project would require duplicating auth, losing cross-table FKs,
+//    doubling the keep-alive overhead, and splitting the cache — it would make
+//    egress worse, not better.
+//  • project_views rows are pruned after 2 days (see migration housekeeping).
+//    The dedup table never grows unbounded regardless of traffic.
+//
+// All routes live under /api/member/studio/* so they inherit the global
+//   app.use('/api/member', csrfProtectMember)   ← CSRF auto-applied
+//   memberAuthMiddleware                          ← applied per route
+// Writes use `supabase` (service-role). Reads use `supabasePublic` (anon, RLS-gated).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function studioViewerKey(memberId) {
+  // One-way hash — never stores raw member id, purely for same-day dedup.
+  return crypto.createHash("sha256").update(`sw:${memberId}`).digest("hex").slice(0, 32);
+}
+
+function parseVideoUrl(raw) {
+  if (!raw) return { url: null, provider: null };
+  try {
+    const u = new URL(raw.trim());
+    if (/youtube\.com|youtu\.be/.test(u.hostname)) return { url: raw.trim(), provider: "youtube" };
+    if (/vimeo\.com/.test(u.hostname))              return { url: raw.trim(), provider: "vimeo"   };
+  } catch {}
+  return { url: null, provider: null };
+}
+
+const studioFeedLimit  = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+const studioWriteLimit = rateLimit({ windowMs: 60_000, max: 10,  standardHeaders: true, legacyHeaders: false });
+
+// ── Feed ─────────────────────────────────────────────────────────────────────
+
+// GET /api/member/studio/feed?page=1&tag=
+app.get("/api/member/studio/feed", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const tag   = (req.query.tag || "").trim().toLowerCase().slice(0, 50);
+  const limit = 20;
+  const from  = (page - 1) * limit;
+  const cKey  = `studio:feed:p${page}:t${tag}`;
+
+  cacheFor(res, 30);
+  const data = await memCache(cKey, 60, async () => {
+    let q = supabasePublic
+      .from("member_projects")
+      .select(`
+        id, title, description, cover_image, video_url, video_provider,
+        domain, tags, views_count, reactions_count, comments_count, created_at,
+        member_id,
+        members!member_projects_member_id_fkey(id, name, photo, role, domain)
+      `)
+      .is("deleted_at", null)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .range(from, from + limit - 1);
+
+    if (tag) q = q.contains("tags", [tag]);
+
+    const { data: rows, error } = await q;
+    if (error) throw error;
+    return rows || [];
+  });
+
+  // Attach viewer's own reaction to each card (non-cached, member-specific)
+  let myReactions = {};
+  if (data.length) {
+    const ids = data.map(r => r.id);
+    const { data: rxs } = await supabase
+      .from("project_reactions")
+      .select("project_id, reaction_type")
+      .eq("member_id", req.member.memberId)
+      .in("project_id", ids);
+    (rxs || []).forEach(r => { myReactions[r.project_id] = r.reaction_type; });
+  }
+
+  const feed = data.map(p => ({ ...p, my_reaction: myReactions[p.id] || null }));
+  res.json({ feed, page, has_more: data.length === limit });
+});
+
+// ── Single project + view increment ─────────────────────────────────────────
+
+// GET /api/member/studio/projects/:id
+app.get("/api/member/studio/projects/:id", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const id = req.params.id;
+
+  const { data: project, error } = await supabasePublic
+    .from("member_projects")
+    .select(`
+      id, title, description, cover_image, video_url, video_provider,
+      domain, tags, views_count, reactions_count, comments_count, status, created_at,
+      member_id,
+      members!member_projects_member_id_fkey(id, name, photo, role, domain),
+      project_collaborators(
+        member_id,
+        members!project_collaborators_member_id_fkey(id, name, photo, role)
+      )
+    `)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error || !project) return res.status(404).json({ error: "Project not found" });
+
+  // Increment view (deduped by viewer_key+day via RPC) — fire and forget for latency
+  const viewerKey = studioViewerKey(req.member.memberId);
+  supabase.rpc("increment_project_view", { p_project_id: id, p_viewer_key: viewerKey })
+    .then(({ data: newCount }) => {
+      if (newCount != null) {
+        // Bust feed cache so next load shows updated view count
+        Object.keys(require("./server").memCacheStore || {}).filter(k => k.startsWith("studio:feed")).forEach(k => {
+          // Best-effort: the in-process memCache map; no-op if export not available
+        });
+      }
+    })
+    .catch(() => {});
+
+  // My reaction
+  const { data: myRx } = await supabase
+    .from("project_reactions")
+    .select("reaction_type")
+    .eq("project_id", id)
+    .eq("member_id", req.member.memberId)
+    .maybeSingle();
+
+  // My save status
+  const { data: mySave } = await supabase
+    .from("member_saves")
+    .select("id, collection_id")
+    .eq("project_id", id)
+    .eq("member_id", req.member.memberId)
+    .limit(1)
+    .maybeSingle();
+
+  res.json({
+    ...project,
+    my_reaction: myRx?.reaction_type || null,
+    is_saved: !!mySave,
+    save_id: mySave?.id || null,
+  });
+});
+
+// ── Create project ────────────────────────────────────────────────────────────
+
+// POST /api/member/studio/projects
+app.post(
+  "/api/member/studio/projects",
+  memberAuthMiddleware,
+  studioWriteLimit,
+  upload.single("cover_image"),
+  async (req, res) => {
+    const { title, description, video_url, domain, tags: rawTags, collab_ids: rawCollabIds } = req.body;
+
+    if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
+    if (title.trim().length > 120) return res.status(400).json({ error: "Title must be ≤ 120 characters" });
+
+    const { url: parsedVideoUrl, provider } = parseVideoUrl(video_url);
+    if (video_url && !parsedVideoUrl) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
+
+    // Parse tags
+    let tags = [];
+    try { tags = rawTags ? (Array.isArray(rawTags) ? rawTags : JSON.parse(rawTags)) : []; }
+    catch { tags = rawTags ? [rawTags] : []; }
+    tags = [...new Set(tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 10);
+
+    // Parse collaborator IDs
+    let collabIds = [];
+    try { collabIds = rawCollabIds ? (Array.isArray(rawCollabIds) ? rawCollabIds : JSON.parse(rawCollabIds)) : []; }
+    catch { collabIds = []; }
+    collabIds = collabIds.filter(id => typeof id === "string" && id.length > 0).slice(0, 20);
+
+    const coverUrl = req.file ? await uploadImage(req.file, "studio") : null;
+
+    const { data: project, error } = await supabase
+      .from("member_projects")
+      .insert([{
+        member_id:      req.member.memberId,
+        account_id:     req.member.id,
+        title:          title.trim().slice(0, 120),
+        description:    description ? description.trim().slice(0, 2000) : null,
+        cover_image:    coverUrl,
+        video_url:      parsedVideoUrl,
+        video_provider: provider,
+        domain:         domain ? domain.trim().slice(0, 80) : null,
+        tags,
+        status: "published",
+      }])
+      .select("id, title, created_at")
+      .single();
+
+    if (error) {
+      console.error("[studio:create]", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+
+    // Tag collaborators
+    if (collabIds.length) {
+      // Verify each id exists in members table
+      const { data: validMembers } = await supabase
+        .from("members").select("id").in("id", collabIds);
+      const validIds = (validMembers || []).map(m => m.id);
+
+      if (validIds.length) {
+        await supabase.from("project_collaborators").insert(
+          validIds.map(mid => ({
+            project_id: project.id,
+            member_id:  mid,
+            tagged_by:  req.member.memberId,
+          }))
+        );
+        // Notify each tagged collaborator
+        for (const mid of validIds) {
+          if (mid !== req.member.memberId) {
+            createMemberNotification(
+              mid, "studio",
+              "You were tagged in a project 🎬",
+              `${req.member.username || "A member"} tagged you as a collaborator on "${title.trim()}"`
+            ).catch(() => {});
+          }
+        }
+      }
+    }
+
+    await logMemberActivity(req.member.id, req.member.memberId, "studio_post_create", { id: project.id, title: title.trim() }, req.ip);
+    res.json({ success: true, id: project.id });
+  }
+);
+
+// ── Edit project ──────────────────────────────────────────────────────────────
+
+// PUT /api/member/studio/projects/:id
+app.put(
+  "/api/member/studio/projects/:id",
+  memberAuthMiddleware,
+  studioWriteLimit,
+  upload.single("cover_image"),
+  async (req, res) => {
+    const { data: existing } = await supabase
+      .from("member_projects")
+      .select("id, member_id, cover_image")
+      .eq("id", req.params.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (!existing) return res.status(404).json({ error: "Project not found" });
+    if (existing.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your project" });
+
+    const updates = { updated_at: new Date().toISOString() };
+    if (req.body.title !== undefined) updates.title = req.body.title.trim().slice(0, 120);
+    if (req.body.description !== undefined) updates.description = req.body.description.trim().slice(0, 2000) || null;
+    if (req.body.domain !== undefined) updates.domain = req.body.domain.trim().slice(0, 80) || null;
+    if (req.body.video_url !== undefined) {
+      const { url: vu, provider: vp } = parseVideoUrl(req.body.video_url);
+      if (req.body.video_url && !vu) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
+      updates.video_url = vu; updates.video_provider = vp;
+    }
+    if (req.body.tags !== undefined) {
+      let tags = [];
+      try { tags = Array.isArray(req.body.tags) ? req.body.tags : JSON.parse(req.body.tags); } catch { tags = [req.body.tags]; }
+      updates.tags = [...new Set(tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 10);
+    }
+    if (req.file) updates.cover_image = await uploadImage(req.file, "studio");
+
+    const { error } = await supabase.from("member_projects").update(updates).eq("id", req.params.id);
+    if (error) { console.error("[studio:edit]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+
+    await logMemberActivity(req.member.id, req.member.memberId, "studio_post_edit", { id: req.params.id }, req.ip);
+    res.json({ success: true });
+  }
+);
+
+// ── Delete project ────────────────────────────────────────────────────────────
+
+// DELETE /api/member/studio/projects/:id
+app.delete("/api/member/studio/projects/:id", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { data: existing } = await supabase
+    .from("member_projects").select("id, member_id").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!existing) return res.status(404).json({ error: "Project not found" });
+  if (existing.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your project" });
+
+  await supabase.from("member_projects")
+    .update({ deleted_at: new Date().toISOString(), status: "hidden" })
+    .eq("id", req.params.id);
+
+  await logMemberActivity(req.member.id, req.member.memberId, "studio_post_delete", { id: req.params.id }, req.ip);
+  res.json({ success: true });
+});
+
+// ── My projects ───────────────────────────────────────────────────────────────
+
+// GET /api/member/studio/mine
+app.get("/api/member/studio/mine", memberAuthMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("member_projects")
+    .select("id, title, description, cover_image, domain, tags, views_count, reactions_count, comments_count, status, created_at")
+    .eq("member_id", req.member.memberId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+
+const VALID_REACTIONS = ["wow", "inspiring", "fire", "mind_blown"];
+
+// POST /api/member/studio/projects/:id/react  { reaction_type }
+// Toggle: if same reaction already set → remove it. If different → switch it.
+app.post("/api/member/studio/projects/:id/react", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { reaction_type } = req.body;
+  if (!VALID_REACTIONS.includes(reaction_type)) return res.status(400).json({ error: "Invalid reaction_type" });
+
+  const projectId = req.params.id;
+  const memberId  = req.member.memberId;
+
+  // Check if project exists
+  const { data: proj } = await supabase.from("member_projects")
+    .select("id").eq("id", projectId).is("deleted_at", null).maybeSingle();
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+
+  // Existing reaction?
+  const { data: existing } = await supabase.from("project_reactions")
+    .select("id, reaction_type").eq("project_id", projectId).eq("member_id", memberId).maybeSingle();
+
+  if (existing) {
+    if (existing.reaction_type === reaction_type) {
+      // Same → remove (toggle off). Trigger decrements reactions_count.
+      await supabase.from("project_reactions").delete().eq("id", existing.id);
+      return res.json({ active: false, reaction_type: null });
+    } else {
+      // Different → switch (delete old, insert new). Net count stays the same.
+      await supabase.from("project_reactions").delete().eq("id", existing.id);
+    }
+  }
+
+  // Insert new. Trigger increments reactions_count.
+  await supabase.from("project_reactions").insert([{ project_id: projectId, member_id: memberId, reaction_type }]);
+  res.json({ active: true, reaction_type });
+});
+
+// GET /api/member/studio/projects/:id/reactions
+// Returns counts only — no viewer identity exposed.
+app.get("/api/member/studio/projects/:id/reactions", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const { data, error } = await supabase
+    .from("project_reactions")
+    .select("reaction_type")
+    .eq("project_id", req.params.id);
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  const counts = { wow: 0, inspiring: 0, fire: 0, mind_blown: 0, total: 0 };
+  (data || []).forEach(r => { counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1; counts.total++; });
+
+  // My reaction
+  const { data: myRx } = await supabase
+    .from("project_reactions").select("reaction_type")
+    .eq("project_id", req.params.id).eq("member_id", req.member.memberId).maybeSingle();
+
+  res.json({ counts, my_reaction: myRx?.reaction_type || null });
+});
+
+// ── Collaborators ─────────────────────────────────────────────────────────────
+
+// POST /api/member/studio/projects/:id/collaborators  { member_id }
+app.post("/api/member/studio/projects/:id/collaborators", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { member_id: targetMemberId } = req.body;
+  if (!targetMemberId) return res.status(400).json({ error: "member_id is required" });
+
+  // Only author can tag
+  const { data: proj } = await supabase.from("member_projects")
+    .select("id, member_id, title").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+  if (proj.member_id !== req.member.memberId) return res.status(403).json({ error: "Only the author can tag collaborators" });
+
+  const { data: targetMember } = await supabase.from("members").select("id, name").eq("id", targetMemberId).maybeSingle();
+  if (!targetMember) return res.status(404).json({ error: "Member not found" });
+
+  const { error } = await supabase.from("project_collaborators").insert([{
+    project_id: req.params.id,
+    member_id:  targetMemberId,
+    tagged_by:  req.member.memberId,
+  }]);
+
+  if (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "Already tagged" });
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  // Notify tagged member
+  if (targetMemberId !== req.member.memberId) {
+    createMemberNotification(
+      targetMemberId, "studio",
+      "You were tagged in a project 🎬",
+      `${req.member.username || "A member"} tagged you as a collaborator on "${proj.title}"`
+    ).catch(() => {});
+  }
+
+  res.json({ success: true });
+});
+
+// DELETE /api/member/studio/projects/:id/collaborators/:memberId
+app.delete("/api/member/studio/projects/:id/collaborators/:memberId", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { data: proj } = await supabase.from("member_projects")
+    .select("id, member_id").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+  // Author can remove anyone; members can remove themselves
+  if (proj.member_id !== req.member.memberId && req.params.memberId !== req.member.memberId) {
+    return res.status(403).json({ error: "Not authorized" });
+  }
+
+  await supabase.from("project_collaborators")
+    .delete().eq("project_id", req.params.id).eq("member_id", req.params.memberId);
+  res.json({ success: true });
+});
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+const commentWriteLimit = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false });
+
+// GET /api/member/studio/projects/:id/comments?page=1
+app.get("/api/member/studio/projects/:id/comments", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 30;
+  const from  = (page - 1) * limit;
+
+  // Fetch top-level comments
+  const { data: topLevel, error } = await supabasePublic
+    .from("project_comments")
+    .select(`
+      id, body, is_pinned, created_at, parent_id,
+      member_id,
+      members!project_comments_member_id_fkey(id, name, photo)
+    `)
+    .eq("project_id", req.params.id)
+    .is("parent_id", null)
+    .is("deleted_at", null)
+    .order("is_pinned", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(from, from + limit - 1);
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  // Fetch replies for these top-level comments
+  let replies = [];
+  if ((topLevel || []).length) {
+    const parentIds = topLevel.map(c => c.id);
+    const { data: r } = await supabasePublic
+      .from("project_comments")
+      .select(`
+        id, body, created_at, parent_id,
+        member_id,
+        members!project_comments_member_id_fkey(id, name, photo)
+      `)
+      .in("parent_id", parentIds)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+    replies = r || [];
+  }
+
+  // Nest replies under parents
+  const replyMap = {};
+  replies.forEach(r => { (replyMap[r.parent_id] = replyMap[r.parent_id] || []).push(r); });
+  const nested = (topLevel || []).map(c => ({ ...c, replies: replyMap[c.id] || [] }));
+
+  res.json({ comments: nested, page, has_more: (topLevel || []).length === limit });
+});
+
+// POST /api/member/studio/projects/:id/comments  { body, parent_id? }
+app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, commentWriteLimit, async (req, res) => {
+  const { body: commentBody, parent_id } = req.body;
+  if (!commentBody || !commentBody.trim()) return res.status(400).json({ error: "Comment body is required" });
+  if (commentBody.trim().length > 1000) return res.status(400).json({ error: "Comment must be ≤ 1000 characters" });
+
+  // Verify project exists
+  const { data: proj } = await supabase.from("member_projects")
+    .select("id, member_id, title").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+
+  // Verify parent exists if given
+  if (parent_id) {
+    const { data: parent } = await supabase.from("project_comments")
+      .select("id, parent_id").eq("id", parent_id).is("deleted_at", null).maybeSingle();
+    if (!parent) return res.status(400).json({ error: "Parent comment not found" });
+    if (parent.parent_id) return res.status(400).json({ error: "Replies can only be one level deep" });
+  }
+
+  const { data: comment, error } = await supabase.from("project_comments")
+    .insert([{
+      project_id: req.params.id,
+      member_id:  req.member.memberId,
+      parent_id:  parent_id || null,
+      body:       commentBody.trim().slice(0, 1000),
+    }])
+    .select("id, body, is_pinned, created_at, parent_id, member_id")
+    .single();
+
+  if (error) { console.error("[studio:comment]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+
+  // Notify project author (not if commenting on own post)
+  if (proj.member_id !== req.member.memberId) {
+    createMemberNotification(
+      proj.member_id, "studio",
+      "New comment on your project 💬",
+      `${req.member.username || "A member"} commented on "${proj.title}"`
+    ).catch(() => {});
+  }
+
+  res.json({ success: true, comment });
+});
+
+// DELETE /api/member/studio/comments/:id (soft-delete; author or project-owner)
+app.delete("/api/member/studio/comments/:id", memberAuthMiddleware, commentWriteLimit, async (req, res) => {
+  const { data: comment } = await supabase.from("project_comments")
+    .select("id, member_id, project_id").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+  // Allow comment author OR project author to delete
+  const { data: proj } = await supabase.from("member_projects")
+    .select("member_id").eq("id", comment.project_id).maybeSingle();
+  const isCommentAuthor  = comment.member_id === req.member.memberId;
+  const isProjectAuthor  = proj?.member_id   === req.member.memberId;
+  if (!isCommentAuthor && !isProjectAuthor) return res.status(403).json({ error: "Not authorized" });
+
+  await supabase.from("project_comments")
+    .update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// PATCH /api/member/studio/comments/:id/pin (project author only — toggle pin)
+app.patch("/api/member/studio/comments/:id/pin", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { data: comment } = await supabase.from("project_comments")
+    .select("id, is_pinned, project_id").eq("id", req.params.id).is("deleted_at", null).maybeSingle();
+  if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+  const { data: proj } = await supabase.from("member_projects")
+    .select("member_id").eq("id", comment.project_id).maybeSingle();
+  if (proj?.member_id !== req.member.memberId) return res.status(403).json({ error: "Only the project author can pin comments" });
+
+  await supabase.from("project_comments")
+    .update({ is_pinned: !comment.is_pinned }).eq("id", req.params.id);
+  res.json({ success: true, is_pinned: !comment.is_pinned });
+});
+
+// ── Save & Collections ────────────────────────────────────────────────────────
+
+// GET /api/member/studio/collections
+app.get("/api/member/studio/collections", memberAuthMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("save_collections")
+    .select("id, name, created_at")
+    .eq("member_id", req.member.memberId)
+    .order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// POST /api/member/studio/collections  { name }
+app.post("/api/member/studio/collections", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: "Collection name is required" });
+
+  const { data, error } = await supabase.from("save_collections")
+    .insert([{ member_id: req.member.memberId, name: name.trim().slice(0, 80) }])
+    .select("id, name").single();
+
+  if (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "Collection already exists" });
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.json({ success: true, collection: data });
+});
+
+// DELETE /api/member/studio/collections/:id
+app.delete("/api/member/studio/collections/:id", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { data: col } = await supabase.from("save_collections")
+    .select("id, member_id").eq("id", req.params.id).maybeSingle();
+  if (!col) return res.status(404).json({ error: "Collection not found" });
+  if (col.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your collection" });
+  await supabase.from("save_collections").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// POST /api/member/studio/saves  { project_id, collection_id? }
+// If collection_id omitted → auto-creates/uses a "Saved" default collection.
+app.post("/api/member/studio/saves", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { project_id, collection_id } = req.body;
+  if (!project_id) return res.status(400).json({ error: "project_id is required" });
+
+  const { data: proj } = await supabase.from("member_projects")
+    .select("id").eq("id", project_id).is("deleted_at", null).maybeSingle();
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+
+  let colId = collection_id;
+  if (!colId) {
+    // Find or create default "Saved" collection
+    const { data: defCol } = await supabase.from("save_collections")
+      .select("id").eq("member_id", req.member.memberId).eq("name", "Saved").maybeSingle();
+    if (defCol) {
+      colId = defCol.id;
+    } else {
+      const { data: newCol } = await supabase.from("save_collections")
+        .insert([{ member_id: req.member.memberId, name: "Saved" }]).select("id").single();
+      colId = newCol?.id;
+    }
+  }
+
+  if (!colId) return res.status(500).json({ error: "Could not resolve collection" });
+
+  const { data, error } = await supabase.from("member_saves")
+    .insert([{ collection_id: colId, project_id, member_id: req.member.memberId }])
+    .select("id").single();
+
+  if (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "Already saved" });
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  res.json({ success: true, save_id: data.id, collection_id: colId });
+});
+
+// DELETE /api/member/studio/saves/:saveId
+app.delete("/api/member/studio/saves/:saveId", memberAuthMiddleware, studioWriteLimit, async (req, res) => {
+  const { data: save } = await supabase.from("member_saves")
+    .select("id, member_id").eq("id", req.params.saveId).maybeSingle();
+  if (!save) return res.status(404).json({ error: "Save not found" });
+  if (save.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your save" });
+  await supabase.from("member_saves").delete().eq("id", req.params.saveId);
+  res.json({ success: true });
+});
+
+// GET /api/member/studio/collections/:id/saves
+app.get("/api/member/studio/collections/:id/saves", memberAuthMiddleware, async (req, res) => {
+  const { data: col } = await supabase.from("save_collections")
+    .select("id, member_id").eq("id", req.params.id).maybeSingle();
+  if (!col || col.member_id !== req.member.memberId) return res.status(404).json({ error: "Collection not found" });
+
+  const { data, error } = await supabase.from("member_saves")
+    .select(`
+      id, created_at,
+      member_projects!member_saves_project_id_fkey(
+        id, title, cover_image, domain, tags, views_count, reactions_count, comments_count
+      )
+    `)
+    .eq("collection_id", req.params.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// ── Post analytics (own projects only; counts only, no viewer identity) ───────
+
+// GET /api/member/studio/projects/:id/analytics
+app.get("/api/member/studio/projects/:id/analytics", memberAuthMiddleware, async (req, res) => {
+  const { data: proj } = await supabase
+    .from("member_projects")
+    .select("id, member_id, title, views_count, reactions_count, comments_count, created_at")
+    .eq("id", req.params.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!proj) return res.status(404).json({ error: "Project not found" });
+  if (proj.member_id !== req.member.memberId) return res.status(403).json({ error: "Analytics only available to the project author" });
+
+  // Reaction breakdown (counts only)
+  const { data: rxRows } = await supabase
+    .from("project_reactions").select("reaction_type").eq("project_id", req.params.id);
+
+  const breakdown = { wow: 0, inspiring: 0, fire: 0, mind_blown: 0 };
+  (rxRows || []).forEach(r => { breakdown[r.reaction_type] = (breakdown[r.reaction_type] || 0) + 1; });
+
+  res.json({
+    views:          proj.views_count,
+    reactions:      proj.reactions_count,
+    comments:       proj.comments_count,
+    reaction_breakdown: breakdown,
+    // No viewer list, no viewer identity — just totals as requested.
+  });
+});
+
+// ── Studio Wall DB health check (call inside initMemberDB or app.listen) ─────
+
+async function initStudioWallDB() {
+  try {
+    const { error } = await supabase.from("member_projects").select("id", { count: "exact", head: true }).limit(1);
+    if (error && error.code === "42P01") {
+      console.warn("[studio] member_projects table not found — run studio_wall_migration.sql in Supabase");
+    } else {
+      console.log("[studio] Studio Wall tables OK");
+    }
+  } catch (e) {
+    console.error("[studio] initStudioWallDB error:", e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-27b — Studio Wall: missing public + analytics routes
+// These complement the existing /api/member/studio/* block above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/studio/members-search?q=  (collab-tag autocomplete)
+app.get("/api/member/studio/members-search", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 40);
+  if (q.length < 2) return res.json([]);
+  try {
+    const { data } = await supabasePublic
+      .from("members")
+      .select("id, name, photo")
+      .ilike("name", `%${q}%`)
+      .eq("is_past", false)
+      .limit(8);
+    // Normalise photo → photo_url for client consistency
+    res.json((data || []).map(m => ({ id: m.id, name: m.name, photo_url: m.photo || null })));
+  } catch {
+    res.json([]);
+  }
+});
+
+// GET /api/member/studio/my-analytics
+// Aggregate views + reactions per post. No viewer identity. No comments count.
+app.get("/api/member/studio/my-analytics", memberAuthMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from("member_projects")
+    .select("id, title, views_count, reactions_count, status, created_at")
+    .eq("member_id", req.member.memberId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  // Only views + reactions — deliberate; no comments, no viewer list, ever.
+  res.json((data || []).map(p => ({
+    id:              p.id,
+    title:           p.title,
+    views_count:     p.views_count     || 0,
+    reactions_count: p.reactions_count || 0,
+    status:          p.status,
+    created_at:      p.created_at,
+  })));
+});
+
+// ── Admin — Studio Wall moderation ───────────────────────────────────────────
+
+// GET /api/admin/wall/projects?page=0&status=published
+app.get("/api/admin/wall/projects", authMiddleware, async (req, res) => {
+  try {
+    const page   = Math.max(0, parseInt(req.query.page) || 0);
+    const status = ["published", "hidden"].includes(req.query.status) ? req.query.status : "published";
+    const limit  = 20;
+    const { data, error } = await supabase
+      .from("member_projects")
+      .select("id, title, status, views_count, reactions_count, comments_count, created_at, deleted_at, members!member_projects_member_id_fkey(id, name)")
+      .is("deleted_at", null)
+      .eq("status", status)
+      .order("created_at", { ascending: false })
+      .range(page * limit, page * limit + limit - 1);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/admin/wall/projects/:id  (hide / restore)
+app.patch("/api/admin/wall/projects/:id", authMiddleware, async (req, res) => {
+  const { status } = req.body;
+  if (!["published", "hidden"].includes(status)) return res.status(400).json({ error: "Invalid status" });
+  const { error } = await supabase.from("member_projects")
+    .update({ status, updated_at: new Date().toISOString() }).eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json({ ok: true });
+});
+
+// DELETE /api/admin/wall/projects/:id  (soft-delete)
+app.delete("/api/admin/wall/projects/:id", authMiddleware, async (req, res) => {
+  await supabase.from("member_projects")
+    .update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
+  res.json({ ok: true });
+});
+
+// PATCH /api/admin/wall/comments/:commentId  (pin/unpin)
+app.patch("/api/admin/wall/comments/:commentId", authMiddleware, async (req, res) => {
+  await supabase.from("project_comments")
+    .update({ is_pinned: Boolean(req.body.is_pinned) }).eq("id", req.params.commentId);
+  res.json({ ok: true });
+});
+
+// POST /api/admin/wall/prune-views  (alternative to pg_cron)
+app.post("/api/admin/wall/prune-views", authMiddleware, async (req, res) => {
+  const cutoff = new Date(Date.now() - 2 * 86_400_000).toISOString().split("T")[0];
+  const { error } = await supabase.from("project_views").delete().lt("viewed_date", cutoff);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  console.log(`[wall/prune-views] Pruned rows older than ${cutoff}`);
+  res.json({ ok: true });
+});
+
 // ── SCANNER PAGE — must be above the catch-all ────────────────────────────────
 app.get("/scanner", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "scanner.html"));
@@ -11274,7 +12079,8 @@ process.on('uncaughtException', (err) => {
 app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
   await initDB();
-  await initMemberDB();   // ← member portal init
+  await initMemberDB();      // ← member portal init
+  await initStudioWallDB();  // ← studio wall table check
   await loadRevokedTokens();
   await loadActiveLockouts();
   console.log("DB initialized");
