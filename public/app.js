@@ -249,6 +249,7 @@ function loadPageData(page) {
   else if (page==='movies') loadMovies();
   else if (page==='wrapped') loadWrapped();
   else if (page==='collaborate') loadCollaborate();
+  else if (page==='studio') loadStudio();
   else if (page==='donations') loadDonationsPage();
   else if (page==='credits') loadCreditsPage();
 }
@@ -13010,3 +13011,315 @@ async function deleteCredit(id) {
     alert('Failed to delete credit. Please try again.');
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Public Studio Wall — index.html client
+// Reads from /api/studio/* (no auth). Interactions nudge to /membersaccess.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PSW = {
+  feedPage:      1,
+  feedTag:       null,
+  feedExhausted: false,
+  feedLoading:   false,
+  tagTimer:      null,
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function pswEsc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function pswFmt(n) {
+  const v = Number(n) || 0;
+  if (v >= 1_000_000) return (v/1_000_000).toFixed(1).replace(/\.0$/,'')+'M';
+  if (v >= 1000)      return (v/1000).toFixed(1).replace(/\.0$/,'')+'k';
+  return String(v);
+}
+
+function pswTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff/60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h/24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString('en-GB', { month:'short', year:'numeric' });
+}
+
+function pswAvatar(name, photo, size = 28) {
+  if (photo) {
+    return `<img src="${pswEsc(photo)}" alt="${pswEsc(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#1a1a1a">`;
+  }
+  const initials = (name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#1e1e1e;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.35)}px;font-weight:600;color:#666;flex-shrink:0">${pswEsc(initials)}</div>`;
+}
+
+function pswEmbedUrl(url, provider) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (provider === 'youtube' || u.hostname.includes('youtube') || u.hostname.includes('youtu.be')) {
+      const vid = u.searchParams.get('v') || u.pathname.split('/').pop();
+      return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1`;
+    }
+    if (provider === 'vimeo' || u.hostname.includes('vimeo')) {
+      return `https://player.vimeo.com/video/${u.pathname.split('/').pop()}?title=0&byline=0&portrait=0`;
+    }
+  } catch {}
+  return null;
+}
+
+const PSW_ICONS = {
+  eye:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  heart:   `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  comment: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+  play:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+  user:    `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
+  pin:     `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+};
+
+const PSW_REACTIONS = [
+  { type:'wow',        label:'Wow',        icon:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
+  { type:'inspiring',  label:'Inspiring',  icon:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
+  { type:'fire',       label:'Fire',       icon:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
+  { type:'mind_blown', label:'Mind Blown', icon:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
+];
+
+// ── Feed card ─────────────────────────────────────────────────────────────────
+
+function pswFeedCard(p) {
+  const author   = p.members || {};
+  const hasCover = !!p.cover_image;
+  const hasVideo = !!p.video_url;
+
+  return `<div class="psw-card" role="button" tabindex="0"
+      onclick="pswOpenDetail('${pswEsc(p.id)}')"
+      onkeydown="if(event.key==='Enter')pswOpenDetail('${pswEsc(p.id)}')">
+    <div class="psw-card-media">
+      ${hasCover
+        ? `<img src="${pswEsc(p.cover_image)}" alt="${pswEsc(p.title)}" class="psw-card-img" loading="lazy">`
+        : hasVideo
+          ? `<div class="psw-card-no-cover" style="color:#2a2a2a">${PSW_ICONS.play}</div>`
+          : `<div class="psw-card-no-cover"></div>`}
+      ${p.domain ? `<div class="psw-card-domain-pill">${pswEsc(p.domain)}</div>` : ''}
+      ${hasVideo ? `<div class="psw-card-play-badge">${PSW_ICONS.play}</div>` : ''}
+    </div>
+    <div class="psw-card-body">
+      <div class="psw-card-author-row">${pswAvatar(author.name, author.photo, 20)}<span class="psw-card-author-name">${pswEsc(author.name||'Member')}</span></div>
+      <div class="psw-card-title">${pswEsc(p.title)}</div>
+      ${p.description ? `<div class="psw-card-desc">${pswEsc(p.description)}</div>` : ''}
+      ${p.tags?.length ? `<div class="psw-card-tags">${p.tags.map(t=>`<span class="psw-tag">${pswEsc(t)}</span>`).join('')}</div>` : ''}
+      <div class="psw-card-stats">
+        <span class="psw-stat">${PSW_ICONS.eye}&nbsp;${pswFmt(p.views_count)}</span>
+        <span class="psw-stat">${PSW_ICONS.heart}&nbsp;${pswFmt(p.reactions_count)}</span>
+        <span class="psw-stat">${PSW_ICONS.comment}&nbsp;${pswFmt(p.comments_count)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Feed load ─────────────────────────────────────────────────────────────────
+
+async function loadStudio(reset = false) {
+  if (!reset) { reset = true; } // first call always resets
+  const grid = document.getElementById('psw-feed');
+  if (!grid) return;
+
+  if (PSW.feedLoading) return;
+  PSW.feedLoading = true;
+
+  if (reset) {
+    PSW.feedPage = 1;
+    PSW.feedExhausted = false;
+    grid.innerHTML = '<div class="psw-loading">Loading…</div>';
+  }
+
+  try {
+    let url = `/api/studio/feed?page=${PSW.feedPage}`;
+    if (PSW.feedTag) url += `&tag=${encodeURIComponent(PSW.feedTag)}`;
+    const resp = await apiFetch(url);
+    const data  = resp.feed || resp || [];
+    const hasMore = resp.has_more ?? (data.length === 20);
+
+    if (reset) grid.innerHTML = '';
+
+    if (!data.length && PSW.feedPage === 1) {
+      grid.innerHTML = `<div class="psw-empty"><div class="psw-empty-icon">${PSW_ICONS.heart}</div><div class="psw-empty-title">Nothing here yet</div><div class="psw-empty-sub">Members haven't posted any work yet.</div></div>`;
+      const btn = document.getElementById('psw-load-more-btn');
+      if (btn) btn.style.display = 'none';
+      return;
+    }
+
+    if (!hasMore) {
+      PSW.feedExhausted = true;
+      const btn = document.getElementById('psw-load-more-btn');
+      if (btn) btn.style.display = 'none';
+    } else {
+      const btn = document.getElementById('psw-load-more-btn');
+      if (btn) btn.style.display = '';
+    }
+
+    grid.insertAdjacentHTML('beforeend', data.map(pswFeedCard).join(''));
+    PSW.feedPage++;
+  } catch (e) {
+    if (grid) grid.innerHTML = `<div class="psw-empty"><div class="psw-empty-title">Could not load posts</div><button class="btn btn-secondary" onclick="loadStudio()" style="margin-top:12px;border-radius:8px;font-size:13px;padding:8px 18px">Retry</button></div>`;
+  } finally {
+    PSW.feedLoading = false;
+  }
+}
+
+function pswLoadMore() {
+  if (PSW.feedExhausted || PSW.feedLoading) return;
+  pswLoadMoreInner();
+}
+
+async function pswLoadMoreInner() {
+  const grid = document.getElementById('psw-feed');
+  if (!grid || PSW.feedLoading) return;
+  PSW.feedLoading = true;
+  try {
+    let url = `/api/studio/feed?page=${PSW.feedPage}`;
+    if (PSW.feedTag) url += `&tag=${encodeURIComponent(PSW.feedTag)}`;
+    const resp  = await apiFetch(url);
+    const data  = resp.feed || resp || [];
+    const hasMore = resp.has_more ?? (data.length === 20);
+    if (!hasMore) {
+      PSW.feedExhausted = true;
+      const btn = document.getElementById('psw-load-more-btn');
+      if (btn) btn.style.display = 'none';
+    }
+    grid.insertAdjacentHTML('beforeend', data.map(pswFeedCard).join(''));
+    PSW.feedPage++;
+  } catch {}
+  finally { PSW.feedLoading = false; }
+}
+
+// ── Detail modal ──────────────────────────────────────────────────────────────
+
+async function pswOpenDetail(projectId) {
+  const overlay = document.getElementById('psw-detail-overlay');
+  const body    = document.getElementById('psw-detail-body');
+  if (!overlay || !body) return;
+  body.innerHTML = '<div class="psw-loading" style="padding:60px 0;text-align:center">Loading…</div>';
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const [p, cResp] = await Promise.all([
+      apiFetch(`/api/studio/projects/${projectId}`),
+      apiFetch(`/api/studio/projects/${projectId}/comments`),
+    ]);
+    const author   = p.members || {};
+    const collabs  = (p.project_collaborators||[]).map(c=>c.members).filter(Boolean);
+    const comments = cResp.comments || cResp || [];
+    const embedUrl = pswEmbedUrl(p.video_url, p.video_provider);
+
+    body.innerHTML = `
+      ${p.cover_image && !embedUrl ? `<img src="${pswEsc(p.cover_image)}" alt="${pswEsc(p.title)}" class="psw-detail-cover">` : ''}
+      ${embedUrl ? `<div class="psw-detail-video-wrap"><iframe src="${pswEsc(embedUrl)}" allowfullscreen loading="lazy"></iframe></div>` : ''}
+      <div class="psw-detail-content">
+        <div class="psw-detail-author-row">
+          ${pswAvatar(author.name, author.photo, 34)}
+          <div>
+            <div class="psw-detail-author-name">${pswEsc(author.name||'Member')}</div>
+            ${author.role ? `<div class="psw-detail-author-role">${pswEsc(author.role)}</div>` : ''}
+          </div>
+          ${p.domain ? `<span class="psw-detail-domain-pill" style="margin-left:auto">${pswEsc(p.domain)}</span>` : ''}
+        </div>
+        <div class="psw-detail-title">${pswEsc(p.title)}</div>
+        ${p.description ? `<div class="psw-detail-desc">${pswEsc(p.description)}</div>` : ''}
+        <div class="psw-detail-meta">
+          <span class="psw-detail-stat">${PSW_ICONS.eye}&nbsp;${pswFmt(p.views_count)}</span>
+          <span class="psw-detail-stat">${PSW_ICONS.heart}&nbsp;${pswFmt(p.reactions_count)}</span>
+          <span class="psw-detail-stat">${PSW_ICONS.comment}&nbsp;${pswFmt(p.comments_count)}</span>
+        </div>
+        ${p.tags?.length ? `<div class="psw-detail-tags">${p.tags.map(t=>`<span class="psw-tag">${pswEsc(t)}</span>`).join('')}</div>` : ''}
+        ${collabs.length ? `
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+            <span style="font-size:11px;color:var(--grey);text-transform:uppercase;letter-spacing:.07em">${PSW_ICONS.user}&nbsp;With</span>
+            ${collabs.map(c=>`<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#bbb">${pswAvatar(c.name,c.photo,20)}&nbsp;${pswEsc(c.name)}</span>`).join('')}
+          </div>` : ''}
+
+        <!-- Reaction gate — visible but locked for guests -->
+        <div class="psw-rxn-gate">
+          <div class="psw-rxn-gate-label">React to this post</div>
+          ${PSW_REACTIONS.map(r=>`<button class="psw-rxn-ghost" onclick="pswShowAuthNudge()" title="${pswEsc(r.label)}">${r.icon}<span style="font-size:11px">${pswEsc(r.label)}</span></button>`).join('')}
+        </div>
+
+        <div class="psw-comments-section">
+          <div class="psw-comments-title">Comments (${p.comments_count||0})</div>
+          <!-- Comment input gate -->
+          <div class="psw-comment-gate" style="margin-bottom:20px">
+            <a href="/membersaccess">Sign in as a KFS member</a> to leave a comment.
+          </div>
+          <div id="psw-comments-list">${pswRenderComments(comments)}</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--grey);font-size:14px">${pswEsc(e.message)}</div>`;
+  }
+}
+
+function pswRenderComments(comments) {
+  if (!comments.length) return `<div style="color:var(--grey);font-size:13px;padding:8px 0">No comments yet.</div>`;
+
+  function renderOne(c, nested = false) {
+    const a = c.members || {};
+    return `<div class="psw-comment ${nested ? 'psw-comment-nested' : ''}">
+      <div class="psw-comment-header">
+        ${pswAvatar(a.name, a.photo, 22)}
+        <span class="psw-comment-author">${pswEsc(a.name||'Member')}</span>
+        <span class="psw-comment-time">${pswTime(c.created_at)}</span>
+        ${c.is_pinned ? `<span class="psw-pin-badge">${PSW_ICONS.pin}&nbsp;Pinned</span>` : ''}
+      </div>
+      <div class="psw-comment-body">${pswEsc(c.body)}</div>
+      ${(c.replies||[]).map(r=>renderOne(r,true)).join('')}
+    </div>`;
+  }
+
+  return comments.map(c => renderOne(c, false)).join('');
+}
+
+function pswCloseDetail() {
+  const o = document.getElementById('psw-detail-overlay');
+  if (o) o.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function pswShowAuthNudge() {
+  const n = document.getElementById('psw-auth-nudge');
+  if (n) n.style.display = 'flex';
+}
+
+// ── Init: wire controls when the page is shown ────────────────────────────────
+
+(function initPublicStudio() {
+  // Escape key closes detail or nudge
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const nudge  = document.getElementById('psw-auth-nudge');
+    const detail = document.getElementById('psw-detail-overlay');
+    if (nudge  && nudge.style.display  === 'flex') { nudge.style.display = 'none'; return; }
+    if (detail && detail.style.display === 'flex') { pswCloseDetail(); }
+  });
+
+  // Load More button
+  const loadMoreBtn = document.getElementById('psw-load-more-btn');
+  if (loadMoreBtn) loadMoreBtn.addEventListener('click', pswLoadMore);
+
+  // Tag filter debounce
+  const tagInput = document.getElementById('psw-tag-filter');
+  if (tagInput) {
+    tagInput.addEventListener('input', e => {
+      clearTimeout(PSW.tagTimer);
+      PSW.tagTimer = setTimeout(() => {
+        PSW.feedTag = e.target.value.trim().toLowerCase() || null;
+        loadStudio(true);
+      }, 400);
+    });
+  }
+})();

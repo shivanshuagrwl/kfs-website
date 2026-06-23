@@ -1028,6 +1028,8 @@ async function logoutMember() {
 
 function switchPanel(el) {
   const panel = el.dataset.panel;
+  // Block studio access for alumni/past members
+  if (panel === 'studio' && window._memberProfile?.is_past) return;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll(`.nav-item[data-panel="${panel}"]`).forEach(n => n.classList.add('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -1063,6 +1065,17 @@ async function loadProfile() {
     if (d.email)  window._member.email  = d.email;
     if (d.mobile) window._member.mobile = d.mobile;
     if (d.name)   window._member.name   = d.name;
+
+    // Hide Studio nav for non-active (alumni/past) members
+    const isActiveMember = !d.is_past;
+    document.querySelectorAll('.nav-item[data-panel="studio"]').forEach(el => {
+      el.style.display = isActiveMember ? '' : 'none';
+    });
+    // If a past member somehow lands on the studio panel, redirect to profile
+    if (!isActiveMember && window.location.hash === '#studio') {
+      window.location.hash = '';
+    }
+
     fillProfile(displayData);
     setText('sidebar-name', displayData.name || '—');
     setText('sidebar-role', displayData.role || displayData.domain || '—');

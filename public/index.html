@@ -798,6 +798,7 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
   .nav-links.open li:nth-child(5){opacity:1;transform:none;transition-delay:.26s}
   .nav-links.open li:nth-child(6){opacity:1;transform:none;transition-delay:.31s}
   .nav-links.open li:nth-child(7){opacity:1;transform:none;transition-delay:.36s}
+  .nav-links.open li:nth-child(8){opacity:1;transform:none;transition-delay:.41s}
   .nav-links a{
     display:flex;align-items:center;padding:18px 28px;
     font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
@@ -2667,6 +2668,111 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 .credit-role-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.04em;padding:6px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .15s;color:var(--grey);user-select:none;background:rgba(255,255,255,.02)}
 .credit-role-check:has(input:checked){border-color:rgba(245,245,245,.25);background:rgba(245,245,245,.08);color:var(--white)}
 .credit-role-check input{display:none}
+
+/* ── Public Studio Wall ──────────────────────────────────────────────────── */
+.psw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+@media(max-width:600px){.psw-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
+@media(max-width:380px){.psw-grid{grid-template-columns:1fr}}
+
+.psw-card{background:var(--black);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .18s,transform .18s,box-shadow .18s}
+.psw-card:hover{border-color:#333;transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.45)}
+body.light-mode .psw-card{background:#fff;border-color:#e0e0e0}
+body.light-mode .psw-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.1)}
+
+.psw-card-media{position:relative;aspect-ratio:16/9;background:#111;overflow:hidden}
+.psw-card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+.psw-card:hover .psw-card-img{transform:scale(1.03)}
+.psw-card-no-cover{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0e0e0e;color:#2a2a2a}
+body.light-mode .psw-card-no-cover{background:#f0f0f0;color:#ccc}
+.psw-card-domain-pill{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 9px;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#bbb;font-weight:500}
+.psw-card-play-badge{position:absolute;bottom:10px;right:10px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;color:#fff}
+
+.psw-card-body{padding:14px 16px 16px}
+.psw-card-author-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.psw-card-author-name{font-size:11px;color:var(--grey);letter-spacing:.03em;font-weight:500}
+.psw-card-title{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.35;margin-bottom:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.psw-card-desc{font-size:12px;color:var(--grey);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px}
+.psw-card-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.psw-tag{font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#777;letter-spacing:.04em}
+body.light-mode .psw-tag{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:#888}
+.psw-card-stats{display:flex;gap:12px;font-size:11px;color:var(--grey);align-items:center}
+.psw-stat{display:inline-flex;align-items:center;gap:4px}
+
+/* Guest banner */
+.psw-guest-banner{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 16px;font-size:13px;color:#aaa;margin-top:24px;line-height:1.5}
+.psw-guest-banner a{color:var(--white);text-decoration:underline;text-underline-offset:2px}
+body.light-mode .psw-guest-banner{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#777}
+body.light-mode .psw-guest-banner a{color:#111}
+
+/* Tag filter input */
+.psw-tag-input-wrap{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:7px 12px}
+body.light-mode .psw-tag-input-wrap{background:rgba(0,0,0,.04);border-color:#ddd}
+.psw-tag-input{background:none;border:none;outline:none;color:var(--white);font-size:13px;width:160px}
+body.light-mode .psw-tag-input{color:#111}
+.psw-tag-input::placeholder{color:var(--grey)}
+
+/* Loading / empty states */
+.psw-loading{color:var(--grey);font-size:13px;text-align:center;padding:60px 0}
+.psw-empty{text-align:center;padding:80px 20px;color:var(--grey)}
+.psw-empty-icon{margin-bottom:16px;opacity:.3}
+.psw-empty-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.psw-empty-sub{font-size:13px}
+
+/* Detail modal */
+.psw-detail-box{background:#0f0f0f;border:1px solid #252525;border-radius:18px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;scrollbar-width:none;position:relative}
+.psw-detail-box::-webkit-scrollbar{display:none}
+body.light-mode .psw-detail-box{background:#fff;border-color:#e0e0e0}
+.psw-detail-close{position:absolute;top:14px;right:14px;z-index:10;background:rgba(255,255,255,.08);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#aaa;transition:background .15s,color .15s}
+.psw-detail-close:hover{background:rgba(255,255,255,.14);color:#fff}
+body.light-mode .psw-detail-close{background:rgba(0,0,0,.06);color:#666}
+body.light-mode .psw-detail-close:hover{background:rgba(0,0,0,.12);color:#111}
+
+.psw-detail-cover{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:18px 18px 0 0;display:block}
+.psw-detail-video-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:18px 18px 0 0;overflow:hidden}
+.psw-detail-video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.psw-detail-content{padding:24px 28px 32px}
+@media(max-width:480px){.psw-detail-content{padding:18px 18px 28px}}
+.psw-detail-author-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.psw-detail-author-name{font-size:13px;font-weight:600}
+.psw-detail-author-role{font-size:11px;color:var(--grey);margin-top:1px}
+.psw-detail-domain-pill{font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#999;font-weight:500}
+body.light-mode .psw-detail-domain-pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#888}
+.psw-detail-title{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1.25;margin-bottom:12px}
+@media(max-width:480px){.psw-detail-title{font-size:18px}}
+.psw-detail-desc{font-size:14px;color:#bbb;line-height:1.7;margin-bottom:16px}
+body.light-mode .psw-detail-desc{color:#555}
+.psw-detail-meta{display:flex;gap:14px;font-size:12px;color:var(--grey);margin-bottom:14px}
+.psw-detail-stat{display:inline-flex;align-items:center;gap:5px}
+.psw-detail-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px}
+
+/* Auth nudge reaction buttons */
+.psw-rxn-gate{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0;padding:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;align-items:center}
+body.light-mode .psw-rxn-gate{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.08)}
+.psw-rxn-gate-label{font-size:12px;color:var(--grey);flex-basis:100%;margin-bottom:4px}
+.psw-rxn-ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px;color:#666;cursor:pointer;transition:border-color .15s,background .15s}
+.psw-rxn-ghost:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#aaa}
+body.light-mode .psw-rxn-ghost{border-color:rgba(0,0,0,.1);background:rgba(0,0,0,.04);color:#aaa}
+body.light-mode .psw-rxn-ghost:hover{border-color:rgba(0,0,0,.18);color:#777}
+
+/* Comments (read-only) */
+.psw-comments-section{margin-top:24px;border-top:1px solid #1e1e1e;padding-top:20px}
+body.light-mode .psw-comments-section{border-color:#eee}
+.psw-comments-title{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#555;margin-bottom:16px;font-weight:600}
+.psw-comment{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.psw-comment-nested{margin-left:32px;padding-left:12px;border-left:2px solid #1e1e1e}
+body.light-mode .psw-comment-nested{border-color:#eee}
+.psw-comment-header{display:flex;align-items:center;gap:8px}
+.psw-comment-author{font-size:12px;font-weight:600;color:#ddd}
+body.light-mode .psw-comment-author{color:#333}
+.psw-comment-time{font-size:11px;color:var(--grey)}
+.psw-comment-body{font-size:13px;color:#bbb;line-height:1.6;padding-left:30px}
+body.light-mode .psw-comment-body{color:#555}
+.psw-comment-gate{margin-top:12px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;font-size:13px;color:var(--grey)}
+body.light-mode .psw-comment-gate{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.08)}
+.psw-comment-gate a{color:var(--white);font-weight:600;text-decoration:none}
+body.light-mode .psw-comment-gate a{color:#111}
+.psw-comment-gate a:hover{text-decoration:underline}
+.psw-pin-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#666;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:1px 6px;margin-left:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -2823,6 +2929,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     <li><a data-nav-page="members" data-page="members">Members</a></li>
     <li><a data-nav-page="wrapped" data-page="wrapped">Wrapped</a></li>
     <li><a data-nav-page="collaborate" data-page="collaborate">Collaborate</a></li>
+    <li><a data-nav-page="studio" data-page="studio">Studio</a></li>
   </ul>
   <div class="nav-right">
     <button data-action="openSearch" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -3201,6 +3308,63 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
       </div>
     </div>
   </section>
+</div>
+
+<!-- ── STUDIO WALL PAGE ── -->
+<div class="page" id="page-studio">
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">Creative Work</p>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:0">
+        <div>
+          <h2 class="section-title">Studio Wall</h2>
+          <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">The work KFS members are making — films, frames, experiments.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="psw-tag-input-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-tag-input" autocomplete="off">
+          </div>
+          <a href="/membersaccess" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;font-size:13px;padding:9px 18px;text-decoration:none">Member Sign-in →</a>
+        </div>
+      </div>
+
+      <!-- Guest banner -->
+      <div class="psw-guest-banner" id="psw-guest-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <span>You're browsing as a guest. <a href="/membersaccess">Sign in as a KFS member</a> to react and comment.</span>
+      </div>
+
+      <!-- Feed grid -->
+      <div id="psw-feed" class="psw-grid" style="margin-top:28px"></div>
+      <div style="text-align:center;margin-top:32px">
+        <button id="psw-load-more-btn" class="btn btn-secondary" style="display:none;border-radius:10px;font-size:13px;padding:9px 22px">Load more</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── STUDIO WALL — Detail Modal (public, read-only) ── -->
+<div id="psw-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px)" onclick="if(event.target===this)pswCloseDetail()">
+  <div class="psw-detail-box">
+    <button class="psw-detail-close" onclick="pswCloseDetail()" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div id="psw-detail-body"></div>
+  </div>
+</div>
+
+<!-- ── STUDIO WALL — Auth Nudge Modal ── -->
+<div id="psw-auth-nudge" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9200;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)" onclick="if(event.target===this)document.getElementById('psw-auth-nudge').style.display='none'">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:16px;padding:36px 32px;max-width:380px;width:100%;text-align:center">
+    <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1a;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </div>
+    <div style="font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px">Members only</div>
+    <p style="font-size:13px;color:var(--grey);line-height:1.6;margin-bottom:24px">Reactions and comments are for KFS members. Sign in to join the conversation.</p>
+    <a href="/membersaccess" class="btn btn-primary" style="display:block;border-radius:10px;text-decoration:none;margin-bottom:10px">Sign in to KFS</a>
+    <button onclick="document.getElementById('psw-auth-nudge').style.display='none'" style="background:none;border:none;color:var(--grey);font-size:13px;cursor:pointer;padding:4px 8px">Maybe later</button>
+  </div>
 </div>
 
 <!-- ── DONATIONS PAGE ── -->
