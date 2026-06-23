@@ -10067,7 +10067,7 @@ app.post("/api/member/2fa/disable", memberAuthMiddleware, async (req, res) => {
 app.get("/api/member/profile", memberAuthMiddleware, async (req, res) => {
   const { data, error } = await supabase
     .from("members")
-    .select("id,name,roll_no,mobile,batch,bio,domain,role,photo,special_tag,sort_order,is_past,instagram,linkedin,github,twitter,youtube,website,custom_links,email,updated_at")
+    .select("id,name,roll_no,mobile,batch,bio,domain,role,photo,special_tag,sort_order,is_past,instagram,linkedin,github,twitter,youtube,website,custom_links,email,updated_at,status,status_updated_at,followers_count,following_count")
     .eq("id", req.member.memberId)
     .maybeSingle();
   if (error || !data) return res.status(404).json({ error: "Member not found" });
@@ -12070,6 +12070,172 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
     console.error("[studio:public:comments]", e.message);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-28 — Network: Follow system
+// Phase 2 — "The Network". Lets members follow each other, see who follows
+// them, and view a lightweight public profile card for anyone tagged/authored
+// content they encounter on the Studio Wall. Counts on `members` are kept in
+// sync by a DB trigger (see phase2_network_migration.sql) — never decremented
+// or incremented manually here, only ever read back fresh.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const networkReadLimit  = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+const networkWriteLimit = rateLimit({ windowMs: 60_000, max: 30,  standardHeaders: true, legacyHeaders: false });
+
+const NETWORK_PROFILE_FIELDS =
+  "id, name, photo, role, domain, batch, bio, status, status_updated_at, followers_count, following_count, is_past";
+
+// Fetch a live (non-deleted) member row by id.
+async function getActiveMember(memberId, fields = NETWORK_PROFILE_FIELDS) {
+  const { data } = await supabase
+    .from("members")
+    .select(fields)
+    .eq("id", memberId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  return data || null;
+}
+
+// POST /api/member/network/follow/:memberId — toggle follow/unfollow
+app.post("/api/member/network/follow/:memberId", memberAuthMiddleware, networkWriteLimit, async (req, res) => {
+  const targetId = req.params.memberId;
+  const viewerId = req.member.memberId;
+
+  if (targetId === viewerId) return res.status(400).json({ error: "You can't follow yourself" });
+
+  const target = await getActiveMember(targetId, "id, name");
+  if (!target) return res.status(404).json({ error: "Member not found" });
+
+  const { data: existing } = await supabase
+    .from("member_follows")
+    .select("id")
+    .eq("follower_id", viewerId)
+    .eq("following_id", targetId)
+    .maybeSingle();
+
+  let following;
+  if (existing) {
+    await supabase.from("member_follows").delete().eq("id", existing.id);
+    following = false;
+  } else {
+    const { error } = await supabase
+      .from("member_follows")
+      .insert([{ follower_id: viewerId, following_id: targetId }]);
+    if (error && error.code !== "23505") {
+      console.error("[network:follow]", error.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+    following = true;
+    if (!error) {
+      createMemberNotification(
+        targetId, "network",
+        "New follower",
+        `${req.member.username || "A member"} started following you`
+      ).catch(() => {});
+    }
+  }
+
+  await logMemberActivity(req.member.id, viewerId, following ? "network_follow" : "network_unfollow", { target_id: targetId }, req.ip);
+
+  const { data: fresh } = await supabase.from("members").select("followers_count").eq("id", targetId).maybeSingle();
+  res.json({ following, followers_count: fresh?.followers_count ?? 0 });
+});
+
+// GET /api/member/network/profile/:memberId — mini profile card for any active member
+app.get("/api/member/network/profile/:memberId", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const targetId = req.params.memberId;
+  const viewerId = req.member.memberId;
+
+  const member = await getActiveMember(targetId);
+  if (!member) return res.status(404).json({ error: "Member not found" });
+
+  let isFollowing = false;
+  if (targetId !== viewerId) {
+    const { data } = await supabase
+      .from("member_follows").select("id")
+      .eq("follower_id", viewerId).eq("following_id", targetId).maybeSingle();
+    isFollowing = !!data;
+  }
+
+  res.json({ ...member, is_following: isFollowing, is_self: targetId === viewerId });
+});
+
+// GET /api/member/network/followers/:memberId?page=1 — who follows this member
+app.get("/api/member/network/followers/:memberId", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const targetId = req.params.memberId;
+  const viewerId = req.member.memberId;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 30;
+  const from  = (page - 1) * limit;
+
+  const { data: rows, error } = await supabase
+    .from("member_follows")
+    .select(`
+      created_at, follower_id,
+      members!member_follows_follower_id_fkey(id, name, photo, role, domain, status, followers_count, following_count)
+    `)
+    .eq("following_id", targetId)
+    .order("created_at", { ascending: false })
+    .range(from, from + limit - 1);
+
+  if (error) { console.error("[network:followers]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+
+  const list = (rows || []).map(r => r.members).filter(Boolean);
+  const ids  = list.map(m => m.id);
+
+  let myFollows = new Set();
+  if (ids.length) {
+    const { data: mine } = await supabase
+      .from("member_follows").select("following_id")
+      .eq("follower_id", viewerId).in("following_id", ids);
+    myFollows = new Set((mine || []).map(r => r.following_id));
+  }
+
+  res.json({
+    members:  list.map(m => ({ ...m, is_following: myFollows.has(m.id), is_self: m.id === viewerId })),
+    page,
+    has_more: list.length === limit,
+  });
+});
+
+// GET /api/member/network/following/:memberId?page=1 — who this member follows
+app.get("/api/member/network/following/:memberId", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const targetId = req.params.memberId;
+  const viewerId = req.member.memberId;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 30;
+  const from  = (page - 1) * limit;
+
+  const { data: rows, error } = await supabase
+    .from("member_follows")
+    .select(`
+      created_at, following_id,
+      members!member_follows_following_id_fkey(id, name, photo, role, domain, status, followers_count, following_count)
+    `)
+    .eq("follower_id", targetId)
+    .order("created_at", { ascending: false })
+    .range(from, from + limit - 1);
+
+  if (error) { console.error("[network:following]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+
+  const list = (rows || []).map(r => r.members).filter(Boolean);
+  const ids  = list.map(m => m.id);
+
+  let myFollows = new Set();
+  if (ids.length) {
+    const { data: mine } = await supabase
+      .from("member_follows").select("following_id")
+      .eq("follower_id", viewerId).in("following_id", ids);
+    myFollows = new Set((mine || []).map(r => r.following_id));
+  }
+
+  res.json({
+    members:  list.map(m => ({ ...m, is_following: myFollows.has(m.id), is_self: m.id === viewerId })),
+    page,
+    has_more: list.length === limit,
+  });
 });
 
 // ── Admin — Studio Wall moderation ───────────────────────────────────────────

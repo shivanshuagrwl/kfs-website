@@ -1040,6 +1040,7 @@ function switchPanel(el) {
   if (panel === 'works')    loadMyWorks();
   if (panel === 'collab')   loadMyCollabs();
   if (panel === 'grievance') loadMyGrievances();
+  if (panel === 'network') loadNetworkPanel();
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
@@ -1079,6 +1080,8 @@ async function loadProfile() {
     fillProfile(displayData);
     setText('sidebar-name', displayData.name || '—');
     setText('sidebar-role', displayData.role || displayData.domain || '—');
+    setText('sidebar-followers-count', swFmtNum ? swFmtNum(d.followers_count) : (d.followers_count||0));
+    setText('sidebar-following-count', swFmtNum ? swFmtNum(d.following_count) : (d.following_count||0));
     const av = $id('sidebar-avatar');
     if (displayData.photo) {
       av.innerHTML = `<img src="${displayData.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" />`;
@@ -2181,7 +2184,7 @@ function swFeedCard(p) {
       ${hasVideo ? `<div class="sw-card-video-badge">${SW_ICONS.play}</div>` : ''}
     </div>
     <div class="sw-card-body">
-      <div class="sw-card-author-row">${swAvatar(author.name, author.photo, 22)}<span class="sw-card-author-name">${swEsc(author.name||'Member')}</span></div>
+      <div class="sw-card-author-row" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')" style="cursor:pointer">${swAvatar(author.name, author.photo, 22)}<span class="sw-card-author-name">${swEsc(author.name||'Member')}</span></div>
       <div class="sw-card-title">${swEsc(p.title)}</div>
       ${p.description ? `<div class="sw-card-desc">${swEsc(p.description)}</div>` : ''}
       ${p.tags?.length ? `<div class="sw-card-tags">${p.tags.map(t=>`<span class="sw-tag">${swEsc(t)}</span>`).join('')}</div>` : ''}
@@ -2362,8 +2365,10 @@ async function swOpenDetail(projectId) {
       ${embedUrl ? `<div class="studio-detail-video-wrap"><iframe src="${swEsc(embedUrl)}" allowfullscreen loading="lazy"></iframe></div>` : ''}
       <div class="studio-detail-content">
         <div class="studio-detail-author-row">
-          ${swAvatar(author.name, author.photo, 34)}
-          <div><div class="studio-detail-author-name">${swEsc(author.name||'Member')}</div>${author.role?`<div class="studio-detail-author-role">${swEsc(author.role)}</div>`:''}</div>
+          <span style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openMemberProfile('${swEsc(p.member_id)}')">
+            ${swAvatar(author.name, author.photo, 34)}
+            <span><div class="studio-detail-author-name">${swEsc(author.name||'Member')}</div>${author.role?`<div class="studio-detail-author-role">${swEsc(author.role)}</div>`:''}</span>
+          </span>
           ${p.domain?`<span class="studio-detail-domain-pill" style="margin-left:auto">${swEsc(p.domain)}</span>`:''}
         </div>
         <div class="studio-detail-title">${swEsc(p.title)}</div>
@@ -2400,8 +2405,10 @@ function swRenderComments(comments, projectId) {
     const a = c.members||{};
     return `<div class="studio-comment ${nested?'studio-comment-nested':''}">
       <div class="studio-comment-header">
-        ${swAvatar(a.name,a.photo,22)}
-        <span class="studio-comment-author">${swEsc(a.name||'Member')}</span>
+        <span style="display:inline-flex;align-items:center;gap:8px;cursor:pointer" onclick="openMemberProfile('${swEsc(a.id)}')">
+          ${swAvatar(a.name,a.photo,22)}
+          <span class="studio-comment-author">${swEsc(a.name||'Member')}</span>
+        </span>
         <span class="studio-comment-time">${swRelTime(c.created_at)}</span>
         ${c.is_pinned?`<span class="studio-comment-pinned-badge">${SW_ICONS.pin}&nbsp;Pinned</span>`:''}
       </div>
@@ -2667,8 +2674,200 @@ function initStudioWall() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Network — Follow system (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const NW = {
+  followersPage: 1, followersExhausted: false, followersLoading: false,
+  followingPage: 1, followingExhausted: false, followingLoading: false,
+  myFollowing: new Map(), // memberId → bool (local optimistic cache)
+  profileMemberId: null,
+};
+
+function nwMyId() {
+  return window._memberProfile?.id || window._member?.id || null;
+}
+
+// Maps a status slug (set by the Member Status feature) to its display label.
+// Kept here too — not just in the status-editor UI — since follower/following
+// rows and the mini-profile modal need to render it wherever it appears.
+function nwStatusLabel(status) {
+  const map = { open_to_collab: 'Open to collab', busy_on_set: 'Busy on set', alumni_mentor: 'Alumni mentor' };
+  return map[status] || null;
+}
+
+function nwFollowBtn(m) {
+  const myId = nwMyId();
+  if (!m.id || m.id === myId) return '';
+  const isFollowing = NW.myFollowing.has(m.id) ? NW.myFollowing.get(m.id) : !!m.is_following;
+  return `<button class="nw-follow-btn ${isFollowing?'following':''}" data-member-id="${swEsc(m.id)}" onclick="event.stopPropagation();toggleFollow('${swEsc(m.id)}',this)">${isFollowing?'Following':'Follow'}</button>`;
+}
+
+function nwRenderRow(m) {
+  const statusLabel = nwStatusLabel(m.status);
+  return `<div class="nw-row" data-row-member="${swEsc(m.id)}">
+    <span class="nw-row-info" onclick="openMemberProfile('${swEsc(m.id)}')">
+      ${swAvatar(m.name, m.photo, 36)}
+      <span>
+        <div class="nw-row-name">${swEsc(m.name||'Member')}${statusLabel?`<span class="nw-status-pill">${swEsc(statusLabel)}</span>`:''}</div>
+        <div class="nw-row-meta">${swEsc(m.role || m.domain || '')}</div>
+      </span>
+    </span>
+    ${nwFollowBtn(m)}
+  </div>`;
+}
+
+async function nwLoadFollowers(reset = false) {
+  const myId = nwMyId();
+  if (!myId) return;
+  if (NW.followersLoading) return;
+  if (!reset && NW.followersExhausted) return;
+  if (reset) { NW.followersPage = 1; NW.followersExhausted = false; }
+  const list = $id('network-followers-list');
+  if (!list) return;
+  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  NW.followersLoading = true;
+  try {
+    const resp = await api('GET', `/api/member/network/followers/${myId}?page=${NW.followersPage}`);
+    const members = resp.members || [];
+    members.forEach(m => NW.myFollowing.set(m.id, m.is_following));
+    if (reset) list.innerHTML = '';
+    if (!members.length && NW.followersPage === 1) {
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">No followers yet</div><div class="sw-empty-sub">Share work on the Studio Wall to get noticed.</div></div>`;
+      hideEl('network-followers-more');
+      return;
+    }
+    list.insertAdjacentHTML('beforeend', members.map(nwRenderRow).join(''));
+    if (resp.has_more) { showEl('network-followers-more'); NW.followersPage++; }
+    else { hideEl('network-followers-more'); NW.followersExhausted = true; }
+  } catch (e) {
+    if (reset) list.innerHTML = `<div class="sw-error">Could not load followers.</div>`;
+  } finally {
+    NW.followersLoading = false;
+  }
+}
+
+async function nwLoadFollowing(reset = false) {
+  const myId = nwMyId();
+  if (!myId) return;
+  if (NW.followingLoading) return;
+  if (!reset && NW.followingExhausted) return;
+  if (reset) { NW.followingPage = 1; NW.followingExhausted = false; }
+  const list = $id('network-following-list');
+  if (!list) return;
+  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  NW.followingLoading = true;
+  try {
+    const resp = await api('GET', `/api/member/network/following/${myId}?page=${NW.followingPage}`);
+    const members = resp.members || [];
+    members.forEach(m => NW.myFollowing.set(m.id, true)); // by definition, people I follow
+    if (reset) list.innerHTML = '';
+    if (!members.length && NW.followingPage === 1) {
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">Not following anyone yet</div><div class="sw-empty-sub">Follow members from their posts on the Studio Wall.</div></div>`;
+      hideEl('network-following-more');
+      return;
+    }
+    list.insertAdjacentHTML('beforeend', members.map(nwRenderRow).join(''));
+    if (resp.has_more) { showEl('network-following-more'); NW.followingPage++; }
+    else { hideEl('network-following-more'); NW.followingExhausted = true; }
+  } catch (e) {
+    if (reset) list.innerHTML = `<div class="sw-error">Could not load following.</div>`;
+  } finally {
+    NW.followingLoading = false;
+  }
+}
+
+function loadNetworkPanel() {
+  nwLoadFollowers(true);
+  nwLoadFollowing(true);
+}
+
+function nwSwitchTab(tabName) {
+  document.querySelectorAll('.nw-tab').forEach(t=>t.classList.toggle('active', t.dataset.networkTab===tabName));
+  document.querySelectorAll('.nw-tab-panel').forEach(p=>p.classList.toggle('active', p.id===`network-tab-${tabName}`));
+}
+
+// ── Follow toggle — called from feed cards, member rows, and the mini-profile modal ──
+async function toggleFollow(memberId, btnEl) {
+  if (!memberId || btnEl?.disabled) return;
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const resp = await api('POST', `/api/member/network/follow/${memberId}`);
+    NW.myFollowing.set(memberId, resp.following);
+    // Update every rendered follow button for this member (feed cards, lists, modal)
+    document.querySelectorAll(`.nw-follow-btn[data-member-id="${memberId}"]`).forEach(b => {
+      b.classList.toggle('following', resp.following);
+      b.textContent = resp.following ? 'Following' : 'Follow';
+      b.disabled = false;
+    });
+    const statFollowers = $id('mpm-stat-followers');
+    if (statFollowers && NW.profileMemberId === memberId) statFollowers.textContent = swFmtNum(resp.followers_count);
+    // Following list membership just changed — refresh it next time that tab is visited
+    NW.followingExhausted = false;
+  } catch (e) {
+    if (btnEl) btnEl.disabled = false;
+    alert(e.message || 'Could not update follow status.');
+  }
+}
+
+// ── Member mini-profile modal ────────────────────────────────────────────
+async function openMemberProfile(memberId) {
+  if (!memberId) return;
+  NW.profileMemberId = memberId;
+  const overlay = $id('member-profile-modal-overlay');
+  const body    = $id('member-profile-modal-body');
+  if (!overlay || !body) return;
+  body.innerHTML = '<div class="sw-loading" style="padding:40px 0;text-align:center">Loading…</div>';
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  try {
+    const m = await api('GET', `/api/member/network/profile/${memberId}`);
+    NW.myFollowing.set(m.id, m.is_following);
+    const statusLabel = nwStatusLabel(m.status);
+    body.innerHTML = `
+      <div class="mpm-head">
+        ${swAvatar(m.name, m.photo, 64)}
+        <div>
+          <div class="mpm-name">${swEsc(m.name||'Member')}${statusLabel?`<span class="nw-status-pill">${swEsc(statusLabel)}</span>`:''}</div>
+          <div class="mpm-role">${swEsc([m.role, m.domain].filter(Boolean).join(' · '))}</div>
+        </div>
+      </div>
+      ${m.bio ? `<div class="mpm-bio">${swEsc(m.bio)}</div>` : ''}
+      <div class="mpm-stats">
+        <div class="mpm-stat"><div class="mpm-stat-val" id="mpm-stat-followers">${swFmtNum(m.followers_count)}</div><div class="mpm-stat-label">Followers</div></div>
+        <div class="mpm-stat"><div class="mpm-stat-val">${swFmtNum(m.following_count)}</div><div class="mpm-stat-label">Following</div></div>
+      </div>
+      ${m.is_self ? '' : `<button class="nw-follow-btn ${m.is_following?'following':''}" id="mpm-follow-btn" data-member-id="${swEsc(m.id)}" style="width:100%;padding:11px" onclick="toggleFollow('${swEsc(m.id)}',this)">${m.is_following?'Following':'Follow'}</button>`}
+    `;
+  } catch (e) {
+    body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:14px">${swEsc(e.message)}</div>`;
+  }
+}
+
+function closeMemberProfileModal() {
+  hideEl('member-profile-modal-overlay');
+  document.body.style.overflow = '';
+  NW.profileMemberId = null;
+}
+
+function initNetworkModule() {
+  document.querySelectorAll('.nw-tab').forEach(btn => {
+    btn.addEventListener('click', () => nwSwitchTab(btn.dataset.networkTab));
+  });
+  $id('network-followers-more-btn')?.addEventListener('click', () => nwLoadFollowers(false));
+  $id('network-following-more-btn')?.addEventListener('click', () => nwLoadFollowing(false));
+  $id('member-profile-modal-close')?.addEventListener('click', closeMemberProfileModal);
+  $id('member-profile-modal-overlay')?.addEventListener('click', e => {
+    if (e.target === $id('member-profile-modal-overlay')) closeMemberProfileModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $id('member-profile-modal-overlay')?.style.display === 'flex') closeMemberProfileModal();
+  });
+}
+
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',initStudioWall);
+  document.addEventListener('DOMContentLoaded',()=>{ initStudioWall(); initNetworkModule(); });
 }else{
-  initStudioWall();
+  initStudioWall(); initNetworkModule();
 }
