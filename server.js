@@ -10966,7 +10966,8 @@ app.get("/api/member/works", memberAuthMiddleware, async (req, res) => {
 
     const { data: movies } = await supabase
       .from("movies")
-      .select("id, title, release_year, poster_image, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew");
+      .select("id, title, release_year, poster_image, director, producer, dop, screenwriter, video_editor, sound_design, management, graphic_design, actors, support_crew")
+      .is("deleted_at", null); // exclude admin-deleted films
 
     const crewFields = ["director","producer","dop","screenwriter","video_editor","sound_design","management","graphic_design","actors","support_crew"];
     const roleLabels = { director:"Director", producer:"Producer", dop:"DOP", screenwriter:"Script Writer", video_editor:"Editor", sound_design:"Sound Design", management:"Management", graphic_design:"Graphic Design", actors:"Actor", support_crew:"Crew" };

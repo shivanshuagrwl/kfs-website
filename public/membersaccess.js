@@ -514,6 +514,8 @@ async function loadDashboard() {
   loadSecurity();
   loadActivity();
   loadMyWorks();
+  loadNotificationBadge(); // populate badge count without opening the panel
+  startNotifPolling();     // keep badge fresh while page is open
   // Hash routing: /membersaccess#collab opens collab panel directly
   const hash = window.location.hash.replace('#', '');
   if (hash && document.querySelector(`[data-panel="${hash}"]`)) {
@@ -1569,6 +1571,31 @@ async function loadActivity() {
 
 let _notifOpen = false;
 let _notifLoading = false;
+let _notifPollTimer = null;
+
+// Silently refresh the unread badge count without opening the panel
+async function loadNotificationBadge() {
+  if (!_token) return;
+  try {
+    const items  = await api('GET', '/api/member/notifications');
+    const unread = items.filter(n => !n.is_read).length;
+    const badge  = $id('notif-badge');
+    if (badge) {
+      badge.textContent = unread > 9 ? '9+' : unread;
+      badge.classList.toggle('visible', unread > 0);
+    }
+    // If the panel is already open, refresh its contents too
+    if (_notifOpen) loadNotifications();
+  } catch (e) { /* silent — badge stays as-is */ }
+}
+
+// Poll for new notifications every 60 s while the page is visible
+function startNotifPolling() {
+  if (_notifPollTimer) return; // already running
+  _notifPollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') loadNotificationBadge();
+  }, 60_000);
+}
 
 // Icon per notification type
 function _notifIcon(type) {
