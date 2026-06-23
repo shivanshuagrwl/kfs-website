@@ -494,10 +494,38 @@ body.light-mode .fb-add-section-btn:hover{border-color:rgba(0,0,0,.35);color:rgb
 @media(min-width:480px){.reg-submit-btn{width:auto}}
 .reg-submit-btn:hover{opacity:.88;transform:scale(.98)}
 .reg-submit-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.reg-success{text-align:center;padding:40px 24px}
-.reg-success-icon{display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--white)}
-.reg-success-title{font-size:20px;font-weight:700;margin-bottom:8px}
-.reg-success-sub{font-size:14px;color:var(--grey)}
+.reg-success{text-align:center;padding:44px 28px 36px;display:flex;flex-direction:column;align-items:center}
+.reg-success-icon{display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:var(--white);width:60px;height:60px;border-radius:50%;background:rgba(52,199,89,.12);border:1px solid rgba(52,199,89,.25);flex-shrink:0}
+.reg-success-icon svg{color:#34c759}
+.reg-success-title{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px;line-height:1.2}
+.reg-success-sub{font-size:14px;color:var(--grey);line-height:1.6;max-width:320px}
+/* Post-registration action buttons (WhatsApp, Calendar, Location, etc.) */
+.reg-success-actions{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px;margin-top:28px}
+.reg-success-action-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;padding:14px 20px;border-radius:14px;font:inherit;font-size:14px;font-weight:600;
+  letter-spacing:-.01em;cursor:pointer;text-decoration:none;
+  transition:transform .18s var(--ease),opacity .18s,background .18s;
+  border:1.5px solid rgba(245,245,245,.14);background:rgba(255,255,255,.07);color:var(--white);
+}
+.reg-success-action-btn:hover{background:rgba(255,255,255,.13);transform:scale(.98)}
+.reg-success-action-btn:active{transform:scale(.96)}
+/* WhatsApp — green tint */
+.reg-success-action-btn.btn-whatsapp{background:rgba(37,211,102,.1);border-color:rgba(37,211,102,.25);color:#25d366}
+.reg-success-action-btn.btn-whatsapp:hover{background:rgba(37,211,102,.18)}
+/* Calendar — accent tint */
+.reg-success-action-btn.btn-calendar{background:rgba(245,245,245,.06);border-color:rgba(245,245,245,.18);color:var(--white)}
+.reg-success-action-btn.btn-calendar:hover{background:rgba(245,245,245,.12)}
+/* Location */
+.reg-success-action-btn.btn-location{background:rgba(245,245,245,.04);border-color:rgba(245,245,245,.1);color:var(--grey)}
+.reg-success-action-btn.btn-location:hover{color:var(--white);background:rgba(245,245,245,.09)}
+/* light mode overrides */
+body.light-mode .reg-success-action-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.12);color:#333}
+body.light-mode .reg-success-action-btn:hover{background:rgba(0,0,0,.09)}
+body.light-mode .reg-success-action-btn.btn-whatsapp{background:rgba(37,211,102,.08);border-color:rgba(37,211,102,.25);color:#128c3e}
+body.light-mode .reg-success-action-btn.btn-calendar{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.15);color:#111}
+body.light-mode .reg-success-action-btn.btn-location{color:#666}
+body.light-mode .reg-success-action-btn.btn-location:hover{color:#111}
 
 /* Section navigation (branching forms) */
 .reg-progress{display:flex;gap:5px;padding:0 24px 14px;flex-shrink:0}
@@ -549,7 +577,7 @@ body.light-mode .reg-tc-label a{color:#111}
 .tc-list{margin:0 0 12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .tc-list li{font-size:13px;color:var(--grey);line-height:1.6;display:flex;align-items:flex-start;gap:8px}
 .tc-list li::before{content:"";display:block;width:4px;height:4px;border-radius:50%;background:rgba(245,245,245,.3);flex-shrink:0;margin-top:7px}
-.tc-ol{margin:10px 0 12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.tc-ol{margin:10px 0 12px 0;padding:0 0 0 20px;list-style:none;display:flex;flex-direction:column;gap:7px}
 .tc-ol li{font-size:13px;color:var(--grey);line-height:1.6;display:flex;align-items:flex-start;gap:10px}
 .tc-num{font-size:11px;font-weight:700;color:rgba(245,245,245,.35);letter-spacing:.04em;flex-shrink:0;padding-top:2px;min-width:28px;font-variant-numeric:tabular-nums}
 .tc-modal-footer{padding:16px 24px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end}
@@ -568,20 +596,20 @@ body.light-mode .reg-progress-dot.done{background:rgba(0,0,0,.45)}
 body.light-mode .reg-progress-dot.current{background:#111}
 body.light-mode .reg-fee-note strong{color:#111}
 
-.event-register-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 0;width:130px;background:transparent;border:2px solid var(--white);border-radius:20px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
-.event-register-btn:hover{background:var(--white);color:var(--black)}
-body.light-mode .event-register-btn{background:transparent;border-color:#111;color:#111}
-body.light-mode .event-register-btn:hover{background:#111;color:#fff;border-color:#111}
+.event-register-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 20px;min-width:0;background:var(--white);border:1.5px solid var(--white);border-radius:980px;color:var(--black);font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all .2s var(--ease)}
+.event-register-btn:hover{background:rgba(245,245,245,.85);transform:scale(.97)}
+body.light-mode .event-register-btn{background:#111;border-color:#111;color:#fff}
+body.light-mode .event-register-btn:hover{background:#333;border-color:#333}
 /* ── EVENT COUNTDOWN ── */
 .event-countdown{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--white)}
 .event-countdown svg{flex-shrink:0;opacity:.8;width:14px;height:14px}
 body.light-mode .event-countdown{color:var(--white)}
 /* ── EVENT ACTION ROW ── */
 .event-action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
-.event-share-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 0;width:130px;background:transparent;border:2px solid var(--white);border-radius:20px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .2s}
-.event-share-btn:hover{background:var(--white);color:var(--black)}
-body.light-mode .event-share-btn{background:transparent;border-color:#111;color:#111}
-body.light-mode .event-share-btn:hover{background:#111;color:#fff;border-color:#111}
+.event-share-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 20px;min-width:0;background:rgba(255,255,255,.07);border:1.5px solid rgba(245,245,245,.22);border-radius:980px;color:var(--white);font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all .2s var(--ease);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.event-share-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(245,245,245,.45);transform:scale(.97)}
+body.light-mode .event-share-btn{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.2);color:#333;backdrop-filter:none}
+body.light-mode .event-share-btn:hover{background:rgba(0,0,0,.1);border-color:rgba(0,0,0,.35)}
 /* ── FILM SORT PILLS ── */
 .film-sort-bar{display:flex;align-items:center;gap:8px;padding:0 40px;margin-bottom:12px;flex-wrap:wrap}
 .film-sort-pill{padding:6px 16px;border-radius:20px;font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--grey);transition:all .2s}
@@ -840,7 +868,7 @@ body.light-mode .hero-logo{content:url('/images/KFS_LOGO_DARK.png')}
 }
 .hero-sub{margin-top:24px;font-size:14px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--grey);opacity:0;animation:fadeUp .8s .6s var(--ease) forwards;position:relative;z-index:1}
-.hero-cta{margin-top:48px;display:flex;gap:16px;opacity:0;animation:fadeUp .8s .8s var(--ease) forwards;position:relative;z-index:1}
+.hero-cta{margin-top:48px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:center;opacity:0;animation:fadeUp .8s .8s var(--ease) forwards;position:relative;z-index:1}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;
   font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
   text-decoration:none;border:1px solid var(--white);cursor:pointer;
@@ -1828,7 +1856,7 @@ body.light-mode .mprofile-blog-thumb-ph{background:#f0f0f0}
   .hero-logo-wrap{margin-bottom:8px}
   .hero-tagline{font-size:clamp(3rem,15vw,4.5rem);line-height:.92;text-align:center;width:100%}
   .hero-sub{font-size:11px;margin-top:12px;text-align:center}
-  .hero-cta{flex-direction:column;align-items:stretch;gap:10px;margin-top:24px;width:100%;max-width:280px}
+  .hero-cta{flex-direction:column;align-items:center;gap:10px;margin-top:24px;width:100%;max-width:280px}
   .hero-cta .btn{width:100%;justify-content:center;padding:13px 20px;font-size:12px}
   .hero-scroll{display:none}
   .hero-reel{display:none}
