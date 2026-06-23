@@ -549,6 +549,9 @@ body.light-mode .reg-tc-label a{color:#111}
 .tc-list{margin:0 0 12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .tc-list li{font-size:13px;color:var(--grey);line-height:1.6;display:flex;align-items:flex-start;gap:8px}
 .tc-list li::before{content:"";display:block;width:4px;height:4px;border-radius:50%;background:rgba(245,245,245,.3);flex-shrink:0;margin-top:7px}
+.tc-ol{margin:10px 0 12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.tc-ol li{font-size:13px;color:var(--grey);line-height:1.6;display:flex;align-items:flex-start;gap:10px}
+.tc-num{font-size:11px;font-weight:700;color:rgba(245,245,245,.35);letter-spacing:.04em;flex-shrink:0;padding-top:2px;min-width:28px;font-variant-numeric:tabular-nums}
 .tc-modal-footer{padding:16px 24px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:flex-end}
 .tc-modal-accept-btn{padding:12px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
 .tc-modal-accept-btn:hover{opacity:.88;transform:scale(.98)}
@@ -2830,9 +2833,9 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
     </h1>
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
-      <a class="btn btn-secondary" data-nav-page="events">Upcoming Events</a>
       <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
-      <a href="/membersaccess" class="btn btn-secondary">Member Portal</a>
+      <a href="/membersaccess" class="btn btn-secondary">Members Portal</a>
+      <a class="btn btn-secondary" data-nav-page="events">Upcoming Events</a>
     </div>
     <div class="hero-scroll">
       <span>Scroll</span>
@@ -5179,6 +5182,7 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Date</label><input type="date" id="event-date"></div>
     <div class="form-group"><label>Time</label><input type="time" id="event-time"></div>
     <div class="form-group"><label>Location</label><textarea id="event-location" rows="3" style="resize:vertical;min-height:70px"></textarea></div>
+    <div class="form-group"><label>Location Link <span style="font-weight:400;color:var(--grey);font-size:12px">(Google Maps URL — shown to attendees after registration)</span></label><input type="url" id="event-location-link" placeholder="https://maps.google.com/..."></div>
     <div class="form-group"><label>Cover Image</label><input type="file" id="event-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
       <label>Status</label>
@@ -5739,43 +5743,43 @@ KFS — KIIT Film Society"></textarea>
       <div class="tc-section tc-section--alert">
         <h4>2. Registration Fees are Voluntary and Non-Refundable</h4>
         <p>All registration fees, participation fees, ticket purchases, passes, and related payments are <strong>final and non-refundable</strong>. Once a payment is successfully processed:</p>
-        <ul style="padding-left:2em">
-          <li>It cannot be cancelled.</li>
-          <li>It cannot be refunded.</li>
-          <li>It cannot be transferred to another individual.</li>
-          <li>It cannot be converted into credits for future events.</li>
-        </ul>
+        <ol class="tc-ol">
+          <li><span class="tc-num">2.1</span> It cannot be cancelled.</li>
+          <li><span class="tc-num">2.2</span> It cannot be refunded.</li>
+          <li><span class="tc-num">2.3</span> It cannot be transferred to another individual.</li>
+          <li><span class="tc-num">2.4</span> It cannot be converted into credits for future events.</li>
+        </ol>
         <p>The participant is responsible for reviewing all event details before completing payment.</p>
       </div>
       <!-- ── Section 3 ── -->
       <div class="tc-section tc-section--alert">
         <h4>3. Strict No-Refund Policy</h4>
         <p>The no-refund policy applies under <strong>all circumstances</strong>, including but not limited to:</p>
-        <ul style="padding-left:2em">
-          <li>Change of mind after registration.</li>
-          <li>Scheduling conflicts or inability to attend.</li>
-          <li>Failure to read event rules or eligibility requirements.</li>
-          <li>Technical issues, internet connectivity problems, or browser-related errors on the participant's device.</li>
-          <li>Incorrect information submitted during registration.</li>
-          <li>Disqualification due to rule violations or misconduct.</li>
-          <li>Event schedule modifications.</li>
-          <li>Failure to receive emails due to spam filters or incorrect email addresses.</li>
-          <li>Rejection of registration for violation of KFS guidelines.</li>
-          <li>Failure to carry required identification documents.</li>
-          <li>Failure to appear at the designated reporting time.</li>
-        </ul>
+        <ol class="tc-ol">
+          <li><span class="tc-num">3.1</span> Change of mind after registration.</li>
+          <li><span class="tc-num">3.2</span> Scheduling conflicts or inability to attend.</li>
+          <li><span class="tc-num">3.3</span> Failure to read event rules or eligibility requirements.</li>
+          <li><span class="tc-num">3.4</span> Technical issues, internet connectivity problems, or browser-related errors on the participant's device.</li>
+          <li><span class="tc-num">3.5</span> Incorrect information submitted during registration.</li>
+          <li><span class="tc-num">3.6</span> Disqualification due to rule violations or misconduct.</li>
+          <li><span class="tc-num">3.7</span> Event schedule modifications.</li>
+          <li><span class="tc-num">3.8</span> Failure to receive emails due to spam filters or incorrect email addresses.</li>
+          <li><span class="tc-num">3.9</span> Rejection of registration for violation of KFS guidelines.</li>
+          <li><span class="tc-num">3.10</span> Failure to carry required identification documents.</li>
+          <li><span class="tc-num">3.11</span> Failure to appear at the designated reporting time.</li>
+        </ol>
       </div>
       <!-- ── Section 4 ── -->
       <div class="tc-section">
         <h4>4. Registration Cancellation by KFS</h4>
         <p>KFS reserves the right to cancel, suspend, or void any registration — even after payment — if the participant:</p>
-        <ul style="padding-left:2em">
-          <li>Provides false, misleading, or fraudulent information.</li>
-          <li>Violates event rules or KIIT University regulations.</li>
-          <li>Engages in harassment, abuse, discrimination, bullying, or misconduct.</li>
-          <li>Threatens event safety, engages in cheating, impersonation, or unauthorized access.</li>
-          <li>Damages property or disrupts event operations.</li>
-        </ul>
+        <ol class="tc-ol">
+          <li><span class="tc-num">4.1</span> Provides false, misleading, or fraudulent information.</li>
+          <li><span class="tc-num">4.2</span> Violates event rules or KIIT University regulations.</li>
+          <li><span class="tc-num">4.3</span> Engages in harassment, abuse, discrimination, bullying, or misconduct.</li>
+          <li><span class="tc-num">4.4</span> Threatens event safety, engages in cheating, impersonation, or unauthorized access.</li>
+          <li><span class="tc-num">4.5</span> Damages property or disrupts event operations.</li>
+        </ol>
         <p>In such cases, registration may be terminated immediately without compensation, refund, or liability. The decision of KFS shall be final and binding.</p>
       </div>
       <!-- ── Section 5 ── -->

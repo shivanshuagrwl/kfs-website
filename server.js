@@ -2754,6 +2754,7 @@ app.post(
       event_date,
       event_time,
       location,
+      location_link,
       is_upcoming,
     } = req.body;
     const coverUrl = await uploadImage(req.file, "events");
@@ -2766,6 +2767,7 @@ app.post(
           event_date,
           event_time,
           location,
+          location_link: location_link || null,
           cover_image: coverUrl,
           is_upcoming: is_upcoming === "true",
         },
@@ -2790,6 +2792,7 @@ app.put(
       event_date,
       event_time,
       location,
+      location_link,
       is_upcoming,
     } = req.body;
     const updates = {
@@ -2798,6 +2801,7 @@ app.put(
       event_date,
       event_time,
       location,
+      location_link: location_link || null,
       is_upcoming: is_upcoming === "true",
     };
     if (req.file) updates.cover_image = await uploadImage(req.file, "events");
@@ -4948,7 +4952,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
       // Fetch event details for the email
       const { data: ev } = await supabasePublic
         .from("events")
-        .select("id,title,event_date,location,is_upcoming")
+        .select("id,title,event_date,location,location_link,is_upcoming")
         .eq("id", req.params.id)
         .maybeSingle();
 
@@ -8343,6 +8347,30 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
   // QR image uses Cloudinary-hosted URL (not a data: URI — blocked by all major email clients).
   // PDF ticket is attached as a file — attendees can save/screenshot it.
 
+  // Build Google Calendar URL
+  let gcUrl = "";
+  if (event.event_date) {
+    const base = event.event_date.replace(/-/g, "");
+    let gcDates = base + "/" + base;
+    if (event.event_time) {
+      const t = event.event_time;
+      const h24 = t.match(/^(\d{1,2}):(\d{2})/);
+      if (h24) {
+        const h = parseInt(h24[1]), m = parseInt(h24[2]);
+        const pad = n => String(n).padStart(2, "0");
+        const eh = Math.min(h + 2, 23);
+        gcDates = `${base}T${pad(h)}${pad(m)}00/${base}T${pad(eh)}${pad(m)}00`;
+      }
+    }
+    const gcTitle = encodeURIComponent(event.title || "KFS Event");
+    const gcLoc = encodeURIComponent(event.location_link || event.location || "");
+    gcUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gcTitle}&dates=${gcDates}&location=${gcLoc}&details=${encodeURIComponent("Registered via KFS — KIIT Film Society")}`;
+  }
+
+  // WhatsApp share URL
+  const waShareText = encodeURIComponent(`I just registered for ${event.title || "an event"} by KFS — KIIT Film Society! See you there: https://kiitfilmsociety.in/events`);
+  const waUrl = `https://wa.me/?text=${waShareText}`;
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8354,96 +8382,97 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px 56px">
 <tr><td align="center">
 
-  <!-- ── Outer card ── -->
+  <!-- ── Outer wrapper ── -->
   <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%">
 
-    <!-- Logo row -->
-    <tr><td align="center" style="padding-bottom:24px">
+    <!-- ── Logo header ── -->
+    <tr><td align="center" style="padding-bottom:28px">
       <table role="presentation" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="background:#fff;border-radius:12px;width:40px;height:40px;text-align:center;vertical-align:middle;font-size:12px;font-weight:900;color:#000;letter-spacing:-.5px;line-height:40px">KFS</td>
+          <td style="vertical-align:middle">
+            <img src="https://kiitfilmsociety.in/images/kfs-logo.png" width="36" height="36" alt="KFS" style="display:block;width:36px;height:36px;border-radius:9px;border:none;outline:none" onerror="this.style.display='none'" />
+          </td>
           <td style="padding-left:10px;vertical-align:middle">
-            <div style="font-size:14px;font-weight:700;color:#f5f5f7;letter-spacing:-.01em">KIIT Film Society</div>
-            <div style="font-size:11px;color:#636366;margin-top:1px">Event Entry Ticket</div>
+            <div style="font-size:15px;font-weight:700;color:#f5f5f7;letter-spacing:-.01em">KIIT Film Society</div>
+            <div style="font-size:11px;color:#636366;margin-top:1px;letter-spacing:.02em">Event Entry Ticket</div>
           </td>
         </tr>
       </table>
     </td></tr>
 
-    <!-- Main ticket card -->
-    <tr><td style="background:#1c1c1e;border-radius:20px;overflow:hidden;border:1px solid #2c2c2e">
+    <!-- ── Main ticket card ── -->
+    <tr><td style="background:#1c1c1e;border-radius:20px;border:1px solid #2c2c2e;overflow:hidden">
 
-      <!-- ── Accent bar ── -->
+      <!-- Top accent bar -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr><td style="background:linear-gradient(90deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);height:6px;font-size:0;line-height:0">&nbsp;</td></tr>
+        <tr><td style="background:linear-gradient(90deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);height:5px;font-size:0;line-height:0">&nbsp;</td></tr>
       </table>
 
-      <!-- ── Event header ── -->
+      <!-- ── Event header block ── -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr><td style="padding:28px 32px 24px">
+        <tr><td style="padding:28px 32px 0 32px">
           <div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">You're in ✓</div>
-          <div style="font-size:28px;font-weight:800;color:#f5f5f7;line-height:1.15;letter-spacing:-.03em">${(event.title || "Event").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
-          ${eventDate ? `<div style="margin-top:12px;font-size:14px;color:#aeaeb2;font-weight:500">${eventDate}</div>` : ""}
-          ${event.location ? `<div style="margin-top:4px;font-size:13px;color:#636366">${event.location.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
-          <!-- CONFIRMED badge -->
-          <div style="margin-top:16px">
+          <div style="font-size:26px;font-weight:800;color:#f5f5f7;line-height:1.2;letter-spacing:-.03em">${(event.title || "Event").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+          ${eventDate ? `<div style="margin-top:10px;font-size:13px;color:#aeaeb2;font-weight:500">${eventDate}</div>` : ""}
+          ${event.location ? `<div style="margin-top:4px;font-size:12px;color:#636366">${event.location.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
+          <div style="margin-top:16px;padding-bottom:24px">
             <span style="display:inline-block;background:rgba(52,199,89,.15);border:1px solid rgba(52,199,89,.35);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700;color:#34c759;letter-spacing:.06em;text-transform:uppercase">● Confirmed</span>
           </div>
         </td></tr>
       </table>
 
-      <!-- ── Perforated tear line ── -->
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <!-- ── Perforated divider (semi-circles on sides prevent overlap with card border) ── -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
         <tr>
-          <td width="20" style="background:#0a0a0a;border-radius:0 20px 20px 0;font-size:0;line-height:0">&nbsp;</td>
-          <td style="border-top:2px dashed #3a3a3c;height:0;font-size:0;line-height:0;padding:0">&nbsp;</td>
-          <td width="20" style="background:#0a0a0a;border-radius:20px 0 0 20px;font-size:0;line-height:0">&nbsp;</td>
+          <td width="18" height="18" style="background:#0a0a0a;border-radius:0 18px 18px 0;font-size:0;line-height:0;padding:0">&nbsp;</td>
+          <td style="height:1px;border-top:2px dashed #3a3a3c;font-size:0;line-height:0;padding:0">&nbsp;</td>
+          <td width="18" height="18" style="background:#0a0a0a;border-radius:18px 0 0 18px;font-size:0;line-height:0;padding:0">&nbsp;</td>
         </tr>
       </table>
 
-      <!-- ── QR + Attendee section ── -->
+      <!-- ── QR + Attendee info (stacked layout avoids divider overlap) ── -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr><td style="padding:28px 32px 32px">
+        <tr><td style="padding:28px 32px 8px 32px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
+            <tr valign="top">
 
-              <!-- QR code — Cloudinary-hosted URL (data: URIs are blocked by Gmail/Outlook/Apple Mail) -->
-              <td align="center" style="width:148px;vertical-align:top">
+              <!-- QR code column -->
+              <td style="width:152px">
                 <table role="presentation" cellpadding="0" cellspacing="0">
-                  <tr><td style="background:#fff;border-radius:14px;padding:10px;display:inline-block">
+                  <tr><td style="background:#ffffff;border-radius:14px;padding:10px;line-height:0">
                     ${qrHostedUrl
-                      ? `<img src="${qrHostedUrl}" width="128" height="128" alt="Entry QR Code" style="display:block;width:128px;height:128px;border:none;outline:none" />`
-                      : `<div style="width:128px;height:128px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:#636366;font-family:Helvetica,Arial,sans-serif;line-height:1.4">QR code in<br>PDF attachment</div>`
+                      ? `<img src="${qrHostedUrl}" width="132" height="132" alt="Entry QR Code" style="display:block;width:132px;height:132px;border:none;outline:none" />`
+                      : `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="width:132px;height:132px;text-align:center;vertical-align:middle;font-size:11px;color:#636366;line-height:1.4;font-family:Helvetica,Arial,sans-serif">QR code in<br>PDF attachment</td></tr></table>`
                     }
                   </td></tr>
                 </table>
-                <div style="margin-top:10px;font-size:10px;font-weight:600;color:#636366;letter-spacing:.08em;text-transform:uppercase;text-align:center">Scan at entry</div>
+                <div style="margin-top:8px;font-size:10px;font-weight:600;color:#636366;letter-spacing:.08em;text-transform:uppercase;text-align:center">Scan at entry</div>
               </td>
 
-              <!-- Divider -->
-              <td width="1" style="border-left:1px dashed #3a3a3c;padding:0 20px;font-size:0;line-height:0">&nbsp;</td>
+              <!-- Vertical dashed divider -->
+              <td width="40" style="padding:0 20px;font-size:0;line-height:0">
+                <div style="width:1px;height:160px;border-left:1px dashed #3a3a3c;margin:0 auto">&nbsp;</div>
+              </td>
 
-              <!-- Attendee details -->
-              <td style="padding-left:24px;vertical-align:middle">
-                <div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px">Attendee</div>
-                <div style="font-size:22px;font-weight:800;color:#f5f5f7;letter-spacing:-.02em;line-height:1.2">${reg.name.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
-                <div style="font-size:12px;color:#636366;margin-top:6px;word-break:break-all">${reg.email.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+              <!-- Attendee details column -->
+              <td style="vertical-align:middle">
+                <div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px">Attendee</div>
+                <div style="font-size:20px;font-weight:800;color:#f5f5f7;letter-spacing:-.02em;line-height:1.2">${reg.name.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+                <div style="font-size:12px;color:#636366;margin-top:5px;word-break:break-all">${reg.email.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
 
                 ${reg.roll_no ? `
-                <!-- Roll No pill -->
-                <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px">
-                  <tr><td style="background:#2c2c2e;border-radius:9px;padding:8px 14px">
-                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Roll No</div>
-                    <div style="font-size:14px;font-weight:700;color:#f5f5f7;letter-spacing:.04em">${reg.roll_no.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px">
+                  <tr><td style="background:#2c2c2e;border-radius:8px;padding:7px 12px">
+                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px">Roll No</div>
+                    <div style="font-size:13px;font-weight:700;color:#f5f5f7;letter-spacing:.04em">${reg.roll_no.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
                   </td></tr>
                 </table>` : ""}
 
                 ${eventDateShort ? `
-                <!-- Date pill -->
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px">
-                  <tr><td style="background:#2c2c2e;border-radius:9px;padding:8px 14px">
-                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Date</div>
-                    <div style="font-size:14px;font-weight:700;color:#f5f5f7">${eventDateShort}</div>
+                  <tr><td style="background:#2c2c2e;border-radius:8px;padding:7px 12px">
+                    <div style="font-size:9px;font-weight:700;color:#636366;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px">Date</div>
+                    <div style="font-size:13px;font-weight:700;color:#f5f5f7">${eventDateShort}</div>
                   </td></tr>
                 </table>` : ""}
               </td>
@@ -8453,13 +8482,40 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
         </td></tr>
       </table>
 
+      <!-- ── Action buttons row (Calendar, Location, WhatsApp) ── -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:20px 32px 28px 32px">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              ${gcUrl ? `
+              <td style="padding-right:8px">
+                <a href="${gcUrl}" style="display:inline-block;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#aeaeb2;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
+                  📅 Add to Calendar
+                </a>
+              </td>` : ""}
+              ${event.location_link ? `
+              <td style="padding-right:8px">
+                <a href="${event.location_link.replace(/"/g,"&quot;")}" style="display:inline-block;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#aeaeb2;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
+                  📍 View Location
+                </a>
+              </td>` : ""}
+              <td>
+                <a href="${waUrl}" style="display:inline-block;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.28);border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#25d366;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
+                  💬 Share on WhatsApp
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+
       <!-- ── Footer strip ── -->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr><td style="background:#111;border-top:1px solid #2c2c2e;padding:18px 32px">
+        <tr><td style="background:#141414;border-top:1px solid #2c2c2e;padding:16px 32px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="font-size:13px;font-weight:600;color:#f5f5f7">See you there!</td>
-              <td align="right" style="font-size:11px;color:#48484a">
+              <td align="right" style="font-size:11px">
                 <a href="mailto:filmsocietykiit@gmail.com" style="color:#636366;text-decoration:none">filmsocietykiit@gmail.com</a>
               </td>
             </tr>
@@ -8472,21 +8528,19 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 
     <!-- Fine print -->
     <tr><td align="center" style="padding-top:20px">
-      <div style="font-size:11px;color:#3a3a3c;text-align:center;line-height:1.6">
-        This ticket is personal and non-transferable.<br>
-        Do not share your QR code with others.
-      </div>
+      <p style="font-size:11px;color:#3a3a3c;text-align:center;line-height:1.6;margin:0">
+        This ticket is personal and non-transferable. Do not share your QR code.
+      </p>
     </td></tr>
 
   </table>
-  <!-- End outer card -->
 
 </td></tr>
 </table>
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR ticket is attached to this email as a PDF.\nOpen the PDF attachment and show the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}${event.location_link ? "Location: " + event.location_link + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR ticket is attached to this email as a PDF.\nOpen the PDF attachment and show the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
   // ── Generate PDF ticket attachment ─────────────────────────────────────────
   let pdfAttachment = null;
@@ -8566,7 +8620,7 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
   // 1. Check event exists
   const { data: event, error: evErr } = await supabasePublic
     .from("events")
-    .select("id,title,event_date,location,is_upcoming")
+    .select("id,title,event_date,location,location_link,is_upcoming")
     .eq("id", eventId)
     .maybeSingle();
   if (evErr || !event) return res.status(404).json({ error: "Event not found" });
