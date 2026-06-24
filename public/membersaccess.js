@@ -410,6 +410,7 @@ function on(id, evt, fn) {
 function showLoginScreen() {
   $id('auth-screen').style.display = 'flex';
   $id('app-screen').style.display  = 'none';
+  document.body.classList.add('auth-active'); // hides the bottom pill nav while signed out
   showStep('login');
   const u = $id('login-username'); if (u) u.value = '';
   const p = $id('login-password'); if (p) p.value = '';
@@ -508,6 +509,7 @@ async function submitGoogleCredential(credential, totpCode) {
 async function loadDashboard() {
   $id('auth-screen').style.display = 'none';
   $id('app-screen').style.display  = 'flex';
+  document.body.classList.remove('auth-active'); // safe to show the bottom pill nav now
   loadPortalMembers(); // preload for pickers (non-blocking)
   await loadProfile();
   loadMovies();
@@ -1097,6 +1099,38 @@ function switchPanel(el) {
   if (panel === 'collab')   loadMyCollabs();
   if (panel === 'grievance') loadMyGrievances();
   if (panel === 'network') loadNetworkPanel();
+}
+
+// ── Mini Settings Sheet (mobile bottom nav → Settings) ────────────────────────
+
+function openSettingsSheet() {
+  $id('settings-sheet-backdrop')?.classList.add('open');
+  $id('settings-sheet')?.classList.add('open');
+  document.querySelectorAll('.btb-item').forEach(i => i.classList.remove('active'));
+  $id('btb-settings')?.classList.add('active');
+}
+
+function closeSettingsSheet() {
+  $id('settings-sheet-backdrop')?.classList.remove('open');
+  $id('settings-sheet')?.classList.remove('open');
+}
+
+// panel: 'profile' | 'analytics' | 'movies' | 'works' | 'security' | 'activity'
+function settingsSheetGo(panel) {
+  closeSettingsSheet();
+  if (panel === 'analytics') {
+    // Analytics lives inside the Strand/Studio panel as a tab
+    const studioNav = document.querySelector('[data-panel="studio"]');
+    if (studioNav) switchPanel(studioNav);
+    swSwitchTab('analytics');
+  } else {
+    const navEl = document.querySelector(`[data-panel="${panel}"]`);
+    if (navEl) switchPanel(navEl);
+  }
+  // Settings has no single matching bottom-bar icon — keep it highlighted
+  // since the user is still "inside" the settings flow they tapped into.
+  document.querySelectorAll('.btb-item').forEach(i => i.classList.remove('active'));
+  $id('btb-settings')?.classList.add('active');
 }
 
 // ── Bottom Tab Bar sync ───────────────────────────────────────────────────────
@@ -1696,9 +1730,43 @@ function _notifIcon(type) {
     profile_change:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
     event:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
     announcement:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
+    follow:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-6.5 7-6.5s7 2.5 7 6.5"/><line x1="18" y1="6" x2="18" y2="12"/><line x1="15" y1="9" x2="21" y2="9"/></svg>`,
+    network:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-6.5 7-6.5s7 2.5 7 6.5"/><line x1="18" y1="6" x2="18" y2="12"/><line x1="15" y1="9" x2="21" y2="9"/></svg>`,
+    new_post:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><circle cx="6.5" cy="6" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+    studio:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/></svg>`,
     default:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
   };
   return icons[type] || icons.default;
+}
+
+// Tiny badge icon overlaid on the bottom-right of an actor's avatar —
+// gives the same at-a-glance "what happened" signal Instagram uses.
+function _notifBadgeIcon(type) {
+  const badges = {
+    follow:   { cls: 'follow',   svg: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7z"/></svg>` },
+    network:  { cls: 'follow',   svg: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7z"/></svg>` },
+    new_post: { cls: 'post',     svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg>` },
+  };
+  return badges[type] || null;
+}
+
+// Cache the most recently loaded notifications keyed by id so click
+// handlers can navigate without fighting HTML-attribute escaping.
+let _notifCache = new Map();
+
+function onNotifClick(id) {
+  const n = _notifCache.get(id);
+  markNotifRead(id, document.querySelector(`.notif-item[data-notif-id="${id}"]`));
+  if (!n) return;
+  if (n.link_type === 'profile' && n.link_id) {
+    closeNotifPanel();
+    openMemberProfile(n.link_id);
+  } else if (n.link_type === 'post' && n.link_id) {
+    closeNotifPanel();
+    const studioNav = document.querySelector('[data-panel="studio"]');
+    if (studioNav) switchPanel(studioNav);
+    swOpenDetail(n.link_id);
+  }
 }
 
 async function loadNotifications() {
@@ -1708,6 +1776,7 @@ async function loadNotifications() {
   if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-title" style="color:#333">Loading…</div></div>';
   try {
     const items = await api('GET', '/api/member/notifications');
+    _notifCache = new Map(items.map(n => [n.id, n]));
     const unread = items.filter(n => !n.is_read);
     const badge = $id('notif-badge');
     if (badge) {
@@ -1724,16 +1793,25 @@ async function loadNotifications() {
         </div>`;
       return;
     }
-    list.innerHTML = items.map(n => `
-      <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="markNotifRead('${n.id}', this)">
-        <div class="notif-icon-bubble">${_notifIcon(n.type)}</div>
+    list.innerHTML = items.map(n => {
+      const badge = _notifBadgeIcon(n.type);
+      const avatarHtml = n.actor_photo || n.actor_name
+        ? `<div class="notif-avatar-wrap">
+             ${swAvatar(n.actor_name, n.actor_photo, 38)}
+             ${badge ? `<span class="notif-type-badge notif-type-badge--${badge.cls}">${badge.svg}</span>` : ''}
+           </div>`
+        : `<div class="notif-icon-bubble">${_notifIcon(n.type)}</div>`;
+      return `
+      <div class="notif-item ${n.is_read ? '' : 'unread'}" data-notif-id="${n.id}" onclick="onNotifClick('${n.id}')">
+        ${avatarHtml}
         <div class="notif-item-content">
-          <div class="notif-item-title">${n.title}</div>
-          ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+          <div class="notif-item-title">${swEsc(n.title)}</div>
+          ${n.body ? `<div class="notif-item-body">${swEsc(n.body)}</div>` : ''}
           <div class="notif-item-time">${relTime(n.created_at)}</div>
         </div>
         <div class="notif-unread-pip ${n.is_read ? 'read' : ''}"></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch(e) {
     if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-sub">Could not load notifications</div></div>';
   } finally { _notifLoading = false; }
@@ -1789,6 +1867,7 @@ async function markAllNotifsRead() {
 // Close panel on Escape
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && _notifOpen) closeNotifPanel();
+  if (e.key === 'Escape' && $id('settings-sheet')?.classList.contains('open')) closeSettingsSheet();
   if (e.key === 'Escape' && _editingCollabToken) closeCollabEditModal();
 });
 

@@ -10845,9 +10845,22 @@ app.get("/api/admin/members/:id/activity", requireSection("members"), async (req
 // SECTION MA-23 — Member Notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function createMemberNotification(memberId, type, title, body) {
+// `extra` may carry actor info (who triggered this notification) and a
+// deep-link target so the client can render an avatar + navigate on tap:
+//   { actorId, actorName, actorPhoto, linkType: 'profile'|'post', linkId }
+async function createMemberNotification(memberId, type, title, body, extra = {}) {
   try {
-    await supabase.from("member_notifications").insert([{ member_id: memberId, type, title, body: body || null }]);
+    await supabase.from("member_notifications").insert([{
+      member_id:   memberId,
+      type,
+      title,
+      body:        body || null,
+      actor_id:    extra.actorId    || null,
+      actor_name:  extra.actorName  || null,
+      actor_photo: extra.actorPhoto || null,
+      link_type:   extra.linkType   || null,
+      link_id:     extra.linkId     || null,
+    }]);
   } catch (e) {
     console.error("[createMemberNotification] failed:", e.message);
   }
@@ -10857,7 +10870,7 @@ async function createMemberNotification(memberId, type, title, body) {
 app.get("/api/member/notifications", memberAuthMiddleware, async (req, res) => {
   const { data } = await supabase
     .from("member_notifications")
-    .select("id, type, title, body, is_read, created_at")
+    .select("id, type, title, body, is_read, created_at, actor_id, actor_name, actor_photo, link_type, link_id")
     .eq("member_id", req.member.memberId)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -11019,6 +11032,11 @@ async function initMemberDB() {
         "    type        TEXT NOT NULL,\n" +
         "    title       TEXT NOT NULL,\n" +
         "    body        TEXT,\n" +
+        "    actor_id    UUID REFERENCES members(id) ON DELETE SET NULL,\n" +
+        "    actor_name  TEXT,\n" +
+        "    actor_photo TEXT,\n" +
+        "    link_type   TEXT,\n" +
+        "    link_id     TEXT,\n" +
         "    is_read     BOOLEAN NOT NULL DEFAULT FALSE,\n" +
         "    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()\n" +
         "  );\n" +
@@ -11027,6 +11045,25 @@ async function initMemberDB() {
       );
     } else {
       console.log("[initMemberDB] member_notifications table OK");
+      // Check for the actor/link columns (added for the follow + new-post
+      // notification types so the client can render an avatar + deep-link).
+      const { error: notifColErr } = await supabase
+        .from("member_notifications")
+        .select("actor_id, actor_name, actor_photo, link_type, link_id")
+        .limit(1);
+      if (notifColErr) {
+        console.warn(
+          "[initMemberDB] member_notifications is missing actor/link columns. Run this SQL:\n\n" +
+          "  ALTER TABLE member_notifications\n" +
+          "    ADD COLUMN IF NOT EXISTS actor_id    UUID REFERENCES members(id) ON DELETE SET NULL,\n" +
+          "    ADD COLUMN IF NOT EXISTS actor_name  TEXT,\n" +
+          "    ADD COLUMN IF NOT EXISTS actor_photo TEXT,\n" +
+          "    ADD COLUMN IF NOT EXISTS link_type   TEXT,\n" +
+          "    ADD COLUMN IF NOT EXISTS link_id     TEXT;"
+        );
+      } else {
+        console.log("[initMemberDB] member_notifications actor/link columns OK");
+      }
     }
 
     // Check member_grievances table
@@ -11658,6 +11695,25 @@ app.post(
             ).catch(() => {});
           }
         }
+      }
+    }
+
+    // Notify followers that this member just posted to the Strand feed.
+    const { data: followerRows } = await supabase
+      .from("member_follows")
+      .select("follower_id")
+      .eq("following_id", req.member.memberId)
+      .limit(500);
+    if (followerRows?.length) {
+      const poster = await getActiveMember(req.member.memberId, "id, name, photo");
+      const posterName = poster?.name || req.member.username || "Someone you follow";
+      for (const { follower_id } of followerRows) {
+        createMemberNotification(
+          follower_id, "new_post",
+          "New post on Strand 🎬",
+          `${posterName} just posted "${title.trim()}"`,
+          { actorId: req.member.memberId, actorName: posterName, actorPhoto: poster?.photo, linkType: "post", linkId: project.id }
+        ).catch(() => {});
       }
     }
 
@@ -12357,10 +12413,12 @@ app.post("/api/member/network/follow/:memberId", memberAuthMiddleware, networkWr
     }
     following = true;
     if (!error) {
+      const actor = await getActiveMember(viewerId, "id, name, photo");
       createMemberNotification(
-        targetId, "network",
+        targetId, "follow",
         "New follower",
-        `${req.member.username || "A member"} started following you`
+        `${actor?.name || req.member.username || "A member"} started following you`,
+        { actorId: viewerId, actorName: actor?.name || req.member.username, actorPhoto: actor?.photo, linkType: "profile", linkId: viewerId }
       ).catch(() => {});
     }
   }
