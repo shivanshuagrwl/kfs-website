@@ -177,8 +177,6 @@
         .btb-dot.show { display: block; }
         /* Push main content up so the floating pill doesn't overlap */
         .main { padding-bottom: 100px !important; }
-        /* Hide the old horizontal scroll mobile nav — replaced by bottom bar */
-        .mobile-nav { display: none !important; }
         /* Hide old mobile topbar – replaced by top sticky bar */
         .mobile-topbar { display: none !important; }
       }
@@ -1425,18 +1423,6 @@
         .layout {
           flex-direction: column;
         }
-        .mobile-nav {
-          display: flex;
-          overflow-x: auto;
-          gap: 4px;
-          padding: 12px 16px;
-          border-bottom: 1px solid var(--border);
-          background: var(--surface);
-        }
-        .mobile-nav .nav-item {
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
       }
 
       /* ── Back to Site button ─────────────────────────────────────────────────── */
@@ -2368,142 +2354,6 @@
           Sign out
         </button>
       </div>
-      <!-- Mobile nav -->
-      <div class="mobile-nav" id="mobile-nav">
-        <div class="nav-item active" data-panel="profile">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg
-          ></span>
-          Profile
-        </div>
-        <div class="nav-item" data-panel="movies">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect x="2" y="2" width="20" height="20" rx="2.18" />
-              <line x1="7" y1="2" x2="7" y2="22" />
-              <line x1="17" y1="2" x2="17" y2="22" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <line x1="2" y1="7" x2="7" y2="7" />
-              <line x1="2" y1="17" x2="7" y2="17" />
-              <line x1="17" y1="17" x2="22" y2="17" />
-              <line x1="17" y1="7" x2="22" y2="7" /></svg
-          ></span>
-          My Movies
-        </div>
-        <div class="nav-item" data-panel="works">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polygon points="23 7 16 12 23 17 23 7" />
-              <rect x="1" y="5" width="15" height="14" rx="2" /></svg
-          ></span>
-          My Works
-        </div>
-        <div class="nav-item" data-panel="security">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-          ></span>
-          Security
-        </div>
-        <div class="nav-item" data-panel="activity">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
-          ></span>
-          Activity
-        </div>
-        <div class="nav-item" data-panel="collab">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
-          ></span>
-          Collab
-        </div>
-        <div class="nav-item" data-panel="grievance">
-          <span class="nav-icon"
-            ><svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg
-          ></span>
-          Feedback
-        </div>
-        <div class="nav-item" data-panel="studio">
-          <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>
-          Studio
-        </div>
-        <div class="nav-item" data-panel="network">
-          <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v6m0 0L6.8 17M12 13.5l5.2 3.5"/></svg></span>
-          Network
-        </div>
-      </div>
 
       <div class="layout">
         <!-- Sidebar -->
@@ -2519,10 +2369,13 @@
               <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v6m0 0L6.8 17M12 13.5l5.2 3.5"/></svg></span>
               Network
             </div>
+            <div class="nav-item" data-panel="collab">
+              <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              Collab
+            </div>
             <div class="nav-item" data-panel="activity">
               <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
               Activity
-              <span class="notif-badge-inline" id="sidebar-notif-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-left:auto;flex-shrink:0;"></span>
             </div>
 
             <!-- Settings section — collapsible -->
@@ -2544,10 +2397,6 @@
               <div class="nav-item nav-item--sub" data-panel="works">
                 <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
                 My Works
-              </div>
-              <div class="nav-item nav-item--sub" data-panel="collab">
-                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-                Collab
               </div>
               <div class="nav-item nav-item--sub" data-panel="grievance">
                 <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
@@ -3498,10 +3347,6 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                 My Posts
               </button>
-              <button class="strand-tab studio-tab" data-studio-tab="analytics">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Analytics
-              </button>
             </div>
 
             <!-- Feed tab — Instagram-style full-width -->
@@ -3528,14 +3373,6 @@
               <div id="studio-my-posts-list"></div>
             </div>
 
-            <!-- Analytics tab — views + reactions only, no viewer identity -->
-            <div class="studio-tab-panel" id="studio-tab-analytics">
-              <div class="studio-analytics-header">
-                <div class="studio-analytics-title">Performance</div>
-                <div class="studio-analytics-sub">Views and reactions across your published work.</div>
-              </div>
-              <div id="studio-analytics-list"></div>
-            </div>
           </div><!-- /#panel-studio -->
 
           <!-- ── NETWORK PANEL ─────────────────────────────────────────── -->
@@ -3730,7 +3567,7 @@
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    KFS Studio Wall — styles
-   Analytics: views + reactions only. No emojis. Premium SVG icons.
+   No emojis. Premium SVG icons.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .studio-tabs { display:flex; gap:4px; margin-bottom:24px; border-bottom:1px solid var(--border); }
@@ -3883,35 +3720,6 @@
 .sw-action-btn:hover { background:#222; color:var(--text); border-color:#333; }
 .sw-action-btn-danger:hover { background:#2a1414; color:#e07070; border-color:#3a2020; }
 
-/* Analytics */
-.studio-analytics-header { margin-bottom:22px; }
-.studio-analytics-title { font-size:15px; font-weight:600; color:var(--text); letter-spacing:-.02em; }
-.studio-analytics-sub { font-size:12px; color:var(--muted); margin-top:3px; }
-.sw-analytics-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:28px; }
-.sw-analytics-kpi { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 14px 14px; display:flex; flex-direction:column; gap:10px; }
-.sw-analytics-kpi-icon { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.sw-analytics-kpi-icon--views { background:#0d1f2d; color:#4ba3d4; }
-.sw-analytics-kpi-icon--reactions { background:#2a1520; color:#d4607a; }
-.sw-analytics-kpi-icon--posts { background:#18201a; color:#5daf7a; }
-.sw-analytics-kpi-val { font-size:22px; font-weight:700; color:var(--text); letter-spacing:-.04em; line-height:1.1; }
-.sw-analytics-kpi-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-weight:500; margin-top:3px; }
-.sw-analytics-section-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px; }
-.sw-analytics-rows { display:flex; flex-direction:column; gap:0; }
-.sw-analytics-row { padding:14px 0; border-bottom:1px solid var(--border); }
-.sw-analytics-row:last-child { border-bottom:none; }
-.sw-analytics-row-head { margin-bottom:10px; }
-.sw-analytics-row-title { font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sw-analytics-metric-row { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
-.sw-analytics-metric-row:last-child { margin-bottom:0; }
-.sw-analytics-metric-label { display:flex; align-items:center; gap:5px; min-width:72px; flex-shrink:0; }
-.sw-analytics-metric-icon { color:var(--muted); opacity:.6; display:flex; align-items:center; }
-.sw-analytics-metric-num { font-size:12px; font-weight:600; color:var(--text); min-width:28px; text-align:right; }
-.sw-analytics-metric-name { font-size:11px; color:var(--muted); }
-.sw-analytics-bar-track { flex:1; height:3px; background:#1e1e1e; border-radius:2px; overflow:hidden; }
-.sw-analytics-bar-fill { height:100%; border-radius:2px; transition:width .4s cubic-bezier(.4,0,.2,1); min-width:2px; }
-.sw-analytics-bar-fill--views { background:#4ba3d4; }
-.sw-analytics-bar-fill--reactions { background:#d4607a; }
-
 /* Modals */
 .studio-modal { background:#111; border:1px solid var(--border); border-radius:18px; padding:28px; width:100%; max-width:560px; position:relative; }
 .studio-modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
@@ -3970,11 +3778,6 @@
 .sw-collab-option:hover { background:#1e1e1e; }
 
 @media (max-width:520px) {
-  .sw-analytics-kpis { grid-template-columns:repeat(3,1fr); gap:8px; }
-  .sw-analytics-kpi { padding:12px 10px 10px; }
-  .sw-analytics-kpi-val { font-size:18px; }
-  .sw-analytics-kpi-icon { width:28px; height:28px; border-radius:7px; }
-  .sw-analytics-kpi-label { font-size:9px; }
   .studio-detail-content { padding:18px 18px 24px; }
   .studio-feed-grid { grid-template-columns:1fr; }
 }
@@ -4239,13 +4042,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </div>
       </div>
-      <!-- Notifications / Activity -->
-      <div class="btb-item" data-panel="activity" onclick="btbSwitch(this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span class="btb-dot" id="btb-notif-dot"></span>
-        <span class="btb-label">Activity</span>
+      <!-- Collab -->
+      <div class="btb-item" data-panel="collab" onclick="btbSwitch(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="btb-label">Collab</span>
       </div>
-      <!-- Settings (opens mini settings sheet: Profile, Analytics, My Movies, My Works, Security, Activity) -->
+      <!-- Settings (opens mini settings sheet: Profile, My Movies, My Works, Security, Activity) -->
       <div class="btb-item" id="btb-settings" onclick="openSettingsSheet()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.63.74 1.11 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span class="btb-label">Settings</span>
@@ -4263,11 +4065,6 @@
           <span class="settings-sheet-label">Profile</span>
           <svg class="settings-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
-        <div class="settings-sheet-item" onclick="settingsSheetGo('analytics')">
-          <span class="settings-sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-          <span class="settings-sheet-label">Analytics</span>
-          <svg class="settings-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
         <div class="settings-sheet-item" onclick="settingsSheetGo('movies')">
           <span class="settings-sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 2l-4 5-4-5"/></svg></span>
           <span class="settings-sheet-label">My Movies</span>
@@ -4281,11 +4078,6 @@
         <div class="settings-sheet-item" onclick="settingsSheetGo('security')">
           <span class="settings-sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg></span>
           <span class="settings-sheet-label">Security</span>
-          <svg class="settings-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
-        <div class="settings-sheet-item" onclick="settingsSheetGo('activity')">
-          <span class="settings-sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-          <span class="settings-sheet-label">Activity</span>
           <svg class="settings-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
@@ -4509,16 +4301,10 @@
       position: relative;
       flex-shrink: 0;
     }
-    .ig-post-avatar-ring {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-      display: flex; align-items: center; justify-content: center;
-      padding: 2px;
-    }
     .ig-post-avatar-inner {
-      width: 100%; height: 100%; border-radius: 50%;
-      background: var(--bg); display: flex; align-items: center; justify-content: center;
-      padding: 2px; overflow: hidden;
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #1e1e1e; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; flex-shrink: 0;
     }
     .ig-post-author-block { flex: 1; min-width: 0; }
     .ig-post-author-name {
@@ -4582,58 +4368,42 @@
       100% { transform: scale(1) rotate(0deg); }
     }
 
-    .ig-post-bookmark { margin-left: auto; }
-
-    /* ── Reaction Popup (desktop hover / mobile long-press) ─────────────── */
-    .rxn-popup {
+    /* ── Reaction Wheel (desktop hover / mobile long-press) ──────────────── */
+    #rxn-overlay {
       position: absolute;
-      bottom: calc(100% + 8px);
-      left: 50%;
-      transform: translateX(-50%) scale(0.88);
-      transform-origin: bottom left;
-      background: rgba(18,18,18,0.95);
-      backdrop-filter: blur(20px) saturate(160%);
-      -webkit-backdrop-filter: blur(20px) saturate(160%);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 100px;
-      padding: 7px 10px;
-      display: flex;
-      gap: 4px;
-      align-items: center;
-      z-index: 300;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset;
+      z-index: 500;
+      display: none;
       opacity: 0;
       pointer-events: none;
-      transition: opacity .18s, transform .2s cubic-bezier(.34,1.56,.64,1);
-      white-space: nowrap;
+      transform: scale(0.7);
+      transform-origin: center center;
+      transition: opacity .16s ease, transform .22s cubic-bezier(.34,1.56,.64,1);
     }
-    .rxn-popup.visible {
+    #rxn-overlay.visible {
       opacity: 1;
-      transform: translateX(-50%) scale(1);
       pointer-events: auto;
+      transform: scale(1);
     }
-    .rxn-btn {
-      width: 44px; height: 44px;
-      border-radius: 50%; border: none; background: transparent;
+    .rxn-wheel {
+      display: block;
+      filter: drop-shadow(0 10px 30px rgba(0,0,0,.55));
+    }
+    .rxn-wedge {
+      fill: rgba(255,255,255,0.05);
+      stroke: rgba(0,0,0,.55);
+      stroke-width: 1.5;
       cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column;
-      gap: 2px;
-      transition: transform .15s cubic-bezier(.34,1.56,.64,1), background .1s;
-      position: relative;
+      transition: fill .12s;
     }
-    .rxn-btn:hover { transform: scale(1.32) translateY(-4px); background: rgba(255,255,255,0.07); }
-    .rxn-btn svg { pointer-events: none; }
-    .rxn-btn .rxn-label {
-      font-size: 9px; font-weight: 600; color: var(--muted);
-      opacity: 0; position: absolute; bottom: -16px;
-      white-space: nowrap; letter-spacing: .02em;
-      transition: opacity .1s;
-      pointer-events: none;
-    }
-    .rxn-btn:hover .rxn-label { opacity: 1; }
-    .rxn-btn.active { background: rgba(75,163,212,0.12); }
-    .rxn-btn.active svg { stroke: #4ba3d4; }
+    .rxn-wedge:hover,
+    .rxn-wedge.active { fill: rgba(75,163,212,0.30); }
+    .rxn-wedge.is-current { stroke: #4ba3d4; stroke-width: 2; }
+    .rxn-wedge-icon { color: #999; pointer-events: none; transition: color .12s, transform .12s; transform-origin: center; }
+    .rxn-wedge:hover + .rxn-wedge-icon,
+    .rxn-wedge.active + .rxn-wedge-icon { color: #fff; transform: scale(1.15); }
+    .rxn-wedge.is-current + .rxn-wedge-icon { color: #4ba3d4; }
+    .rxn-hub { fill: rgba(10,10,10,.92); stroke: rgba(255,255,255,.14); stroke-width: 1; }
+    .rxn-hub-label { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; letter-spacing: .02em; pointer-events: none; }
 
     /* Likes count */
     .ig-post-likes {
@@ -4675,7 +4445,6 @@
     /* Tab panels inside strand get no padding — grid handles spacing */
     .strand-panel .studio-tab-panel { padding: 0; }
     .strand-panel #studio-tab-my-posts { padding: 0 24px; }
-    .strand-panel #studio-tab-analytics { padding: 0 24px; }
     .strand-panel #studio-tab-my-posts > div:first-child { padding: 16px 0 20px; }
 
     /* Load more button */
@@ -4814,6 +4583,7 @@
     .composer-input::placeholder { color: #444; }
     .composer-input-title { font-size: 15px; font-weight: 600; }
     </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="/membersaccess.js" defer></script>
   </body>
 </html>
