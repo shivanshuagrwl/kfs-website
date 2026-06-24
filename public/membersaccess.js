@@ -2391,9 +2391,7 @@ function swFeedCard(p) {
     <!-- Header -->
     <div class="ig-post-header">
       <div class="ig-post-avatar-wrap">
-        <div class="ig-post-avatar-ring">
-          <div class="ig-post-avatar-inner">${avatarInner}</div>
-        </div>
+        <div class="ig-post-avatar-inner">${avatarInner}</div>
       </div>
       <div class="ig-post-author-block">
         <div class="ig-post-author-name" onclick="openMemberProfile('${swEsc(p.member_id)}')">${swEsc(author.name||'Member')}</div>
@@ -2419,13 +2417,6 @@ function swFeedCard(p) {
       </button>
       <button class="ig-action-btn" onclick="swOpenDetail('${swEsc(p.id)}')" title="Comment">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </button>
-      <button class="ig-action-btn" title="Views" style="cursor:default;gap:5px;font-size:12px;color:var(--muted)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        ${swFmtNum(p.views_count)}
-      </button>
-      <button class="ig-action-btn ig-post-bookmark" title="Open post" onclick="swOpenDetail('${swEsc(p.id)}')">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 21 12 16 5 21 5 3 19 3"/></svg>
       </button>
     </div>
 

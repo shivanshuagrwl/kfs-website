@@ -13175,13 +13175,6 @@ function pswFeedCard(p) {
       <button class="psw-ig-btn" onclick="pswOpenDetail('${pswEsc(p.id)}')" title="Comment">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </button>
-      <div class="psw-ig-views">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        ${pswFmt(p.views_count)}
-      </div>
-      <button class="psw-ig-btn psw-ig-btn-right" onclick="pswOpenDetail('${pswEsc(p.id)}')" title="Open post">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 21 12 16 5 21 5 3 19 3"/></svg>
-      </button>
     </div>
 
     ${likesHtml}
