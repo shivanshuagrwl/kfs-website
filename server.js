@@ -5384,6 +5384,50 @@ app.get("/og/blog/:id", async (req, res) => {
   }
 });
 
+// ── /og/studio/:id — share image for a public Studio Wall post ──────────────
+app.get("/og/studio/:id", async (req, res) => {
+  try {
+    const { data: p } = await supabasePublic
+      .from("member_projects")
+      .select("id, title, description, cover_image, domain, member_id, members!member_projects_member_id_fkey(name)")
+      .eq("id", req.params.id)
+      .is("deleted_at", null)
+      .eq("status", "published")
+      .maybeSingle();
+    if (!p) return res.status(404).send("Not found");
+
+    if (p.cover_image) {
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.redirect(302, p.cover_image);
+    }
+
+    const desc = p.description
+      ? p.description.slice(0, 90) + (p.description.length > 90 ? "…" : "")
+      : null;
+
+    const svg = buildOGSvg({
+      coverDataUri: null,
+      badge: "KFS STUDIO",
+      title: p.title || "Studio Wall",
+      lines: [
+        { text: desc || null, color: "#777777", size: 20 },
+        {
+          text: p.members?.name ? "By " + p.members.name : null,
+          color: "#555555",
+          size: 17,
+        },
+      ],
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.end(svgToPng(svg));
+  } catch (err) {
+    console.error("[og/studio]", err.message);
+    res.status(500).send("OG generation failed");
+  }
+});
+
 // ── SHARE-LINK HTML WITH DYNAMIC OG TAGS ─────────────────────────────────────
 // Injects og:title / og:description / og:image into the SPA shell so
 // social crawlers (WhatsApp, Twitter, Telegram…) get real previews AND
@@ -5620,6 +5664,72 @@ app.get("/films/:slug", async (req, res) => {
     });
   } catch (err) {
     console.error("[share/film]", err.message);
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+  }
+});
+
+// ── /studio/:slug  (e.g. /studio/my-short-film-7f3a) ─────────────────────────
+app.get("/studio/:slug", async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    const projectResult = id
+      ? await supabasePublic
+          .from("member_projects")
+          .select(
+            "id, title, description, cover_image, domain, tags, created_at, member_id, members!member_projects_member_id_fkey(name)",
+          )
+          .eq("id", id)
+          .is("deleted_at", null)
+          .eq("status", "published")
+          .maybeSingle()
+      : { data: null };
+    const p = projectResult?.data ?? null;
+
+    if (!p) {
+      // Unknown/unpublished post — serve the SPA so it can show its own 404/empty state
+      return res.sendFile(path.join(__dirname, "public", "index.html"));
+    }
+
+    const canonicalSlug = slugify(p.title) + "-" + p.id;
+    const pageUrl = `https://kiitfilmsociety.in/studio/${canonicalSlug}`;
+    const authorName = p.members?.name || "a KFS member";
+    const desc = p.description
+      ? p.description.slice(0, 160)
+      : `${p.title} — work by ${authorName} on the KFS Studio Wall.`;
+    const imageUrl = p.cover_image
+      ? `https://kiitfilmsociety.in/og/studio/${p.id}`
+      : null;
+
+    return serveWithOg(res, {
+      title: p.title ? `${p.title} — KFS Studio Wall` : "KFS Studio Wall",
+      description: desc,
+      imageUrl,
+      url: pageUrl,
+      type: "article",
+      author: authorName,
+      publishedTime: p.created_at || null,
+      jsonLd: {
+        "@context": "https://schema.org",
+        "@type": "CreativeWork",
+        name: p.title,
+        description: desc,
+        url: pageUrl,
+        image: imageUrl || "https://kiitfilmsociety.in/images/og-banner.png",
+        creator: { "@type": "Person", name: authorName },
+        dateCreated: p.created_at || undefined,
+        keywords: (p.tags || []).join(", ") || undefined,
+        publisher: {
+          "@type": "Organization",
+          name: "KFS — KIIT Film Society",
+          logo: {
+            "@type": "ImageObject",
+            url: "https://kiitfilmsociety.in/images/kfs-logo.png",
+          },
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[share/studio]", err.message);
     res.sendFile(path.join(__dirname, "public", "index.html"));
   }
 });

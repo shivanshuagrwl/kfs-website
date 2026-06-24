@@ -162,6 +162,8 @@ function _doNavigate(page, pushState=true) {
   document.getElementById('movie-detail').classList.remove('active');
   document.getElementById('admin-login').classList.remove('active');
   document.getElementById('admin-panel').classList.remove('active');
+  const pswOverlay = document.getElementById('psw-detail-overlay');
+  if (pswOverlay) { pswOverlay.style.display = 'none'; document.body.style.overflow = ''; }
   hideScrollProgress();
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
@@ -202,7 +204,7 @@ function _doNavigate(page, pushState=true) {
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
   // Reset meta tags to site defaults on section navigation
-  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team') {
+  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team' || page === 'studio') {
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
@@ -236,6 +238,7 @@ window.addEventListener('popstate', e => {
   if (!state) { navigate('home', false); return; }
   if (state.page === 'blog-detail') { openBlog(state.id); return; }
   if (state.page === 'movie-detail') { openMovie(state.id); return; }
+  if (state.page === 'studio-detail') { navigate('studio', false); pswOpenDetail(state.id); return; }
   navigate(state.page || 'home', false);
 });
 
@@ -4481,6 +4484,7 @@ async function checkRoute() {
 
   const blogMatch  = path.match(/^blog\/(.+)/);
   const filmMatch  = path.match(/^films\/(.+)/);
+  const studioMatch = path.match(/^studio\/(.+)/);
   const eventMatch = path.match(/^events\/(.+)/);
   // legacy /movies/ URLs redirect to films
   const movieLegacy = path.match(/^movies\/(.+)/);
@@ -4525,6 +4529,19 @@ async function checkRoute() {
       } catch(e) {}
     }
     navigate('blog', false);
+    return;
+  }
+
+  if (studioMatch) {
+    const slug = studioMatch[1];
+    const id   = idFromSlug(slug);
+    if (id) {
+      try {
+        const project = await apiFetch('/api/studio/projects/' + id);
+        if (project && project.id) { navigate('studio', false); pswOpenDetail(project.id); return; }
+      } catch(e) {}
+    }
+    navigate('studio', false);
     return;
   }
 
@@ -4788,7 +4805,7 @@ function updateMetaTags({ title, description, image, url }) {
   canon.href = fullUrl;
 
   // og tags — also update og:type (article for blogs/films, website for sections)
-  const ogType = (url.includes('/blog/') || url.includes('/films/')) ? 'article' : 'website';
+  const ogType = (url.includes('/blog/') || url.includes('/films/') || url.includes('/studio/')) ? 'article' : 'website';
   const ogMeta = {
     'og:title': title,
     'og:description': description,
@@ -13259,6 +13276,37 @@ async function pswOpenDetail(projectId) {
           <div id="psw-comments-list">${pswRenderComments(comments)}</div>
         </div>
       </div>`;
+
+    // Shareable, crawlable URL — same pattern as openBlog()/openMovie().
+    // The server has a matching /studio/:slug SSR route that injects the
+    // right OG tags for link previews even before this JS runs.
+    const slug = (p.title ? p.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + p.id;
+    history.pushState({ page: 'studio-detail', id: p.id }, '', '/studio/' + slug);
+    window._currentStudioProjectId = p.id;
+    const studioDesc = p.description
+      ? p.description.slice(0, 155)
+      : `${p.title} — work by ${author.name || 'a KFS member'} on the KFS Studio Wall.`;
+    updateMetaTags({
+      title: p.title,
+      description: studioDesc,
+      image: `/og/studio/${p.id}`,
+      url: '/studio/' + slug,
+    });
+    injectPageSchema({
+      "@context": "https://schema.org",
+      "@type": "CreativeWork",
+      "name": p.title,
+      "description": studioDesc,
+      "image": `https://kiitfilmsociety.in/og/studio/${p.id}`,
+      "url": `https://kiitfilmsociety.in/studio/${slug}`,
+      "creator": { "@type": "Person", "name": author.name || "KFS member" },
+      "dateCreated": p.created_at || undefined,
+      "publisher": {
+        "@type": "Organization",
+        "name": "KFS — KIIT Film Society",
+        "logo": { "@type": "ImageObject", "url": "https://kiitfilmsociety.in/images/kfs-logo.png" }
+      }
+    });
   } catch (e) {
     body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--grey);font-size:14px">${pswEsc(e.message)}</div>`;
   }
@@ -13288,6 +13336,19 @@ function pswCloseDetail() {
   const o = document.getElementById('psw-detail-overlay');
   if (o) o.style.display = 'none';
   document.body.style.overflow = '';
+  // Only touch history/meta if we actually pushed a detail state (avoids
+  // clobbering the URL if this is ever called while no detail is open).
+  if (window._currentStudioProjectId) {
+    window._currentStudioProjectId = null;
+    history.pushState({ page: 'studio' }, '', '/studio');
+    updateMetaTags({
+      title: 'KIIT Film Society',
+      description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
+      image: '/images/og-banner.png',
+      url: '/studio',
+    });
+    removePageSchema();
+  }
 }
 
 function pswShowAuthNudge() {
