@@ -119,17 +119,17 @@
           display: flex;
           position: fixed;
           left: 50%;
-          bottom: max(16px, env(safe-area-inset-bottom));
+          bottom: max(12px, env(safe-area-inset-bottom));
           transform: translateX(-50%);
-          width: min(92%, 410px);
+          width: min(88%, 380px);
           z-index: 200;
-          background: rgba(17,17,17,0.72);
-          backdrop-filter: blur(24px) saturate(160%);
-          -webkit-backdrop-filter: blur(24px) saturate(160%);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 26px;
-          box-shadow: 0 10px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
-          padding: 7px 6px;
+          background: rgba(14,14,14,0.82);
+          backdrop-filter: blur(28px) saturate(180%);
+          -webkit-backdrop-filter: blur(28px) saturate(180%);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 22px;
+          box-shadow: 0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+          padding: 5px 5px;
           justify-content: space-around;
           align-items: center;
         }
@@ -140,15 +140,15 @@
           gap: 2px;
           flex: 1;
           cursor: pointer;
-          padding: 6px 0;
-          border-radius: 18px;
-          color: var(--muted);
+          padding: 5px 0;
+          border-radius: 16px;
+          color: rgba(255,255,255,0.38);
           transition: color 0.12s, background 0.12s;
           position: relative;
         }
-        .btb-item.active { color: var(--text); background: rgba(255,255,255,0.07); }
-        .btb-item svg { width: 21px; height: 21px; }
-        .btb-label { font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+        .btb-item.active { color: rgba(255,255,255,0.92); background: rgba(255,255,255,0.06); }
+        .btb-item svg { width: 19px; height: 19px; }
+        .btb-label { font-size: 8px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
         .btb-dot { position: absolute; top: 4px; right: calc(50% - 17px); width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: none; }
         .btb-dot.show { display: block; }
         /* Push main content up so the floating pill doesn't overlap */
@@ -479,9 +479,42 @@
         width: 20px;
         text-align: center;
       }
-      .sidebar-footer {
-        margin-top: auto;
+      .sidebar-section-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 10px 0;
       }
+      .sidebar-settings-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--muted);
+        cursor: pointer;
+        transition: all 0.12s;
+        margin-bottom: 2px;
+        user-select: none;
+      }
+      .sidebar-settings-toggle:hover { background: #1a1a1a; color: var(--text); }
+      .sidebar-settings-toggle.open { color: var(--text); }
+      .sidebar-settings-items {
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.25s cubic-bezier(.4,0,.2,1), opacity 0.2s;
+        opacity: 0;
+      }
+      .sidebar-settings-items.open {
+        max-height: 400px;
+        opacity: 1;
+      }
+      .nav-item--sub {
+        padding-left: 20px;
+        font-size: 13px;
+      }
+      .sidebar-settings-chevron.open { transform: rotate(180deg); }
       .member-chip {
         display: flex;
         align-items: center;
@@ -2453,138 +2486,53 @@
         <aside class="sidebar">
           <div class="sidebar-logo">Social <span>Strand</span></div>
           <nav id="sidebar-nav">
-            <div class="nav-item active" data-panel="profile">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg
-              ></span>
-              Profile
-            </div>
-            <div class="nav-item" data-panel="movies">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="2" y="2" width="20" height="20" rx="2.18" />
-                  <line x1="7" y1="2" x2="7" y2="22" />
-                  <line x1="17" y1="2" x2="17" y2="22" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <line x1="2" y1="7" x2="7" y2="7" />
-                  <line x1="2" y1="17" x2="7" y2="17" />
-                  <line x1="17" y1="17" x2="22" y2="17" />
-                  <line x1="17" y1="7" x2="22" y2="7" /></svg
-              ></span>
-              My Movies
-            </div>
-            <div class="nav-item" data-panel="works">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polygon points="23 7 16 12 23 17 23 7" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" /></svg
-              ></span>
-              My Works
-            </div>
-            <div class="nav-item" data-panel="security">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-              ></span>
-              Security
-            </div>
-            <div class="nav-item" data-panel="activity">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg
-              ></span>
-              Activity
-            </div>
-            <div class="nav-item" data-panel="collab">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
-              ></span>
-              Collab
-            </div>
-            <div class="nav-item" data-panel="grievance">
-              <span class="nav-icon"
-                ><svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg
-              ></span>
-              Feedback
-            </div>
-            <div class="nav-item" data-panel="studio">
+            <!-- Primary nav: Studio feed + Network -->
+            <div class="nav-item active" data-panel="studio">
               <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>
-              Studio
+              Social Strand
             </div>
             <div class="nav-item" data-panel="network">
               <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v6m0 0L6.8 17M12 13.5l5.2 3.5"/></svg></span>
               Network
+            </div>
+            <div class="nav-item" data-panel="activity">
+              <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+              Activity
+              <span class="notif-badge-inline" id="sidebar-notif-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-left:auto;flex-shrink:0;"></span>
+            </div>
+
+            <!-- Settings section — collapsible -->
+            <div class="sidebar-section-divider"></div>
+            <div class="sidebar-settings-toggle" id="sidebar-settings-toggle" onclick="toggleSidebarSettings()">
+              <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.63.74 1.11 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+              Settings
+              <svg class="sidebar-settings-chevron" id="sidebar-settings-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto;transition:transform .2s;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="sidebar-settings-items" id="sidebar-settings-items">
+              <div class="nav-item nav-item--sub" data-panel="profile">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+                Profile
+              </div>
+              <div class="nav-item nav-item--sub" data-panel="movies">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span>
+                My Movies
+              </div>
+              <div class="nav-item nav-item--sub" data-panel="works">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+                My Works
+              </div>
+              <div class="nav-item nav-item--sub" data-panel="collab">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                Collab
+              </div>
+              <div class="nav-item nav-item--sub" data-panel="grievance">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                Feedback
+              </div>
+              <div class="nav-item nav-item--sub" data-panel="security">
+                <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                Security
+              </div>
             </div>
           </nav>
           <div class="sidebar-footer">
@@ -4507,11 +4455,16 @@
     }
     @media (min-width: 601px) {
       .ig-post {
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        margin-bottom: 24px;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 20px;
+        margin-bottom: 16px;
         margin-top: 0;
+        background: #0e0e0e;
+        box-shadow: 0 2px 20px rgba(0,0,0,0.3);
       }
+      /* Clip image to card's top corners only */
+      .ig-post .ig-post-img-wrap { border-radius: 20px 20px 0 0; overflow: hidden; }
+      .ig-post .ig-post-text-bg:first-of-type { border-radius: 20px 20px 0 0; }
     }
 
     /* Post header: avatar + name + time + options */
@@ -4561,17 +4514,16 @@
       width: 100%; display: block;
       max-height: 600px; object-fit: cover;
     }
-    /* Text-only post */
+    /* Text-only post — X/Twitter clean style, no black box */
     .ig-post-text-bg {
-      width: 100%; min-height: 240px; max-height: 400px;
-      display: flex; align-items: center; justify-content: center;
-      padding: 40px 28px;
-      background: #111;
+      width: 100%; padding: 8px 14px 4px;
+      display: flex; align-items: flex-start; justify-content: flex-start;
+      background: transparent;
     }
     .ig-post-text-content {
-      font-size: 20px; font-weight: 500; color: var(--text);
-      line-height: 1.55; text-align: center;
-      max-width: 420px;
+      font-size: 17px; font-weight: 400; color: var(--text);
+      line-height: 1.6; text-align: left;
+      max-width: 100%; letter-spacing: -0.01em;
     }
 
     /* Action row */
@@ -4583,16 +4535,79 @@
     .ig-action-btn {
       width: 36px; height: 36px; border-radius: 50%; background: none; border: none;
       display: flex; align-items: center; justify-content: center;
-      color: var(--text); cursor: pointer; transition: opacity .12s;
+      color: var(--text); cursor: pointer; transition: opacity .12s, transform .15s;
+      position: relative;
     }
     .ig-action-btn:hover { opacity: .6; }
-    .ig-action-btn.liked svg { fill: #ed4956; stroke: #ed4956; }
+    .ig-action-btn.ig-like-btn { position: relative; overflow: visible; }
+    .ig-action-btn.ig-like-btn:active { transform: scale(0.88); }
+
+    /* Liked state: hand turns accent blue, pops */
+    .ig-action-btn.liked svg { fill: #4ba3d4; stroke: #4ba3d4; }
+    .ig-action-btn.liked { animation: likeHandPop 0.28s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes likeHandPop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.28) rotate(-8deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+
     .ig-post-bookmark { margin-left: auto; }
+
+    /* ── Reaction Popup (desktop hover / mobile long-press) ─────────────── */
+    .rxn-popup {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) scale(0.88);
+      transform-origin: bottom left;
+      background: rgba(18,18,18,0.95);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 100px;
+      padding: 7px 10px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      z-index: 300;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s, transform .2s cubic-bezier(.34,1.56,.64,1);
+      white-space: nowrap;
+    }
+    .rxn-popup.visible {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+      pointer-events: auto;
+    }
+    .rxn-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%; border: none; background: transparent;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      gap: 2px;
+      transition: transform .15s cubic-bezier(.34,1.56,.64,1), background .1s;
+      position: relative;
+    }
+    .rxn-btn:hover { transform: scale(1.32) translateY(-4px); background: rgba(255,255,255,0.07); }
+    .rxn-btn svg { pointer-events: none; }
+    .rxn-btn .rxn-label {
+      font-size: 9px; font-weight: 600; color: var(--muted);
+      opacity: 0; position: absolute; bottom: -16px;
+      white-space: nowrap; letter-spacing: .02em;
+      transition: opacity .1s;
+      pointer-events: none;
+    }
+    .rxn-btn:hover .rxn-label { opacity: 1; }
+    .rxn-btn.active { background: rgba(75,163,212,0.12); }
+    .rxn-btn.active svg { stroke: #4ba3d4; }
 
     /* Likes count */
     .ig-post-likes {
       padding: 0 14px 4px;
-      font-size: 13px; font-weight: 700; color: var(--text);
+      font-size: 13px; font-weight: 600; color: var(--text);
     }
     /* Caption */
     .ig-post-caption {

@@ -1101,6 +1101,18 @@ function switchPanel(el) {
   if (panel === 'network') loadNetworkPanel();
 }
 
+// ── Desktop Sidebar Settings Toggle ──────────────────────────────────────
+
+function toggleSidebarSettings() {
+  const items = $id('sidebar-settings-items');
+  const chevron = $id('sidebar-settings-chevron');
+  const toggle = $id('sidebar-settings-toggle');
+  const isOpen = items?.classList.contains('open');
+  items?.classList.toggle('open', !isOpen);
+  chevron?.classList.toggle('open', !isOpen);
+  toggle?.classList.toggle('open', !isOpen);
+}
+
 // ── Mini Settings Sheet (mobile bottom nav → Settings) ────────────────────────
 
 function openSettingsSheet() {
@@ -2336,7 +2348,7 @@ function swFeedCard(p) {
     ? `<img src="${swEsc(author.photo)}" alt="${swEsc(author.name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
     : `<div style="width:100%;height:100%;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#666;">${swEsc((author.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</div>`;
 
-  // Media section — image, video, or text background
+  // Media section — image, video, or text body
   let mediaHtml = '';
   if (hasImage) {
     mediaHtml = `<div class="ig-post-img-wrap"><img src="${swEsc(p.cover_image)}" alt="" class="ig-post-img" loading="lazy"></div>`;
@@ -2348,7 +2360,7 @@ function swFeedCard(p) {
       mediaHtml = `<div class="ig-post-img-wrap" style="aspect-ratio:16/9;background:#111;display:flex;align-items:center;justify-content:center;">${SW_ICONS.play}</div>`;
     }
   } else if (postType === 'text' && p.description) {
-    // Text-only post — show body text large, styled
+    // Text-only post — X/Twitter style: just inline text, no dark box
     mediaHtml = `<div class="ig-post-text-bg"><div class="ig-post-text-content">${swEsc(p.description)}</div></div>`;
   }
 
@@ -2371,7 +2383,33 @@ function swFeedCard(p) {
     ? `<div class="ig-post-view-comments" onclick="swOpenDetail('${swEsc(p.id)}')">${swFmtNum(p.comments_count) === '1' ? 'View 1 comment' : `View all ${swFmtNum(p.comments_count)} comments`}</div>` : '';
 
   const likesLabel = p.reactions_count > 0
-    ? `<div class="ig-post-likes">${swFmtNum(p.reactions_count)} like${p.reactions_count !== 1 ? 's' : ''}</div>` : '';
+    ? `<div class="ig-post-likes">${swFmtNum(p.reactions_count)} ${p.reactions_count !== 1 ? 'reactions' : 'reaction'}</div>` : '';
+
+  // Reaction popup — film-themed reactions with Truman Show sun reference
+  const reactionPopupHtml = `
+    <div class="rxn-popup" id="rxn-popup-${swEsc(p.id)}" role="menu" aria-label="React"
+      onmouseenter="swCancelHideRxnPopup('${swEsc(p.id)}')" onmouseleave="swHideRxnPopup('${swEsc(p.id)}')">
+      <button class="rxn-btn${myRxn==='wow'?' active':''}" data-rxn="wow" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','wow')" title="Like" role="menuitem">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        <span class="rxn-label">Like</span>
+      </button>
+      <button class="rxn-btn${myRxn==='fire'?' active':''}" data-rxn="fire" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','fire')" title="Fire" role="menuitem">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>
+        <span class="rxn-label">Fire</span>
+      </button>
+      <button class="rxn-btn${myRxn==='brilliant'?' active':''}" data-rxn="brilliant" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','brilliant')" title="Brilliant" role="menuitem">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="rxn-label">Brilliant</span>
+      </button>
+      <button class="rxn-btn${myRxn==='truman'?' active':''}" data-rxn="truman" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','truman')" title="Good morning, and in case I dont see ya" role="menuitem">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <span class="rxn-label">Truman</span>
+      </button>
+      <button class="rxn-btn${myRxn==='mind_blown'?' active':''}" data-rxn="mind_blown" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','mind_blown')" title="Mind Blown" role="menuitem">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <span class="rxn-label">Whoa</span>
+      </button>
+    </div>`;
 
   return `<article class="ig-post" data-project-id="${swEsc(p.id)}">
     <!-- Header -->
@@ -2395,8 +2433,13 @@ function swFeedCard(p) {
 
     <!-- Action bar -->
     <div class="ig-post-actions">
-      <button class="ig-action-btn ${isLiked?'liked':''}" onclick="swToggleReaction('${swEsc(p.id)}','wow')" title="${isLiked?'Unlike':'Like'}">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#ed4956':'none'}" stroke="${isLiked?'#ed4956':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <button class="ig-action-btn ig-like-btn${isLiked?' liked':''}"
+        data-project-id="${swEsc(p.id)}"
+        title="${isLiked?'Liked':'Like'}"
+        onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','wow')"
+        onmouseenter="swShowRxnPopup('${swEsc(p.id)}')"
+        onmouseleave="swHideRxnPopup('${swEsc(p.id)}')"
+      >${reactionPopupHtml}<svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#4ba3d4':'none'}" stroke="${isLiked?'#4ba3d4':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
       </button>
       <button class="ig-action-btn" onclick="swOpenDetail('${swEsc(p.id)}')" title="Comment">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -2410,7 +2453,7 @@ function swFeedCard(p) {
       </button>
     </div>
 
-    <!-- Likes -->
+    <!-- Reactions count -->
     ${likesLabel}
 
     <!-- Caption -->
@@ -2469,6 +2512,7 @@ async function swLoadFeed(reset = false) {
     data.forEach(p => { if (p.my_reaction) SW.myReactions.set(p.id, p.my_reaction); });
 
     grid.insertAdjacentHTML('beforeend', data.map(swFeedCard).join(''));
+    swAttachLongPress();
     SW.feedPage++;
   } catch (e) {
     const grid = $id('studio-feed');
@@ -2705,19 +2749,75 @@ function swUpdateReactionUI(projectId) {
   $id(`detail-reactions-${projectId}`)?.querySelectorAll('.studio-rxn-btn').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.rxn === myRxn);
   });
-  // Update inline feed heart button on ig-post cards
+  // Update inline feed like button on ig-post cards
   const feedCard = document.querySelector(`.ig-post[data-project-id="${CSS.escape(projectId)}"]`);
   if (feedCard) {
-    const heartBtn = feedCard.querySelector('.ig-action-btn');
-    if (heartBtn) {
+    const likeBtn = feedCard.querySelector('.ig-like-btn');
+    if (likeBtn) {
       const isLiked = !!myRxn;
-      heartBtn.classList.toggle('liked', isLiked);
-      heartBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#ed4956':'none'}" stroke="${isLiked?'#ed4956':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+      likeBtn.classList.toggle('liked', isLiked);
+      // Replace only the SVG (last child), keep the reaction popup
+      const svg = likeBtn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', isLiked ? '#4ba3d4' : 'none');
+        svg.setAttribute('stroke', isLiked ? '#4ba3d4' : 'currentColor');
+      }
     }
   }
 }
 
-// ── Create / Edit Modal — Instagram-style composer ────────────────────────
+// ── Reaction Popup (desktop hover + mobile long-press) ────────────────────
+
+const _rxnPopupTimers = {};
+
+function swShowRxnPopup(projectId) {
+  _rxnPopupTimers[projectId] = setTimeout(() => {
+    const popup = document.getElementById(`rxn-popup-${projectId}`);
+    if (popup) popup.classList.add('visible');
+  }, 320);
+}
+
+function swHideRxnPopup(projectId) {
+  clearTimeout(_rxnPopupTimers[projectId]);
+  setTimeout(() => {
+    const popup = document.getElementById(`rxn-popup-${projectId}`);
+    if (popup) popup.classList.remove('visible');
+  }, 180);
+}
+
+function swCancelHideRxnPopup(projectId) {
+  clearTimeout(_rxnPopupTimers[projectId]);
+}
+
+// Mobile long-press: attach to feed after render
+function swAttachLongPress() {
+  document.querySelectorAll('.ig-like-btn[data-project-id]').forEach(btn => {
+    if (btn._lpAttached) return;
+    btn._lpAttached = true;
+    let timer;
+    btn.addEventListener('touchstart', e => {
+      timer = setTimeout(() => {
+        const pid = btn.dataset.projectId;
+        const popup = document.getElementById(`rxn-popup-${pid}`);
+        if (popup) {
+          popup.classList.add('visible');
+          // dismiss on outside touch
+          const dismiss = (ev) => {
+            if (!popup.contains(ev.target)) {
+              popup.classList.remove('visible');
+              document.removeEventListener('touchstart', dismiss, true);
+            }
+          };
+          setTimeout(() => document.addEventListener('touchstart', dismiss, true), 50);
+        }
+      }, 420);
+    }, { passive: true });
+    btn.addEventListener('touchend', () => clearTimeout(timer), { passive: true });
+    btn.addEventListener('touchmove', () => clearTimeout(timer), { passive: true });
+  });
+}
+
+
 
 let _composerPostType = 'image'; // 'image' | 'text' | 'video'
 
