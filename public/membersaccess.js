@@ -1078,6 +1078,8 @@ async function loadProfile() {
     }
 
     fillProfile(displayData);
+    renderStatusPicker(d.status);
+    loadMySkills();
     setText('sidebar-name', displayData.name || '—');
     setText('sidebar-role', displayData.role || displayData.domain || '—');
     setText('sidebar-followers-count', swFmtNum ? swFmtNum(d.followers_count) : (d.followers_count||0));
@@ -2085,6 +2087,7 @@ async function loadMyGrievances() {
 const SW = {
   feedPage:             1,
   feedTag:              null,
+  feedSort:             'latest', // 'latest' | 'foryou' (Phase 2 smart feed)
   feedExhausted:        false,
   feedLoading:          false,
   myReactions:          new Map(), // projectId → reactionType | null
@@ -2212,6 +2215,7 @@ async function swLoadFeed(reset = false) {
   try {
     let url = `/api/member/studio/feed?page=${SW.feedPage}`;
     if (SW.feedTag) url += `&tag=${encodeURIComponent(SW.feedTag)}`;
+    if (SW.feedSort === 'foryou') url += `&sort=foryou`;
     const resp = await api('GET', url);
     // server returns { feed, page, has_more }
     const data = resp.feed || resp; // fallback to flat array
@@ -2664,6 +2668,15 @@ function initStudioWall() {
   });
   $id('studio-load-more-btn')?.addEventListener('click',()=>swLoadFeed(false));
 
+  // Smart feed — Latest / For You (Phase 2)
+  $id('feed-sort-toggle')?.addEventListener('click', e => {
+    const btn = e.target.closest('.feed-sort-btn');
+    if (!btn || btn.classList.contains('active')) return;
+    document.querySelectorAll('.feed-sort-btn').forEach(b => b.classList.toggle('active', b === btn));
+    SW.feedSort = btn.dataset.feedSort === 'foryou' ? 'foryou' : 'latest';
+    swLoadFeed(true);
+  });
+
   // Load feed when Studio panel becomes active
   const panelEl=$id('panel-studio');
   if(panelEl){
@@ -2786,6 +2799,8 @@ function loadNetworkPanel() {
 function nwSwitchTab(tabName) {
   document.querySelectorAll('.nw-tab').forEach(t=>t.classList.toggle('active', t.dataset.networkTab===tabName));
   document.querySelectorAll('.nw-tab-panel').forEach(p=>p.classList.toggle('active', p.id===`network-tab-${tabName}`));
+  if (tabName === 'discover')    loadDiscoverTab();
+  if (tabName === 'leaderboard') loadLeaderboardTab();
 }
 
 // ── Follow toggle — called from feed cards, member rows, and the mini-profile modal ──
@@ -2838,6 +2853,7 @@ async function openMemberProfile(memberId) {
         <div class="mpm-stat"><div class="mpm-stat-val" id="mpm-stat-followers">${swFmtNum(m.followers_count)}</div><div class="mpm-stat-label">Followers</div></div>
         <div class="mpm-stat"><div class="mpm-stat-val">${swFmtNum(m.following_count)}</div><div class="mpm-stat-label">Following</div></div>
       </div>
+      ${m.skills?.length ? `<div class="mpm-skills">${m.skills.map(s=>`<span class="mpm-skill-chip" onclick="closeMemberProfileModal();discFilterBySkill('${swEsc(s.name)}')" style="cursor:pointer">${swEsc(s.name)}</span>`).join('')}</div>` : ''}
       ${m.is_self ? '' : `<button class="nw-follow-btn ${m.is_following?'following':''}" id="mpm-follow-btn" data-member-id="${swEsc(m.id)}" style="width:100%;padding:11px" onclick="toggleFollow('${swEsc(m.id)}',this)">${m.is_following?'Following':'Follow'}</button>`}
     `;
   } catch (e) {
@@ -2866,8 +2882,320 @@ function initNetworkModule() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Member status (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Renders the active pill in the Profile panel's status picker.
+// (nwStatusLabel(), above, renders the same slugs as a read-only pill
+// wherever a member's status shows up elsewhere — feed cards, rows, modal.)
+function renderStatusPicker(status) {
+  document.querySelectorAll('#status-picker .status-pill-btn').forEach(b => {
+    const isClear = b.classList.contains('status-pill-clear');
+    b.classList.toggle('active', !isClear && b.dataset.status === (status || ''));
+  });
+}
+
+async function setMemberStatus(status) {
+  const picker = $id('status-picker');
+  picker?.querySelectorAll('.status-pill-btn').forEach(b => b.disabled = true);
+  hideEl('status-err');
+  try {
+    const resp = await api('POST', '/api/member/network/status', { status: status || null });
+    renderStatusPicker(resp.status);
+    if (window._memberProfile) window._memberProfile.status = resp.status;
+    showMsg('status-msg', resp.status ? 'Status updated.' : 'Status cleared.');
+  } catch (e) {
+    showMsg('status-err', e.message || 'Could not update status.', false);
+  } finally {
+    picker?.querySelectorAll('.status-pill-btn').forEach(b => b.disabled = false);
+  }
+}
+
+function initStatusModule() {
+  $id('status-picker')?.addEventListener('click', e => {
+    const btn = e.target.closest('.status-pill-btn');
+    if (!btn || btn.disabled) return;
+    const isClear = btn.classList.contains('status-pill-clear');
+    if (!isClear && btn.classList.contains('active')) return; // already set — no-op
+    setMemberStatus(isClear ? null : btn.dataset.status);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Skills / Interest graph (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SKILLS = { mine: [], suggestTimer: null };
+
+function skillChipHtml(tag) {
+  return `<span class="skill-chip" data-tag-id="${swEsc(tag.id)}">${swEsc(tag.name)}<button type="button" class="skill-chip-remove" onclick="removeSkill('${swEsc(tag.id)}')" title="Remove" aria-label="Remove ${swEsc(tag.name)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`;
+}
+
+function renderSkillChips() {
+  const wrap = $id('skill-chips');
+  if (!wrap) return;
+  if (!SKILLS.mine.length) {
+    wrap.innerHTML = `<div class="skill-chip-empty">No skills tagged yet — add up to ${12} above.</div>`;
+    return;
+  }
+  wrap.innerHTML = SKILLS.mine.map(skillChipHtml).join('');
+}
+
+async function loadMySkills() {
+  try {
+    SKILLS.mine = await api('GET', '/api/member/skills/mine');
+    renderSkillChips();
+  } catch (e) {
+    console.error('loadMySkills:', e);
+  }
+}
+
+async function addSkill(name) {
+  const clean = (name || '').trim();
+  if (!clean) return;
+  hideEl('skill-err');
+  try {
+    const resp = await api('POST', '/api/member/skills', { name: clean });
+    if (!SKILLS.mine.some(t => t.id === resp.tag.id)) {
+      SKILLS.mine.push(resp.tag);
+      renderSkillChips();
+    }
+    const input = $id('skill-input');
+    if (input) input.value = '';
+    hideEl('skill-suggestions');
+  } catch (e) {
+    showMsg('skill-err', e.message || 'Could not add skill.', false);
+  }
+}
+
+async function removeSkill(tagId) {
+  try {
+    await api('DELETE', `/api/member/skills/${tagId}`);
+    SKILLS.mine = SKILLS.mine.filter(t => t.id !== tagId);
+    renderSkillChips();
+  } catch (e) {
+    showMsg('skill-err', e.message || 'Could not remove skill.', false);
+  }
+}
+
+async function showSkillSuggestions(q) {
+  const box = $id('skill-suggestions');
+  if (!box) return;
+  try {
+    const results = await api('GET', `/api/member/skills/search?q=${encodeURIComponent(q)}`);
+    const mineIds = new Set(SKILLS.mine.map(t => t.id));
+    const filtered = results.filter(r => !mineIds.has(r.id));
+    let html = filtered.map(r => `<div class="skill-suggestion-item" onclick="addSkill('${swEsc(r.name)}')"><span>${swEsc(r.name)}</span><span class="skill-suggestion-count">${swFmtNum(r.usage_count)} ${r.usage_count===1?'member':'members'}</span></div>`).join('');
+    if (q && !results.some(r => r.name.toLowerCase() === q.toLowerCase())) {
+      html += `<div class="skill-suggestion-item skill-suggestion-create" onclick="addSkill('${swEsc(q)}')">+ Add "${swEsc(q)}"</div>`;
+    }
+    if (!html) { hideEl('skill-suggestions'); return; }
+    box.innerHTML = html;
+    box.style.display = 'block';
+  } catch (e) {
+    hideEl('skill-suggestions');
+  }
+}
+
+function initSkillsModule() {
+  const input = $id('skill-input');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(SKILLS.suggestTimer);
+    const v = input.value.trim();
+    if (!v) { hideEl('skill-suggestions'); return; }
+    SKILLS.suggestTimer = setTimeout(() => showSkillSuggestions(v), 300);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addSkill(input.value); }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.skill-input-wrap')) hideEl('skill-suggestions');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Discovery & Explore (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DISC = { facetsLoaded: false, page: 1, exhausted: false, loading: false };
+
+async function discLoadFacets() {
+  if (DISC.facetsLoaded) return;
+  try {
+    const { domains, batches } = await api('GET', '/api/member/network/facets');
+    const dSel = $id('discover-domain-filter');
+    const bSel = $id('discover-batch-filter');
+    if (dSel) dSel.insertAdjacentHTML('beforeend', (domains||[]).map(d => `<option value="${swEsc(d)}">${swEsc(d)}</option>`).join(''));
+    if (bSel) bSel.insertAdjacentHTML('beforeend', (batches||[]).map(b => `<option value="${swEsc(b)}">${swEsc(b)}</option>`).join(''));
+    DISC.facetsLoaded = true;
+  } catch (e) { console.error('discLoadFacets:', e); }
+}
+
+async function discLoadTrending() {
+  const row = $id('discover-trending-row');
+  if (!row) return;
+  try {
+    const { trending } = await api('GET', '/api/member/network/trending');
+    if (!trending.length) { row.innerHTML = `<div class="skill-chip-empty">Nothing trending yet — be the first to post.</div>`; return; }
+    row.innerHTML = trending.map(p => {
+      const author = p.members || {};
+      return `<div class="discover-trend-card" onclick="swOpenDetail('${swEsc(p.id)}')">
+        <div class="discover-trend-media">${p.cover_image ? `<img src="${swEsc(p.cover_image)}" loading="lazy" alt="${swEsc(p.title)}">` : ''}</div>
+        <div class="discover-trend-title">${swEsc(p.title)}</div>
+        <div class="discover-trend-meta">${swEsc(author.name||'Member')} · ${swFmtNum(p.trending_score)} reactions/48h</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    row.innerHTML = `<div class="sw-error">Could not load trending posts.</div>`;
+  }
+}
+
+async function discLoadNewJoiners() {
+  const row = $id('discover-newjoiners-row');
+  if (!row) return;
+  try {
+    const joiners = await api('GET', '/api/member/network/new-joiners');
+    if (!joiners.length) { row.innerHTML = `<div class="skill-chip-empty">No new joiners yet.</div>`; return; }
+    row.innerHTML = joiners.map(m => `<div class="discover-joiner-card" onclick="openMemberProfile('${swEsc(m.id)}')">
+        ${swAvatar(m.name, m.photo, 56)}
+        <div class="discover-joiner-name">${swEsc(m.name||'Member')}</div>
+        <div class="discover-joiner-meta">${swEsc(m.role || m.domain || '')}</div>
+      </div>`).join('');
+  } catch (e) {
+    row.innerHTML = `<div class="sw-error">Could not load new joiners.</div>`;
+  }
+}
+
+async function discLoadMembers(reset = false) {
+  if (DISC.loading) return;
+  if (!reset && DISC.exhausted) return;
+  if (reset) { DISC.page = 1; DISC.exhausted = false; }
+  const list = $id('discover-list');
+  if (!list) return;
+  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  DISC.loading = true;
+  try {
+    const params = new URLSearchParams({ page: DISC.page });
+    const q      = $id('discover-search')?.value.trim();
+    const domain = $id('discover-domain-filter')?.value;
+    const batch  = $id('discover-batch-filter')?.value;
+    const skill  = $id('discover-skill-filter')?.value.trim();
+    if (q)      params.set('q', q);
+    if (domain) params.set('domain', domain);
+    if (batch)  params.set('batch', batch);
+    if (skill)  params.set('skill', skill);
+
+    const resp = await api('GET', `/api/member/network/discover?${params.toString()}`);
+    const members = resp.members || [];
+    members.forEach(m => NW.myFollowing.set(m.id, m.is_following));
+    if (reset) list.innerHTML = '';
+    if (!members.length && DISC.page === 1) {
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">No members match</div><div class="sw-empty-sub">Try a different filter.</div></div>`;
+      hideEl('discover-more');
+      return;
+    }
+    list.insertAdjacentHTML('beforeend', members.map(nwRenderRow).join(''));
+    if (resp.has_more) { showEl('discover-more'); DISC.page++; }
+    else { hideEl('discover-more'); DISC.exhausted = true; }
+  } catch (e) {
+    if (reset) list.innerHTML = `<div class="sw-error">Could not load members.</div>`;
+  } finally {
+    DISC.loading = false;
+  }
+}
+
+function loadDiscoverTab() {
+  discLoadFacets();
+  discLoadTrending();
+  discLoadNewJoiners();
+  discLoadMembers(true);
+}
+
+// Jump to Network → Discover, pre-filtered by a skill (called from a skill
+// chip on the mini-profile modal).
+function discFilterBySkill(skillName) {
+  const input = $id('discover-skill-filter');
+  if (input) input.value = skillName;
+  const navNetwork = document.querySelector('.nav-item[data-panel="network"]');
+  if (navNetwork) switchPanel(navNetwork);
+  nwSwitchTab('discover');
+}
+
+function initDiscoverModule() {
+  let searchTimer = null;
+  const debouncedReload = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => discLoadMembers(true), 350); };
+  $id('discover-search')?.addEventListener('input', debouncedReload);
+  $id('discover-skill-filter')?.addEventListener('input', debouncedReload);
+  $id('discover-domain-filter')?.addEventListener('change', () => discLoadMembers(true));
+  $id('discover-batch-filter')?.addEventListener('change', () => discLoadMembers(true));
+  $id('discover-more-btn')?.addEventListener('click', () => discLoadMembers(false));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Leaderboard / Hall of fame (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LB = { period: 'weekly' };
+
+function lbRankClass(rank) {
+  if (rank === 1) return 'lb-rank-1';
+  if (rank === 2) return 'lb-rank-2';
+  if (rank === 3) return 'lb-rank-3';
+  return '';
+}
+
+async function lbLoad() {
+  const list = $id('lb-list');
+  if (!list) return;
+  list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  hideEl('lb-my-rank');
+  try {
+    const resp = await api('GET', `/api/member/network/leaderboard?period=${LB.period}`);
+    const rows = resp.leaderboard || [];
+    if (!rows.length) {
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">No wows yet</div><div class="sw-empty-sub">${LB.period==='weekly' ? 'Check back once posts start getting reactions this week.' : 'The hall of fame fills up once posts start earning wow reactions.'}</div></div>`;
+      return;
+    }
+    const wowIcon = SW_REACTIONS.find(r => r.type === 'wow')?.icon || '';
+    list.innerHTML = rows.map(m => `<div class="lb-row" onclick="openMemberProfile('${swEsc(m.id)}')">
+        <div class="lb-rank ${lbRankClass(m.rank)}">${m.rank}</div>
+        ${swAvatar(m.name, m.photo, 36)}
+        <div class="lb-info">
+          <div class="lb-name">${swEsc(m.name||'Member')}</div>
+          <div class="lb-meta">${swEsc(m.role || m.domain || '')}</div>
+        </div>
+        <div class="lb-wows">${wowIcon}${swFmtNum(m.wows_received)}</div>
+      </div>`).join('');
+    if (resp.my_rank) {
+      const banner = $id('lb-my-rank');
+      if (banner) { banner.style.display = 'block'; banner.textContent = `You're #${resp.my_rank} ${LB.period==='weekly' ? 'this week' : 'all-time'}.`; }
+    }
+  } catch (e) {
+    list.innerHTML = `<div class="sw-error">Could not load the leaderboard.</div>`;
+  }
+}
+
+function loadLeaderboardTab() { lbLoad(); }
+
+function initLeaderboardModule() {
+  document.querySelectorAll('.lb-period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('active')) return;
+      document.querySelectorAll('.lb-period-btn').forEach(b => b.classList.toggle('active', b === btn));
+      LB.period = btn.dataset.lbPeriod === 'all_time' ? 'all_time' : 'weekly';
+      lbLoad();
+    });
+  });
+}
+
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',()=>{ initStudioWall(); initNetworkModule(); });
+  document.addEventListener('DOMContentLoaded',()=>{
+    initStudioWall(); initNetworkModule();
+    initStatusModule(); initSkillsModule(); initDiscoverModule(); initLeaderboardModule();
+  });
 }else{
   initStudioWall(); initNetworkModule();
+  initStatusModule(); initSkillsModule(); initDiscoverModule(); initLeaderboardModule();
 }

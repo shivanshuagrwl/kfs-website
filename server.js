@@ -11242,52 +11242,162 @@ function parseVideoUrl(raw) {
 const studioFeedLimit  = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 const studioWriteLimit = rateLimit({ windowMs: 60_000, max: 10,  standardHeaders: true, legacyHeaders: false });
 
+// ── Smart feed ranking helpers (Phase 2 — "The Network") ────────────────────
+// Signal weights live in `feed_weights` (DB-editable, no deploy needed — see
+// phase2_network_migration.sql). Cached briefly since they rarely change.
+async function getFeedWeights() {
+  return memCache("feed:weights", 600, async () => {
+    const { data, error } = await supabase.from("feed_weights").select("signal, weight");
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach(r => { map[r.signal] = Number(r.weight); });
+    return map;
+  });
+}
+
+// Reaction counts per project in the last 48h — the "trending" signal.
+// Shared by the ranked feed and the standalone /network/trending endpoint.
+async function getTrendingCounts() {
+  return memCache("feed:trending-counts", 180, async () => {
+    const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("project_reactions")
+      .select("project_id")
+      .gte("created_at", since);
+    if (error) throw error;
+    const counts = {};
+    (data || []).forEach(r => { counts[r.project_id] = (counts[r.project_id] || 0) + 1; });
+    return counts;
+  });
+}
+
 // ── Feed ─────────────────────────────────────────────────────────────────────
 
-// GET /api/member/studio/feed?page=1&tag=
+// GET /api/member/studio/feed?page=1&tag=&sort=latest|foryou
+// sort=latest (default): unchanged chronological feed, exactly as Phase 1.
+// sort=foryou: ranked using feed_weights signals — followed authors, domain/
+//   skill match, 48h trending velocity, and a recency decay. The candidate
+//   pool (recent published posts) is cached briefly and shared across
+//   viewers; the ranking itself is computed fresh per request since it
+//   depends on who the viewer follows and their domain/skills.
 app.get("/api/member/studio/feed", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
   const tag   = (req.query.tag || "").trim().toLowerCase().slice(0, 50);
+  const sort  = req.query.sort === "foryou" ? "foryou" : "latest";
   const limit = 20;
   const from  = (page - 1) * limit;
-  const cKey  = `studio:feed:p${page}:t${tag}`;
 
-  cacheFor(res, 30);
-  const data = await memCache(cKey, 60, async () => {
-    let q = supabasePublic
-      .from("member_projects")
-      .select(`
-        id, title, description, cover_image, video_url, video_provider,
-        domain, tags, views_count, reactions_count, comments_count, created_at,
-        member_id,
-        members!member_projects_member_id_fkey(id, name, photo, role, domain)
-      `)
-      .is("deleted_at", null)
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .range(from, from + limit - 1);
+  if (sort === "latest") {
+    const cKey = `studio:feed:p${page}:t${tag}`;
+    cacheFor(res, 30);
+    const data = await memCache(cKey, 60, async () => {
+      let q = supabasePublic
+        .from("member_projects")
+        .select(`
+          id, title, description, cover_image, video_url, video_provider,
+          domain, tags, views_count, reactions_count, comments_count, created_at,
+          member_id,
+          members!member_projects_member_id_fkey(id, name, photo, role, domain)
+        `)
+        .is("deleted_at", null)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .range(from, from + limit - 1);
 
-    if (tag) q = q.contains("tags", [tag]);
+      if (tag) q = q.contains("tags", [tag]);
 
-    const { data: rows, error } = await q;
-    if (error) throw error;
-    return rows || [];
-  });
+      const { data: rows, error } = await q;
+      if (error) throw error;
+      return rows || [];
+    });
 
-  // Attach viewer's own reaction to each card (non-cached, member-specific)
-  let myReactions = {};
-  if (data.length) {
-    const ids = data.map(r => r.id);
-    const { data: rxs } = await supabase
-      .from("project_reactions")
-      .select("project_id, reaction_type")
-      .eq("member_id", req.member.memberId)
-      .in("project_id", ids);
-    (rxs || []).forEach(r => { myReactions[r.project_id] = r.reaction_type; });
+    // Attach viewer's own reaction to each card (non-cached, member-specific)
+    let myReactions = {};
+    if (data.length) {
+      const ids = data.map(r => r.id);
+      const { data: rxs } = await supabase
+        .from("project_reactions")
+        .select("project_id, reaction_type")
+        .eq("member_id", req.member.memberId)
+        .in("project_id", ids);
+      (rxs || []).forEach(r => { myReactions[r.project_id] = r.reaction_type; });
+    }
+
+    const feed = data.map(p => ({ ...p, my_reaction: myReactions[p.id] || null }));
+    return res.json({ feed, page, has_more: data.length === limit, sort });
   }
 
-  const feed = data.map(p => ({ ...p, my_reaction: myReactions[p.id] || null }));
-  res.json({ feed, page, has_more: data.length === limit });
+  // ── "For You" — smart ranked feed ─────────────────────────────────────────
+  try {
+    const poolKey = `studio:feed:pool:t${tag}`;
+    const pool = await memCache(poolKey, 90, async () => {
+      let q = supabasePublic
+        .from("member_projects")
+        .select(`
+          id, title, description, cover_image, video_url, video_provider,
+          domain, tags, views_count, reactions_count, comments_count, created_at,
+          member_id,
+          members!member_projects_member_id_fkey(id, name, photo, role, domain)
+        `)
+        .is("deleted_at", null)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(150);
+      if (tag) q = q.contains("tags", [tag]);
+      const { data: rows, error } = await q;
+      if (error) throw error;
+      return rows || [];
+    });
+
+    const [weights, trending, followRows, skillRows, viewerRow] = await Promise.all([
+      getFeedWeights(),
+      getTrendingCounts(),
+      supabase.from("member_follows").select("following_id").eq("follower_id", req.member.memberId),
+      supabase.from("member_skills").select("skill_tags(name)").eq("member_id", req.member.memberId),
+      supabase.from("members").select("domain").eq("id", req.member.memberId).maybeSingle(),
+    ]);
+
+    const followingIds = new Set((followRows.data || []).map(r => r.following_id));
+    const viewerDomain = viewerRow.data?.domain || null;
+    const skillNames = new Set((skillRows.data || []).map(r => (r.skill_tags?.name || "").toLowerCase()).filter(Boolean));
+
+    const wFollow = weights.followed_author ?? 3.0;
+    const wDomain = weights.domain_match    ?? 1.5;
+    const wTrend  = weights.trending        ?? 2.0;
+    const wDecay  = weights.recency_decay   ?? 0.08;
+    const now = Date.now();
+
+    const scored = pool.map(p => {
+      let score = 0;
+      if (followingIds.has(p.member_id)) score += wFollow;
+      const domainMatch = !!(viewerDomain && p.domain && p.domain.toLowerCase() === viewerDomain.toLowerCase());
+      const skillMatch  = !domainMatch && (p.tags || []).some(t => skillNames.has(String(t).toLowerCase()));
+      if (domainMatch || skillMatch) score += wDomain;
+      score += (trending[p.id] || 0) * wTrend;
+      const hoursSince = Math.max(0, (now - new Date(p.created_at).getTime()) / 3_600_000);
+      score -= wDecay * hoursSince;
+      return { ...p, _score: score };
+    }).sort((a, b) => b._score - a._score);
+
+    const pageItems = scored.slice(from, from + limit);
+
+    let myReactions = {};
+    if (pageItems.length) {
+      const ids = pageItems.map(r => r.id);
+      const { data: rxs } = await supabase
+        .from("project_reactions")
+        .select("project_id, reaction_type")
+        .eq("member_id", req.member.memberId)
+        .in("project_id", ids);
+      (rxs || []).forEach(r => { myReactions[r.project_id] = r.reaction_type; });
+    }
+
+    const feed = pageItems.map(({ _score, ...p }) => ({ ...p, my_reaction: myReactions[p.id] || null }));
+    res.json({ feed, page, has_more: from + limit < scored.length, sort });
+  } catch (e) {
+    console.error("[studio:feed:foryou]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // ── Single project + view increment ─────────────────────────────────────────
@@ -12159,7 +12269,13 @@ app.get("/api/member/network/profile/:memberId", memberAuthMiddleware, networkRe
     isFollowing = !!data;
   }
 
-  res.json({ ...member, is_following: isFollowing, is_self: targetId === viewerId });
+  const { data: skillRows } = await supabase
+    .from("member_skills")
+    .select("skill_tags(id, name, category)")
+    .eq("member_id", targetId);
+  const skills = (skillRows || []).map(r => r.skill_tags).filter(Boolean);
+
+  res.json({ ...member, skills, is_following: isFollowing, is_self: targetId === viewerId });
 });
 
 // GET /api/member/network/followers/:memberId?page=1 — who follows this member
@@ -12236,6 +12352,369 @@ app.get("/api/member/network/following/:memberId", memberAuthMiddleware, network
     page,
     has_more: list.length === limit,
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-29 — Network: Member status
+// Phase 2 — "The Network". A short, self-set status shown on the member's
+// profile, the mini-profile card, and Discovery search results. Kept to a
+// fixed set (rather than free text) so it stays moderation-free and the
+// pills stay visually consistent everywhere they're rendered.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATUS_OPTIONS = ["open_to_collab", "busy_on_set", "alumni_mentor"];
+
+// POST /api/member/network/status  { status }  — status may be null/"" to clear
+app.post("/api/member/network/status", memberAuthMiddleware, networkWriteLimit, async (req, res) => {
+  const raw = req.body?.status;
+  const status = (raw === null || raw === undefined || raw === "") ? null : String(raw).trim();
+  if (status !== null && !STATUS_OPTIONS.includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("members")
+    .update({ status, status_updated_at: now })
+    .eq("id", req.member.memberId);
+  if (error) {
+    console.error("[network:status]", error.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  memInvalidate("members:list");
+  await logMemberActivity(req.member.id, req.member.memberId, "status_updated", { status }, req.ip);
+  res.json({ success: true, status, status_updated_at: now });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-30 — Network: Skills / Interest graph
+// Phase 2 — "The Network". Members tag themselves from a shared, crowd-grown
+// pool (skill_tags) — tags are created on first use (normalized, length-
+// capped) so the pool grows organically without admin curation. usage_count
+// is kept in sync by a DB trigger (see phase2_network_migration.sql).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_SKILLS_PER_MEMBER = 12;
+
+function normalizeSkillName(raw) {
+  return String(raw || "").trim().replace(/\s+/g, " ").slice(0, 40);
+}
+
+// GET /api/member/skills/search?q=ed — autocomplete from the shared tag pool
+app.get("/api/member/skills/search", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const q = normalizeSkillName(req.query.q || "");
+  let query = supabase
+    .from("skill_tags")
+    .select("id, name, category, usage_count")
+    .order("usage_count", { ascending: false })
+    .limit(15);
+  if (q) query = query.ilike("name", `%${q}%`);
+  const { data, error } = await query;
+  if (error) { console.error("[skills:search]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+  res.json(data || []);
+});
+
+// GET /api/member/skills/mine — my own tagged skills/interests
+app.get("/api/member/skills/mine", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const { data, error } = await supabase
+    .from("member_skills")
+    .select("id, created_at, skill_tags(id, name, category)")
+    .eq("member_id", req.member.memberId)
+    .order("created_at", { ascending: true });
+  if (error) { console.error("[skills:mine]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+  res.json((data || []).map(r => ({ link_id: r.id, ...(r.skill_tags || {}) })));
+});
+
+// POST /api/member/skills  { name, category? } — tag self (creates the tag if new)
+app.post("/api/member/skills", memberAuthMiddleware, networkWriteLimit, async (req, res) => {
+  const name = normalizeSkillName(req.body?.name);
+  if (!name) return res.status(400).json({ error: "Skill name required" });
+  const category = ["skill", "interest"].includes(req.body?.category) ? req.body.category : "skill";
+
+  const { count } = await supabase
+    .from("member_skills").select("id", { count: "exact", head: true }).eq("member_id", req.member.memberId);
+  if ((count || 0) >= MAX_SKILLS_PER_MEMBER) {
+    return res.status(400).json({ error: `You can tag up to ${MAX_SKILLS_PER_MEMBER} skills/interests.` });
+  }
+
+  // Find-or-create the tag (case-insensitive match on name)
+  let { data: tag } = await supabase.from("skill_tags").select("id, name, category").ilike("name", name).maybeSingle();
+  if (!tag) {
+    const { data: created, error: createErr } = await supabase
+      .from("skill_tags").insert([{ name, category }]).select("id, name, category").single();
+    if (createErr) {
+      console.error("[skills:create-tag]", createErr.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+    tag = created;
+  }
+
+  const { error: linkErr } = await supabase
+    .from("member_skills").insert([{ member_id: req.member.memberId, skill_tag_id: tag.id }]);
+  if (linkErr && linkErr.code !== "23505") {
+    console.error("[skills:link]", linkErr.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  memInvalidate("members:list");
+  res.json({ success: true, tag });
+});
+
+// DELETE /api/member/skills/:tagId — untag self
+app.delete("/api/member/skills/:tagId", memberAuthMiddleware, networkWriteLimit, async (req, res) => {
+  const { error } = await supabase
+    .from("member_skills").delete()
+    .eq("member_id", req.member.memberId).eq("skill_tag_id", req.params.tagId);
+  if (error) { console.error("[skills:delete]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+  memInvalidate("members:list");
+  res.json({ success: true });
+});
+
+// GET /api/member/skills/:tagId/members?page=1 — who else shares this tag (discovery)
+app.get("/api/member/skills/:tagId/members", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const tagId    = req.params.tagId;
+  const viewerId = req.member.memberId;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 30;
+  const from  = (page - 1) * limit;
+
+  const { data: rows, error } = await supabase
+    .from("member_skills")
+    .select(`member_id, members!member_skills_member_id_fkey(${NETWORK_PROFILE_FIELDS})`)
+    .eq("skill_tag_id", tagId)
+    .range(from, from + limit - 1);
+  if (error) { console.error("[skills:tag-members]", error.message); return res.status(500).json({ error: "Internal server error" }); }
+
+  const list = (rows || []).map(r => r.members).filter(m => m && m.id !== viewerId);
+  const ids  = list.map(m => m.id);
+  let myFollows = new Set();
+  if (ids.length) {
+    const { data: mine } = await supabase
+      .from("member_follows").select("following_id")
+      .eq("follower_id", viewerId).in("following_id", ids);
+    myFollows = new Set((mine || []).map(r => r.following_id));
+  }
+  res.json({
+    members: list.map(m => ({ ...m, is_following: myFollows.has(m.id) })),
+    page,
+    has_more: (rows || []).length === limit,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-31 — Network: Weekly leaderboard / hall of fame
+// Phase 2 — "The Network". Ranks members by "wow" reactions received on their
+// Studio Wall posts. The expensive aggregation runs server-side via a
+// Postgres function (compute_leaderboard — see phase2_leaderboard_function.sql)
+// on a timer; this route only ever reads the pre-computed `weekly_leaderboard`
+// table, so it stays fast regardless of how much reaction history exists.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Monday→Sunday of the current ISO week, as 'YYYY-MM-DD' (UTC).
+function getISOWeekRange(d = new Date()) {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = date.getUTCDay() || 7; // Mon=1 .. Sun=7
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  const monday = new Date(date);
+  const sunday = new Date(date);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const fmt = (x) => x.toISOString().slice(0, 10);
+  return { monday: fmt(monday), sunday: fmt(sunday) };
+}
+
+async function refreshLeaderboards() {
+  try {
+    const { monday, sunday } = getISOWeekRange();
+    const { error: wErr } = await supabase.rpc("compute_leaderboard", {
+      p_period_type: "weekly", p_period_start: monday, p_period_end: sunday, p_limit: 50,
+    });
+    if (wErr) console.error("[leaderboard:weekly]", wErr.message);
+
+    const { error: aErr } = await supabase.rpc("compute_leaderboard", {
+      p_period_type: "all_time", p_period_start: null, p_period_end: null, p_limit: 50,
+    });
+    if (aErr) console.error("[leaderboard:all_time]", aErr.message);
+
+    memInvalidate("leaderboard:");
+  } catch (e) {
+    console.error("[leaderboard:refresh]", e.message);
+  }
+}
+
+// GET /api/member/network/leaderboard?period=weekly|all_time
+app.get("/api/member/network/leaderboard", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const period   = req.query.period === "all_time" ? "all_time" : "weekly";
+  const viewerId = req.member.memberId;
+  const { monday } = getISOWeekRange();
+  const cKey = `leaderboard:${period}:${period === "weekly" ? monday : "all"}`;
+
+  try {
+    cacheFor(res, 60);
+    const rows = await memCache(cKey, 120, async () => {
+      let q = supabase
+        .from("weekly_leaderboard")
+        .select("rank, wows_received, member_id, members!weekly_leaderboard_member_id_fkey(id, name, photo, role, domain, status)")
+        .eq("period_type", period)
+        .order("rank", { ascending: true })
+        .limit(50);
+      q = period === "weekly" ? q.eq("period_start", monday) : q.is("period_start", null);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    });
+
+    const list = rows.map(r => ({ rank: r.rank, wows_received: r.wows_received, ...(r.members || {}) }));
+    const mine = list.find(m => m.id === viewerId);
+    res.json({
+      period,
+      week_start: period === "weekly" ? monday : null,
+      leaderboard: list,
+      my_rank: mine ? mine.rank : null,
+    });
+  } catch (e) {
+    console.error("[network:leaderboard]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-32 — Network: Discovery & Explore
+// Phase 2 — "The Network". Browse members by domain/batch/skill/name, see
+// trending Studio Wall posts (48h reaction velocity) and who recently joined.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/network/facets — distinct domains & batches for filter UIs
+app.get("/api/member/network/facets", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  try {
+    cacheFor(res, 300);
+    const data = await memCache("network:facets", 600, async () => {
+      const { data: rows, error } = await supabase.from("members").select("domain, batch").is("deleted_at", null);
+      if (error) throw error;
+      const domains = [...new Set((rows || []).map(r => r.domain).filter(Boolean))].sort();
+      const batches = [...new Set((rows || []).map(r => r.batch).filter(Boolean))].sort();
+      return { domains, batches };
+    });
+    res.json(data);
+  } catch (e) {
+    console.error("[network:facets]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/member/network/discover?domain=&batch=&skill=&q=&page=1 — browse members
+app.get("/api/member/network/discover", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  const viewerId = req.member.memberId;
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 24;
+  const from  = (page - 1) * limit;
+  const { domain, batch, skill, q } = req.query;
+
+  try {
+    let skillMemberIds = null;
+    if (skill) {
+      const { data: tagRows } = await supabase
+        .from("skill_tags").select("id").ilike("name", `%${String(skill).trim()}%`).limit(20);
+      const tagIds = (tagRows || []).map(t => t.id);
+      if (!tagIds.length) return res.json({ members: [], page, has_more: false });
+      const { data: links } = await supabase.from("member_skills").select("member_id").in("skill_tag_id", tagIds);
+      skillMemberIds = [...new Set((links || []).map(l => l.member_id))];
+      if (!skillMemberIds.length) return res.json({ members: [], page, has_more: false });
+    }
+
+    let query = supabase
+      .from("members")
+      .select("id, name, photo, role, domain, batch, status, status_updated_at, followers_count, following_count, is_past")
+      .is("deleted_at", null)
+      .neq("id", viewerId)
+      .order("followers_count", { ascending: false })
+      .range(from, from + limit - 1);
+
+    if (domain) query = query.eq("domain", domain);
+    if (batch)  query = query.eq("batch", batch);
+    if (q)      query = query.ilike("name", `%${String(q).trim()}%`);
+    if (skillMemberIds) query = query.in("id", skillMemberIds);
+
+    const { data: rows, error } = await query;
+    if (error) throw error;
+
+    const ids = (rows || []).map(m => m.id);
+    let myFollows = new Set();
+    if (ids.length) {
+      const { data: mine } = await supabase
+        .from("member_follows").select("following_id")
+        .eq("follower_id", viewerId).in("following_id", ids);
+      myFollows = new Set((mine || []).map(r => r.following_id));
+    }
+
+    res.json({
+      members: (rows || []).map(m => ({ ...m, is_following: myFollows.has(m.id) })),
+      page,
+      has_more: (rows || []).length === limit,
+    });
+  } catch (e) {
+    console.error("[network:discover]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/member/network/trending — Studio Wall posts with the most reaction
+// velocity in the last 48h (shares the same signal the smart feed ranks on).
+app.get("/api/member/network/trending", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  try {
+    cacheFor(res, 60);
+    const data = await memCache("network:trending", 180, async () => {
+      const counts = await getTrendingCounts();
+      const topIds = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([id]) => id);
+      if (!topIds.length) return [];
+
+      const { data: projects, error } = await supabasePublic
+        .from("member_projects")
+        .select(`
+          id, title, cover_image, video_url, video_provider, domain, tags,
+          views_count, reactions_count, comments_count, created_at, member_id,
+          members!member_projects_member_id_fkey(id, name, photo, role, domain)
+        `)
+        .in("id", topIds)
+        .eq("status", "published")
+        .is("deleted_at", null);
+      if (error) throw error;
+
+      const order = new Map(topIds.map((id, i) => [id, i]));
+      return (projects || [])
+        .sort((a, b) => order.get(a.id) - order.get(b.id))
+        .map(p => ({ ...p, trending_score: counts[p.id] }));
+    });
+    res.json({ trending: data });
+  } catch (e) {
+    console.error("[network:trending]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/member/network/new-joiners — most recently activated portal accounts
+app.get("/api/member/network/new-joiners", memberAuthMiddleware, networkReadLimit, async (req, res) => {
+  try {
+    cacheFor(res, 120);
+    const data = await memCache("network:new-joiners", 300, async () => {
+      const { data: rows, error } = await supabase
+        .from("member_accounts")
+        .select("created_at, members!member_accounts_member_id_fkey(id, name, photo, role, domain, batch, is_past, deleted_at)")
+        .eq("account_status", "active")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (rows || [])
+        .map(r => r.members)
+        .filter(m => m && !m.deleted_at && !m.is_past)
+        .slice(0, 12)
+        .map(({ deleted_at, ...m }) => m);
+    });
+    res.json(data);
+  } catch (e) {
+    console.error("[network:new-joiners]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // ── Admin — Studio Wall moderation ───────────────────────────────────────────
@@ -12396,4 +12875,11 @@ app.listen(PORT, async () => {
   }
   await enforce2FAPolicy();
   setInterval(enforce2FAPolicy, 60 * 60 * 1000);
+
+  // ── Phase 2 — "The Network": weekly/all-time leaderboard refresh ──
+  // Recomputes via the compute_leaderboard() Postgres function (see
+  // phase2_leaderboard_function.sql) so the read endpoint never has to
+  // aggregate reaction history live.
+  await refreshLeaderboards();
+  setInterval(refreshLeaderboards, 30 * 60 * 1000);
 });

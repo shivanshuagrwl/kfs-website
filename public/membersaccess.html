@@ -2635,6 +2635,34 @@
             </div>
 
             <div class="card">
+              <div class="card-title">Status</div>
+              <div class="panel-sub" style="margin-bottom: 16px">
+                A short status shown on your profile, your network card, and Discovery search results.
+              </div>
+              <div class="status-picker" id="status-picker">
+                <button type="button" class="status-pill-btn" data-status="open_to_collab">Open to collab</button>
+                <button type="button" class="status-pill-btn" data-status="busy_on_set">Busy on set</button>
+                <button type="button" class="status-pill-btn" data-status="alumni_mentor">Alumni mentor</button>
+                <button type="button" class="status-pill-btn status-pill-clear" data-status="">Clear</button>
+              </div>
+              <div id="status-msg" class="ok-msg" style="display: none"></div>
+              <div id="status-err" class="err-msg" style="display: none"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Skills &amp; Interests</div>
+              <div class="panel-sub" style="margin-bottom: 16px">
+                Tag what you do or want to learn. Powers Discovery and your "For You" feed.
+              </div>
+              <div class="skill-input-wrap">
+                <input id="skill-input" type="text" placeholder="e.g. Cinematography, Editing, Sound Design…" autocomplete="off" />
+                <div id="skill-suggestions" class="skill-suggestions" style="display: none"></div>
+              </div>
+              <div id="skill-chips" class="skill-chips"></div>
+              <div id="skill-err" class="err-msg" style="display: none"></div>
+            </div>
+
+            <div class="card">
               <div class="card-title">Social Links</div>
               <div class="form-grid">
                 <div class="form-group">
@@ -3231,6 +3259,10 @@
             <!-- Feed tab -->
             <div class="studio-tab-panel active" id="studio-tab-feed">
               <div class="studio-feed-toolbar">
+                <div class="feed-sort-toggle" id="feed-sort-toggle">
+                  <button type="button" class="feed-sort-btn active" data-feed-sort="latest">Latest</button>
+                  <button type="button" class="feed-sort-btn" data-feed-sort="foryou">For You</button>
+                </div>
                 <input id="studio-tag-filter" type="text" placeholder="Filter by tag…" class="studio-tag-input" />
                 <button class="btn-primary studio-post-btn" id="studio-new-post-btn" style="min-width:120px">Post Work</button>
               </div>
@@ -3261,11 +3293,13 @@
           <!-- ── NETWORK PANEL ─────────────────────────────────────────── -->
           <div class="panel" id="panel-network">
             <div class="panel-title">Network</div>
-            <div class="panel-sub">Members you follow, and members who follow you.</div>
+            <div class="panel-sub">Members you follow, who follows you, and the wider KFS network.</div>
 
             <div class="nw-tabs">
               <button class="nw-tab active" data-network-tab="followers">Followers</button>
               <button class="nw-tab" data-network-tab="following">Following</button>
+              <button class="nw-tab" data-network-tab="discover">Discover</button>
+              <button class="nw-tab" data-network-tab="leaderboard">Leaderboard</button>
             </div>
 
             <div class="nw-tab-panel active" id="network-tab-followers">
@@ -3280,6 +3314,39 @@
               <div id="network-following-more" style="display:none;text-align:center;padding:20px 0">
                 <button class="btn-ghost" id="network-following-more-btn" style="font-size:13px">Load more</button>
               </div>
+            </div>
+
+            <div class="nw-tab-panel" id="network-tab-discover">
+              <div class="discover-section">
+                <div class="discover-section-title">Trending on the Wall</div>
+                <div id="discover-trending-row" class="discover-trending-row"><div class="sw-loading">Loading…</div></div>
+              </div>
+              <div class="discover-section">
+                <div class="discover-section-title">New joiners</div>
+                <div id="discover-newjoiners-row" class="discover-newjoiners-row"><div class="sw-loading">Loading…</div></div>
+              </div>
+              <div class="discover-section">
+                <div class="discover-section-title">Browse members</div>
+                <div class="discover-filters">
+                  <input id="discover-search" type="text" placeholder="Search by name…" />
+                  <select id="discover-domain-filter"><option value="">All domains</option></select>
+                  <select id="discover-batch-filter"><option value="">All batches</option></select>
+                  <input id="discover-skill-filter" type="text" placeholder="Filter by skill…" />
+                </div>
+                <div id="discover-list" class="nw-list"></div>
+                <div id="discover-more" style="display:none;text-align:center;padding:20px 0">
+                  <button class="btn-ghost" id="discover-more-btn" style="font-size:13px">Load more</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="nw-tab-panel" id="network-tab-leaderboard">
+              <div class="lb-period-toggle">
+                <button class="lb-period-btn active" data-lb-period="weekly">This week</button>
+                <button class="lb-period-btn" data-lb-period="all_time">Hall of fame</button>
+              </div>
+              <div id="lb-my-rank" class="lb-my-rank" style="display:none"></div>
+              <div id="lb-list" class="lb-list"></div>
             </div>
           </div><!-- /#panel-network -->
 
@@ -3394,6 +3461,64 @@
 .nw-follow-btn.following:hover { background:#3a1414; border-color:#5a1f1f; color:#f87171; }
 .nw-follow-btn:disabled { opacity:.5; cursor:default; }
 
+/* ── Member status picker (Profile panel) ──────────────────────────────── */
+.status-picker { display:flex; flex-wrap:wrap; gap:8px; }
+.status-pill-btn { font-size:13px; font-weight:600; padding:9px 16px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; transition:background .12s,border-color .12s,color .12s; }
+.status-pill-btn:hover { border-color:#444; }
+.status-pill-btn.active { background:#16241c; color:#4ade80; border-color:#1f3328; }
+.status-pill-btn.status-pill-clear { color:var(--muted); }
+.status-pill-btn.status-pill-clear:hover { color:var(--text); }
+
+/* ── Skills / interest graph (Profile panel) ───────────────────────────── */
+.skill-input-wrap { position:relative; margin-bottom:12px; }
+.skill-suggestions { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:10px; max-height:220px; overflow-y:auto; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+.skill-suggestion-item { padding:10px 14px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.skill-suggestion-item:hover { background:var(--faint); }
+.skill-suggestion-count { font-size:11px; color:var(--muted); }
+.skill-suggestion-create { color:var(--muted); font-style:italic; }
+.skill-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.skill-chip { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; padding:6px 8px 6px 14px; border-radius:20px; background:var(--faint); color:var(--text); }
+.skill-chip-remove { background:none; border:none; color:var(--muted); cursor:pointer; display:flex; align-items:center; padding:3px; border-radius:50%; }
+.skill-chip-remove:hover { color:#f87171; background:rgba(248,113,113,.12); }
+.skill-chip-empty { font-size:13px; color:var(--muted); }
+
+/* ── Discover tab ───────────────────────────────────────────────────────── */
+.discover-section { margin-bottom:32px; }
+.discover-section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:14px; }
+.discover-trending-row, .discover-newjoiners-row { display:flex; gap:14px; overflow-x:auto; padding-bottom:6px; scrollbar-width:thin; }
+.discover-trend-card { flex:0 0 180px; cursor:pointer; }
+.discover-trend-media { width:180px; height:110px; border-radius:10px; background:var(--faint); overflow:hidden; position:relative; }
+.discover-trend-media img { width:100%; height:100%; object-fit:cover; }
+.discover-trend-title { font-size:12.5px; font-weight:600; margin-top:8px; line-height:1.4; }
+.discover-trend-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+.discover-joiner-card { flex:0 0 92px; text-align:center; cursor:pointer; }
+.discover-joiner-name { font-size:11.5px; font-weight:600; margin-top:8px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.discover-joiner-meta { font-size:10.5px; color:var(--muted); margin-top:1px; }
+.discover-filters { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+.discover-filters input, .discover-filters select { width:auto; flex:1 1 160px; min-width:140px; }
+
+/* ── Leaderboard tab ───────────────────────────────────────────────────── */
+.lb-period-toggle { display:flex; gap:8px; margin-bottom:18px; }
+.lb-period-btn { font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; transition:background .12s,color .12s,border-color .12s; }
+.lb-period-btn:hover { color:var(--text); }
+.lb-period-btn.active { background:var(--text); color:var(--bg); border-color:var(--text); }
+.lb-my-rank { font-size:12.5px; color:var(--muted); margin-bottom:14px; padding:10px 14px; background:var(--surface); border:1px solid var(--border); border-radius:10px; }
+.lb-list { display:flex; flex-direction:column; gap:2px; }
+.lb-row { display:flex; align-items:center; gap:12px; padding:12px 8px; border-bottom:1px solid var(--border); cursor:pointer; }
+.lb-rank { width:28px; text-align:center; font-size:13px; font-weight:700; color:var(--muted); flex-shrink:0; }
+.lb-rank.lb-rank-1 { color:#facc15; }
+.lb-rank.lb-rank-2 { color:#d1d5db; }
+.lb-rank.lb-rank-3 { color:#cd7f32; }
+.lb-info { flex:1; min-width:0; }
+.lb-name { font-size:14px; font-weight:600; }
+.lb-meta { font-size:12px; color:var(--muted); margin-top:1px; }
+.lb-wows { display:flex; align-items:center; gap:5px; font-size:13px; font-weight:700; color:var(--text); flex-shrink:0; }
+
+/* ── Smart feed sort toggle (Studio panel) ──────────────────────────────── */
+.feed-sort-toggle { display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:3px; }
+.feed-sort-btn { font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:7px; border:none; background:transparent; color:var(--muted); cursor:pointer; transition:background .12s,color .12s; }
+.feed-sort-btn.active { background:var(--faint); color:var(--text); }
+
 /* Member mini-profile modal */
 .member-profile-modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; width:100%; max-width:380px; padding:28px 24px; position:relative; }
 .member-profile-modal-close { position:absolute; top:16px; right:16px; background:none; border:none; color:var(--muted); cursor:pointer; padding:4px; }
@@ -3406,6 +3531,8 @@
 .mpm-stat { text-align:center; }
 .mpm-stat-val { font-size:16px; font-weight:700; }
 .mpm-stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+.mpm-skills { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:18px; }
+.mpm-skill-chip { font-size:11px; font-weight:600; padding:4px 10px; border-radius:14px; background:var(--faint); color:var(--text); }
 
 .studio-feed-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:20px; }
 .studio-tag-input { width:auto; flex:1; font-size:13px; padding:9px 12px; }
