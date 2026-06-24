@@ -119,40 +119,64 @@
           display: flex;
           position: fixed;
           left: 50%;
-          bottom: max(12px, env(safe-area-inset-bottom));
+          bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
           transform: translateX(-50%);
-          width: min(88%, 380px);
+          width: min(92vw, 360px);
           z-index: 200;
-          background: rgba(14,14,14,0.82);
-          backdrop-filter: blur(28px) saturate(180%);
-          -webkit-backdrop-filter: blur(28px) saturate(180%);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 22px;
-          box-shadow: 0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
-          padding: 5px 5px;
+          background: rgba(12,12,12,0.88);
+          backdrop-filter: blur(32px) saturate(200%);
+          -webkit-backdrop-filter: blur(32px) saturate(200%);
+          border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 100px; /* true pill */
+          box-shadow:
+            0 8px 32px rgba(0,0,0,0.7),
+            0 2px 8px rgba(0,0,0,0.5),
+            inset 0 1px 0 rgba(255,255,255,0.06);
+          padding: 6px 8px;
           justify-content: space-around;
           align-items: center;
+          gap: 0;
         }
         .btb-item {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 2px;
+          justify-content: center;
+          gap: 3px;
           flex: 1;
           cursor: pointer;
-          padding: 5px 0;
-          border-radius: 16px;
-          color: rgba(255,255,255,0.38);
-          transition: color 0.12s, background 0.12s;
+          /* same total height as the plus button area so all items share one baseline */
+          min-height: 52px;
+          padding: 0;
+          border-radius: 100px;
+          color: rgba(255,255,255,0.32);
+          transition: color 0.14s ease, background 0.14s ease;
           position: relative;
         }
-        .btb-item.active { color: rgba(255,255,255,0.92); background: rgba(255,255,255,0.06); }
-        .btb-item svg { width: 19px; height: 19px; }
-        .btb-label { font-size: 8px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
-        .btb-dot { position: absolute; top: 4px; right: calc(50% - 17px); width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: none; }
+        .btb-item:active { transform: scale(0.9); transition: transform 0.08s; }
+        .btb-item.active { color: rgba(255,255,255,0.95); }
+
+        .btb-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .btb-label {
+          font-size: 9px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          line-height: 1;
+        }
+        .btb-dot {
+          position: absolute;
+          top: 8px;
+          right: calc(50% - 14px);
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: #22c55e;
+          display: none;
+          box-shadow: 0 0 0 1.5px rgba(12,12,12,0.88);
+        }
         .btb-dot.show { display: block; }
         /* Push main content up so the floating pill doesn't overlap */
-        .main { padding-bottom: 96px !important; }
+        .main { padding-bottom: 100px !important; }
         /* Hide the old horizontal scroll mobile nav — replaced by bottom bar */
         .mobile-nav { display: none !important; }
         /* Hide old mobile topbar – replaced by top sticky bar */
@@ -4214,7 +4238,6 @@
         <div class="btb-post-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </div>
-        <span class="btb-label" style="visibility:hidden">Post</span>
       </div>
       <!-- Notifications / Activity -->
       <div class="btb-item" data-panel="activity" onclick="btbSwitch(this)">
@@ -4297,17 +4320,25 @@
     <style>
     /* ─── Bottom tab bar extra styles ───────────────────────────────────── */
     .btb-post-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 13px;
-      background: var(--text);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 2px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3);
+      transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s;
+      flex-shrink: 0;
     }
-    .btb-post-btn svg { color: var(--bg); width: 18px; height: 18px; }
-    .btb-post-item { cursor: pointer; }
+    .btb-post-btn:active { transform: scale(0.9); box-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+    .btb-post-btn svg { color: #000; width: 18px; height: 18px; flex-shrink: 0; }
+    .btb-post-item {
+      cursor: pointer;
+      gap: 0 !important;     /* no label, no gap needed */
+      justify-content: center !important;
+    }
+    .btb-post-item:active { transform: none !important; }
     .btb-post-item.active { background: transparent !important; }
 
     /* ─── Strand panel overrides — Instagram-style edge-to-edge ─────────── */

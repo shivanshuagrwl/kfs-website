@@ -2385,31 +2385,7 @@ function swFeedCard(p) {
   const likesLabel = p.reactions_count > 0
     ? `<div class="ig-post-likes">${swFmtNum(p.reactions_count)} ${p.reactions_count !== 1 ? 'reactions' : 'reaction'}</div>` : '';
 
-  // Reaction popup — film-themed reactions with Truman Show sun reference
-  const reactionPopupHtml = `
-    <div class="rxn-popup" id="rxn-popup-${swEsc(p.id)}" role="menu" aria-label="React"
-      onmouseenter="swCancelHideRxnPopup('${swEsc(p.id)}')" onmouseleave="swHideRxnPopup('${swEsc(p.id)}')">
-      <button class="rxn-btn${myRxn==='wow'?' active':''}" data-rxn="wow" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','wow')" title="Like" role="menuitem">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-        <span class="rxn-label">Like</span>
-      </button>
-      <button class="rxn-btn${myRxn==='fire'?' active':''}" data-rxn="fire" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','fire')" title="Fire" role="menuitem">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>
-        <span class="rxn-label">Fire</span>
-      </button>
-      <button class="rxn-btn${myRxn==='brilliant'?' active':''}" data-rxn="brilliant" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','brilliant')" title="Brilliant" role="menuitem">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        <span class="rxn-label">Brilliant</span>
-      </button>
-      <button class="rxn-btn${myRxn==='truman'?' active':''}" data-rxn="truman" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','truman')" title="Good morning, and in case I dont see ya" role="menuitem">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-        <span class="rxn-label">Truman</span>
-      </button>
-      <button class="rxn-btn${myRxn==='mind_blown'?' active':''}" data-rxn="mind_blown" onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','mind_blown')" title="Mind Blown" role="menuitem">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        <span class="rxn-label">Whoa</span>
-      </button>
-    </div>`;
+  // Reaction popup is now a single body-level portal (#rxn-overlay), not per-card
 
   return `<article class="ig-post" data-project-id="${swEsc(p.id)}">
     <!-- Header -->
@@ -2439,7 +2415,7 @@ function swFeedCard(p) {
         onclick="event.stopPropagation();swToggleReaction('${swEsc(p.id)}','wow')"
         onmouseenter="swShowRxnPopup('${swEsc(p.id)}')"
         onmouseleave="swHideRxnPopup('${swEsc(p.id)}')"
-      >${reactionPopupHtml}<svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#4ba3d4':'none'}" stroke="${isLiked?'#4ba3d4':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+      ><svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#4ba3d4':'none'}" stroke="${isLiked?'#4ba3d4':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
       </button>
       <button class="ig-action-btn" onclick="swOpenDetail('${swEsc(p.id)}')" title="Comment">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -2764,30 +2740,152 @@ function swUpdateReactionUI(projectId) {
       }
     }
   }
+  // Sync overlay active states if it's currently showing for this project
+  if (RXN.currentId === projectId) _rxnSyncActive(projectId);
 }
 
-// ── Reaction Popup (desktop hover + mobile long-press) ────────────────────
+// ── Reaction Overlay — single body-level portal ────────────────────────────
+// One shared #rxn-overlay div, positioned via getBoundingClientRect().
+// Escapes all overflow:hidden / stacking context traps in the card layout.
 
-const _rxnPopupTimers = {};
+const RXN = {
+  overlay: null,
+  pill: null,
+  currentId: null,
+  showTimer: null,
+  hideTimer: null,
+};
 
+function _rxnEnsureOverlay() {
+  if (RXN.overlay) return;
+  const el = document.createElement('div');
+  el.id = 'rxn-overlay';
+  el.innerHTML = `<div class="rxn-pill">
+    <button class="rxn-btn" data-rxn="wow" title="Like">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+      <span class="rxn-label">Like</span>
+    </button>
+    <button class="rxn-btn" data-rxn="fire" title="Fire">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>
+      <span class="rxn-label">Fire</span>
+    </button>
+    <button class="rxn-btn" data-rxn="brilliant" title="Brilliant">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="rxn-label">Brilliant</span>
+    </button>
+    <button class="rxn-btn" data-rxn="truman" title="Good morning, and in case I don't see ya">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <span class="rxn-label">Truman</span>
+    </button>
+    <button class="rxn-btn" data-rxn="mind_blown" title="Mind Blown">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <span class="rxn-label">Whoa</span>
+    </button>
+  </div>`;
+  document.body.appendChild(el);
+  RXN.overlay = el;
+  RXN.pill = el.querySelector('.rxn-pill');
+
+  // Delegate clicks on rxn-btn inside overlay
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.rxn-btn');
+    if (btn && RXN.currentId) {
+      e.stopPropagation();
+      swToggleReaction(RXN.currentId, btn.dataset.rxn);
+      _rxnHideNow();
+    }
+  });
+
+  // Keep visible when hovering the overlay itself
+  el.addEventListener('mouseenter', () => {
+    clearTimeout(RXN.hideTimer);
+  });
+  el.addEventListener('mouseleave', () => {
+    _rxnScheduleHide(150);
+  });
+}
+
+function _rxnPosition(triggerEl) {
+  const rect = triggerEl.getBoundingClientRect();
+  const pill = RXN.pill;
+  // Temporarily show (off-screen) to measure
+  RXN.overlay.style.left = '-9999px';
+  RXN.overlay.style.top  = '-9999px';
+  RXN.overlay.style.display = 'block';
+  const pillW = pill.offsetWidth || 280;
+  const pillH = pill.offsetHeight || 62;
+
+  // Preferred: above the button, centered on it
+  const gap = 10;
+  let top  = rect.top + window.scrollY - pillH - gap;
+  let left = rect.left + window.scrollX + rect.width / 2 - pillW / 2;
+
+  // Clamp to viewport
+  const vw = window.innerWidth;
+  left = Math.max(8, Math.min(left, vw - pillW - 8));
+  // If not enough room above, flip below
+  if (top < window.scrollY + 8) {
+    top = rect.bottom + window.scrollY + gap;
+  }
+
+  // Arrow offset relative to pill left edge, pointing at button center
+  const arrowLeft = (rect.left + window.scrollX + rect.width / 2) - left - 5;
+  pill.style.setProperty('--arrow-left', `${Math.max(12, Math.min(arrowLeft, pillW - 22))}px`);
+
+  RXN.overlay.style.left = `${left}px`;
+  RXN.overlay.style.top  = `${top}px`;
+}
+
+function _rxnSyncActive(projectId) {
+  const myRxn = SW.myReactions.get(projectId) || null;
+  RXN.pill?.querySelectorAll('.rxn-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.rxn === myRxn);
+  });
+}
+
+function _rxnShowNow(projectId, triggerEl) {
+  _rxnEnsureOverlay();
+  RXN.currentId = projectId;
+  _rxnSyncActive(projectId);
+  _rxnPosition(triggerEl);
+  // Force reflow so transition plays
+  RXN.overlay.offsetHeight;
+  RXN.overlay.classList.add('visible');
+}
+
+function _rxnHideNow() {
+  if (!RXN.overlay) return;
+  RXN.overlay.classList.remove('visible');
+  RXN.currentId = null;
+}
+
+function _rxnScheduleHide(delay = 180) {
+  clearTimeout(RXN.hideTimer);
+  RXN.hideTimer = setTimeout(_rxnHideNow, delay);
+}
+
+// Public API called from HTML attributes
 function swShowRxnPopup(projectId) {
-  _rxnPopupTimers[projectId] = setTimeout(() => {
-    const popup = document.getElementById(`rxn-popup-${projectId}`);
-    if (popup) popup.classList.add('visible');
-  }, 320);
+  clearTimeout(RXN.hideTimer);
+  clearTimeout(RXN.showTimer);
+  RXN.showTimer = setTimeout(() => {
+    const btn = document.querySelector(`.ig-like-btn[data-project-id="${CSS.escape(projectId)}"]`);
+    if (btn) _rxnShowNow(projectId, btn);
+  }, 280);
 }
 
 function swHideRxnPopup(projectId) {
-  clearTimeout(_rxnPopupTimers[projectId]);
-  setTimeout(() => {
-    const popup = document.getElementById(`rxn-popup-${projectId}`);
-    if (popup) popup.classList.remove('visible');
-  }, 180);
+  clearTimeout(RXN.showTimer);
+  _rxnScheduleHide(160);
 }
 
 function swCancelHideRxnPopup(projectId) {
-  clearTimeout(_rxnPopupTimers[projectId]);
+  // Legacy — no longer needed (overlay handles its own mouseenter)
+  clearTimeout(RXN.hideTimer);
 }
+
+// Dismiss on scroll (repositioning on scroll would be expensive)
+window.addEventListener('scroll', () => { if (RXN.overlay?.classList.contains('visible')) _rxnHideNow(); }, { passive: true });
 
 // Mobile long-press: attach to feed after render
 function swAttachLongPress() {
@@ -2795,21 +2893,18 @@ function swAttachLongPress() {
     if (btn._lpAttached) return;
     btn._lpAttached = true;
     let timer;
-    btn.addEventListener('touchstart', e => {
+    btn.addEventListener('touchstart', () => {
       timer = setTimeout(() => {
         const pid = btn.dataset.projectId;
-        const popup = document.getElementById(`rxn-popup-${pid}`);
-        if (popup) {
-          popup.classList.add('visible');
-          // dismiss on outside touch
-          const dismiss = (ev) => {
-            if (!popup.contains(ev.target)) {
-              popup.classList.remove('visible');
-              document.removeEventListener('touchstart', dismiss, true);
-            }
-          };
-          setTimeout(() => document.addEventListener('touchstart', dismiss, true), 50);
-        }
+        _rxnShowNow(pid, btn);
+        // Dismiss on outside touch
+        const dismiss = (ev) => {
+          if (!RXN.overlay?.contains(ev.target) && ev.target !== btn) {
+            _rxnHideNow();
+            document.removeEventListener('touchstart', dismiss, true);
+          }
+        };
+        setTimeout(() => document.addEventListener('touchstart', dismiss, true), 50);
       }, 420);
     }, { passive: true });
     btn.addEventListener('touchend', () => clearTimeout(timer), { passive: true });
