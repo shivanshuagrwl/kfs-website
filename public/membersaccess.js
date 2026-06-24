@@ -2328,10 +2328,11 @@ const SW_ICONS = {
 };
 
 const SW_REACTIONS = [
-  { type:'wow',        label:'Wow',        icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
-  { type:'inspiring',  label:'Inspiring',  icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
-  { type:'fire',       label:'Fire',       icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
-  { type:'mind_blown', label:'Mind Blown', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
+  { type:'wow',        label:'Wow',           icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
+  { type:'fire',       label:'Fire',          icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
+  { type:'brilliant',  label:'Brilliant',     icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
+  { type:'truman',     label:'Good Morning!', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>` },
+  { type:'mind_blown', label:'Mind Blown',    icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
 ];
 
 // ── Feed card ─────────────────────────────────────────────────────────────
@@ -2602,6 +2603,7 @@ async function swLoadAnalytics() {
 // ── Detail Modal ──────────────────────────────────────────────────────────
 
 async function swOpenDetail(projectId) {
+  _rxnHideNow(); // dismiss reaction wheel if open
   SW.detailProjectId = projectId;
   const overlay = $id('studio-detail-modal-overlay');
   const body    = $id('studio-detail-body');
@@ -2783,9 +2785,9 @@ function _rxnEnsureOverlay() {
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <span class="rxn-label">Brilliant</span>
     </button>
-    <button class="rxn-btn" data-rxn="truman" title="Truman">
-      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div>
-      <span class="rxn-label">Truman</span>
+    <button class="rxn-btn" data-rxn="truman" title="Good Morning!">
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg></div>
+      <span class="rxn-label">Good Morning!</span>
     </button>
     <button class="rxn-btn" data-rxn="mind_blown" title="Whoa">
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
@@ -2818,50 +2820,40 @@ function _rxnEnsureOverlay() {
 function _rxnPosition(triggerEl) {
   const rect = triggerEl.getBoundingClientRect();
   const wheel = RXN.pill;
-  const N = 5; // number of buttons
+  const N = 5;
+  const OVERLAY = 200;   // must match CSS #rxn-overlay width/height
+  const BTN = 44;        // must match CSS .rxn-btn width/height
+  const R = 64;          // orbit radius — fits nicely inside 200px container
 
-  // Position each button radially around center
-  // We want a half-circle arc above the trigger button
-  const R = 52; // orbit radius px
-  const wheelSize = 130; // must match CSS .rxn-wheel width/height
-  const btnSize = 48;
-
+  // Position each button in a fan arc above the trigger
+  // Arc: -160° → -20° (fan opening upward, slightly tilted left)
   wheel.querySelectorAll('.rxn-btn').forEach((btn, i) => {
-    // Spread 5 buttons in a semicircular arc above: -150° to -30° (from right)
-    // 0° = 3 o'clock, -90° = 12 o'clock (up)
-    const startAngle = -150; // degrees
-    const endAngle   = -30;
+    const startAngle = -160;
+    const endAngle   = -20;
     const angle = startAngle + (i / (N - 1)) * (endAngle - startAngle);
     const rad = (angle * Math.PI) / 180;
-    // Center is at (wheelSize/2, wheelSize/2)
-    const cx = wheelSize / 2 + R * Math.cos(rad) - btnSize / 2;
-    const cy = wheelSize / 2 + R * Math.sin(rad) - btnSize / 2;
+    // Center of the 200px container
+    const cx = OVERLAY / 2 + R * Math.cos(rad) - BTN / 2;
+    const cy = OVERLAY / 2 + R * Math.sin(rad) - BTN / 2;
     btn.style.left = `${Math.round(cx)}px`;
     btn.style.top  = `${Math.round(cy)}px`;
-    // Stagger delay for spin-in is handled by CSS :nth-child
   });
 
-  // Show off-screen to measure
-  RXN.overlay.style.left = '-9999px';
-  RXN.overlay.style.top  = '-9999px';
-  RXN.overlay.style.display = 'block';
-
-  const gap = 10;
-  // Place wheel so its bottom-center is just above the trigger button center
-  const btnCx = rect.left + window.scrollX + rect.width / 2;
-  let left = btnCx - wheelSize / 2;
-  let top  = rect.top + window.scrollY - wheelSize - gap;
+  // Place the container so its center is directly above the trigger button
+  const gap = 8;
+  const btnCx = rect.left + rect.width / 2;  // viewport-relative (fixed positioning)
+  let left = btnCx - OVERLAY / 2;
+  let top  = rect.top - OVERLAY - gap;
 
   const vw = window.innerWidth;
-  left = Math.max(8, Math.min(left, vw - wheelSize - 8));
-  if (top < window.scrollY + 8) {
-    top = rect.bottom + window.scrollY + gap;
+  left = Math.max(4, Math.min(left, vw - OVERLAY - 4));
+  if (top < 4) {
+    top = rect.bottom + gap;
   }
 
-  RXN.overlay.dataset.btnCx = btnCx;
-  RXN.overlay.dataset.btnCy = rect.top + window.scrollY + rect.height / 2;
-  RXN.overlay.style.left = `${left}px`;
-  RXN.overlay.style.top  = `${top}px`;
+  RXN.overlay.style.left = `${Math.round(left)}px`;
+  RXN.overlay.style.top  = `${Math.round(top)}px`;
+  RXN.overlay.style.display = 'block';
 }
 
 function _rxnSyncActive(projectId) {
@@ -2884,6 +2876,7 @@ function _rxnShowNow(projectId, triggerEl) {
 function _rxnHideNow() {
   if (!RXN.overlay) return;
   RXN.overlay.classList.remove('visible');
+  RXN.overlay.style.display = 'none';  // fully remove from hit-testing
   RXN.currentId = null;
 }
 
@@ -2914,6 +2907,14 @@ function swCancelHideRxnPopup(projectId) {
 
 // Dismiss on scroll (repositioning on scroll would be expensive)
 window.addEventListener('scroll', () => { if (RXN.overlay?.classList.contains('visible')) _rxnHideNow(); }, { passive: true });
+
+// Dismiss when clicking anywhere outside the overlay or the like button
+document.addEventListener('click', e => {
+  if (!RXN.overlay?.classList.contains('visible')) return;
+  if (RXN.overlay.contains(e.target)) return;
+  if (e.target.closest('.ig-like-btn')) return;
+  _rxnHideNow();
+}, true);
 
 // Mobile long-press: attach to feed after render
 function swAttachLongPress() {
@@ -2973,6 +2974,7 @@ function _fillComposerAuthor() {
 }
 
 async function swOpenNewPostModal() {
+  _rxnHideNow(); // dismiss reaction wheel if open
   SW.editingProjectId = null;
   const t = $id('studio-modal-title-text'); if(t) t.textContent = 'New Post';
   const s = $id('sw-submit-btn'); if(s) s.textContent = 'Post';

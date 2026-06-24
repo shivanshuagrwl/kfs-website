@@ -4445,34 +4445,35 @@
       z-index: 9999;
       pointer-events: none;
       display: none;
-      width: 130px;
-      height: 130px;
+      /* Large enough that no button ever clips — buttons are positioned absolutely
+         within .rxn-wheel which is centered here */
+      width: 200px;
+      height: 200px;
     }
     #rxn-overlay.visible {
       pointer-events: auto;
     }
     /* ── Reaction radial wheel ──────────────────────────────────────────── */
     .rxn-wheel {
-      position: relative;
-      width: 130px;
-      height: 130px;
+      position: absolute;
+      inset: 0;
       /* no background, no border — the wheel floats */
     }
-    /* Each rxn-btn is positioned absolutely around the center */
+    /* Each rxn-btn is positioned absolutely around the center of .rxn-wheel */
     .rxn-btn {
       position: absolute;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: #1c1c1c;
-      border: 1px solid #2e2e2e;
+      background: #202020;
+      border: 1px solid #323232;
       cursor: pointer;
       color: var(--muted);
-      box-shadow: 0 4px 16px rgba(0,0,0,.55);
+      box-shadow: 0 4px 18px rgba(0,0,0,.65), 0 1px 4px rgba(0,0,0,.4);
       padding: 0;
       justify-content: center;
       transition:
@@ -4482,38 +4483,35 @@
         box-shadow .12s;
     }
     .rxn-btn:hover {
-      background: #2a2a2a;
+      background: #2e2e2e;
       color: var(--text);
-      transform: scale(1.18) !important;
-      box-shadow: 0 6px 24px rgba(0,0,0,.7);
+      transform: scale(1.22) !important;
+      box-shadow: 0 6px 28px rgba(0,0,0,.8);
       z-index: 2;
     }
     .rxn-btn.active {
-      background: #1a2535;
+      background: #152030;
       color: #4ba3d4;
       border-color: #2a4060;
     }
-    .rxn-btn.active:hover {
-      color: #6bbfe6;
-    }
+    .rxn-btn.active:hover { color: #6bbfe6; }
     .rxn-btn svg { display: block; flex-shrink: 0; }
     .rxn-icon-wrap { display: flex; align-items: center; justify-content: center; }
-    .rxn-label {
-      display: none; /* hidden in wheel — tooltip on hover via title attr */
-    }
-    /* Spin-in entrance for each button */
+    .rxn-label { display: none; }
+    /* Spin-in entrance — targets buttons inside the wheel */
     @keyframes rxnBtnIn {
-      from { opacity: 0; transform: scale(0.4) rotate(-30deg); }
+      from { opacity: 0; transform: scale(0.35) rotate(-40deg); }
       to   { opacity: 1; }
     }
     #rxn-overlay.visible .rxn-btn {
-      animation: rxnBtnIn 0.22s cubic-bezier(.34,1.56,.64,1) both;
+      animation: rxnBtnIn 0.24s cubic-bezier(.34,1.56,.64,1) both;
     }
-    #rxn-overlay.visible .rxn-btn:nth-child(1) { animation-delay: 0ms; }
-    #rxn-overlay.visible .rxn-btn:nth-child(2) { animation-delay: 30ms; }
-    #rxn-overlay.visible .rxn-btn:nth-child(3) { animation-delay: 60ms; }
-    #rxn-overlay.visible .rxn-btn:nth-child(4) { animation-delay: 90ms; }
-    #rxn-overlay.visible .rxn-btn:nth-child(5) { animation-delay: 120ms; }
+    /* nth-child selectors apply to .rxn-btn children of .rxn-wheel */
+    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(1) { animation-delay: 0ms; }
+    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(2) { animation-delay: 35ms; }
+    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(3) { animation-delay: 70ms; }
+    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(4) { animation-delay: 105ms; }
+    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(5) { animation-delay: 140ms; }
 
     /* Likes count */
     .ig-post-likes {
