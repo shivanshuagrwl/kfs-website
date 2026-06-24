@@ -2331,7 +2331,7 @@ const SW_REACTIONS = [
   { type:'wow',        label:'Wow',           icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
   { type:'fire',       label:'Fire',          icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
   { type:'brilliant',  label:'Brilliant',     icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
-  { type:'seahaven',   label:'Good Morning!', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>` },
+  { type:'seahaven',   label:'Seahaven',      icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>` },
   { type:'mind_blown', label:'Mind Blown',    icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
 ];
 
@@ -2794,9 +2794,9 @@ function _rxnEnsureOverlay() {
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <span class="rxn-label">Brilliant</span>
     </button>
-    <button class="rxn-btn" data-rxn="seahaven" title="Good Morning!">
+    <button class="rxn-btn" data-rxn="seahaven" title="Seahaven">
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg></div>
-      <span class="rxn-label">Good Morning!</span>
+      <span class="rxn-label">Seahaven</span>
     </button>
     <button class="rxn-btn" data-rxn="mind_blown" title="Whoa">
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
@@ -2830,16 +2830,13 @@ function _rxnPosition(triggerEl) {
   const rect = triggerEl.getBoundingClientRect();
   const wheel = RXN.pill;
   const N = 5;
-  const OVERLAY = 210;   // must match CSS #rxn-overlay width/height
+  const OVERLAY = 160;   // must match CSS #rxn-overlay width/height
   const BTN = 42;        // must match CSS .rxn-btn width/height
-  const R = 76;          // orbit radius — wide enough that adjacent buttons don't overlap
+  const R = 46;          // orbit radius — full circle, buttons evenly spaced with clear gaps
 
-  // Position each button in a fan arc above the trigger
-  // Arc: -168° → -12° (fan opening upward, slightly tilted left)
+  // Position each button evenly around a full 360° circle, starting at 12 o'clock
   wheel.querySelectorAll('.rxn-btn').forEach((btn, i) => {
-    const startAngle = -168;
-    const endAngle   = -12;
-    const angle = startAngle + (i / (N - 1)) * (endAngle - startAngle);
+    const angle = -90 + i * (360 / N);
     const rad = (angle * Math.PI) / 180;
     // Center of the OVERLAY container
     const cx = OVERLAY / 2 + R * Math.cos(rad) - BTN / 2;
