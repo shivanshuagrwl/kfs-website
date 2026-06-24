@@ -2245,32 +2245,107 @@ const SW_REACTIONS = [
 // ── Feed card ─────────────────────────────────────────────────────────────
 
 function swFeedCard(p) {
-  const author = p.members || {};
-  const myRxn  = SW.myReactions.get(p.id) || p.my_reaction || null;
+  const author   = p.members || {};
+  const myRxn    = SW.myReactions.get(p.id) || p.my_reaction || null;
+  const isLiked  = !!myRxn;
+  const hasImage = !!p.cover_image;
   const hasVideo = !!p.video_url;
-  const hasCover = !!p.cover_image;
+  const postType = p.post_type || (hasImage ? 'image' : hasVideo ? 'video' : 'text');
 
-  return `<div class="sw-card" data-project-id="${swEsc(p.id)}" role="button" tabindex="0"
-      onclick="swOpenDetail('${swEsc(p.id)}')" onkeydown="if(event.key==='Enter')swOpenDetail('${swEsc(p.id)}')">
-    <div class="sw-card-media">
-      ${hasCover ? `<img src="${swEsc(p.cover_image)}" alt="${swEsc(p.title)}" class="sw-card-img" loading="lazy">`
-        : hasVideo ? `<div class="sw-card-no-cover sw-card-video-placeholder">${SW_ICONS.play}</div>`
-        : `<div class="sw-card-no-cover"></div>`}
-      ${p.domain ? `<div class="sw-card-domain-pill">${swEsc(p.domain)}</div>` : ''}
-      ${hasVideo ? `<div class="sw-card-video-badge">${SW_ICONS.play}</div>` : ''}
-    </div>
-    <div class="sw-card-body">
-      <div class="sw-card-author-row" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')" style="cursor:pointer">${swAvatar(author.name, author.photo, 22)}<span class="sw-card-author-name">${swEsc(author.name||'Member')}</span></div>
-      <div class="sw-card-title">${swEsc(p.title)}</div>
-      ${p.description ? `<div class="sw-card-desc">${swEsc(p.description)}</div>` : ''}
-      ${p.tags?.length ? `<div class="sw-card-tags">${p.tags.map(t=>`<span class="sw-tag">${swEsc(t)}</span>`).join('')}</div>` : ''}
-      <div class="sw-card-stats">
-        <span class="sw-stat">${SW_ICONS.eye}&nbsp;${swFmtNum(p.views_count)}</span>
-        <span class="sw-stat ${myRxn?'sw-stat-active':''}">${myRxn?SW_ICONS.heartF:SW_ICONS.heart}&nbsp;${swFmtNum(p.reactions_count)}</span>
-        <span class="sw-stat">${SW_ICONS.comment}&nbsp;${swFmtNum(p.comments_count)}</span>
+  // Avatar — with gradient ring like Instagram
+  const avatarInner = author.photo
+    ? `<img src="${swEsc(author.photo)}" alt="${swEsc(author.name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
+    : `<div style="width:100%;height:100%;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#666;">${swEsc((author.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</div>`;
+
+  // Media section — image, video, or text background
+  let mediaHtml = '';
+  if (hasImage) {
+    mediaHtml = `<div class="ig-post-img-wrap"><img src="${swEsc(p.cover_image)}" alt="" class="ig-post-img" loading="lazy"></div>`;
+  } else if (hasVideo) {
+    const embedUrl = swVideoEmbedUrl(p.video_url, p.video_provider);
+    if (embedUrl) {
+      mediaHtml = `<div class="ig-post-img-wrap" style="position:relative;padding-bottom:56.25%;background:#000;"><iframe src="${swEsc(embedUrl)}" allowfullscreen loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe></div>`;
+    } else {
+      mediaHtml = `<div class="ig-post-img-wrap" style="aspect-ratio:16/9;background:#111;display:flex;align-items:center;justify-content:center;">${SW_ICONS.play}</div>`;
+    }
+  } else if (postType === 'text' && p.description) {
+    // Text-only post — show body text large, styled
+    mediaHtml = `<div class="ig-post-text-bg"><div class="ig-post-text-content">${swEsc(p.description)}</div></div>`;
+  }
+
+  // Caption: show title as headline, then description (if there's also an image)
+  const hasCaption = hasImage || hasVideo;
+  let captionHtml = '';
+  if (hasCaption && (p.title || p.description)) {
+    const captionBody = [p.title, (hasImage || hasVideo) ? p.description : null].filter(Boolean).join(' · ');
+    captionHtml = `<div class="ig-post-caption"><span class="ig-post-caption-author" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">${swEsc(author.name||'Member')}</span> <span class="ig-post-caption-text">${swEsc(captionBody)}</span></div>`;
+  } else if (postType !== 'text' && p.title) {
+    captionHtml = `<div class="ig-post-caption"><span class="ig-post-caption-author" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">${swEsc(author.name||'Member')}</span> <span class="ig-post-caption-text">${swEsc(p.title)}</span></div>`;
+  }
+
+  // Tags
+  const tagsHtml = p.tags?.length
+    ? `<div class="ig-post-tags">${p.tags.map(t=>`<span class="ig-post-tag">#${swEsc(t)}</span>`).join(' ')}</div>` : '';
+
+  // Comments count link
+  const commentsHtml = p.comments_count > 0
+    ? `<div class="ig-post-view-comments" onclick="swOpenDetail('${swEsc(p.id)}')">${swFmtNum(p.comments_count) === '1' ? 'View 1 comment' : `View all ${swFmtNum(p.comments_count)} comments`}</div>` : '';
+
+  const likesLabel = p.reactions_count > 0
+    ? `<div class="ig-post-likes">${swFmtNum(p.reactions_count)} like${p.reactions_count !== 1 ? 's' : ''}</div>` : '';
+
+  return `<article class="ig-post" data-project-id="${swEsc(p.id)}">
+    <!-- Header -->
+    <div class="ig-post-header">
+      <div class="ig-post-avatar-wrap">
+        <div class="ig-post-avatar-ring">
+          <div class="ig-post-avatar-inner">${avatarInner}</div>
+        </div>
       </div>
+      <div class="ig-post-author-block">
+        <div class="ig-post-author-name" onclick="openMemberProfile('${swEsc(p.member_id)}')">${swEsc(author.name||'Member')}</div>
+        <div class="ig-post-time">${swRelTime(p.created_at)}</div>
+      </div>
+      <button class="ig-post-options" onclick="swOpenDetail('${swEsc(p.id)}')" title="More">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
     </div>
-  </div>`;
+
+    <!-- Media / text body -->
+    ${mediaHtml}
+
+    <!-- Action bar -->
+    <div class="ig-post-actions">
+      <button class="ig-action-btn ${isLiked?'liked':''}" onclick="swToggleReaction('${swEsc(p.id)}','wow')" title="${isLiked?'Unlike':'Like'}">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#ed4956':'none'}" stroke="${isLiked?'#ed4956':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+      <button class="ig-action-btn" onclick="swOpenDetail('${swEsc(p.id)}')" title="Comment">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="ig-action-btn" title="Views" style="cursor:default;gap:5px;font-size:12px;color:var(--muted)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        ${swFmtNum(p.views_count)}
+      </button>
+      <button class="ig-action-btn ig-post-bookmark" title="Open post" onclick="swOpenDetail('${swEsc(p.id)}')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 21 12 16 5 21 5 3 19 3"/></svg>
+      </button>
+    </div>
+
+    <!-- Likes -->
+    ${likesLabel}
+
+    <!-- Caption -->
+    ${captionHtml}
+
+    <!-- Tags -->
+    ${tagsHtml}
+
+    <!-- Comments link -->
+    ${commentsHtml}
+
+    <!-- Timestamp -->
+    <div class="ig-post-timestamp">${swRelTime(p.created_at)}</div>
+  </article>`;
 }
 
 // ── Feed Load ─────────────────────────────────────────────────────────────
@@ -2547,95 +2622,181 @@ async function swToggleReaction(projectId, reactionType) {
 
 function swUpdateReactionUI(projectId) {
   const myRxn = SW.myReactions.get(projectId)||null;
+  // Update detail modal reactions
   $id(`detail-reactions-${projectId}`)?.querySelectorAll('.studio-rxn-btn').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.rxn === myRxn);
   });
+  // Update inline feed heart button on ig-post cards
+  const feedCard = document.querySelector(`.ig-post[data-project-id="${CSS.escape(projectId)}"]`);
+  if (feedCard) {
+    const heartBtn = feedCard.querySelector('.ig-action-btn');
+    if (heartBtn) {
+      const isLiked = !!myRxn;
+      heartBtn.classList.toggle('liked', isLiked);
+      heartBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#ed4956':'none'}" stroke="${isLiked?'#ed4956':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+    }
+  }
 }
 
-// ── Create / Edit Modal ────────────────────────────────────────────────────
+// ── Create / Edit Modal — Instagram-style composer ────────────────────────
+
+let _composerPostType = 'image'; // 'image' | 'text' | 'video'
+
+function swSetPostType(type) {
+  _composerPostType = type;
+  // Update type buttons
+  document.querySelectorAll('.composer-type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.postType === type);
+  });
+  // Show/hide sections
+  ['image','text','video'].forEach(t => {
+    const s = $id(`section-${t}`); if (s) s.style.display = t === type ? 'flex' : 'none';
+  });
+}
+
+function _fillComposerAuthor() {
+  const d = window._memberProfile || _member || {};
+  const name = d.name || '';
+  const photo = d.photo || '';
+  const avEl = $id('composer-avatar-el');
+  if (avEl) {
+    if (photo) {
+      avEl.innerHTML = `<img src="${swEsc(photo)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover" />`;
+    } else {
+      avEl.textContent = (name || '?')[0].toUpperCase();
+    }
+  }
+  const nameEl = $id('composer-author-name');
+  if (nameEl) nameEl.textContent = name;
+}
 
 async function swOpenNewPostModal() {
   SW.editingProjectId = null;
-  const t = $id('studio-modal-title-text'); if(t) t.textContent='New Post';
-  const s = $id('sw-submit-btn'); if(s) s.textContent='Publish';
+  const t = $id('studio-modal-title-text'); if(t) t.textContent = 'New Post';
+  const s = $id('sw-submit-btn'); if(s) s.textContent = 'Post';
   swResetPostModal();
-  const o = $id('studio-post-modal-overlay'); if(o){o.style.display='flex';document.body.style.overflow='hidden';}
+  swSetPostType('image');
+  // Show type row for new posts
+  const typeRow = $id('composer-type-row'); if (typeRow) typeRow.style.display = '';
+  _fillComposerAuthor();
+  const o = $id('studio-post-modal-overlay');
+  if (o) { o.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
 }
 
 async function swOpenEditModal(projectId) {
   try {
     const p = await api('GET', `/api/member/studio/projects/${projectId}`);
     SW.editingProjectId = projectId;
-    const t=$id('studio-modal-title-text'); if(t)t.textContent='Edit Post';
-    const s=$id('sw-submit-btn'); if(s)s.textContent='Save Changes';
+    const t = $id('studio-modal-title-text'); if(t) t.textContent = 'Edit Post';
+    const s = $id('sw-submit-btn'); if(s) s.textContent = 'Save';
     swResetPostModal();
-    const f=id=>$id(id);
-    if(f('sw-title'))          f('sw-title').value           = p.title||'';
-    if(f('sw-desc'))           f('sw-desc').value            = p.description||'';
-    if(f('sw-video-url'))      f('sw-video-url').value       = p.video_url||'';
-    if(f('sw-video-provider')) f('sw-video-provider').value  = p.video_provider||'';
-    if(f('sw-domain'))         f('sw-domain').value          = p.domain||'';
-    if(f('sw-tags'))           f('sw-tags').value            = (p.tags||[]).join(', ');
-    if(f('sw-desc-count'))     f('sw-desc-count').textContent= (p.description||'').length;
-    if(p.cover_image){const pv=$id('sw-cover-preview'),img=$id('sw-cover-img');if(pv&&img){img.src=p.cover_image;pv.style.display='';}}
-    SW.collabPickerSelected=(p.project_collaborators||[]).map(c=>c.members).filter(Boolean)
-      .map(m=>({id:m.id,name:m.name,photo:m.photo||null}));
+    // Hide type switcher when editing
+    const typeRow = $id('composer-type-row'); if (typeRow) typeRow.style.display = 'none';
+
+    // Detect type from stored data
+    const hasVideo = !!p.video_url;
+    const hasCover = !!p.cover_image;
+    const hasCaptionOnly = !p.title && !hasVideo && !hasCover && p.description;
+    if (hasVideo) swSetPostType('video');
+    else if (hasCaptionOnly) swSetPostType('text');
+    else swSetPostType('image');
+
+    // Fill fields
+    const f = id => $id(id);
+    if (f('sw-title'))  f('sw-title').value  = p.title || '';
+    if (f('sw-tags'))   f('sw-tags').value   = (p.tags || []).join(', ');
+    if (f('sw-domain')) f('sw-domain').value = p.domain || '';
+    // Caption / text
+    const captionVal = p.description || '';
+    if (f('sw-caption'))       { f('sw-caption').value = captionVal; $id('sw-caption-count').textContent = captionVal.length; }
+    if (f('sw-text-body'))     { f('sw-text-body').value = captionVal; $id('sw-text-count').textContent = captionVal.length; }
+    if (f('sw-video-caption')) { f('sw-video-caption').value = captionVal; $id('sw-video-caption-count').textContent = captionVal.length; }
+    if (f('sw-video-url'))     f('sw-video-url').value = p.video_url || '';
+    if (f('sw-video-provider')) f('sw-video-provider').value = p.video_provider || '';
+    // Cover image preview
+    if (p.cover_image) {
+      const img = $id('sw-cover-img'); if (img) { img.src = p.cover_image; img.style.display = ''; }
+      const ph = $id('composer-img-placeholder'); if (ph) ph.style.display = 'none';
+      const rm = $id('composer-img-remove'); if (rm) rm.style.display = '';
+    }
+    SW.collabPickerSelected = (p.project_collaborators || []).map(c => c.members).filter(Boolean)
+      .map(m => ({ id: m.id, name: m.name, photo: m.photo || null }));
     swRenderCollabPicker();
-    const o=$id('studio-post-modal-overlay'); if(o){o.style.display='flex';document.body.style.overflow='hidden';}
-  } catch(e){alert('Could not load post for editing: '+e.message);}
+    _fillComposerAuthor();
+    const o = $id('studio-post-modal-overlay'); if (o) { o.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+  } catch(e) { alert('Could not load post for editing: ' + e.message); }
 }
 
 function swResetPostModal() {
-  ['sw-title','sw-desc','sw-video-url','sw-domain','sw-tags'].forEach(id=>{const el=$id(id);if(el)el.value='';});
-  const p=$id('sw-video-provider');if(p)p.value='';
-  const cv=$id('sw-cover');if(cv)cv.value='';
-  const pv=$id('sw-cover-preview');if(pv)pv.style.display='none';
-  const cnt=$id('sw-desc-count');if(cnt)cnt.textContent='0';
-  const err=$id('sw-err');if(err)err.style.display='none';
-  SW.collabPickerSelected=[];
+  // Clear all inputs
+  ['sw-title','sw-tags','sw-domain','sw-caption','sw-text-body','sw-video-url','sw-video-caption'].forEach(id => {
+    const el = $id(id); if (el) el.value = '';
+  });
+  ['sw-caption-count','sw-text-count','sw-video-caption-count'].forEach(id => {
+    const el = $id(id); if (el) el.textContent = '0';
+  });
+  const p = $id('sw-video-provider'); if (p) p.value = '';
+  const cv = $id('sw-cover'); if (cv) cv.value = '';
+  const img = $id('sw-cover-img'); if (img) { img.src = ''; img.style.display = 'none'; }
+  const ph = $id('composer-img-placeholder'); if (ph) ph.style.display = '';
+  const rm = $id('composer-img-remove'); if (rm) rm.style.display = 'none';
+  const err = $id('sw-err'); if (err) err.style.display = 'none';
+  SW.collabPickerSelected = [];
   swRenderCollabPicker();
 }
 
 async function swSubmitPost() {
-  const title    = ($id('sw-title')?.value||'').trim();
-  const desc     = ($id('sw-desc')?.value||'').trim();
-  const videoUrl = ($id('sw-video-url')?.value||'').trim();
-  const provider = $id('sw-video-provider')?.value||'';
-  const domain   = ($id('sw-domain')?.value||'').trim();
-  const tagsRaw  = ($id('sw-tags')?.value||'').trim();
-  const coverFile= $id('sw-cover')?.files?.[0]||null;
-  const errEl=$id('sw-err'), btn=$id('sw-submit-btn');
+  const type     = _composerPostType;
+  const title    = ($id('sw-title')?.value || '').trim();
+  // Pick description from whichever textarea is active
+  let desc = '';
+  if (type === 'text')  desc = ($id('sw-text-body')?.value || '').trim();
+  else if (type === 'video') desc = ($id('sw-video-caption')?.value || '').trim();
+  else desc = ($id('sw-caption')?.value || '').trim();
 
-  const showErr=msg=>{if(errEl){errEl.textContent=msg;errEl.style.display='';}};
-  if(!title){showErr('Title is required.');return;}
-  if(btn){btn.disabled=true;btn.textContent=SW.editingProjectId?'Saving…':'Publishing…';}
-  if(errEl)errEl.style.display='none';
+  const videoUrl = ($id('sw-video-url')?.value || '').trim();
+  const provider = $id('sw-video-provider')?.value || '';
+  const domain   = ($id('sw-domain')?.value || '').trim();
+  const tagsRaw  = ($id('sw-tags')?.value || '').trim();
+  const coverFile = $id('sw-cover')?.files?.[0] || null;
+  const errEl = $id('sw-err'), btn = $id('sw-submit-btn');
+
+  const showErr = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = ''; } };
+
+  // Validation: at least something must be present
+  if (type === 'text' && !desc) { showErr('Write something to post.'); return; }
+  if (type === 'video' && !videoUrl) { showErr('Add a YouTube or Vimeo URL.'); return; }
+  if (type === 'image' && !coverFile && !$id('sw-cover-img')?.src) { showErr('Pick a photo to post.'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = SW.editingProjectId ? 'Saving…' : 'Posting…'; }
+  if (errEl) errEl.style.display = 'none';
 
   try {
-    const tags=tagsRaw?tagsRaw.split(',').map(t=>t.trim()).filter(Boolean):[];
-    const collabIds=SW.collabPickerSelected.map(m=>m.id);
-    const fd=new FormData();
-    fd.append('title',title);
-    fd.append('description',desc);
-    fd.append('video_url',videoUrl);
-    if(provider)fd.append('video_provider',provider);
-    fd.append('domain',domain);
-    fd.append('tags',JSON.stringify(tags));
-    fd.append('collab_ids',JSON.stringify(collabIds));
-    if(coverFile)fd.append('cover_image',coverFile);
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const collabIds = SW.collabPickerSelected.map(m => m.id);
+    const fd = new FormData();
+    fd.append('title', title || desc.slice(0, 80)); // use first 80 chars of body as title if blank
+    fd.append('description', desc);
+    fd.append('video_url', videoUrl);
+    if (provider) fd.append('video_provider', provider);
+    fd.append('domain', domain);
+    fd.append('tags', JSON.stringify(tags));
+    fd.append('collab_ids', JSON.stringify(collabIds));
+    fd.append('post_type', type);
+    if (coverFile) fd.append('cover_image', coverFile);
 
-    if(SW.editingProjectId){
-      await api('PUT',`/api/member/studio/projects/${SW.editingProjectId}`,fd,true);
+    if (SW.editingProjectId) {
+      await api('PUT', `/api/member/studio/projects/${SW.editingProjectId}`, fd, true);
     } else {
-      await api('POST','/api/member/studio/projects',fd,true);
+      await api('POST', '/api/member/studio/projects', fd, true);
     }
     swClosePostModal();
     await swLoadFeed(true);
     await swLoadMyPosts();
-  } catch(e){
-    showErr(e.message||'Could not save post. Please try again.');
+  } catch(e) {
+    showErr(e.message || 'Could not save post. Please try again.');
   } finally {
-    if(btn){btn.disabled=false;btn.textContent=SW.editingProjectId?'Save Changes':'Publish';}
+    if (btn) { btn.disabled = false; btn.textContent = SW.editingProjectId ? 'Save' : 'Post'; }
   }
 }
 
