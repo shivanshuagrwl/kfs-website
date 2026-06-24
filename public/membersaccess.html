@@ -4442,6 +4442,24 @@
     }
 
     /* ── Reaction radial wheel ──────────────────────────────────────────── */
+    /* Blurred backdrop — sits behind the wheel, softly blurring/dimming the
+       rest of the page while a reaction is being picked (desktop + mobile) */
+    #rxn-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      display: none;
+      background: rgba(0,0,0,.32);
+      -webkit-backdrop-filter: blur(7px);
+      backdrop-filter: blur(7px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease-out;
+    }
+    #rxn-backdrop.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
     #rxn-overlay {
       position: fixed;
       z-index: 9999;
@@ -4461,8 +4479,14 @@
       inset: 0;
       /* no background, no border — the wheel floats */
     }
-    /* Each rxn-btn is positioned absolutely around the center of .rxn-wheel */
+    /* Each rxn-btn is positioned absolutely around the center of .rxn-wheel.
+       --dx/--dy (set in JS) point from the wheel's center to this button's
+       resting spot, so the entrance can start every button at the hub and
+       burst it outward to its place on the ring. */
     .rxn-btn {
+      --dx: 0px;
+      --dy: 0px;
+      --enter-delay: 0ms;
       position: absolute;
       display: flex;
       flex-direction: column;
@@ -4478,16 +4502,19 @@
       box-shadow: 0 4px 18px rgba(0,0,0,.65), 0 1px 4px rgba(0,0,0,.4);
       padding: 0;
       justify-content: center;
+      opacity: 0;
+      transform: translate(calc(-1 * var(--dx)), calc(-1 * var(--dy))) scale(.25);
       transition:
         background .12s,
         color .12s,
-        transform .18s cubic-bezier(.34,1.56,.64,1),
-        box-shadow .12s;
+        box-shadow .12s,
+        transform .32s var(--enter-delay) cubic-bezier(.34,1.56,.64,1),
+        opacity .2s var(--enter-delay) ease-out;
     }
     .rxn-btn:hover {
       background: #2e2e2e;
       color: var(--text);
-      transform: scale(1.22) !important;
+      transform: translate(0,0) scale(1.22) !important;
       box-shadow: 0 6px 28px rgba(0,0,0,.8);
       z-index: 2;
     }
@@ -4531,20 +4558,11 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-    /* Spin-in entrance — targets buttons inside the wheel */
-    @keyframes rxnBtnIn {
-      from { opacity: 0; transform: scale(0.35) rotate(-40deg); }
-      to   { opacity: 1; }
-    }
+    /* Entrance — buttons burst outward from the wheel's center to their resting spot */
     #rxn-overlay.visible .rxn-btn {
-      animation: rxnBtnIn 0.24s cubic-bezier(.34,1.56,.64,1) both;
+      opacity: 1;
+      transform: translate(0,0) scale(1);
     }
-    /* nth-child selectors apply to .rxn-btn children of .rxn-wheel */
-    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(1) { animation-delay: 0ms; }
-    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(2) { animation-delay: 35ms; }
-    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(3) { animation-delay: 70ms; }
-    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(4) { animation-delay: 105ms; }
-    #rxn-overlay.visible .rxn-wheel .rxn-btn:nth-child(5) { animation-delay: 140ms; }
 
     /* Likes count */
     .ig-post-likes {

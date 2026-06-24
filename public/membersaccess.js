@@ -2772,6 +2772,7 @@ function swUpdateReactionUI(projectId) {
 const RXN = {
   overlay: null,
   pill: null,
+  backdrop: null,
   currentId: null,
   showTimer: null,
   hideTimer: null,
@@ -2779,6 +2780,13 @@ const RXN = {
 
 function _rxnEnsureOverlay() {
   if (RXN.overlay) return;
+
+  // Soft blurred backdrop behind the wheel — dims/blurs the rest of the page while it's open
+  const backdrop = document.createElement('div');
+  backdrop.id = 'rxn-backdrop';
+  document.body.appendChild(backdrop);
+  RXN.backdrop = backdrop;
+
   const el = document.createElement('div');
   el.id = 'rxn-overlay';
   el.innerHTML = `<div class="rxn-wheel">
@@ -2843,6 +2851,13 @@ function _rxnPosition(triggerEl) {
     const cy = OVERLAY / 2 + R * Math.sin(rad) - BTN / 2;
     btn.style.left = `${Math.round(cx)}px`;
     btn.style.top  = `${Math.round(cy)}px`;
+    // Vector from the wheel's center to this button's final position — the entrance
+    // animation uses this to make every button visually burst outward from the hub.
+    const dx = (cx + BTN / 2) - OVERLAY / 2;
+    const dy = (cy + BTN / 2) - OVERLAY / 2;
+    btn.style.setProperty('--dx', `${dx.toFixed(1)}px`);
+    btn.style.setProperty('--dy', `${dy.toFixed(1)}px`);
+    btn.style.setProperty('--enter-delay', `${i * 30}ms`);
   });
 
   // Place the container so its center is directly above the trigger button
@@ -2874,15 +2889,19 @@ function _rxnShowNow(projectId, triggerEl) {
   RXN.currentId = projectId;
   _rxnSyncActive(projectId);
   _rxnPosition(triggerEl);
-  // Force reflow so transition plays
+  RXN.backdrop.style.display = 'block';
+  // Force reflow so transitions play
   RXN.overlay.offsetHeight;
   RXN.overlay.classList.add('visible');
+  RXN.backdrop.classList.add('visible');
 }
 
 function _rxnHideNow() {
   if (!RXN.overlay) return;
   RXN.overlay.classList.remove('visible');
   RXN.overlay.style.display = 'none';  // fully remove from hit-testing
+  RXN.backdrop?.classList.remove('visible');
+  if (RXN.backdrop) RXN.backdrop.style.display = 'none';
   RXN.currentId = null;
 }
 
