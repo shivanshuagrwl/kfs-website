@@ -360,6 +360,7 @@ function wireStaticButtons() {
   // Security
   on('sec-change-pw-btn',  'click', changePasswordFromSecurity);
   on('revoke-sessions-btn','click', revokeAllSessions);
+  on('security-logout-btn','click', logoutMember);
 
   // Collab
   on('new-collab-btn',    'click', showCollabForm);
@@ -2378,26 +2379,43 @@ function swFeedCard(p) {
   const tagsHtml = p.tags?.length
     ? `<div class="ig-post-tags">${p.tags.map(t=>`<span class="ig-post-tag">#${swEsc(t)}</span>`).join(' ')}</div>` : '';
 
-  // Comments count link
-  const commentsHtml = p.comments_count > 0
-    ? `<div class="ig-post-view-comments" onclick="swOpenDetail('${swEsc(p.id)}')">${swFmtNum(p.comments_count) === '1' ? 'View 1 comment' : `View all ${swFmtNum(p.comments_count)} comments`}</div>` : '';
+  // Comments count link + inline preview
+  const previewComments = (p.latest_comments || []).slice(0,3);
+  const commentsHtml = (() => {
+    let html = '';
+    if (previewComments.length) {
+      html += `<div class="ig-post-comments-preview">`;
+      previewComments.forEach(c => {
+        const ca = c.members || {};
+        html += `<div class="ig-comment-preview-row"><span class="ig-comment-preview-author">${swEsc(ca.name||'Member')}</span> <span class="ig-comment-preview-body">${swEsc(c.body||'')}</span></div>`;
+      });
+      html += `</div>`;
+    }
+    if (p.comments_count > previewComments.length) {
+      const remaining = p.comments_count - previewComments.length;
+      html += `<div class="ig-post-view-comments" onclick="event.stopPropagation();swOpenDetail('${swEsc(p.id)}')">View ${remaining > 0 && previewComments.length > 0 ? `${p.comments_count > 1 ? `all ${swFmtNum(p.comments_count)} comments` : '1 comment'}` : (p.comments_count === 1 ? '1 comment' : `all ${swFmtNum(p.comments_count)} comments`)}</div>`;
+    } else if (p.comments_count === 0) {
+      html += '';
+    }
+    return html;
+  })();
 
   const likesLabel = p.reactions_count > 0
     ? `<div class="ig-post-likes">${swFmtNum(p.reactions_count)} ${p.reactions_count !== 1 ? 'reactions' : 'reaction'}</div>` : '';
 
   // Reaction popup is now a single body-level portal (#rxn-overlay), not per-card
 
-  return `<article class="ig-post" data-project-id="${swEsc(p.id)}">
+  return `<article class="ig-post" data-project-id="${swEsc(p.id)}" onclick="swOpenDetail('${swEsc(p.id)}')">
     <!-- Header -->
     <div class="ig-post-header">
-      <div class="ig-post-avatar-wrap">
+      <div class="ig-post-avatar-wrap" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
         <div class="ig-post-avatar-inner">${avatarInner}</div>
       </div>
-      <div class="ig-post-author-block">
-        <div class="ig-post-author-name" onclick="openMemberProfile('${swEsc(p.member_id)}')">${swEsc(author.name||'Member')}</div>
+      <div class="ig-post-author-block" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
+        <div class="ig-post-author-name">${swEsc(author.name||'Member')}</div>
         <div class="ig-post-time">${swRelTime(p.created_at)}</div>
       </div>
-      <button class="ig-post-options" onclick="swOpenDetail('${swEsc(p.id)}')" title="More">
+      <button class="ig-post-options" onclick="event.stopPropagation();swOpenDetail('${swEsc(p.id)}')" title="More">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
       </button>
     </div>
@@ -2415,9 +2433,10 @@ function swFeedCard(p) {
         onmouseleave="swHideRxnPopup('${swEsc(p.id)}')"
       ><svg width="24" height="24" viewBox="0 0 24 24" fill="${isLiked?'#4ba3d4':'none'}" stroke="${isLiked?'#4ba3d4':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
       </button>
-      <button class="ig-action-btn" onclick="swOpenDetail('${swEsc(p.id)}')" title="Comment">
+      <button class="ig-action-btn" onclick="event.stopPropagation();swOpenDetail('${swEsc(p.id)}')" title="Comment">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </button>
+      <span class="ig-post-views-inline"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>&nbsp;${swFmtNum(p.views_count||0)}</span>
     </div>
 
     <!-- Reactions count -->
@@ -2751,31 +2770,31 @@ function _rxnEnsureOverlay() {
   if (RXN.overlay) return;
   const el = document.createElement('div');
   el.id = 'rxn-overlay';
-  el.innerHTML = `<div class="rxn-pill">
+  el.innerHTML = `<div class="rxn-wheel">
     <button class="rxn-btn" data-rxn="wow" title="Like">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></div>
       <span class="rxn-label">Like</span>
     </button>
     <button class="rxn-btn" data-rxn="fire" title="Fire">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg></div>
       <span class="rxn-label">Fire</span>
     </button>
     <button class="rxn-btn" data-rxn="brilliant" title="Brilliant">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <span class="rxn-label">Brilliant</span>
     </button>
-    <button class="rxn-btn" data-rxn="truman" title="Good morning, and in case I don't see ya">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    <button class="rxn-btn" data-rxn="truman" title="Truman">
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div>
       <span class="rxn-label">Truman</span>
     </button>
-    <button class="rxn-btn" data-rxn="mind_blown" title="Mind Blown">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <button class="rxn-btn" data-rxn="mind_blown" title="Whoa">
+      <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
       <span class="rxn-label">Whoa</span>
     </button>
   </div>`;
   document.body.appendChild(el);
   RXN.overlay = el;
-  RXN.pill = el.querySelector('.rxn-pill');
+  RXN.pill = el.querySelector('.rxn-wheel');
 
   // Delegate clicks on rxn-btn inside overlay
   el.addEventListener('click', e => {
@@ -2798,31 +2817,49 @@ function _rxnEnsureOverlay() {
 
 function _rxnPosition(triggerEl) {
   const rect = triggerEl.getBoundingClientRect();
-  const pill = RXN.pill;
-  // Temporarily show (off-screen) to measure
+  const wheel = RXN.pill;
+  const N = 5; // number of buttons
+
+  // Position each button radially around center
+  // We want a half-circle arc above the trigger button
+  const R = 52; // orbit radius px
+  const wheelSize = 130; // must match CSS .rxn-wheel width/height
+  const btnSize = 48;
+
+  wheel.querySelectorAll('.rxn-btn').forEach((btn, i) => {
+    // Spread 5 buttons in a semicircular arc above: -150° to -30° (from right)
+    // 0° = 3 o'clock, -90° = 12 o'clock (up)
+    const startAngle = -150; // degrees
+    const endAngle   = -30;
+    const angle = startAngle + (i / (N - 1)) * (endAngle - startAngle);
+    const rad = (angle * Math.PI) / 180;
+    // Center is at (wheelSize/2, wheelSize/2)
+    const cx = wheelSize / 2 + R * Math.cos(rad) - btnSize / 2;
+    const cy = wheelSize / 2 + R * Math.sin(rad) - btnSize / 2;
+    btn.style.left = `${Math.round(cx)}px`;
+    btn.style.top  = `${Math.round(cy)}px`;
+    // Stagger delay for spin-in is handled by CSS :nth-child
+  });
+
+  // Show off-screen to measure
   RXN.overlay.style.left = '-9999px';
   RXN.overlay.style.top  = '-9999px';
   RXN.overlay.style.display = 'block';
-  const pillW = pill.offsetWidth || 280;
-  const pillH = pill.offsetHeight || 62;
 
-  // Preferred: above the button, centered on it
   const gap = 10;
-  let top  = rect.top + window.scrollY - pillH - gap;
-  let left = rect.left + window.scrollX + rect.width / 2 - pillW / 2;
+  // Place wheel so its bottom-center is just above the trigger button center
+  const btnCx = rect.left + window.scrollX + rect.width / 2;
+  let left = btnCx - wheelSize / 2;
+  let top  = rect.top + window.scrollY - wheelSize - gap;
 
-  // Clamp to viewport
   const vw = window.innerWidth;
-  left = Math.max(8, Math.min(left, vw - pillW - 8));
-  // If not enough room above, flip below
+  left = Math.max(8, Math.min(left, vw - wheelSize - 8));
   if (top < window.scrollY + 8) {
     top = rect.bottom + window.scrollY + gap;
   }
 
-  // Arrow offset relative to pill left edge, pointing at button center
-  const arrowLeft = (rect.left + window.scrollX + rect.width / 2) - left - 5;
-  pill.style.setProperty('--arrow-left', `${Math.max(12, Math.min(arrowLeft, pillW - 22))}px`);
-
+  RXN.overlay.dataset.btnCx = btnCx;
+  RXN.overlay.dataset.btnCy = rect.top + window.scrollY + rect.height / 2;
   RXN.overlay.style.left = `${left}px`;
   RXN.overlay.style.top  = `${top}px`;
 }
