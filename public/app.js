@@ -204,7 +204,7 @@ function _doNavigate(page, pushState=true) {
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
   // Reset meta tags to site defaults on section navigation
-  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team' || page === 'studio') {
+  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team' || page === 'strand') {
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
@@ -238,7 +238,7 @@ window.addEventListener('popstate', e => {
   if (!state) { navigate('home', false); return; }
   if (state.page === 'blog-detail') { openBlog(state.id); return; }
   if (state.page === 'movie-detail') { openMovie(state.id); return; }
-  if (state.page === 'studio-detail') { navigate('studio', false); pswOpenDetail(state.id); return; }
+  if (state.page === 'strand-detail') { navigate('strand', false); pswOpenDetail(state.id); return; }
   navigate(state.page || 'home', false);
 });
 
@@ -252,7 +252,7 @@ function loadPageData(page) {
   else if (page==='movies') loadMovies();
   else if (page==='wrapped') loadWrapped();
   else if (page==='collaborate') loadCollaborate();
-  else if (page==='studio') loadStudio();
+  else if (page==='strand') loadStudio();
   else if (page==='donations') loadDonationsPage();
   else if (page==='credits') loadCreditsPage();
 }
@@ -4538,10 +4538,10 @@ async function checkRoute() {
     if (id) {
       try {
         const project = await apiFetch('/api/studio/projects/' + id);
-        if (project && project.id) { navigate('studio', false); pswOpenDetail(project.id); return; }
+        if (project && project.id) { navigate('strand', false); pswOpenDetail(project.id); return; }
       } catch(e) {}
     }
-    navigate('studio', false);
+    navigate('strand', false);
     return;
   }
 
@@ -10349,7 +10349,7 @@ function openCollabForm(post) {
     if (memberToken && (memberProfile || memberData)) {
       // Portal member — send them to the portal collab panel instead of showing the form here
       closeCollabForm();
-      window.location.href = '/membersaccess#collab';
+      window.location.href = '/Social-Strand#collab';
       return;
     }
 
@@ -13031,7 +13031,7 @@ async function deleteCredit(id) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Public Studio Wall — index.html client
-// Reads from /api/studio/* (no auth). Interactions nudge to /membersaccess.
+// Reads from /api/studio/* (no auth). Interactions nudge to /Social-Strand.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const PSW = {
@@ -13271,26 +13271,26 @@ async function pswOpenDetail(projectId) {
           <div class="psw-comments-title">Comments (${p.comments_count||0})</div>
           <!-- Comment input gate -->
           <div class="psw-comment-gate" style="margin-bottom:20px">
-            <a href="/membersaccess">Sign in as a KFS member</a> to leave a comment.
+            <a href="/Social-Strand">Join Social Strand</a> to leave a comment.
           </div>
           <div id="psw-comments-list">${pswRenderComments(comments)}</div>
         </div>
       </div>`;
 
     // Shareable, crawlable URL — same pattern as openBlog()/openMovie().
-    // The server has a matching /studio/:slug SSR route that injects the
+    // The server has a matching /strand/:slug SSR route that injects the
     // right OG tags for link previews even before this JS runs.
     const slug = (p.title ? p.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + p.id;
-    history.pushState({ page: 'studio-detail', id: p.id }, '', '/studio/' + slug);
+    history.pushState({ page: 'strand-detail', id: p.id }, '', '/strand/' + slug);
     window._currentStudioProjectId = p.id;
     const studioDesc = p.description
       ? p.description.slice(0, 155)
-      : `${p.title} — work by ${author.name || 'a KFS member'} on the KFS Studio Wall.`;
+      : `${p.title} — work by ${author.name || 'a KFS member'} on the KFS Social Strand.`;
     updateMetaTags({
       title: p.title,
       description: studioDesc,
       image: `/og/studio/${p.id}`,
-      url: '/studio/' + slug,
+      url: '/strand/' + slug,
     });
     injectPageSchema({
       "@context": "https://schema.org",
@@ -13298,7 +13298,7 @@ async function pswOpenDetail(projectId) {
       "name": p.title,
       "description": studioDesc,
       "image": `https://kiitfilmsociety.in/og/studio/${p.id}`,
-      "url": `https://kiitfilmsociety.in/studio/${slug}`,
+      "url": `https://kiitfilmsociety.in/strand/${slug}`,
       "creator": { "@type": "Person", "name": author.name || "KFS member" },
       "dateCreated": p.created_at || undefined,
       "publisher": {
@@ -13340,12 +13340,12 @@ function pswCloseDetail() {
   // clobbering the URL if this is ever called while no detail is open).
   if (window._currentStudioProjectId) {
     window._currentStudioProjectId = null;
-    history.pushState({ page: 'studio' }, '', '/studio');
+    history.pushState({ page: 'strand' }, '', '/strand');
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
       image: '/images/og-banner.png',
-      url: '/studio',
+      url: '/strand',
     });
     removePageSchema();
   }

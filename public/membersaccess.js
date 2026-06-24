@@ -516,13 +516,69 @@ async function loadDashboard() {
   loadMyWorks();
   loadNotificationBadge(); // populate badge count without opening the panel
   startNotifPolling();     // keep badge fresh while page is open
-  // Hash routing: /membersaccess#collab opens collab panel directly
-  const hash = window.location.hash.replace('#', '');
-  if (hash && document.querySelector(`[data-panel="${hash}"]`)) {
-    switchPanel(document.querySelector(`[data-panel="${hash}"]`));
+
+  // ── First-time login detection ──────────────────────────────────────────
+  // We track this with a per-member localStorage key so it only fires once
+  // per device. Keyed by member id so different members on the same device
+  // get their own first-time flag.
+  const memberId = (_member?.id || window._memberProfile?.id || 'unknown');
+  const firstTimeKey = `kfs-strand-welcomed-${memberId}`;
+  const isFirstTime = !localStorage.getItem(firstTimeKey);
+
+  if (isFirstTime) {
+    // Show onboarding overlay — direct them to profile
+    const overlay = $id('onboarding-overlay');
+    if (overlay) {
+      overlay.classList.add('open');
+      const goBtn   = $id('onboarding-go-btn');
+      const skipBtn = $id('onboarding-skip-btn');
+      if (goBtn) goBtn.addEventListener('click', () => {
+        overlay.classList.remove('open');
+        localStorage.setItem(firstTimeKey, '1');
+        // Switch to profile panel
+        const profileNav = document.querySelector('[data-panel="profile"]');
+        if (profileNav) switchPanel(profileNav);
+      }, { once: true });
+      if (skipBtn) skipBtn.addEventListener('click', () => {
+        overlay.classList.remove('open');
+        localStorage.setItem(firstTimeKey, '1');
+        // Go straight to feed
+        _goToStrandFeed();
+      }, { once: true });
+    }
+  } else {
+    // Returning user — open Strand feed immediately unless hash says otherwise
+    const hash = window.location.hash.replace('#', '');
+    if (hash && document.querySelector(`[data-panel="${hash}"]`)) {
+      switchPanel(document.querySelector(`[data-panel="${hash}"]`));
+    } else {
+      _goToStrandFeed();
+    }
   }
+
   // Clear hash after use so back-navigation stays clean
-  if (hash) history.replaceState(null, '', window.location.pathname);
+  if (window.location.hash) history.replaceState(null, '', window.location.pathname);
+
+  // Wire bottom tab bar if not already wired
+  _wireBtb();
+}
+
+/** Switch directly to the Strand (Social Strand) feed panel. */
+function _goToStrandFeed() {
+  const studioNav = document.querySelector('[data-panel="studio"]');
+  if (studioNav && window._memberProfile && !window._memberProfile.is_past) {
+    switchPanel(studioNav);
+  }
+}
+
+/** Wire the bottom tab bar (mobile) — safe to call multiple times. */
+function _wireBtb() {
+  // Already wired if btb-strand has a listener flag
+  if (window._btbWired) return;
+  window._btbWired = true;
+  document.querySelectorAll('.btb-item[data-panel]').forEach(item => {
+    item.addEventListener('click', () => btbSwitch(item));
+  });
 }
 
 // ── Live lockout countdown ───────────────────────────────────────────────────
@@ -1043,7 +1099,24 @@ function switchPanel(el) {
   if (panel === 'network') loadNetworkPanel();
 }
 
-// ── Profile ───────────────────────────────────────────────────────────────────
+// ── Bottom Tab Bar sync ───────────────────────────────────────────────────────
+
+function btbSwitch(el) {
+  const panel = el.dataset.panel;
+  if (!panel) return;
+  // Use existing switchPanel logic
+  const navEl = document.querySelector(`.sidebar [data-panel="${panel}"]`) ||
+                document.querySelector(`.mobile-nav [data-panel="${panel}"]`) ||
+                document.querySelector(`[data-panel="${panel}"]`);
+  if (navEl) switchPanel(navEl);
+  // Sync active state on bottom bar
+  document.querySelectorAll('.btb-item').forEach(i => {
+    i.classList.toggle('active', i.dataset.panel === panel);
+  });
+}
+
+// Keep bottom tab bar in sync when panel changes from sidebar/desktop nav
+const _origSwitchPanel = typeof switchPanel !== 'undefined' ? switchPanel : null;
 
 async function loadProfile() {
   try {
@@ -2080,7 +2153,7 @@ async function loadMyGrievances() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// KFS Studio Wall — Client
+// KFS Social Strand — Client
 // Routes: /api/member/studio/* (member-auth-gated, CSRF applied by server)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2260,7 +2333,7 @@ async function swLoadMyPosts() {
   try {
     const data = await api('GET', '/api/member/studio/mine');
     if (!data.length) {
-      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon">${SW_ICONS.postsLg}</div><div class="sw-empty-title">No posts yet</div><div class="sw-empty-sub">Post your first project to the Studio Wall.</div></div>`;
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon">${SW_ICONS.postsLg}</div><div class="sw-empty-title">No posts yet</div><div class="sw-empty-sub">Post your first project to the Social Strand.</div></div>`;
       return;
     }
     list.innerHTML = data.map(p => `
@@ -2747,7 +2820,7 @@ async function nwLoadFollowers(reset = false) {
     members.forEach(m => NW.myFollowing.set(m.id, m.is_following));
     if (reset) list.innerHTML = '';
     if (!members.length && NW.followersPage === 1) {
-      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">No followers yet</div><div class="sw-empty-sub">Share work on the Studio Wall to get noticed.</div></div>`;
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">No followers yet</div><div class="sw-empty-sub">Share work on the Social Strand to get noticed.</div></div>`;
       hideEl('network-followers-more');
       return;
     }
@@ -2777,7 +2850,7 @@ async function nwLoadFollowing(reset = false) {
     members.forEach(m => NW.myFollowing.set(m.id, true)); // by definition, people I follow
     if (reset) list.innerHTML = '';
     if (!members.length && NW.followingPage === 1) {
-      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">Not following anyone yet</div><div class="sw-empty-sub">Follow members from their posts on the Studio Wall.</div></div>`;
+      list.innerHTML = `<div class="sw-empty"><div class="sw-empty-title">Not following anyone yet</div><div class="sw-empty-sub">Follow members from their posts on the Social Strand.</div></div>`;
       hideEl('network-following-more');
       return;
     }

@@ -2669,7 +2669,7 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 .credit-role-check:has(input:checked){border-color:rgba(245,245,245,.25);background:rgba(245,245,245,.08);color:var(--white)}
 .credit-role-check input{display:none}
 
-/* ── Public Studio Wall ──────────────────────────────────────────────────── */
+/* ── Public Social Strand ──────────────────────────────────────────────────── */
 .psw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
 @media(max-width:600px){.psw-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
 @media(max-width:380px){.psw-grid{grid-template-columns:1fr}}
@@ -2929,7 +2929,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <li><a data-nav-page="members" data-page="members">Members</a></li>
     <li><a data-nav-page="wrapped" data-page="wrapped">Wrapped</a></li>
     <li><a data-nav-page="collaborate" data-page="collaborate">Collaborate</a></li>
-    <li><a data-nav-page="studio" data-page="studio">Studio</a></li>
+    <li><a data-nav-page="strand" data-page="strand">Strand</a></li>
   </ul>
   <div class="nav-right">
     <button data-action="openSearch" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -2969,7 +2969,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <p class="hero-sub">KIIT Film Society &mdash; Est. 2019</p>
     <div class="hero-cta">
       <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
-      <a href="/membersaccess" class="btn btn-secondary">Members Portal</a>
+      <a href="/Social-Strand" class="btn btn-secondary">Social Strand</a>
       <a class="btn btn-secondary" data-nav-page="events">Upcoming Events</a>
     </div>
     <div class="hero-scroll">
@@ -3130,7 +3130,7 @@ body.light-mode .psw-comment-gate a{color:#111}
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
       <a data-action="navigate" data-args='["credits"]' style="cursor:pointer">Credits</a>
-      <a href="/membersaccess">Member Login</a>
+      <a href="/Social-Strand">Social Strand</a>
     </div>
   </footer>
 </div>
@@ -3237,7 +3237,7 @@ body.light-mode .psw-comment-gate a{color:#111}
             <p class="mab-sub" style="font-size:13.5px;color:var(--grey);margin:0;line-height:1.5">Login to your KFS account today to get exclusive members' access and features.</p>
           </div>
         </div>
-        <a class="mab-btn" href="/membersaccess" style="flex-shrink:0;display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:var(--white);color:var(--black);border-radius:12px;font-size:13px;font-weight:700;letter-spacing:.02em;text-decoration:none;transition:opacity .2s;white-space:nowrap" onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+        <a class="mab-btn" href="/Social-Strand" style="flex-shrink:0;display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:var(--white);color:var(--black);border-radius:12px;font-size:13px;font-weight:700;letter-spacing:.02em;text-decoration:none;transition:opacity .2s;white-space:nowrap" onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
           Log in
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </a>
@@ -3311,13 +3311,13 @@ body.light-mode .psw-comment-gate a{color:#111}
 </div>
 
 <!-- ── STUDIO WALL PAGE ── -->
-<div class="page" id="page-studio">
+<div class="page" id="page-strand">
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Creative Work</p>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:0">
         <div>
-          <h2 class="section-title">Studio Wall</h2>
+          <h2 class="section-title">Social Strand</h2>
           <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">The work KFS members are making — films, frames, experiments.</p>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -3325,14 +3325,14 @@ body.light-mode .psw-comment-gate a{color:#111}
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-tag-input" autocomplete="off">
           </div>
-          <a href="/membersaccess" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;font-size:13px;padding:9px 18px;text-decoration:none">Member Sign-in →</a>
+          <a href="/Social-Strand" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;font-size:13px;padding:9px 18px;text-decoration:none">Join Social Strand →</a>
         </div>
       </div>
 
       <!-- Guest banner -->
       <div class="psw-guest-banner" id="psw-guest-banner">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        <span>You're browsing as a guest. <a href="/membersaccess">Sign in as a KFS member</a> to react and comment.</span>
+        <span>You're browsing as a guest. <a href="/Social-Strand">Join Social Strand</a> to react and comment.</span>
       </div>
 
       <!-- Feed grid -->
@@ -3362,7 +3362,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     </div>
     <div style="font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px">Members only</div>
     <p style="font-size:13px;color:var(--grey);line-height:1.6;margin-bottom:24px">Reactions and comments are for KFS members. Sign in to join the conversation.</p>
-    <a href="/membersaccess" class="btn btn-primary" style="display:block;border-radius:10px;text-decoration:none;margin-bottom:10px">Sign in to KFS</a>
+    <a href="/Social-Strand" class="btn btn-primary" style="display:block;border-radius:10px;text-decoration:none;margin-bottom:10px">Join Social Strand</a>
     <button onclick="document.getElementById('psw-auth-nudge').style.display='none'" style="background:none;border:none;color:var(--grey);font-size:13px;cursor:pointer;padding:4px 8px">Maybe later</button>
   </div>
 </div>
@@ -5404,8 +5404,8 @@ KFS — KIIT Film Society"></textarea>
         </div>
         <p style="color:var(--white);font-size:15px;font-weight:600;margin:0 0 8px">Members only</p>
         <p style="color:var(--grey);font-size:13.5px;line-height:1.6;margin:0 0 24px">This board is exclusive to KFS members. Log in to your member account to post an open call.</p>
-        <a href="/membersaccess" style="display:inline-block;background:var(--white);color:#000;font-size:14px;font-weight:700;padding:11px 28px;border-radius:10px;text-decoration:none;letter-spacing:-.01em;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Log in to KFS Portal</a>
-        <p style="color:#555;font-size:12px;margin-top:16px">Already logged in? <span style="color:var(--grey);cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="closeCollabForm();navigate('membersaccess')">Open portal</span></p>
+        <a href="/Social-Strand" style="display:inline-block;background:var(--white);color:#000;font-size:14px;font-weight:700;padding:11px 28px;border-radius:10px;text-decoration:none;letter-spacing:-.01em;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Join Social Strand</a>
+        <p style="color:#555;font-size:12px;margin-top:16px">Already logged in? <span style="color:var(--grey);cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="closeCollabForm();navigate('Social-Strand')">Open portal</span></p>
       </div>
     </div>
 

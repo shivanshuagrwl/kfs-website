@@ -5668,8 +5668,8 @@ app.get("/films/:slug", async (req, res) => {
   }
 });
 
-// ── /studio/:slug  (e.g. /studio/my-short-film-7f3a) ─────────────────────────
-app.get("/studio/:slug", async (req, res) => {
+// ── /strand/:slug  (e.g. /strand/my-short-film-7f3a) ─────────────────────────
+app.get("/strand/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
     const projectResult = id
@@ -5691,17 +5691,17 @@ app.get("/studio/:slug", async (req, res) => {
     }
 
     const canonicalSlug = slugify(p.title) + "-" + p.id;
-    const pageUrl = `https://kiitfilmsociety.in/studio/${canonicalSlug}`;
+    const pageUrl = `https://kiitfilmsociety.in/strand/${canonicalSlug}`;
     const authorName = p.members?.name || "a KFS member";
     const desc = p.description
       ? p.description.slice(0, 160)
-      : `${p.title} — work by ${authorName} on the KFS Studio Wall.`;
+      : `${p.title} — work by ${authorName} on the KFS Social Strand.`;
     const imageUrl = p.cover_image
       ? `https://kiitfilmsociety.in/og/studio/${p.id}`
       : null;
 
     return serveWithOg(res, {
-      title: p.title ? `${p.title} — KFS Studio Wall` : "KFS Studio Wall",
+      title: p.title ? `${p.title} — KFS Social Strand` : "KFS Social Strand",
       description: desc,
       imageUrl,
       url: pageUrl,
@@ -5729,9 +5729,13 @@ app.get("/studio/:slug", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[share/studio]", err.message);
+    console.error("[share/strand]", err.message);
     res.sendFile(path.join(__dirname, "public", "index.html"));
   }
+});
+// Legacy redirect /studio/:slug → /strand/:slug
+app.get("/studio/:slug", (req, res) => {
+  res.redirect(301, `/strand/${req.params.slug}`);
 });
 
 // ── /events/:slug ─────────────────────────────────────────────────────────────
@@ -9541,7 +9545,7 @@ async function sendMemberCredentialsEmail({ toEmail, toName, username, tempPassw
   }
 
   const fromName    = s.smtp_from_name || "KFS — KIIT Film Society";
-  const loginUrl    = "https://kiitfilmsociety.in/membersaccess";
+  const loginUrl    = "https://kiitfilmsociety.in/Social-Strand";
   const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
 <tr><td align="center">
@@ -9604,8 +9608,12 @@ app.use("/api/member", csrfProtectMember);
 // SECTION MA-10 — Member portal page route
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.get("/membersaccess", (req, res) => {
+app.get("/Social-Strand", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "membersaccess.html"));
+});
+// Legacy redirect — keep old URL working
+app.get("/membersaccess", (req, res) => {
+  res.redirect(301, "/Social-Strand");
 });
 app.get("/membersaccess.js", (req, res) => {
   res.setHeader("Content-Type", "application/javascript");

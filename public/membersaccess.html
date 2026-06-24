@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Member Portal — KFS</title>
+    <title>Social Strand — KFS</title>
     <meta name="robots" content="noindex,nofollow" />
     <style>
       /* ── Reset & Base ────────────────────────────────────────────────────── */
@@ -105,6 +105,136 @@
         color: var(--muted);
         font-weight: 400;
       }
+
+      /* ── Instagram-style bottom tab bar ─────────────────────────────────── */
+      .bottom-tab-bar {
+        display: none;
+      }
+      @media (max-width: 768px) {
+        .bottom-tab-bar {
+          display: flex;
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 200;
+          background: rgba(10,10,10,0.92);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-top: 1px solid var(--border);
+          padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+          justify-content: space-around;
+          align-items: center;
+        }
+        .btb-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 3px;
+          flex: 1;
+          cursor: pointer;
+          padding: 6px 0;
+          color: var(--muted);
+          transition: color 0.12s;
+          position: relative;
+        }
+        .btb-item.active { color: var(--text); }
+        .btb-item svg { width: 22px; height: 22px; }
+        .btb-label { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+        .btb-dot { position: absolute; top: 4px; right: calc(50% - 18px); width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: none; }
+        .btb-dot.show { display: block; }
+        /* Push main content up so bottom bar doesn't overlap */
+        .main { padding-bottom: 80px !important; }
+        /* Hide the old horizontal scroll mobile nav — replaced by bottom bar */
+        .mobile-nav { display: none !important; }
+        /* Hide old mobile topbar – replaced by top sticky bar */
+        .mobile-topbar { display: none !important; }
+      }
+
+      /* ── First-time onboarding overlay ──────────────────────────────────── */
+      #onboarding-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        background: rgba(0,0,0,0.88);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      #onboarding-overlay.open { display: flex; }
+      .onboarding-card {
+        background: #111;
+        border: 1px solid #2a2a2a;
+        border-radius: 20px;
+        padding: 40px 36px 36px;
+        max-width: 440px;
+        width: 100%;
+        text-align: center;
+      }
+      .onboarding-wave {
+        font-size: 42px;
+        margin-bottom: 16px;
+        display: block;
+      }
+      .onboarding-title {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        margin-bottom: 8px;
+        color: var(--text);
+      }
+      .onboarding-sub {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.6;
+        margin-bottom: 28px;
+      }
+      .onboarding-checklist {
+        text-align: left;
+        background: #161616;
+        border: 1px solid #1e1e1e;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .onboarding-check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .onboarding-check-item svg { flex-shrink: 0; color: #4ade80; }
+      .onboarding-cta {
+        width: 100%;
+        background: var(--text);
+        color: var(--bg);
+        font-size: 14px;
+        font-weight: 700;
+        padding: 14px 20px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s;
+        margin-bottom: 10px;
+      }
+      .onboarding-cta:hover { opacity: 0.88; }
+      .onboarding-skip {
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 8px;
+        transition: color 0.12s;
+      }
+      .onboarding-skip:hover { color: var(--text); }
       .auth-title {
         font-size: 22px;
         font-weight: 700;
@@ -1738,7 +1868,7 @@
       <div class="auth-card" id="auth-card">
         <!-- Step: Login -->
         <div id="step-login">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div class="auth-title">Sign in</div>
           <div class="auth-sub">Access your KFS member account</div>
 
@@ -1794,7 +1924,7 @@
 
         <!-- Step: TOTP -->
         <div id="step-totp" style="display: none">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div class="auth-title">Two-factor code</div>
           <div class="auth-sub">
             Enter the 6-digit code from your authenticator app
@@ -1817,7 +1947,7 @@
 
         <!-- Step: Forgot Password — enter username -->
         <div id="step-fp-username" style="display: none">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div class="auth-title">Reset your password</div>
           <div class="auth-sub">
             Enter your username and we'll send a verification code to your email
@@ -1847,7 +1977,7 @@
 
         <!-- Step: Forgot Password — enter OTP -->
         <div id="step-fp-otp" style="display: none">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div class="auth-title">Enter verification code</div>
           <div class="auth-sub" id="fp-otp-sub">
             We've sent a 6-digit code to your phone.
@@ -1891,7 +2021,7 @@
 
         <!-- Step: Forgot Password — set new password -->
         <div id="step-fp-reset" style="display: none">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div class="auth-title">Set a new password</div>
           <div class="auth-sub">
             Choose a strong password you haven't used before.
@@ -1929,7 +2059,7 @@
 
         <!-- Step: Forgot Password — success -->
         <div id="step-fp-success" style="display: none">
-          <div class="auth-logo">KFS <span>Member Portal</span></div>
+          <div class="auth-logo">KFS <span>Social Strand</span></div>
           <div
             style="
               display: flex;
@@ -2197,7 +2327,7 @@
       <div class="layout">
         <!-- Sidebar -->
         <aside class="sidebar">
-          <div class="sidebar-logo">KFS <span>Portal</span></div>
+          <div class="sidebar-logo">Social <span>Strand</span></div>
           <nav id="sidebar-nav">
             <div class="nav-item active" data-panel="profile">
               <span class="nav-icon"
@@ -3244,29 +3374,51 @@
             <div id="grv-list"></div>
           </div>
 
-          <!-- ── STUDIO WALL PANEL ──────────────────────────────────────── -->
-          <div class="panel" id="panel-studio">
-            <div class="panel-title">Studio Wall</div>
-            <div class="panel-sub">Share your creative work. Explore what KFS members are making.</div>
-
-            <!-- Sub-tabs -->
-            <div class="studio-tabs">
-              <button class="studio-tab active" data-studio-tab="feed">Feed</button>
-              <button class="studio-tab" data-studio-tab="my-posts">My Posts</button>
-              <button class="studio-tab" data-studio-tab="analytics">Analytics</button>
+          <!-- ── SOCIAL STRAND PANEL ──────────────────────────────────────── -->
+          <div class="panel strand-panel" id="panel-studio">
+            <!-- Strand top bar (Instagram-style) -->
+            <div class="strand-topbar">
+              <div class="strand-topbar-logo">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                Social Strand
+              </div>
+              <div class="strand-topbar-actions">
+                <a href="/strand" target="_blank" class="strand-public-link" title="View public Strand">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </a>
+                <button class="strand-post-fab" id="studio-new-post-btn" title="Post Work">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
             </div>
 
-            <!-- Feed tab -->
+            <!-- Sub-tabs (Instagram-style underline tabs) -->
+            <div class="strand-tabs">
+              <button class="strand-tab studio-tab active" data-studio-tab="feed">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                Feed
+              </button>
+              <button class="strand-tab studio-tab" data-studio-tab="my-posts">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                My Posts
+              </button>
+              <button class="strand-tab studio-tab" data-studio-tab="analytics">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Analytics
+              </button>
+            </div>
+
+            <!-- Feed tab — Instagram-style full-width -->
             <div class="studio-tab-panel active" id="studio-tab-feed">
-              <div class="studio-feed-toolbar">
-                <div class="feed-sort-toggle" id="feed-sort-toggle">
-                  <button type="button" class="feed-sort-btn active" data-feed-sort="latest">Latest</button>
-                  <button type="button" class="feed-sort-btn" data-feed-sort="foryou">For You</button>
+              <!-- Sort + tag filter row (hidden until scrolled or tapped — clean default) -->
+              <div class="strand-feed-controls" id="strand-feed-controls">
+                <div class="strand-sort-pills" id="feed-sort-toggle">
+                  <button type="button" class="strand-sort-pill feed-sort-btn active" data-feed-sort="latest">Latest</button>
+                  <button type="button" class="strand-sort-pill feed-sort-btn" data-feed-sort="foryou">For You</button>
                 </div>
-                <input id="studio-tag-filter" type="text" placeholder="Filter by tag…" class="studio-tag-input" />
-                <button class="btn-primary studio-post-btn" id="studio-new-post-btn" style="min-width:120px">Post Work</button>
+                <input id="studio-tag-filter" type="text" placeholder="Filter by tag…" class="strand-tag-input" />
               </div>
-              <div id="studio-feed" class="studio-feed-grid"></div>
+              <div id="studio-feed" class="strand-feed-grid"></div>
               <div id="studio-feed-more" style="display:none;text-align:center;padding:24px 0">
                 <button class="btn-ghost" id="studio-load-more-btn" style="font-size:13px">Load more</button>
               </div>
@@ -3274,8 +3426,8 @@
 
             <!-- My Posts tab -->
             <div class="studio-tab-panel" id="studio-tab-my-posts">
-              <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
-                <button class="btn-primary" id="studio-new-post-btn2" style="min-width:120px">Post Work</button>
+              <div style="display:flex;justify-content:flex-end;padding:16px 0 20px">
+                <button class="btn-primary" id="studio-new-post-btn2" style="min-width:120px">+ Post Work</button>
               </div>
               <div id="studio-my-posts-list"></div>
             </div>
@@ -3922,6 +4074,243 @@
         </button>
       </div>
     </div>
+
+    <!-- ── Bottom Tab Bar (mobile Instagram-style) ───────────────────────── -->
+    <nav class="bottom-tab-bar" id="bottom-tab-bar" aria-label="Main navigation">
+      <!-- Home/Feed -->
+      <div class="btb-item active" data-panel="studio" id="btb-strand" onclick="btbSwitch(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="btb-label">Strand</span>
+      </div>
+      <!-- Network -->
+      <div class="btb-item" data-panel="network" onclick="btbSwitch(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v6m0 0L6.8 17M12 13.5l5.2 3.5"/></svg>
+        <span class="btb-label">Network</span>
+      </div>
+      <!-- Post (centre action button) -->
+      <div class="btb-item btb-post-item" onclick="document.getElementById('studio-new-post-btn')?.click()">
+        <div class="btb-post-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <span class="btb-label" style="visibility:hidden">Post</span>
+      </div>
+      <!-- Notifications / Activity -->
+      <div class="btb-item" data-panel="activity" onclick="btbSwitch(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="btb-dot" id="btb-notif-dot"></span>
+        <span class="btb-label">Activity</span>
+      </div>
+      <!-- Profile -->
+      <div class="btb-item" data-panel="profile" onclick="btbSwitch(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <span class="btb-label">Profile</span>
+      </div>
+    </nav>
+
+    <!-- ── First-time onboarding overlay ─────────────────────────────────── -->
+    <div id="onboarding-overlay" role="dialog" aria-modal="true">
+      <div class="onboarding-card">
+        <span class="onboarding-wave">👋</span>
+        <div class="onboarding-title">Welcome to Social Strand!</div>
+        <div class="onboarding-sub">Before you dive into the feed, take a minute to set up your profile — it helps the community know you.</div>
+        <div class="onboarding-checklist">
+          <div class="onboarding-check-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Add a profile photo</span>
+          </div>
+          <div class="onboarding-check-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Write a short bio</span>
+          </div>
+          <div class="onboarding-check-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Link your Instagram / socials</span>
+          </div>
+        </div>
+        <button class="onboarding-cta" id="onboarding-go-btn">Set Up My Profile →</button>
+        <button class="onboarding-skip" id="onboarding-skip-btn">Skip for now, take me to the feed</button>
+      </div>
+    </div>
+
+    <style>
+    /* ─── Bottom tab bar extra styles ───────────────────────────────────── */
+    .btb-post-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2px;
+    }
+    .btb-post-btn svg { color: var(--bg); width: 20px; height: 20px; }
+    .btb-post-item { cursor: pointer; }
+
+    /* ─── Strand panel overrides — Instagram-style edge-to-edge ─────────── */
+    .strand-panel {
+      padding: 0 !important;  /* remove panel padding, we manage it ourselves */
+    }
+    .strand-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .strand-topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .strand-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .strand-public-link {
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      transition: color 0.12s;
+    }
+    .strand-public-link:hover { color: var(--text); }
+    .strand-post-fab {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--text);
+      color: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .strand-post-fab:hover { opacity: 0.85; }
+
+    /* Tabs */
+    .strand-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .strand-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.12s, border-color 0.12s;
+      letter-spacing: 0.01em;
+    }
+    .strand-tab:hover { color: var(--text); }
+    .strand-tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+    /* Feed controls (sort + tag) */
+    .strand-feed-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .strand-sort-pills {
+      display: flex;
+      gap: 6px;
+    }
+    .strand-sort-pill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .strand-sort-pill.active {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+    .strand-tag-input {
+      flex: 1;
+      min-width: 120px;
+      max-width: 220px;
+      height: 34px;
+      padding: 0 12px;
+      font-size: 13px;
+      border-radius: 20px;
+      background: #151515;
+      border: 1px solid var(--border);
+      color: var(--text);
+      outline: none;
+    }
+    .strand-tag-input:focus { border-color: #444; }
+
+    /* Instagram-style feed grid — 2 col on desktop, 1 col card on mobile */
+    .strand-feed-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--border);
+    }
+    @media (max-width: 600px) {
+      .strand-feed-grid { grid-template-columns: 1fr; gap: 0; background: var(--bg); }
+      .strand-topbar { padding: 14px 16px 10px; }
+      .strand-tabs { padding: 0 4px; }
+      .strand-tab { padding: 10px 10px; font-size: 12px; }
+    }
+
+    /* Override card styles inside the strand grid to be edge-to-edge */
+    .strand-feed-grid .sw-card {
+      border-radius: 0;
+      border: none;
+      background: var(--bg);
+    }
+    .strand-feed-grid .sw-card:hover { transform: none; border: none; }
+    .strand-feed-grid .sw-card-img { aspect-ratio: 1/1; }
+    .strand-feed-grid .sw-card-no-cover { aspect-ratio: 1/1; }
+
+    /* Inline single-col card variant on mobile */
+    @media (max-width: 600px) {
+      .strand-feed-grid .sw-card { border-bottom: 1px solid var(--border); }
+      .strand-feed-grid .sw-card-img { aspect-ratio: 4/3; }
+      .strand-feed-grid .sw-card-no-cover { aspect-ratio: 4/3; }
+    }
+
+    /* Feed empty/loading states inherit padding from content, not panel */
+    #studio-tab-feed .sw-empty,
+    #studio-tab-feed .sw-loading { padding: 56px 24px; }
+
+    /* Tab panels inside strand get no padding — grid handles spacing */
+    .strand-panel .studio-tab-panel { padding: 0; }
+    .strand-panel #studio-tab-my-posts { padding: 0 24px; }
+    .strand-panel #studio-tab-analytics { padding: 0 24px; }
+    .strand-panel #studio-tab-my-posts > div:first-child { padding: 16px 0 20px; }
+
+    /* Load more button */
+    #studio-feed-more { padding: 24px; text-align: center; }
+    </style>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="/membersaccess.js" defer></script>
