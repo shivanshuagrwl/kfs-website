@@ -11799,7 +11799,7 @@ app.get("/api/member/studio/mine", memberAuthMiddleware, async (req, res) => {
 
 // ── Reactions ─────────────────────────────────────────────────────────────────
 
-const VALID_REACTIONS = ["wow", "inspiring", "fire", "mind_blown"];
+const VALID_REACTIONS = ["wow", "fire", "brilliant", "seahaven", "mind_blown"];
 
 // POST /api/member/studio/projects/:id/react  { reaction_type }
 // Toggle: if same reaction already set → remove it. If different → switch it.
@@ -11845,7 +11845,7 @@ app.get("/api/member/studio/projects/:id/reactions", memberAuthMiddleware, studi
 
   if (error) return res.status(500).json({ error: "Internal server error" });
 
-  const counts = { wow: 0, inspiring: 0, fire: 0, mind_blown: 0, total: 0 };
+  const counts = { wow: 0, fire: 0, brilliant: 0, seahaven: 0, mind_blown: 0, total: 0 };
   (data || []).forEach(r => { counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1; counts.total++; });
 
   // My reaction
@@ -12162,7 +12162,7 @@ app.get("/api/member/studio/projects/:id/analytics", memberAuthMiddleware, async
   const { data: rxRows } = await supabase
     .from("project_reactions").select("reaction_type").eq("project_id", req.params.id);
 
-  const breakdown = { wow: 0, inspiring: 0, fire: 0, mind_blown: 0 };
+  const breakdown = { wow: 0, fire: 0, brilliant: 0, seahaven: 0, mind_blown: 0 };
   (rxRows || []).forEach(r => { breakdown[r.reaction_type] = (breakdown[r.reaction_type] || 0) + 1; });
 
   res.json({

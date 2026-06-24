@@ -2331,7 +2331,7 @@ const SW_REACTIONS = [
   { type:'wow',        label:'Wow',           icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>` },
   { type:'fire',       label:'Fire',          icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 01-7 7 7 7 0 01-4.5-1.5c1-.5 1.5-1 1-2z"/></svg>` },
   { type:'brilliant',  label:'Brilliant',     icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` },
-  { type:'truman',     label:'Good Morning!', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>` },
+  { type:'seahaven',   label:'Good Morning!', icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>` },
   { type:'mind_blown', label:'Mind Blown',    icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
 ];
 
@@ -2642,7 +2642,16 @@ async function swOpenDetail(projectId) {
           <span class="studio-detail-stat">${SW_ICONS.comment}&nbsp;${swFmtNum(p.comments_count)}</span>
         </div>
         ${p.tags?.length?`<div class="studio-detail-tags">${p.tags.map(t=>`<span class="sw-tag">${swEsc(t)}</span>`).join('')}</div>`:''}
-        ${collabs.length?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">${SW_ICONS.user}&nbsp;With</span>${collabs.map(c=>`<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#bbb">${swAvatar(c.name,c.photo,20)}&nbsp;${swEsc(c.name)}</span>`).join('')}</div>`:''}
+        ${collabs.length?(()=>{
+          const MAX=3;
+          const shown=collabs.slice(0,MAX);
+          const extra=collabs.length-shown.length;
+          return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+            <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">${SW_ICONS.user}&nbsp;With</span>
+            ${shown.map(c=>`<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:#bbb">${swAvatar(c.name,c.photo,16)}${swEsc(c.name)}</span>`).join('')}
+            ${extra>0?`<span style="font-size:11px;color:var(--muted)">+${extra} more</span>`:''}
+          </div>`;
+        })():''}
         <div class="studio-reactions" id="detail-reactions-${swEsc(p.id)}">
           ${SW_REACTIONS.map(r=>`<button class="studio-rxn-btn ${myRxn===r.type?'active':''}" data-rxn="${swEsc(r.type)}" data-project="${swEsc(p.id)}" onclick="swToggleReaction('${swEsc(p.id)}','${swEsc(r.type)}')" title="${swEsc(r.label)}">${r.icon}<span class="sw-rxn-label">${swEsc(r.label)}</span></button>`).join('')}
         </div>
@@ -2650,7 +2659,7 @@ async function swOpenDetail(projectId) {
           <div class="studio-comments-title">Comments</div>
           <div class="studio-comment-input-row">
             <input id="sw-comment-input" type="text" placeholder="Add a comment…" class="studio-comment-input" maxlength="1000" onkeydown="if(event.key==='Enter')swPostComment('${swEsc(p.id)}',null)">
-            <button class="btn-primary studio-comment-post-btn" onclick="swPostComment('${swEsc(p.id)}',null)">Post</button>
+            <button class="studio-comment-post-btn" onclick="swPostComment('${swEsc(p.id)}',null)">Post</button>
           </div>
           <div id="sw-comments-list">${swRenderComments(comments, p.id)}</div>
         </div>
@@ -2692,7 +2701,7 @@ function swShowReplyInput(commentId, projectId) {
   wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px">
     <input id="sw-reply-text-${swEsc(commentId)}" type="text" placeholder="Reply…" class="studio-comment-input" maxlength="1000"
       onkeydown="if(event.key==='Enter')swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">
-    <button class="btn-primary studio-comment-post-btn" onclick="swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">Reply</button>
+    <button class="studio-comment-post-btn" onclick="swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">Reply</button>
   </div>`;
   $id(`sw-reply-text-${commentId}`)?.focus();
 }
@@ -2785,7 +2794,7 @@ function _rxnEnsureOverlay() {
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <span class="rxn-label">Brilliant</span>
     </button>
-    <button class="rxn-btn" data-rxn="truman" title="Good Morning!">
+    <button class="rxn-btn" data-rxn="seahaven" title="Good Morning!">
       <div class="rxn-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg></div>
       <span class="rxn-label">Good Morning!</span>
     </button>
@@ -2821,18 +2830,18 @@ function _rxnPosition(triggerEl) {
   const rect = triggerEl.getBoundingClientRect();
   const wheel = RXN.pill;
   const N = 5;
-  const OVERLAY = 200;   // must match CSS #rxn-overlay width/height
-  const BTN = 44;        // must match CSS .rxn-btn width/height
-  const R = 64;          // orbit radius — fits nicely inside 200px container
+  const OVERLAY = 210;   // must match CSS #rxn-overlay width/height
+  const BTN = 42;        // must match CSS .rxn-btn width/height
+  const R = 76;          // orbit radius — wide enough that adjacent buttons don't overlap
 
   // Position each button in a fan arc above the trigger
-  // Arc: -160° → -20° (fan opening upward, slightly tilted left)
+  // Arc: -168° → -12° (fan opening upward, slightly tilted left)
   wheel.querySelectorAll('.rxn-btn').forEach((btn, i) => {
-    const startAngle = -160;
-    const endAngle   = -20;
+    const startAngle = -168;
+    const endAngle   = -12;
     const angle = startAngle + (i / (N - 1)) * (endAngle - startAngle);
     const rad = (angle * Math.PI) / 180;
-    // Center of the 200px container
+    // Center of the OVERLAY container
     const cx = OVERLAY / 2 + R * Math.cos(rad) - BTN / 2;
     const cy = OVERLAY / 2 + R * Math.sin(rad) - BTN / 2;
     btn.style.left = `${Math.round(cx)}px`;
@@ -3191,11 +3200,35 @@ function initStudioWall() {
     }
   });
   $id('sw-submit-btn')?.addEventListener('click', swSubmitPost);
-  $id('sw-cover')?.addEventListener('change',e=>{
-    const f=e.target.files?.[0];if(!f)return;
-    const pv=$id('sw-cover-preview'),img=$id('sw-cover-img');
-    if(!pv||!img)return;
-    img.src=URL.createObjectURL(f);pv.style.display='';
+
+  // Post type picker (Photo / Text / Video)
+  document.querySelectorAll('.composer-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => swSetPostType(btn.dataset.postType));
+  });
+
+  // Tap the image zone (anywhere except the remove button) to open the file picker
+  $id('composer-img-zone')?.addEventListener('click', e => {
+    if (e.target.closest('#composer-img-remove')) return;
+    $id('sw-cover')?.click();
+  });
+
+  // Remove the selected/loaded photo and go back to the placeholder state
+  $id('composer-img-remove')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const cv = $id('sw-cover'); if (cv) cv.value = '';
+    const img = $id('sw-cover-img'); if (img) { img.src = ''; img.style.display = 'none'; }
+    const ph = $id('composer-img-placeholder'); if (ph) ph.style.display = '';
+    e.currentTarget.style.display = 'none';
+  });
+
+  $id('sw-cover')?.addEventListener('change', e => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const img = $id('sw-cover-img');
+    const ph  = $id('composer-img-placeholder');
+    const rm  = $id('composer-img-remove');
+    if (img) { img.src = URL.createObjectURL(f); img.style.display = ''; }
+    if (ph) ph.style.display = 'none';
+    if (rm) rm.style.display = '';
   });
   $id('sw-desc')?.addEventListener('input',e=>{const c=$id('sw-desc-count');if(c)c.textContent=e.target.value.length;});
 
