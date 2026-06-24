@@ -13106,37 +13106,91 @@ const PSW_REACTIONS = [
   { type:'mind_blown', label:'Mind Blown', icon:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>` },
 ];
 
-// ── Feed card ─────────────────────────────────────────────────────────────────
+// ── Feed card — Instagram-style ───────────────────────────────────────────────
 
 function pswFeedCard(p) {
   const author   = p.members || {};
-  const hasCover = !!p.cover_image;
+  const hasImage = !!p.cover_image;
   const hasVideo = !!p.video_url;
+  const postType = p.post_type || (hasImage ? 'image' : hasVideo ? 'video' : 'text');
 
-  return `<div class="psw-card" role="button" tabindex="0"
-      onclick="pswOpenDetail('${pswEsc(p.id)}')"
-      onkeydown="if(event.key==='Enter')pswOpenDetail('${pswEsc(p.id)}')">
-    <div class="psw-card-media">
-      ${hasCover
-        ? `<img src="${pswEsc(p.cover_image)}" alt="${pswEsc(p.title)}" class="psw-card-img" loading="lazy">`
-        : hasVideo
-          ? `<div class="psw-card-no-cover" style="color:#2a2a2a">${PSW_ICONS.play}</div>`
-          : `<div class="psw-card-no-cover"></div>`}
-      ${p.domain ? `<div class="psw-card-domain-pill">${pswEsc(p.domain)}</div>` : ''}
-      ${hasVideo ? `<div class="psw-card-play-badge">${PSW_ICONS.play}</div>` : ''}
-    </div>
-    <div class="psw-card-body">
-      <div class="psw-card-author-row">${pswAvatar(author.name, author.photo, 20)}<span class="psw-card-author-name">${pswEsc(author.name||'Member')}</span></div>
-      <div class="psw-card-title">${pswEsc(p.title)}</div>
-      ${p.description ? `<div class="psw-card-desc">${pswEsc(p.description)}</div>` : ''}
-      ${p.tags?.length ? `<div class="psw-card-tags">${p.tags.map(t=>`<span class="psw-tag">${pswEsc(t)}</span>`).join('')}</div>` : ''}
-      <div class="psw-card-stats">
-        <span class="psw-stat">${PSW_ICONS.eye}&nbsp;${pswFmt(p.views_count)}</span>
-        <span class="psw-stat">${PSW_ICONS.heart}&nbsp;${pswFmt(p.reactions_count)}</span>
-        <span class="psw-stat">${PSW_ICONS.comment}&nbsp;${pswFmt(p.comments_count)}</span>
+  // Avatar inner — photo or initials
+  const avatarInner = author.photo
+    ? `<img src="${pswEsc(author.photo)}" alt="${pswEsc(author.name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
+    : `<div style="width:100%;height:100%;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#666;">${pswEsc((author.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</div>`;
+
+  // Media section
+  let mediaHtml = '';
+  if (hasImage) {
+    mediaHtml = `<div class="psw-ig-img-wrap"><img src="${pswEsc(p.cover_image)}" alt="" class="psw-ig-img" loading="lazy"></div>`;
+  } else if (hasVideo) {
+    const embedUrl = pswEmbedUrl(p.video_url, p.video_provider);
+    if (embedUrl) {
+      mediaHtml = `<div class="psw-ig-img-wrap" style="position:relative;padding-bottom:56.25%;background:#000;"><iframe src="${pswEsc(embedUrl)}" allowfullscreen loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe></div>`;
+    } else {
+      mediaHtml = `<div class="psw-ig-img-wrap" style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">${PSW_ICONS.play}</div>`;
+    }
+  } else if (p.description) {
+    mediaHtml = `<div class="psw-ig-text-bg"><div class="psw-ig-text-content">${pswEsc(p.description)}</div></div>`;
+  }
+
+  // Caption
+  let captionHtml = '';
+  if (hasImage || hasVideo) {
+    const captionBody = [p.title, p.description].filter(Boolean).join(' · ');
+    if (captionBody) captionHtml = `<div class="psw-ig-caption"><span class="psw-ig-caption-author">${pswEsc(author.name||'Member')}</span> <span class="psw-ig-caption-text">${pswEsc(captionBody)}</span></div>`;
+  } else if (postType !== 'text' && p.title) {
+    captionHtml = `<div class="psw-ig-caption"><span class="psw-ig-caption-author">${pswEsc(author.name||'Member')}</span> <span class="psw-ig-caption-text">${pswEsc(p.title)}</span></div>`;
+  }
+
+  const tagsHtml = p.tags?.length
+    ? `<div class="psw-ig-tags">${p.tags.map(t=>`<span class="psw-ig-tag">#${pswEsc(t)}</span>`).join(' ')}</div>` : '';
+
+  const commentsHtml = p.comments_count > 0
+    ? `<div class="psw-ig-view-comments" onclick="pswOpenDetail('${pswEsc(p.id)}')">${p.comments_count === 1 ? 'View 1 comment' : `View all ${pswFmt(p.comments_count)} comments`}</div>` : '';
+
+  const likesHtml = p.reactions_count > 0
+    ? `<div class="psw-ig-likes">${pswFmt(p.reactions_count)} like${p.reactions_count !== 1 ? 's' : ''}</div>` : '';
+
+  return `<article class="psw-ig-post" data-project-id="${pswEsc(p.id)}">
+    <div class="psw-ig-header">
+      <div class="psw-ig-avatar-ring">
+        <div class="psw-ig-avatar-inner">${avatarInner}</div>
       </div>
+      <div class="psw-ig-author-block">
+        <div class="psw-ig-author-name">${pswEsc(author.name||'Member')}</div>
+        <div class="psw-ig-post-time">${pswTime(p.created_at)}</div>
+      </div>
+      <button class="psw-ig-options" onclick="pswOpenDetail('${pswEsc(p.id)}')" title="More">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
     </div>
-  </div>`;
+
+    ${mediaHtml}
+
+    <div class="psw-ig-actions">
+      <button class="psw-ig-btn" onclick="pswShowAuthNudge()" title="Like">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+      <button class="psw-ig-btn" onclick="pswOpenDetail('${pswEsc(p.id)}')" title="Comment">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <div class="psw-ig-views">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        ${pswFmt(p.views_count)}
+      </div>
+      <button class="psw-ig-btn psw-ig-btn-right" onclick="pswOpenDetail('${pswEsc(p.id)}')" title="Open post">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 21 12 16 5 21 5 3 19 3"/></svg>
+      </button>
+    </div>
+
+    ${likesHtml}
+    ${captionHtml}
+    ${tagsHtml}
+    ${commentsHtml}
+    <div class="psw-ig-sign-in"><a href="/Social-Strand">Sign in</a> to like and comment.</div>
+    <div class="psw-ig-timestamp">${pswTime(p.created_at)}</div>
+  </article>`;
 }
 
 // ── Feed load ─────────────────────────────────────────────────────────────────

@@ -2669,33 +2669,77 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 .credit-role-check:has(input:checked){border-color:rgba(245,245,245,.25);background:rgba(245,245,245,.08);color:var(--white)}
 .credit-role-check input{display:none}
 
-/* ── Public Social Strand ──────────────────────────────────────────────────── */
-.psw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
-@media(max-width:600px){.psw-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
-@media(max-width:380px){.psw-grid{grid-template-columns:1fr}}
+/* ── Public Social Strand — Instagram-style feed ──────────────────────── */
+/* Feed container: centered single-column */
+.psw-grid{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:0}
 
-.psw-card{background:var(--black);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .18s,transform .18s,box-shadow .18s}
-.psw-card:hover{border-color:#333;transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.45)}
-body.light-mode .psw-card{background:#fff;border-color:#e0e0e0}
-body.light-mode .psw-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.1)}
+/* Instagram post card */
+.psw-ig-post{width:100%;max-width:614px;border-bottom:1px solid var(--border);background:var(--black)}
+body.light-mode .psw-ig-post{background:#fff;border-color:#efefef}
+@media(min-width:601px){.psw-ig-post{border:1px solid var(--border);border-radius:3px;margin-bottom:24px}}
+body.light-mode @media(min-width:601px){.psw-ig-post{border-color:#dbdbdb}}
 
-.psw-card-media{position:relative;aspect-ratio:16/9;background:#111;overflow:hidden}
-.psw-card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
-.psw-card:hover .psw-card-img{transform:scale(1.03)}
-.psw-card-no-cover{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0e0e0e;color:#2a2a2a}
-body.light-mode .psw-card-no-cover{background:#f0f0f0;color:#ccc}
-.psw-card-domain-pill{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 9px;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#bbb;font-weight:500}
-.psw-card-play-badge{position:absolute;bottom:10px;right:10px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;color:#fff}
+/* Post header */
+.psw-ig-header{display:flex;align-items:center;gap:10px;padding:12px 14px 10px}
+.psw-ig-avatar-ring{width:38px;height:38px;border-radius:50%;background:linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);display:flex;align-items:center;justify-content:center;padding:2px;flex-shrink:0}
+.psw-ig-avatar-inner{width:100%;height:100%;border-radius:50%;background:var(--black);display:flex;align-items:center;justify-content:center;padding:2px;overflow:hidden}
+body.light-mode .psw-ig-avatar-inner{background:#fff}
+.psw-ig-author-block{flex:1;min-width:0}
+.psw-ig-author-name{font-size:13px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
+body.light-mode .psw-ig-author-name{color:#111}
+.psw-ig-post-time{font-size:11px;color:var(--grey);margin-top:1px}
+.psw-ig-options{width:32px;height:32px;border-radius:50%;background:none;border:none;display:flex;align-items:center;justify-content:center;color:var(--grey);cursor:pointer;transition:background .12s;flex-shrink:0}
+.psw-ig-options:hover{background:rgba(255,255,255,.08);color:var(--white)}
+body.light-mode .psw-ig-options:hover{background:rgba(0,0,0,.06);color:#111}
 
-.psw-card-body{padding:14px 16px 16px}
-.psw-card-author-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
-.psw-card-author-name{font-size:11px;color:var(--grey);letter-spacing:.03em;font-weight:500}
-.psw-card-title{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.35;margin-bottom:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.psw-card-desc{font-size:12px;color:var(--grey);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px}
-.psw-card-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+/* Media */
+.psw-ig-img-wrap{width:100%;position:relative;background:#111;overflow:hidden}
+body.light-mode .psw-ig-img-wrap{background:#f0f0f0}
+.psw-ig-img{width:100%;display:block;max-height:600px;object-fit:cover}
+.psw-ig-text-bg{width:100%;min-height:240px;display:flex;align-items:center;justify-content:center;padding:40px 28px;background:#111}
+body.light-mode .psw-ig-text-bg{background:#fafafa}
+.psw-ig-text-content{font-size:20px;font-weight:500;color:var(--white);line-height:1.55;text-align:center;max-width:420px}
+body.light-mode .psw-ig-text-content{color:#111}
+
+/* Action bar */
+.psw-ig-actions{display:flex;align-items:center;padding:6px 14px 2px;gap:4px}
+.psw-ig-btn{width:36px;height:36px;border-radius:50%;background:none;border:none;display:flex;align-items:center;justify-content:center;color:var(--white);cursor:pointer;transition:opacity .12s}
+.psw-ig-btn:hover{opacity:.6}
+body.light-mode .psw-ig-btn{color:#111}
+.psw-ig-btn-right{margin-left:auto}
+.psw-ig-views{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--grey);padding:0 2px}
+
+/* Likes */
+.psw-ig-likes{padding:0 14px 4px;font-size:13px;font-weight:700;color:var(--white)}
+body.light-mode .psw-ig-likes{color:#111}
+
+/* Caption */
+.psw-ig-caption{padding:0 14px 6px;font-size:14px;color:var(--white);line-height:1.55}
+body.light-mode .psw-ig-caption{color:#111}
+.psw-ig-caption-author{font-weight:700;cursor:default}
+.psw-ig-caption-text{color:#e0e0e0}
+body.light-mode .psw-ig-caption-text{color:#333}
+
+/* Tags */
+.psw-ig-tags{padding:0 14px 4px;display:flex;flex-wrap:wrap;gap:4px}
+.psw-ig-tag{font-size:12px;color:#4ba3d4;cursor:default}
+body.light-mode .psw-ig-tag{color:#2563eb}
+
+/* View comments / sign-in gate */
+.psw-ig-view-comments{padding:0 14px 6px;font-size:13px;color:var(--grey);cursor:pointer}
+.psw-ig-view-comments:hover{color:var(--white)}
+body.light-mode .psw-ig-view-comments:hover{color:#111}
+.psw-ig-sign-in{padding:0 14px 8px;font-size:13px;color:var(--grey)}
+.psw-ig-sign-in a{color:var(--white);font-weight:600;text-decoration:none}
+body.light-mode .psw-ig-sign-in a{color:#111}
+.psw-ig-sign-in a:hover{text-decoration:underline}
+
+/* Timestamp */
+.psw-ig-timestamp{padding:0 14px 12px;font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.04em}
+
+/* Keep psw-tag for detail modal tags */
 .psw-tag{font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#777;letter-spacing:.04em}
 body.light-mode .psw-tag{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:#888}
-.psw-card-stats{display:flex;gap:12px;font-size:11px;color:var(--grey);align-items:center}
 .psw-stat{display:inline-flex;align-items:center;gap:4px}
 
 /* Guest banner */
@@ -3312,36 +3356,36 @@ body.light-mode .psw-comment-gate a{color:#111}
 
 <!-- ── STUDIO WALL PAGE ── -->
 <div class="page" id="page-strand">
-  <section class="section">
-    <div class="section-inner">
-      <p class="section-label">Creative Work</p>
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:0">
-        <div>
-          <h2 class="section-title">Social Strand</h2>
-          <p style="color:var(--grey);font-size:14px;margin-top:10px;line-height:1.5">The work KFS members are making — films, frames, experiments.</p>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div class="psw-tag-input-wrap">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-tag-input" autocomplete="off">
-          </div>
-          <a href="/Social-Strand" class="btn btn-primary" style="border-radius:10px;white-space:nowrap;font-size:13px;padding:9px 18px;text-decoration:none">Join Social Strand →</a>
-        </div>
+  <!-- Instagram-style header bar -->
+  <div style="position:sticky;top:60px;z-index:80;background:var(--black);border-bottom:1px solid var(--border);padding:12px 0">
+    <div style="max-width:614px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--white)"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span style="font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--white)">Social Strand</span>
       </div>
-
-      <!-- Guest banner -->
-      <div class="psw-guest-banner" id="psw-guest-banner">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        <span>You're browsing as a guest. <a href="/Social-Strand">Join Social Strand</a> to react and comment.</span>
-      </div>
-
-      <!-- Feed grid -->
-      <div id="psw-feed" class="psw-grid" style="margin-top:28px"></div>
-      <div style="text-align:center;margin-top:32px">
-        <button id="psw-load-more-btn" class="btn btn-secondary" style="display:none;border-radius:10px;font-size:13px;padding:9px 22px">Load more</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="psw-tag-input-wrap" style="padding:6px 10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-tag-input" autocomplete="off" style="width:120px">
+        </div>
+        <a href="/Social-Strand" style="font-size:13px;font-weight:700;color:#0095f6;text-decoration:none;white-space:nowrap">Sign in</a>
       </div>
     </div>
-  </section>
+  </div>
+
+  <!-- Guest banner -->
+  <div class="psw-guest-banner" id="psw-guest-banner" style="max-width:614px;margin:16px auto 0;border-radius:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <span>Browsing as guest. <a href="/Social-Strand">Join Social Strand</a> to like and comment.</span>
+  </div>
+
+  <!-- Instagram-style single-column feed -->
+  <div style="max-width:614px;margin:16px auto 0;padding:0">
+    <div id="psw-feed" class="psw-grid"></div>
+    <div style="text-align:center;padding:24px 0">
+      <button id="psw-load-more-btn" class="btn btn-secondary" style="display:none;border-radius:10px;font-size:13px;padding:9px 22px">Load more</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── STUDIO WALL — Detail Modal (public, read-only) ── -->
