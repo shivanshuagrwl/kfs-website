@@ -1476,6 +1476,10 @@
       @media (max-width: 768px) {
         .back-to-site-btn { display: none !important; }
       }
+      /* Hide the global floating back-to-site when Strand is active — strand has its own in the topbar */
+      body:has(#panel-studio.active) .back-to-site-btn {
+        display: none !important;
+      }
 
       /* ── Collab panel ────────────────────────────────────────────────────────── */
       .collab-split {
@@ -4302,6 +4306,7 @@
     .strand-feed-controls {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 10px;
       padding: 14px 48px;
       border-bottom: 1px solid var(--border);
