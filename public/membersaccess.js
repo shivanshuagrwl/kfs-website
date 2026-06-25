@@ -4994,8 +4994,11 @@ function gcRenderGroups(list) {
     const row = document.createElement('div');
     row.className = 'dm-conv-row gc-conv-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
     row.dataset.key = g.id;
-    const preview = g.last_snippet
-      ? (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + g.last_snippet
+    // Normalise last_msg_at — server v2 sends it directly; old server sent it inside last_msg
+    const lastAt = g.last_msg_at || g.last_msg?.created_at || g.created_at;
+    const snippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
+    const preview = snippet
+      ? (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + snippet
       : 'No messages yet';
     row.innerHTML = `
       ${gcGroupAvatar(g, 42)}
@@ -5004,10 +5007,13 @@ function gcRenderGroups(list) {
         <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
       </div>
       <div class="dm-conv-right">
-        <span class="dm-conv-time">${gcTime(g.last_msg_at)}</span>
+        <span class="dm-conv-time">${gcTime(lastAt)}</span>
         ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
       </div>`;
-    row.addEventListener('click', () => gcOpenGroup(g));
+    row.addEventListener('click', () => {
+      const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
+      opener(g);
+    });
     container.appendChild(row);
   });
 }
@@ -5142,6 +5148,17 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     ? container.lastElementChild : null;
 
   msgs.forEach(m => {
+    // ── System / activity messages (WhatsApp style centered pill) ──────────
+    if (m.msg_type === 'system' || m.is_system) {
+      lastSender = '__system__';
+      group = null;
+      const pill = document.createElement('div');
+      pill.className = 'gc-system-msg';
+      pill.textContent = m.body;
+      container.appendChild(pill);
+      return;
+    }
+
     const mine = m.sender_id === myId || (m.id.startsWith('tmp-') && !m.sender_id);
     const senderKey = mine ? '__mine__' : m.sender_id;
     const convKey   = GC.activeId;
@@ -5155,18 +5172,23 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       group.className = `dm-msg-group ${mine ? 'mine' : 'theirs'}`;
 
       if (!mine) {
-        // Show avatar + name for group messages
+        // WhatsApp/Insta style: avatar on the left + colored sender name above bubble
         const sName  = m.sender?.name  || m.sender_name  || 'Member';
         const sPhoto = m.sender?.photo || m.sender_photo || null;
         const header = document.createElement('div');
         header.className = 'gc-msg-header';
+        // Generate a stable hue from the sender_id for colored names
+        const hue = m.sender_id
+          ? [...m.sender_id].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360
+          : 200;
         header.innerHTML = `
-          ${gcAvatar(sName, sPhoto, 22)}
-          <span class="gc-msg-sender-name" data-member-id="${swEsc(m.sender_id)}" style="cursor:pointer">${swEsc(displayName)}</span>
+          <div class="gc-msg-av-wrap">
+            ${gcAvatar(sName, sPhoto, 28)}
+          </div>
+          <span class="gc-msg-sender-name" data-member-id="${swEsc(m.sender_id)}" style="cursor:pointer;color:hsl(${hue},60%,65%)">${swEsc(displayName)}</span>
         `;
         header.querySelector('.gc-msg-sender-name')?.addEventListener('click', (e) => {
           e.stopPropagation();
-          // Open nickname modal for this member
           nicksOpenModal(GC.activeId, m.sender_id, sName, true);
         });
         group.appendChild(header);
@@ -5310,7 +5332,9 @@ async function gcPollTick() {
     if (!msgs.length) return;
 
     const known   = new Set(GC.msgs.map(m => m.id));
-    const newMsgs = msgs.filter(m => !known.has(m.id) && !GC.pendingBodies.has(m.body));
+    const newMsgs = msgs.filter(m =>
+      !known.has(m.id) && (m.msg_type === 'system' || m.is_system || !GC.pendingBodies.has(m.body))
+    );
     if (!newMsgs.length) return;
 
     // Merge new nicknames (only available when resp is an object, not array)
@@ -5448,7 +5472,7 @@ function gcOpenCreateModal() {
   searchInp.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => renderResults(searchInp.value), 150); };
 
   const submitBtn = $id('gc-create-submit');
-  submitBtn.onclick = async () => {
+    submitBtn.onclick = async () => {
     const name = ($id('gc-create-name').value || '').trim();
     if (!name) { $id('gc-create-error').textContent = 'Group name required.'; $id('gc-create-error').style.display = ''; return; }
     if (!selected.size) { $id('gc-create-error').textContent = 'Add at least one member.'; $id('gc-create-error').style.display = ''; return; }
@@ -5457,7 +5481,22 @@ function gcOpenCreateModal() {
       const res = await api('POST', '/api/member/groups', { name, member_ids: [...selected.keys()] });
       gcCloseCreateModal();
       await gcLoadGroups();
-      if (res.group) gcOpenGroup(res.group);
+      if (res.group) {
+        // Use the full object from the freshly-loaded GC.groups list (has last_msg_at, members, etc.)
+        // Fall back to the POST response merged with sensible defaults if not found yet
+        const fresh = GC.groups.find(g => g.id === res.group.id) || {
+          ...res.group,
+          members:           res.group.members || [],
+          last_msg_at:       res.group.created_at,
+          last_snippet:      null,
+          last_sender_is_me: false,
+          unread_count:      0,
+          my_role:           'owner',
+        };
+        // Use the correct override path (window.gcOpenGroup if IIFE has patched it)
+        const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
+        await opener(fresh);
+      }
     } catch (e) {
       $id('gc-create-error').textContent = e.message || 'Could not create group.';
       $id('gc-create-error').style.display = '';
@@ -5765,7 +5804,7 @@ if (document.readyState === "loading") {
     // Tag each item with type and normalised sort key
     const items = [
       ...dms.map(c => ({ type: 'dm', data: c, ts: c.last_msg_at || '0' })),
-      ...groups.map(g => ({ type: 'group', data: g, ts: g.last_msg_at || '0' })),
+      ...groups.map(g => ({ type: 'group', data: g, ts: g.last_msg_at || g.last_msg?.created_at || g.created_at || '0' })),
     ].sort((a, b) => (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
 
     items.forEach(item => {
@@ -5796,8 +5835,11 @@ if (document.readyState === "loading") {
         row.className = 'dm-conv-row inbox-group-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
         row.dataset.key  = g.id;
         row.dataset.type = 'group';
-        const preview = g.last_snippet
-          ? (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + g.last_snippet
+        // Normalise: server v2 sends last_msg_at directly; old server sent last_msg sub-object
+        const gLastAt  = g.last_msg_at || g.last_msg?.created_at || g.created_at;
+        const gSnippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
+        const preview = gSnippet
+          ? (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + gSnippet
           : 'No messages yet';
         row.innerHTML = `
           ${inboxGroupAv(g, 42)}
@@ -5806,7 +5848,7 @@ if (document.readyState === "loading") {
             <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
           </div>
           <div class="dm-conv-right">
-            <span class="dm-conv-time">${dmTime(g.last_msg_at)}</span>
+            <span class="dm-conv-time">${dmTime(gLastAt)}</span>
             ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
           </div>`;
         row.addEventListener('click', () => inboxOpenGroup(g));
@@ -5882,16 +5924,23 @@ if (document.readyState === "loading") {
   };
 
   // ── Also patch gcOpenGroup mobile slide to use dm-sidebar/dm-window ───────
-  const _origGcOpenGroup = typeof gcOpenGroup === 'function' ? gcOpenGroup : null;
-  if (_origGcOpenGroup) {
-    window.gcOpenGroup = async function(group) {
-      await _origGcOpenGroup(group);
-      // Override the gc-sidebar/gc-window slide with dm-sidebar/dm-window
-      $id('gc-sidebar')?.classList.remove('dm-slide-out'); // undo any gc slide
-      $id('gc-window')?.classList.remove('dm-slide-in');
-      $id('dm-sidebar')?.classList.add('dm-slide-out');
-      $id('gc-window')?.classList.add('dm-slide-in');
-    };
+  // We defer capture until the first call so gcOpenGroup is always defined by then
+  window.gcOpenGroup = async function(group) {
+    // Resolve the real implementation at call time, not at IIFE time
+    // (gcOpenGroup may not exist when the IIFE runs, but will by the time user clicks)
+    const _orig = window.gcOpenGroup.__orig;
+    if (_orig) {
+      await _orig(group);
+    }
+    // Override the gc-sidebar/gc-window slide with dm-sidebar/dm-window
+    $id('gc-sidebar')?.classList.remove('dm-slide-out');
+    $id('gc-window')?.classList.remove('dm-slide-in');
+    $id('dm-sidebar')?.classList.add('dm-slide-out');
+    $id('gc-window')?.classList.add('dm-slide-in');
+  };
+  // Store the original reference — gcOpenGroup is definitely defined by now (it's declared above the IIFE)
+  if (typeof gcOpenGroup === 'function' && !window.gcOpenGroup.__orig) {
+    window.gcOpenGroup.__orig = gcOpenGroup;
   }
 
   // ── Unified load: fetch both convs + groups, then render ─────────────────

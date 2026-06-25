@@ -14240,18 +14240,29 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
       membersByGroup[m.group_id].push({ ...m.members, nickname: m.nickname });
     });
 
-    const result = (groups || []).map(g => ({
-      id:         g.id,
-      name:       g.name,
-      created_by: g.created_by,
-      created_at: g.created_at,
-      members:    membersByGroup[g.id] || [],
-      last_msg:   lastMsgMap[g.id] || null,
-    })).sort((a, b) => {
-      const at = a.last_msg?.created_at || a.created_at;
-      const bt = b.last_msg?.created_at || b.created_at;
-      return new Date(bt) - new Date(at);
+    // Build a member-id→name map for sender name resolution
+    const memberNameMap = {};
+    (allMembers || []).forEach(m => {
+      if (m.members?.id) memberNameMap[m.members.id] = m.members.name || 'Member';
     });
+
+    const result = (groups || []).map(g => {
+      const lm = lastMsgMap[g.id] || null;
+      const myMembership = (allMembers || []).find(m => m.group_id === g.id && m.member_id === myId);
+      return {
+        id:                g.id,
+        name:              g.name,
+        created_by:        g.created_by,
+        created_at:        g.created_at,
+        members:           membersByGroup[g.id] || [],
+        last_msg_at:       lm ? lm.created_at : g.created_at,
+        last_snippet:      lm ? (lm.body || '').slice(0, 80) : null,
+        last_sender_is_me: lm ? lm.sender_id === myId : false,
+        last_sender_name:  lm ? (memberNameMap[lm.sender_id] || 'Member') : null,
+        unread_count:      0,
+        my_role:           g.created_by === myId ? 'owner' : 'member',
+      };
+    }).sort((a, b) => new Date(b.last_msg_at) - new Date(a.last_msg_at));
 
     res.json(result);
   } catch (e) {
@@ -14279,10 +14290,57 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
     const rows = [myId, ...memberIds].map(mid => ({ group_id: group.id, member_id: mid }));
     await supabase.from("dm_group_members").insert(rows);
 
-    res.json({ success: true, group });
+    // Insert a system activity message: "X created the group"
+    const { data: creator } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    const creatorName = creator?.name || "Someone";
+    const memberCount = memberIds.length;
+    await supabase.from("dm_group_messages").insert([{
+      group_id:    group.id,
+      sender_id:   myId,
+      body:        `🎉 ${creatorName} created the group · ${memberCount + 1} member${memberCount + 1 !== 1 ? 's' : ''}`,
+      msg_type:    'system',
+    }]).catch(() => { /* non-fatal */ });
+
+    res.json({ success: true, group: {
+      ...group,
+      members:           [myId, ...memberIds].map(mid => ({ id: mid })),
+      last_msg_at:       group.created_at,
+      last_snippet:      null,
+      last_sender_is_me: false,
+      last_sender_name:  null,
+      unread_count:      0,
+      my_role:           'owner',
+    } });
   } catch (e) {
     console.error("[groups POST]", e.message);
     res.status(500).json({ error: "Failed to create group" });
+  }
+});
+
+// PATCH /api/member/groups/:id  { name }  — rename (alias for /name sub-route, for client compat)
+app.patch("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const name = (req.body?.name || "").trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: "Name required" });
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+    // Fetch old name for activity message
+    const { data: grp } = await supabase.from("dm_group_chats").select("name").eq("id", gid).maybeSingle();
+    await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    // Insert system activity message
+    const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    const actorName = actor?.name || "Someone";
+    await supabase.from("dm_group_messages").insert([{
+      group_id:  gid,
+      sender_id: myId,
+      body:      `✏️ ${actorName} changed the group name to "${name}"`,
+      msg_type:  'system',
+    }]).catch(() => {});
+    res.json({ success: true, name });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to rename group" });
   }
 });
 
@@ -14297,6 +14355,15 @@ app.patch("/api/member/groups/:id/name", memberAuthMiddleware, gcWriteLimit, asy
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
     await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    // Insert system activity message
+    const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    const actorName = actor?.name || "Someone";
+    await supabase.from("dm_group_messages").insert([{
+      group_id:  gid,
+      sender_id: myId,
+      body:      `✏️ ${actorName} changed the group name to "${name}"`,
+      msg_type:  'system',
+    }]).catch(() => {});
     res.json({ success: true, name });
   } catch (e) {
     res.status(500).json({ error: "Failed to rename group" });
@@ -14317,6 +14384,19 @@ app.post("/api/member/groups/:id/members", memberAuthMiddleware, gcWriteLimit, a
     const { count } = await supabase.from("dm_group_members").select("*", { count: "exact", head: true }).eq("group_id", gid);
     if ((count || 0) >= 50) return res.status(400).json({ error: "Group is full (50 members max)" });
     await supabase.from("dm_group_members").upsert([{ group_id: gid, member_id: memberId }], { onConflict: "group_id,member_id" });
+    // Insert system activity message
+    const [{ data: actor }, { data: added }] = await Promise.all([
+      supabase.from("members").select("name").eq("id", myId).maybeSingle(),
+      supabase.from("members").select("name").eq("id", memberId).maybeSingle(),
+    ]);
+    const actorName = actor?.name || "Someone";
+    const addedName = added?.name || "a member";
+    await supabase.from("dm_group_messages").insert([{
+      group_id:  gid,
+      sender_id: myId,
+      body:      `👤 ${actorName} added ${addedName}`,
+      msg_type:  'system',
+    }]).catch(() => {});
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to add member" });
@@ -14331,7 +14411,15 @@ app.delete("/api/member/groups/:id/members/:memberId", memberAuthMiddleware, gcW
     const memberId = req.params.memberId;
     // Can only remove yourself (leave) — creator can't forcibly remove others in v1
     if (memberId !== myId) return res.status(403).json({ error: "You can only remove yourself" });
+    const { data: leaver } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    const leaverName = leaver?.name || "Someone";
     await supabase.from("dm_group_members").delete().eq("group_id", gid).eq("member_id", myId);
+    await supabase.from("dm_group_messages").insert([{
+      group_id:  gid,
+      sender_id: myId,
+      body:      `👋 ${leaverName} left the group`,
+      msg_type:  'system',
+    }]).catch(() => {});
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to leave group" });
@@ -14374,7 +14462,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, members!dm_group_messages_sender_id_fkey(id, name, photo)")
+      .select("id, sender_id, body, created_at, msg_type, members!dm_group_messages_sender_id_fkey(id, name, photo)")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -14389,13 +14477,14 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const result = (msgs || [])
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map(m => ({
-        id:          m.id,
-        group_id:    gid,
-        sender_id:   m.sender_id,
-        sender_name: nickMap[m.sender_id] || m.members?.name || "Member",
+        id:           m.id,
+        group_id:     gid,
+        sender_id:    m.sender_id,
+        sender_name:  nickMap[m.sender_id] || m.members?.name || "Member",
         sender_photo: m.members?.photo || null,
-        body:        m.body,
-        sent_at:     m.created_at,
+        body:         m.body,
+        sent_at:      m.created_at,
+        msg_type:     m.msg_type || 'text',
       }));
 
     res.json(result);
@@ -14439,6 +14528,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         sender_photo: sender?.photo || null,
         body:         msg.body,
         sent_at:      msg.created_at,
+        msg_type:     'text',
       },
     });
   } catch (e) {

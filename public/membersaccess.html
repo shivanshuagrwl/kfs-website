@@ -4103,8 +4103,40 @@
   flex-shrink: 0;
 }
 .gc-msg-header { display:flex; align-items:center; gap:6px; margin-bottom:3px; padding-left:2px; }
-.gc-msg-sender-name { font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.01em; }
-.gc-msg-sender-name:hover { color:var(--text); }
+.gc-msg-sender-name { font-size:11px; font-weight:600; letter-spacing:.01em; }
+.gc-msg-sender-name:hover { filter:brightness(1.2); }
+
+/* Avatar column — keeps the avatar flush-left beside bubbles */
+.dm-msg-group.theirs { flex-direction:column; align-items:flex-start; }
+.gc-msg-av-wrap { display:flex; align-items:flex-end; }
+
+/* System / activity messages (WhatsApp pill style) */
+.gc-system-msg {
+  display:block;
+  text-align:center;
+  font-size:11px;
+  color:rgba(255,255,255,.38);
+  background:rgba(255,255,255,.05);
+  border-radius:12px;
+  padding:4px 14px;
+  margin:10px auto;
+  max-width:80%;
+  width:fit-content;
+  letter-spacing:.01em;
+  line-height:1.5;
+  user-select:none;
+}
+
+/* "Theirs" bubbles — slightly different bg to match insta DM style */
+.dm-msg-group.theirs .dm-bubble {
+  background:rgba(255,255,255,.09);
+  color:var(--text);
+  border-radius:4px 18px 18px 18px;
+}
+.dm-msg-group.theirs .dm-bubble:not(:first-of-type) {
+  border-radius:4px 18px 18px 18px;
+  margin-left:0;
+}
 .dm-block-active { color: #ef4444 !important; }
 .dm-blocked-banner { padding:10px 16px; background:rgba(239,68,68,.08); border-top:1px solid rgba(239,68,68,.15); color:#ef4444; font-size:12px; text-align:center; line-height:1.5; }
 #dm-topbar-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
