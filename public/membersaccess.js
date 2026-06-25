@@ -1097,9 +1097,10 @@ function switchPanel(el) {
   if (panel === 'activity') loadActivity();
   if (panel === 'movies')   loadMovies();
   if (panel === 'works')    loadMyWorks();
-  if (panel === 'collab')   loadMyCollabs();
   if (panel === 'grievance') loadMyGrievances();
   if (panel === 'network') loadNetworkPanel();
+  if (panel === 'dms') { if (typeof dmPanelOpened === 'function') dmPanelOpened(); }
+  else { if (typeof dmPausePolling === 'function') dmPausePolling(); }
 }
 
 // ── Desktop Sidebar Settings Toggle ──────────────────────────────────────
@@ -3396,6 +3397,7 @@ function nwSwitchTab(tabName) {
   document.querySelectorAll('.nw-tab-panel').forEach(p=>p.classList.toggle('active', p.id===`network-tab-${tabName}`));
   if (tabName === 'discover')    loadDiscoverTab();
   if (tabName === 'leaderboard') loadLeaderboardTab();
+  if (tabName === 'collab')      loadMyCollabs();
 }
 
 // ── Follow toggle — called from feed cards, member rows, and the mini-profile modal ──
@@ -3793,4 +3795,516 @@ if(document.readyState==='loading'){
 }else{
   initStudioWall(); initNetworkModule();
   initStatusModule(); initSkillsModule(); initDiscoverModule(); initLeaderboardModule();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DM CHAT MODULE
+// Uses member_notifications (type="dm") — zero new DB tables.
+// conv_key = "<smaller_uuid>:<larger_uuid>" (deterministic pair key)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DM = {
+  convs:         [],    // loaded conversations
+  activeKey:     null,  // current conv_key
+  activePeer:    null,  // { id, name, photo, role, batch, domain }
+  msgs:          [],    // messages in active convo
+  oldestSentAt:  null,  // for "load earlier" pagination
+  poll:          null,  // setInterval handle
+  members:       [],    // cached member list for picker
+  pickerTimer:   null,
+  panelVisible:  false,
+};
+
+const DM_POLL = 5000; // ms
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function dmMyId() {
+  return window._memberProfile?.id || _member?.id || null;
+}
+
+function dmAvatar(name, photo, size) {
+  if (photo) return `<img src="${swEsc(photo)}" alt="${swEsc(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;background:#1e1e1e">`;
+  const init = (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return `<div class="dm-av-placeholder" style="width:${size}px;height:${size}px;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * .36)}px;font-weight:700;color:#666;flex-shrink:0">${swEsc(init)}</div>`;
+}
+
+function dmTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  if (diff < 7 * 86400000) return `${Math.floor(diff / 86400000)}d`;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function dmFull(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ─── Badge ────────────────────────────────────────────────────────────────────
+
+function dmSetBadge(n) {
+  const show = n > 0;
+  const label = n > 99 ? '99+' : String(n);
+  [$id('dm-nav-badge'), $id('dm-btb-badge')].forEach(el => {
+    if (!el) return;
+    el.style.display = show ? '' : 'none';
+    el.textContent = label;
+  });
+}
+
+async function dmRefreshBadge() {
+  try {
+    const d = await api('GET', '/api/member/dm/unread-count');
+    dmSetBadge(d.count || 0);
+  } catch { /* silent */ }
+}
+
+// ─── Conversation list ────────────────────────────────────────────────────────
+
+async function dmLoadConvs() {
+  try {
+    const data = await api('GET', '/api/member/dm/conversations');
+    DM.convs = data || [];
+    dmRenderConvs(DM.convs);
+    const total = DM.convs.reduce((s, c) => s + (c.unread_count || 0), 0);
+    dmSetBadge(total);
+  } catch (e) {
+    console.error('[DM] loadConvs:', e.message);
+  }
+}
+
+function dmRenderConvs(list) {
+  const container = $id('dm-conv-list');
+  if (!container) return;
+  $id('dm-conv-loading') && ($id('dm-conv-loading').style.display = 'none');
+
+  // Remove old rows
+  container.querySelectorAll('.dm-conv-row').forEach(el => el.remove());
+
+  if (!list || list.length === 0) {
+    $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = '');
+    return;
+  }
+  $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = 'none');
+
+  list.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
+    row.dataset.key = c.conv_key;
+    const preview = c.last_snippet
+      ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
+      : 'No messages yet';
+    row.innerHTML = `
+      ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
+      <div class="dm-conv-info">
+        <div class="dm-conv-name">${swEsc(c.peer?.name || 'Member')}</div>
+        <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
+      </div>
+      <div class="dm-conv-right">
+        <span class="dm-conv-time">${dmTime(c.last_msg_at)}</span>
+        ${c.unread_count > 0 ? `<span class="dm-unread-pill">${c.unread_count > 9 ? '9+' : c.unread_count}</span>` : ''}
+      </div>`;
+    row.addEventListener('click', () => dmOpenConv(c));
+    container.appendChild(row);
+  });
+}
+
+// ─── Open a conversation ──────────────────────────────────────────────────────
+
+async function dmOpenConv(conv) {
+  DM.activeKey   = conv.conv_key;
+  DM.activePeer  = conv.peer;
+  DM.msgs        = [];
+  DM.oldestSentAt = null;
+
+  // Highlight row
+  document.querySelectorAll('.dm-conv-row').forEach(el => {
+    el.classList.toggle('dm-active-row', el.dataset.key === conv.conv_key);
+  });
+
+  // Topbar
+  const ta = $id('dm-topbar-avatar');
+  if (ta) ta.innerHTML = dmAvatar(conv.peer?.name, conv.peer?.photo, 34);
+  setText('dm-topbar-name', conv.peer?.name || 'Member');
+  setText('dm-topbar-sub', [conv.peer?.role, conv.peer?.batch || conv.peer?.domain].filter(Boolean).join(' · '));
+
+  // Show window, hide empty state
+  $id('dm-window-empty') && ($id('dm-window-empty').style.display = 'none');
+  $id('dm-active') && ($id('dm-active').style.display = 'flex');
+
+  // Mobile slide
+  $id('dm-sidebar')?.classList.add('dm-slide-out');
+  $id('dm-window')?.classList.add('dm-slide-in');
+
+  await dmLoadMsgs(false);
+  $id('dm-input')?.focus();
+}
+
+// Open or create a conversation with a member by ID (called from Network cards)
+async function dmStartWith(memberId, peerHint) {
+  const navEl = document.querySelector('[data-panel="dms"]');
+  if (navEl) switchPanel(navEl);
+  document.querySelectorAll('.btb-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.panel === 'dms');
+  });
+
+  // Check if conversation already exists
+  const existing = DM.convs.find(c => c.peer?.id === memberId);
+  if (existing) { dmOpenConv(existing); return; }
+
+  // No existing — show chat UI optimistically, conv created on first message
+  DM.activeKey  = null;
+  DM.activePeer = peerHint || { id: memberId, name: 'Member', photo: null };
+  DM.msgs       = [];
+
+  const ta = $id('dm-topbar-avatar');
+  if (ta) ta.innerHTML = dmAvatar(DM.activePeer.name, DM.activePeer.photo, 34);
+  setText('dm-topbar-name', DM.activePeer.name || 'Member');
+  setText('dm-topbar-sub', [DM.activePeer.role, DM.activePeer.batch || DM.activePeer.domain].filter(Boolean).join(' · '));
+
+  $id('dm-window-empty') && ($id('dm-window-empty').style.display = 'none');
+  $id('dm-active') && ($id('dm-active').style.display = 'flex');
+  $id('dm-msg-list') && ($id('dm-msg-list').innerHTML = '');
+  $id('dm-load-earlier-wrap') && ($id('dm-load-earlier-wrap').style.display = 'none');
+  $id('dm-sidebar')?.classList.add('dm-slide-out');
+  $id('dm-window')?.classList.add('dm-slide-in');
+  $id('dm-input')?.focus();
+}
+
+// ─── Load messages ────────────────────────────────────────────────────────────
+
+async function dmLoadMsgs(prepend) {
+  if (!DM.activeKey) return;
+  try {
+    const myId = dmMyId();
+    let url = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=40`;
+    if (prepend && DM.oldestSentAt) url += `&before=${encodeURIComponent(DM.oldestSentAt)}`;
+
+    const msgs = await api('GET', url);
+    if (!msgs || !msgs.length) {
+      if (prepend) $id('dm-load-earlier-wrap') && ($id('dm-load-earlier-wrap').style.display = 'none');
+      return;
+    }
+
+    if (prepend) {
+      DM.msgs = [...msgs, ...DM.msgs];
+    } else {
+      DM.msgs = msgs;
+    }
+    DM.oldestSentAt = DM.msgs[0]?.sent_at || null;
+
+    const list = $id('dm-msg-list');
+    if (!list) return;
+
+    if (!prepend) {
+      list.innerHTML = '';
+      dmRenderMsgs(DM.msgs, list, myId);
+      dmScrollBottom();
+    } else {
+      const area    = $id('dm-msgs');
+      const prevH   = area.scrollHeight;
+      const prevTop = area.scrollTop;
+      list.innerHTML = '';
+      dmRenderMsgs(DM.msgs, list, myId);
+      area.scrollTop = area.scrollHeight - prevH + prevTop;
+    }
+
+    const moreWrap = $id('dm-load-earlier-wrap');
+    if (moreWrap) moreWrap.style.display = msgs.length >= 40 ? '' : 'none';
+
+    // Zero this conv's unread in local state & refresh badge
+    const conv = DM.convs.find(c => c.conv_key === DM.activeKey);
+    if (conv) conv.unread_count = 0;
+    const total = DM.convs.reduce((s, c) => s + (c.unread_count || 0), 0);
+    dmSetBadge(total);
+    // Re-render conv list to clear unread pill
+    dmRenderConvs(DM.convs);
+  } catch (e) {
+    console.error('[DM] loadMsgs:', e.message);
+  }
+}
+
+function dmRenderMsgs(msgs, container, myId) {
+  // Group consecutive messages from same sender
+  let lastSender = null;
+  let group = null;
+
+  msgs.forEach(m => {
+    const mine = m.sender_id === myId;
+    const senderKey = m.sender_id;
+
+    if (senderKey !== lastSender) {
+      group = document.createElement('div');
+      group.className = `dm-msg-group ${mine ? 'mine' : 'theirs'}`;
+      container.appendChild(group);
+      lastSender = senderKey;
+    }
+
+    const isDeleted = m.body === '[deleted]';
+    const bubble = document.createElement('div');
+    bubble.className = `dm-bubble${isDeleted ? ' dm-deleted' : ''}`;
+    bubble.textContent = m.body;
+
+    const meta = document.createElement('div');
+    meta.className = 'dm-meta';
+    meta.innerHTML = `<span class="dm-msg-time">${dmFull(m.sent_at)}</span>${mine && !isDeleted ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
+
+    const delBtn = meta.querySelector('.dm-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dmDeleteMsg(m.id, bubble, delBtn);
+      });
+    }
+
+    group.appendChild(bubble);
+    group.appendChild(meta);
+  });
+}
+
+function dmScrollBottom() {
+  const el = $id('dm-msgs');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+// ─── Send ─────────────────────────────────────────────────────────────────────
+
+async function dmSend() {
+  const input = $id('dm-input');
+  if (!input) return;
+  const body = input.value.trim();
+  if (!body) return;
+
+  const peerId = DM.activePeer?.id;
+  if (!peerId) return;
+
+  // Optimistic bubble
+  const myId = dmMyId();
+  const tmp  = { id: 'tmp-' + Date.now(), sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null };
+  DM.msgs.push(tmp);
+  const list = $id('dm-msg-list');
+  // Snapshot child count BEFORE rendering so we can roll back exactly the nodes we added
+  const prevChildCount = list ? list.children.length : 0;
+  if (list) dmRenderMsgs([tmp], list, myId);
+  dmScrollBottom();
+  input.value = '';
+  input.style.height = '';
+
+  try {
+    const res = await api('POST', '/api/member/dm/send', { to_member_id: peerId, body });
+
+    // If this was a new conversation, update our active key
+    if (!DM.activeKey && res.conv_key) DM.activeKey = res.conv_key;
+
+    // Replace temp msg with real
+    DM.msgs = DM.msgs.filter(m => m.id !== tmp.id);
+    if (res.message) DM.msgs.push(res.message);
+
+    // Update conv list locally (avoid full refetch on every send)
+    const existingConv = DM.convs.find(c => c.conv_key === DM.activeKey);
+    if (existingConv) {
+      existingConv.last_snippet      = body.slice(0, 80);
+      existingConv.last_msg_at       = res.message?.sent_at || new Date().toISOString();
+      existingConv.last_sender_is_me = true;
+      dmRenderConvs(DM.convs);
+    } else {
+      // First message in a brand-new conv — need server data for peer info
+      await dmLoadConvs();
+    }
+
+    // Re-render messages to replace tmp with confirmed row
+    if (list) { list.innerHTML = ''; dmRenderMsgs(DM.msgs, list, myId); dmScrollBottom(); }
+  } catch (e) {
+    // Roll back: remove any group nodes added after the snapshot
+    DM.msgs = DM.msgs.filter(m => m.id !== tmp.id);
+    if (list) {
+      while (list.children.length > prevChildCount) list.lastChild.remove();
+    }
+    console.error('[DM] send:', e.message);
+  }
+}
+
+// ─── Delete message ────────────────────────────────────────────────────────────
+
+async function dmDeleteMsg(msgId, bubble, btn) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    await api('DELETE', `/api/member/dm/messages/${msgId}`);
+    bubble.textContent = '[deleted]';
+    bubble.classList.add('dm-deleted');
+    btn.remove();
+    const msg = DM.msgs.find(m => m.id === msgId);
+    if (msg) msg.body = '[deleted]';
+  } catch (e) {
+    console.error('[DM] delete:', e.message);
+  }
+}
+
+// ─── Polling ──────────────────────────────────────────────────────────────────
+
+async function dmPollTick() {
+  if (!DM.activeKey) return;
+  try {
+    const myId  = dmMyId();
+    // Use newest known message as cursor — server only returns rows after this timestamp,
+    // so the mark-read UPDATE only fires when there are genuinely new unread messages.
+    const newest = DM.msgs.length ? DM.msgs[DM.msgs.length - 1].sent_at : null;
+    const url    = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=20`
+                 + (newest ? `&since=${encodeURIComponent(newest)}` : '');
+    const msgs   = await api('GET', url);
+    if (!msgs?.length) return;
+    // Dedup by id as a safety net (shouldn't be needed with since= cursor)
+    const known   = new Set(DM.msgs.map(m => m.id));
+    const newMsgs = msgs.filter(m => !known.has(m.id));
+    if (!newMsgs.length) return;
+    DM.msgs.push(...newMsgs);
+    const list = $id('dm-msg-list');
+    if (!list) return;
+    const area  = $id('dm-msgs');
+    const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
+    dmRenderMsgs(newMsgs, list, myId);
+    if (atEnd) dmScrollBottom();
+  } catch { /* silent */ }
+}
+
+function dmStartPolling() {
+  dmPausePolling();
+  DM.poll = setInterval(dmPollTick, DM_POLL);
+}
+function dmPausePolling() {
+  if (DM.poll) { clearInterval(DM.poll); DM.poll = null; }
+}
+
+// ─── Panel open/close ─────────────────────────────────────────────────────────
+
+async function dmPanelOpened() {
+  DM.panelVisible = true;
+  await dmLoadConvs();
+  dmStartPolling();
+}
+
+// ─── Back button (mobile) ─────────────────────────────────────────────────────
+
+function dmGoBack() {
+  $id('dm-sidebar')?.classList.remove('dm-slide-out');
+  $id('dm-window')?.classList.remove('dm-slide-in');
+  $id('dm-active') && ($id('dm-active').style.display = 'none');
+  $id('dm-window-empty') && ($id('dm-window-empty').style.display = '');
+  DM.activeKey  = null;
+  DM.activePeer = null;
+  dmPausePolling(); // stop the poll interval when no conv is active
+  document.querySelectorAll('.dm-conv-row').forEach(el => el.classList.remove('dm-active-row'));
+}
+
+// ─── Member picker ────────────────────────────────────────────────────────────
+
+async function dmEnsureMembers() {
+  if (DM.members.length) return;
+  try {
+    const data = await api('GET', '/api/members');
+    const list = Array.isArray(data) ? data : (data.members || []);
+    const myId = dmMyId();
+    DM.members = list.filter(m => m.id !== myId);
+  } catch { DM.members = []; }
+}
+
+function dmRenderPicker(q) {
+  const results = $id('dm-picker-results');
+  if (!results) return;
+  const query = (q || '').toLowerCase().trim();
+  const hits  = query
+    ? DM.members.filter(m => (m.name || '').toLowerCase().includes(query) || (m.roll_no || '').includes(query))
+    : DM.members.slice(0, 10);
+
+  if (!hits.length) {
+    results.innerHTML = `<div class="dm-state-msg" style="padding:16px">${query ? 'No members found.' : 'Start typing a name…'}</div>`;
+    return;
+  }
+  results.innerHTML = hits.map(m => `
+    <div class="dm-picker-row" data-id="${swEsc(m.id)}">
+      ${dmAvatar(m.name, m.photo, 36)}
+      <div>
+        <div class="dm-picker-name">${swEsc(m.name || 'Member')}</div>
+        <div class="dm-picker-meta">${swEsc([m.role, m.batch || m.domain].filter(Boolean).join(' · '))}</div>
+      </div>
+    </div>`).join('');
+  results.querySelectorAll('.dm-picker-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const memberId = row.dataset.id;
+      const m = DM.members.find(x => x.id === memberId);
+      dmClosePicker();
+      dmStartWith(memberId, m ? { id: m.id, name: m.name, photo: m.photo, role: m.role, batch: m.batch, domain: m.domain } : null);
+    });
+  });
+}
+
+function dmOpenPicker() {
+  $id('dm-picker-overlay') && ($id('dm-picker-overlay').style.display = '');
+  const inp = $id('dm-picker-input');
+  if (inp) { inp.value = ''; inp.focus(); }
+  dmEnsureMembers().then(() => dmRenderPicker(''));
+}
+function dmClosePicker() {
+  $id('dm-picker-overlay') && ($id('dm-picker-overlay').style.display = 'none');
+}
+
+// ─── Conversation search/filter ───────────────────────────────────────────────
+
+function dmFilterConvs(q) {
+  const query = (q || '').toLowerCase().trim();
+  dmRenderConvs(query ? DM.convs.filter(c => (c.peer?.name || '').toLowerCase().includes(query)) : DM.convs);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+function initDM() {
+  // New message button
+  $id('dm-new-btn')?.addEventListener('click', dmOpenPicker);
+
+  // Picker close
+  $id('dm-picker-close')?.addEventListener('click', dmClosePicker);
+  $id('dm-picker-overlay')?.addEventListener('click', e => { if (e.target === $id('dm-picker-overlay')) dmClosePicker(); });
+
+  // Picker search
+  $id('dm-picker-input')?.addEventListener('input', e => {
+    clearTimeout(DM.pickerTimer);
+    DM.pickerTimer = setTimeout(() => dmRenderPicker(e.target.value), 200);
+  });
+
+  // Conv search
+  $id('dm-search')?.addEventListener('input', e => dmFilterConvs(e.target.value));
+
+  // Send
+  $id('dm-send-btn')?.addEventListener('click', dmSend);
+  $id('dm-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dmSend(); }
+  });
+
+  // Auto-grow textarea
+  $id('dm-input')?.addEventListener('input', function () {
+    this.style.height = '';
+    this.style.height = Math.min(this.scrollHeight, 110) + 'px';
+  });
+
+  // Back (mobile)
+  $id('dm-back-btn')?.addEventListener('click', dmGoBack);
+
+  // Load earlier
+  $id('dm-load-earlier')?.addEventListener('click', () => dmLoadMsgs(true));
+
+  // Background unread badge refresh every 30s
+  dmRefreshBadge();
+  setInterval(dmRefreshBadge, 30000);
+}
+
+// Boot after DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDM);
+} else {
+  initDM();
 }

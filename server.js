@@ -12957,6 +12957,343 @@ app.get("/scanner.js", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "scanner.js"));
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-33 — Direct Messaging (Social Strand DMs)
+//
+// NO new tables required — messages are stored in the existing
+// member_notifications table (type = "dm") with these field mappings:
+//
+//   member_id   → recipient member UUID
+//   actor_id    → sender member UUID
+//   actor_name  → sender display name
+//   actor_photo → sender photo URL (snapshot at send time)
+//   body        → message text (max 2000 chars)
+//   link_type   → always "dm"
+//   link_id     → canonical conversation key = "<smaller_uuid>:<larger_uuid>"
+//   is_read     → false until recipient reads
+//   created_at  → send timestamp
+//
+// Conversation key is deterministic: sort the two UUIDs lexicographically and
+// join with ":", guaranteeing a stable unique ID for any pair of members.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const dmRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Slow down — too many messages." },
+  keyGenerator: (req) => req.member?.memberId || req.ip,
+});
+
+/** Stable conversation key for any two member UUIDs */
+function dmConvKey(a, b) {
+  return [a, b].sort().join(":");
+}
+
+// ── GET /api/member/dm/conversations ─────────────────────────────────────────
+// Returns all unique conversations the logged-in member has participated in,
+// sorted newest-first, with peer info + last snippet + unread count.
+app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+
+    // All DM notifications involving me (sent or received)
+    // Sent = rows I am the actor_id of with type "dm" on someone else's member_id
+    // Received = rows where I am member_id and link_type = "dm"
+    const [{ data: received }, { data: sent }] = await Promise.all([
+      supabase
+        .from("member_notifications")
+        .select("id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at")
+        .eq("member_id", myId)
+        .eq("link_type", "dm")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase
+        .from("member_notifications")
+        .select("id, member_id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at")
+        .eq("actor_id", myId)
+        .eq("link_type", "dm")
+        .order("created_at", { ascending: false })
+        .limit(500),
+    ]);
+
+    // Build a map of conv_key → { lastMsg, unreadCount, peerId, peerName, peerPhoto }
+    const convMap = new Map();
+
+    // Process received messages
+    for (const row of (received || [])) {
+      const key = row.link_id;
+      if (!key) continue;
+      if (!convMap.has(key)) {
+        convMap.set(key, {
+          key,
+          lastMsg:      row,
+          unreadCount:  row.is_read ? 0 : 1,
+          peerId:       row.actor_id,
+          peerName:     row.actor_name,
+          peerPhoto:    row.actor_photo,
+        });
+      } else {
+        const c = convMap.get(key);
+        if (!row.is_read) c.unreadCount++;
+        if (new Date(row.created_at) > new Date(c.lastMsg.created_at)) c.lastMsg = row;
+      }
+    }
+
+    // Process sent messages
+    for (const row of (sent || [])) {
+      const key = row.link_id;
+      if (!key) continue;
+      if (!convMap.has(key)) {
+        convMap.set(key, {
+          key,
+          lastMsg:      row,
+          unreadCount:  0,
+          peerId:       row.member_id,
+          peerName:     null, // will fill from members query
+          peerPhoto:    null,
+        });
+      } else {
+        const c = convMap.get(key);
+        if (new Date(row.created_at) > new Date(c.lastMsg.created_at)) {
+          c.lastMsg = row;
+          // If last msg is mine, update last_sender_is_me
+        }
+      }
+    }
+
+    if (convMap.size === 0) return res.json([]);
+
+    // Gather peer IDs whose names/photos we need to look up
+    const peerIds = [...new Set([...convMap.values()].map(c => c.peerId).filter(Boolean))];
+    const { data: peers } = await supabase
+      .from("members")
+      .select("id, name, photo, role, batch, domain")
+      .in("id", peerIds);
+    const peerLookup = Object.fromEntries((peers || []).map(p => [p.id, p]));
+
+    // Sort by most recent message
+    const result = [...convMap.values()]
+      .sort((a, b) => new Date(b.lastMsg.created_at) - new Date(a.lastMsg.created_at))
+      .map(c => {
+        const peer   = peerLookup[c.peerId] || { id: c.peerId, name: c.peerName || "Member", photo: c.peerPhoto };
+        const lastMsg = c.lastMsg;
+        const isMine  = lastMsg.actor_id === myId;
+        return {
+          conv_key:          c.key,
+          peer,
+          last_msg_at:       lastMsg.created_at,
+          last_snippet:      (lastMsg.body || "").slice(0, 80),
+          last_sender_is_me: isMine,
+          unread_count:      c.unreadCount,
+        };
+      });
+
+    res.json(result);
+  } catch (e) {
+    console.error("[dm/conversations]", e.message);
+    res.status(500).json({ error: "Failed to load conversations" });
+  }
+});
+
+// ── GET /api/member/dm/messages/:convKey ──────────────────────────────────────
+// Returns messages for a conversation. convKey = "<uuid>:<uuid>" (sorted).
+// Cursor params:
+//   ?before=<ISO>  — load earlier messages (load-more, descending fetch)
+//   ?since=<ISO>   — poll for new messages only (used by dmPollTick, ascending)
+app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId    = req.member.memberId;
+    const convKey = req.params.convKey;
+
+    // Validate: the conv key must contain myId (prevents reading other people's convs)
+    const parts = convKey.split(":");
+    if (parts.length !== 2 || !parts.includes(myId)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const limit  = Math.min(parseInt(req.query.limit) || 40, 80);
+    const before = req.query.before; // load-earlier pagination
+    const since  = req.query.since;  // poll-for-new cursor (ISO timestamp of newest known msg)
+
+    // Ascending when fetching new messages (since), descending for initial/before load
+    const asc = !!since;
+
+    // Fetch both sides: messages received by me + messages I sent in this conv
+    let qRecv = supabase
+      .from("member_notifications")
+      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at")
+      .eq("member_id", myId)
+      .eq("link_type", "dm")
+      .eq("link_id", convKey)
+      .order("created_at", { ascending: asc })
+      .limit(limit);
+    let qSent = supabase
+      .from("member_notifications")
+      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at")
+      .eq("actor_id", myId)
+      .eq("link_type", "dm")
+      .eq("link_id", convKey)
+      .order("created_at", { ascending: asc })
+      .limit(limit);
+
+    if (before) {
+      qRecv = qRecv.lt("created_at", before);
+      qSent = qSent.lt("created_at", before);
+    }
+    if (since) {
+      qRecv = qRecv.gt("created_at", since);
+      qSent = qSent.gt("created_at", since);
+    }
+
+    const [{ data: recv }, { data: sent }] = await Promise.all([qRecv, qSent]);
+
+    // Merge + sort ascending + deduplicate
+    const all = [...(recv || []), ...(sent || [])];
+    const seen = new Set();
+    const msgs = all
+      .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; })
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .slice(since ? 0 : -limit); // for since: keep all new msgs; for before: keep last N
+
+    // Mark unread received messages as read — fire-and-forget, never blocks response
+    const unreadIds = (recv || []).filter(m => !m.is_read).map(m => m.id);
+    if (unreadIds.length) {
+      supabase
+        .from("member_notifications")
+        .update({ is_read: true })
+        .in("id", unreadIds)
+        .then(() => {})
+        .catch(e => console.error("[dm/mark-read]", e.message));
+    }
+
+    res.json(msgs.map(m => ({
+      id:        m.id,
+      sender_id: m.actor_id,
+      body:      m.body,
+      sent_at:   m.created_at,
+      is_read:   m.is_read,
+    })));
+  } catch (e) {
+    console.error("[dm/messages GET]", e.message);
+    res.status(500).json({ error: "Failed to load messages" });
+  }
+});
+
+// ── POST /api/member/dm/send ──────────────────────────────────────────────────
+// Body: { to_member_id, body }
+app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, res) => {
+  try {
+    const myId              = req.member.memberId;
+    const { to_member_id, body } = req.body || {};
+
+    if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
+    if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
+
+    const trimmed = (body || "").trim();
+    if (!trimmed || trimmed === "\u200B") return res.status(400).json({ error: "Message body required" });
+    if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
+
+    // Verify target exists
+    const { data: target } = await supabase
+      .from("members")
+      .select("id, name")
+      .eq("id", to_member_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!target) return res.status(404).json({ error: "Member not found" });
+
+    // Fetch sender info for snapshot
+    const { data: sender } = await supabase
+      .from("members")
+      .select("id, name, photo")
+      .eq("id", myId)
+      .maybeSingle();
+
+    const key = dmConvKey(myId, to_member_id);
+    const now = new Date().toISOString();
+
+    const { data: msg, error: insertErr } = await supabase
+      .from("member_notifications")
+      .insert([{
+        member_id:   to_member_id,
+        type:        "dm",
+        title:       `Message from ${sender?.name || req.member.username}`,
+        body:        trimmed,
+        actor_id:    myId,
+        actor_name:  sender?.name   || req.member.username,
+        actor_photo: sender?.photo  || null,
+        link_type:   "dm",
+        link_id:     key,
+        is_read:     false,
+      }])
+      .select("id, actor_id, member_id, body, created_at, is_read")
+      .single();
+
+    if (insertErr) throw insertErr;
+
+    res.json({
+      success:         true,
+      conv_key:        key,
+      message: {
+        id:        msg.id,
+        sender_id: myId,
+        body:      msg.body,
+        sent_at:   msg.created_at,
+        read_at:   null,
+      },
+    });
+  } catch (e) {
+    console.error("[dm/send]", e.message);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// ── DELETE /api/member/dm/messages/:msgId ─────────────────────────────────────
+// Soft-delete: clears body to "[deleted]"
+app.delete("/api/member/dm/messages/:msgId", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const msgId = req.params.msgId;
+
+    const { data: msg } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, link_type")
+      .eq("id", msgId)
+      .maybeSingle();
+
+    if (!msg || msg.link_type !== "dm") return res.status(404).json({ error: "Not found" });
+    if (msg.actor_id !== myId) return res.status(403).json({ error: "Cannot delete another member's message" });
+
+    await supabase
+      .from("member_notifications")
+      .update({ body: "[deleted]", title: "Message deleted" })
+      .eq("id", msgId);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[dm/delete]", e.message);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// ── GET /api/member/dm/unread-count ──────────────────────────────────────────
+app.get("/api/member/dm/unread-count", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { count } = await supabase
+      .from("member_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", myId)
+      .eq("link_type", "dm")
+      .eq("is_read", false);
+    res.json({ count: count || 0 });
+  } catch (e) {
+    res.json({ count: 0 });
+  }
+});
+
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
