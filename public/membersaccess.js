@@ -4289,6 +4289,7 @@ async function dmPanelOpened() {
 // ─── Back button (mobile) ─────────────────────────────────────────────────────
 
 function dmGoBack() {
+  if (typeof window._dpClose === 'function') window._dpClose();
   $id('dm-sidebar')?.classList.remove('dm-slide-out');
   $id('dm-window')?.classList.remove('dm-slide-in');
   $id('dm-active') && ($id('dm-active').style.display = 'none');
@@ -5723,6 +5724,7 @@ if (document.readyState === "loading") {
     });
 
     // Use the patched dmOpenConv (includes block/nick logic)
+    if (typeof window._dpClose === 'function') window._dpClose();
     if (typeof window.dmOpenConv === 'function') window.dmOpenConv(conv);
   }
 
@@ -5743,11 +5745,13 @@ if (document.readyState === "loading") {
     });
 
     // gcOpenGroup handles topbar, messages, polling
+    if (typeof window._dpClose === 'function') window._dpClose();
     if (typeof gcOpenGroup === 'function') gcOpenGroup(group);
   }
 
   // ── Override gcGoBack to return to unified list ───────────────────────────
   window.gcGoBack = function() {
+    if (typeof window._dpClose === 'function') window._dpClose();
     const gcWin = $id('gc-window');
     const dmWin = $id('dm-window');
     if (gcWin) gcWin.style.display = 'none';
@@ -5910,6 +5914,247 @@ if (document.readyState === "loading") {
     document.addEventListener('DOMContentLoaded', initUnifiedInbox);
   } else {
     initUnifiedInbox();
+  }
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DETAIL PANEL — Instagram-style right drawer for DM + Group info
+// ═══════════════════════════════════════════════════════════════════════════════
+
+(function () {
+
+  const DP = {
+    mode: null,   // 'dm' | 'group'
+    peer: null,   // for dm: { id, name, photo, role, batch }
+    group: null,  // for group: group object
+  };
+
+  // ── Open / close ────────────────────────────────────────────────────────────
+  function dpOpen() {
+    const panel = document.getElementById('dm-detail-panel');
+    if (!panel) return;
+    panel.style.display = 'flex';
+    // Mobile: animate in
+    requestAnimationFrame(() => panel.classList.add('open'));
+  }
+
+  function dpClose() {
+    const panel = document.getElementById('dm-detail-panel');
+    if (!panel) return;
+    panel.classList.remove('open');
+    // Desktop: hide immediately; mobile waits for transition
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) panel.style.display = 'none';
+    else panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+  }
+
+  function dpToggle() {
+    const panel = document.getElementById('dm-detail-panel');
+    if (!panel) return;
+    const visible = panel.style.display !== 'none';
+    visible ? dpClose() : dpOpen();
+  }
+
+  // ── Populate for a 1-1 DM ──────────────────────────────────────────────────
+  function dpShowDm(peer) {
+    DP.mode = 'dm';
+    DP.peer = peer;
+
+    // Hero
+    const avEl = document.getElementById('dm-detail-avatar');
+    if (avEl) avEl.innerHTML = dmAvatar(peer.name, peer.photo, 64);
+    setText('dm-detail-name', peer.name || 'Member');
+    setText('dm-detail-sub', [peer.role, peer.batch || peer.domain].filter(Boolean).join(' · '));
+
+    // Hide group members section, show DM-only buttons
+    document.getElementById('dm-detail-members-section').style.display = 'none';
+    document.getElementById('dm-detail-delete-btn').style.display = '';
+    document.getElementById('dm-detail-leave-btn').style.display = 'none';
+    document.getElementById('dm-detail-block-btn').style.display = '';
+
+    // Block button label
+    const isBlocked = typeof BLOCKS !== 'undefined' && BLOCKS.set?.has(peer.id);
+    setText('dm-detail-block-label', isBlocked ? 'Unblock' : 'Block');
+    const blockBtn = document.getElementById('dm-detail-block-btn');
+    if (blockBtn) blockBtn.classList.toggle('dm-detail-danger', isBlocked);
+
+    // Nickname button label — show current nickname if set
+    const convKey = DM.activeKey || '';
+    const nick = (typeof NICKS !== 'undefined' && NICKS[convKey])
+      ? NICKS[convKey].find(n => n.target_id === peer.id)?.nickname
+      : null;
+    setText('dm-detail-nickname-label', nick ? `Nickname: ${nick}` : 'Nickname');
+
+    dpOpen();
+  }
+
+  // ── Populate for a Group ───────────────────────────────────────────────────
+  function dpShowGroup(group) {
+    DP.mode = 'group';
+    DP.group = group;
+
+    // Hero
+    const avEl = document.getElementById('dm-detail-avatar');
+    if (avEl) {
+      const letter = (group.avatar_text || group.name?.[0] || '?').slice(0, 2).toUpperCase();
+      avEl.innerHTML = `<div class="gc-group-av" style="width:64px;height:64px;font-size:24px">${swEsc(letter)}</div>`;
+    }
+    setText('dm-detail-name', group.name);
+    const count = group.members?.length || 0;
+    setText('dm-detail-sub', `${count} member${count !== 1 ? 's' : ''}`);
+
+    // Members section
+    document.getElementById('dm-detail-members-section').style.display = '';
+    document.getElementById('dm-detail-delete-btn').style.display = 'none';
+    document.getElementById('dm-detail-leave-btn').style.display = '';
+    document.getElementById('dm-detail-block-btn').style.display = 'none';
+    setText('dm-detail-nickname-label', 'Nicknames');
+
+    // Render member list
+    const listEl = document.getElementById('dm-detail-members-list');
+    if (listEl) {
+      const members = group.members || [];
+      listEl.innerHTML = members.map(m => `
+        <div class="dm-detail-member-row">
+          ${dmAvatar(m.name, m.photo, 32)}
+          <div style="flex:1;min-width:0">
+            <div class="dm-detail-member-name">${swEsc(m.name || 'Member')}</div>
+            ${m.role && m.role !== 'member' ? `<div class="dm-detail-member-role">${swEsc(m.role)}</div>` : ''}
+          </div>
+        </div>`).join('');
+    }
+
+    dpOpen();
+  }
+
+  // ── Action: Nickname ───────────────────────────────────────────────────────
+  function dpNickname() {
+    dpClose();
+    if (DP.mode === 'dm' && DP.peer) {
+      const convKey = DM.activeKey || '';
+      if (typeof dmOpenNicknameModal === 'function') {
+        dmOpenNicknameModal(DP.peer.id, DP.peer.name, convKey);
+      } else if (typeof nicksOpenModal === 'function') {
+        nicksOpenModal(convKey, DP.peer.id, DP.peer.name);
+      }
+    } else if (DP.mode === 'group' && DP.group) {
+      if (typeof gcOpenInfoModal === 'function') gcOpenInfoModal(DP.group.id);
+    }
+  }
+
+  // ── Action: Block ──────────────────────────────────────────────────────────
+  async function dpBlock() {
+    if (DP.mode !== 'dm' || !DP.peer) return;
+    const peerId = DP.peer.id;
+    if (typeof dmToggleBlock === 'function') {
+      await dmToggleBlock(peerId);
+    } else {
+      // Fallback: direct API call
+      const isBlocked = typeof BLOCKS !== 'undefined' && BLOCKS.set?.has(peerId);
+      try {
+        if (isBlocked) {
+          await api('DELETE', `/api/member/blocks/${peerId}`);
+          BLOCKS.set?.delete(peerId);
+        } else {
+          await api('POST', '/api/member/blocks', { blocked_id: peerId });
+          BLOCKS.set?.add(peerId);
+        }
+      } catch (e) { console.error('[DP] block:', e); return; }
+    }
+    // Refresh label
+    const nowBlocked = typeof BLOCKS !== 'undefined' && BLOCKS.set?.has(peerId);
+    setText('dm-detail-block-label', nowBlocked ? 'Unblock' : 'Block');
+    const blockBtn = document.getElementById('dm-detail-block-btn');
+    if (blockBtn) blockBtn.classList.toggle('dm-detail-danger', nowBlocked);
+  }
+
+  // ── Action: Delete Chat (DM) ───────────────────────────────────────────────
+  async function dpDeleteChat() {
+    if (!confirm('Delete this conversation? This only removes it from your view.')) return;
+    dpClose();
+    // Reset DM panel to empty state
+    if (typeof dmGoBack === 'function') dmGoBack();
+    // Optimistically remove from list
+    if (DM.activeKey) {
+      DM.convs = (DM.convs || []).filter(c => c.conv_key !== DM.activeKey);
+      if (typeof dmRenderConvs === 'function') dmRenderConvs(DM.convs);
+    }
+  }
+
+  // ── Action: Leave Group ────────────────────────────────────────────────────
+  async function dpLeaveGroup() {
+    if (!DP.group) return;
+    if (!confirm(`Leave "${DP.group.name}"?`)) return;
+    const myId = window._memberProfile?.id;
+    try {
+      await api('DELETE', `/api/member/groups/${DP.group.id}/members/${myId}`);
+      dpClose();
+      GC.groups = (GC.groups || []).filter(g => g.id !== DP.group.id);
+      if (typeof window.gcGoBack === 'function') window.gcGoBack();
+    } catch (e) { alert('Could not leave group. Please try again.'); }
+  }
+
+  // ── Action: Add Members (Group) ────────────────────────────────────────────
+  function dpAddMembers() {
+    dpClose();
+    if (typeof gcOpenAddMembersModal === 'function' && DP.group) {
+      gcOpenAddMembersModal(DP.group.id);
+    } else if (typeof gcOpenInfoModal === 'function' && DP.group) {
+      gcOpenInfoModal(DP.group.id);
+    }
+  }
+
+  // ── Wire up buttons ────────────────────────────────────────────────────────
+  function initDetailPanel() {
+    document.getElementById('dm-detail-close')?.addEventListener('click', dpClose);
+    document.getElementById('dm-detail-nickname-btn')?.addEventListener('click', dpNickname);
+    document.getElementById('dm-detail-block-btn')?.addEventListener('click', dpBlock);
+    document.getElementById('dm-detail-delete-btn')?.addEventListener('click', dpDeleteChat);
+    document.getElementById('dm-detail-leave-btn')?.addEventListener('click', dpLeaveGroup);
+    document.getElementById('dm-detail-add-member-btn')?.addEventListener('click', dpAddMembers);
+
+    // DM topbar ⓘ button
+    document.getElementById('dm-info-btn')?.addEventListener('click', () => {
+      if (!DM.activePeer) return;
+      dpShowDm(DM.activePeer);
+    });
+
+    // GC topbar ⓘ button (re-wire to use dpShowGroup)
+    document.getElementById('gc-info-btn')?.addEventListener('click', () => {
+      if (!GC.activeGroup) return;
+      // Load fresh member details first
+      if (GC.activeGroup.members?.length) {
+        dpShowGroup(GC.activeGroup);
+      } else {
+        api('GET', `/api/member/groups/${GC.activeGroup.id}`)
+          .then(data => { GC.activeGroup = { ...GC.activeGroup, ...data }; dpShowGroup(GC.activeGroup); })
+          .catch(() => dpShowGroup(GC.activeGroup));
+      }
+    });
+
+    // Close when clicking outside on desktop
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('dm-detail-panel');
+      if (!panel || panel.style.display === 'none') return;
+      const infoBtn = document.getElementById('dm-info-btn');
+      const gcInfoBtn = document.getElementById('gc-info-btn');
+      if (!panel.contains(e.target) && e.target !== infoBtn && e.target !== gcInfoBtn
+          && !infoBtn?.contains(e.target) && !gcInfoBtn?.contains(e.target)) {
+        dpClose();
+      }
+    });
+  }
+
+  // Also expose dpShowDm so initDMExtensions patched dmOpenConv can call it to close panel when switching convs
+  window._dpClose = dpClose;
+  window._dpShowDm = dpShowDm;
+  window._dpShowGroup = dpShowGroup;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDetailPanel);
+  } else {
+    initDetailPanel();
   }
 
 })();
