@@ -19,6 +19,7 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 app.set('trust proxy', 1); // Render reverse-proxy ke peeche
+app.set('case sensitive routing', true); // /Social-Strand (member portal) ≠ /social-strand (public feed)
 const PORT = process.env.PORT || 3000;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -5668,10 +5669,11 @@ app.get("/films/:slug", async (req, res) => {
   }
 });
 
-// ── /strand/:slug  (e.g. /strand/my-short-film-7f3a) ─────────────────────────
-app.get("/strand/:slug", async (req, res) => {
+// ── /social-strand/:username/:postid  — canonical shareable post URL ──────────
+// e.g. kiitfilmsociety.in/social-strand/rahul-das/7f3a1b2c
+app.get("/social-strand/:username/:postid", async (req, res) => {
   try {
-    const id = idFromSlug(req.params.slug);
+    const id = idFromSlug(req.params.postid);
     const projectResult = id
       ? await supabasePublic
           .from("member_projects")
@@ -5686,13 +5688,13 @@ app.get("/strand/:slug", async (req, res) => {
     const p = projectResult?.data ?? null;
 
     if (!p) {
-      // Unknown/unpublished post — serve the SPA so it can show its own 404/empty state
+      // Unknown/unpublished post — serve SPA (will show its own empty/404 state)
       return res.sendFile(path.join(__dirname, "public", "index.html"));
     }
 
-    const canonicalSlug = slugify(p.title) + "-" + p.id;
-    const pageUrl = `https://kiitfilmsociety.in/strand/${canonicalSlug}`;
-    const authorName = p.members?.name || "a KFS member";
+    const authorName  = p.members?.name || "a KFS member";
+    const usernameSlug = slugify(authorName) || "member";
+    const pageUrl     = `https://kiitfilmsociety.in/social-strand/${usernameSlug}/${p.id}`;
     const desc = p.description
       ? p.description.slice(0, 160)
       : `${p.title} — work by ${authorName} on the KFS Social Strand.`;
@@ -5729,13 +5731,53 @@ app.get("/strand/:slug", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[share/strand]", err.message);
+    console.error("[share/social-strand]", err.message);
     res.sendFile(path.join(__dirname, "public", "index.html"));
   }
 });
-// Legacy redirect /studio/:slug → /strand/:slug
-app.get("/studio/:slug", (req, res) => {
-  res.redirect(301, `/strand/${req.params.slug}`);
+
+// ── /social-strand (bare) — public Social Strand feed page ───────────────────
+// Serves the SPA (index.html); client router shows the public strand feed.
+app.get("/social-strand", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ── Legacy redirects → canonical /social-strand/:username/:postid ─────────────
+// /strand/:slug  (old format with title-slug)
+app.get("/strand/:slug", async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    if (!id) return res.redirect(301, "/social-strand");
+    const { data: p } = await supabasePublic
+      .from("member_projects")
+      .select("id, members!member_projects_member_id_fkey(name)")
+      .eq("id", id)
+      .maybeSingle();
+    if (!p) return res.redirect(301, "/social-strand");
+    const usernameSlug = slugify(p.members?.name || "member") || "member";
+    res.redirect(301, `/social-strand/${usernameSlug}/${p.id}`);
+  } catch (err) {
+    console.error("[legacy/strand]", err.message);
+    res.redirect(301, "/social-strand");
+  }
+});
+// /studio/:slug  (oldest format)
+app.get("/studio/:slug", async (req, res) => {
+  try {
+    const id = idFromSlug(req.params.slug);
+    if (!id) return res.redirect(301, "/social-strand");
+    const { data: p } = await supabasePublic
+      .from("member_projects")
+      .select("id, members!member_projects_member_id_fkey(name)")
+      .eq("id", id)
+      .maybeSingle();
+    if (!p) return res.redirect(301, "/social-strand");
+    const usernameSlug = slugify(p.members?.name || "member") || "member";
+    res.redirect(301, `/social-strand/${usernameSlug}/${p.id}`);
+  } catch (err) {
+    console.error("[legacy/studio]", err.message);
+    res.redirect(301, "/social-strand");
+  }
 });
 
 // ── /events/:slug ─────────────────────────────────────────────────────────────

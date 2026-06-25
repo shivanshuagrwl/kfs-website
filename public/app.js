@@ -4485,6 +4485,8 @@ async function checkRoute() {
   const blogMatch  = path.match(/^blog\/(.+)/);
   const filmMatch  = path.match(/^films\/(.+)/);
   const studioMatch = path.match(/^studio\/(.+)/);
+  const strandMatch = path.match(/^(?:strand|social-strand)\/[^/]+\/([^/]+)/) ||
+                      path.match(/^strand\/([^/]+)/);
   const eventMatch = path.match(/^events\/(.+)/);
   // legacy /movies/ URLs redirect to films
   const movieLegacy = path.match(/^movies\/(.+)/);
@@ -4494,6 +4496,9 @@ async function checkRoute() {
     loadCollabEditToken(collabEditMatch[1]);
     return;
   }
+
+  // bare /social-strand → public Strand feed page (same as /strand)
+  if (path === 'social-strand') { navigate('strand', false); return; }
 
   // Extract ID from the tail of a slug: "my-post-title-42" → "42"
   // Works for both numeric IDs and UUIDs.
@@ -4535,6 +4540,19 @@ async function checkRoute() {
   if (studioMatch) {
     const slug = studioMatch[1];
     const id   = idFromSlug(slug);
+    if (id) {
+      try {
+        const project = await apiFetch('/api/studio/projects/' + id);
+        if (project && project.id) { navigate('strand', false); pswOpenDetail(project.id); return; }
+      } catch(e) {}
+    }
+    navigate('strand', false);
+    return;
+  }
+
+  // /social-strand/:username/:postid  OR  /strand/:slug  (legacy)
+  if (strandMatch) {
+    const id = idFromSlug(strandMatch[1]);
     if (id) {
       try {
         const project = await apiFetch('/api/studio/projects/' + id);
@@ -13300,6 +13318,7 @@ async function pswOpenDetail(projectId) {
           <span class="psw-detail-stat">${PSW_ICONS.eye}&nbsp;${pswFmt(p.views_count)}</span>
           <span class="psw-detail-stat">${PSW_ICONS.heart}&nbsp;${pswFmt(p.reactions_count)}</span>
           <span class="psw-detail-stat">${PSW_ICONS.comment}&nbsp;${pswFmt(p.comments_count)}</span>
+          <button id="psw-share-btn" class="psw-share-btn" style="margin-left:auto;display:flex;align-items:center;gap:5px;background:none;border:1px solid #333;color:#aaa;font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;transition:border-color .2s,color .2s" onmouseover="this.style.borderColor='#666';this.style.color='#fff'" onmouseout="this.style.borderColor='#333';this.style.color='#aaa'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</button>
         </div>
         ${p.tags?.length ? `<div class="psw-detail-tags">${p.tags.map(t=>`<span class="psw-tag">${pswEsc(t)}</span>`).join('')}</div>` : ''}
         ${collabs.length ? `
@@ -13324,11 +13343,11 @@ async function pswOpenDetail(projectId) {
         </div>
       </div>`;
 
-    // Shareable, crawlable URL — same pattern as openBlog()/openMovie().
-    // The server has a matching /strand/:slug SSR route that injects the
-    // right OG tags for link previews even before this JS runs.
-    const slug = (p.title ? p.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + p.id;
-    history.pushState({ page: 'strand-detail', id: p.id }, '', '/strand/' + slug);
+    // Shareable, crawlable URL — canonical format: /social-strand/:username/:postid
+    // Server has a matching SSR route that injects OG tags for link previews.
+    const usernameSlug = (author.name || 'member').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const shareUrl = `/social-strand/${usernameSlug}/${p.id}`;
+    history.pushState({ page: 'strand-detail', id: p.id }, '', shareUrl);
     window._currentStudioProjectId = p.id;
     const studioDesc = p.description
       ? p.description.slice(0, 155)
@@ -13337,7 +13356,7 @@ async function pswOpenDetail(projectId) {
       title: p.title,
       description: studioDesc,
       image: `/og/studio/${p.id}`,
-      url: '/strand/' + slug,
+      url: shareUrl,
     });
     injectPageSchema({
       "@context": "https://schema.org",
@@ -13345,7 +13364,7 @@ async function pswOpenDetail(projectId) {
       "name": p.title,
       "description": studioDesc,
       "image": `https://kiitfilmsociety.in/og/studio/${p.id}`,
-      "url": `https://kiitfilmsociety.in/strand/${slug}`,
+      "url": `https://kiitfilmsociety.in${shareUrl}`,
       "creator": { "@type": "Person", "name": author.name || "KFS member" },
       "dateCreated": p.created_at || undefined,
       "publisher": {
@@ -13354,6 +13373,30 @@ async function pswOpenDetail(projectId) {
         "logo": { "@type": "ImageObject", "url": "https://kiitfilmsociety.in/images/kfs-logo.png" }
       }
     });
+
+    // Wire up Share button
+    const shareBtn = document.getElementById('psw-share-btn');
+    if (shareBtn) {
+      shareBtn.onclick = async () => {
+        const fullUrl = `https://kiitfilmsociety.in${shareUrl}`;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: p.title, url: fullUrl });
+          } else {
+            await navigator.clipboard.writeText(fullUrl);
+            shareBtn.textContent = 'Link copied!';
+            setTimeout(() => { shareBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share`; }, 2000);
+          }
+        } catch(e) {
+          // fallback: select from a temp input
+          const inp = document.createElement('input');
+          inp.value = fullUrl; document.body.appendChild(inp);
+          inp.select(); document.execCommand('copy'); document.body.removeChild(inp);
+          shareBtn.textContent = 'Link copied!';
+          setTimeout(() => { shareBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share`; }, 2000);
+        }
+      };
+    }
   } catch (e) {
     body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--grey);font-size:14px">${pswEsc(e.message)}</div>`;
   }
@@ -13387,12 +13430,12 @@ function pswCloseDetail() {
   // clobbering the URL if this is ever called while no detail is open).
   if (window._currentStudioProjectId) {
     window._currentStudioProjectId = null;
-    history.pushState({ page: 'strand' }, '', '/strand');
+    history.pushState({ page: 'strand' }, '', '/social-strand');
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
       image: '/images/og-banner.png',
-      url: '/strand',
+      url: '/social-strand',
     });
     removePageSchema();
   }
