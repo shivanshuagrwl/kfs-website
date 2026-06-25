@@ -1101,7 +1101,7 @@ function switchPanel(el) {
   if (panel === 'works')    loadMyWorks();
   if (panel === 'grievance') loadMyGrievances();
   if (panel === 'network') loadNetworkPanel();
-  if (panel === 'dms') { if (typeof dmPanelOpened === 'function') dmPanelOpened(); }
+  if (panel === 'dms') { if (typeof window.dmPanelOpened === 'function') window.dmPanelOpened(); }
   else {
     if (typeof dmPausePolling === 'function') dmPausePolling();
     if (typeof gcPausePolling === 'function') gcPausePolling();
@@ -3893,7 +3893,9 @@ async function dmLoadConvs() {
   try {
     const data = await api('GET', '/api/member/dm/conversations');
     DM.convs = data || [];
-    dmRenderConvs(DM.convs);
+    // Use window.dmRenderConvs so the unified-inbox IIFE override (inboxRender) is picked up
+    if (typeof window.dmRenderConvs === 'function') window.dmRenderConvs(DM.convs);
+    else dmRenderConvs(DM.convs);
     const total = DM.convs.reduce((s, c) => s + (c.unread_count || 0), 0);
     dmSetBadge(total);
   } catch (e) {
@@ -4375,8 +4377,11 @@ function initDM() {
     DM.pickerTimer = setTimeout(() => dmRenderPicker(e.target.value), 200);
   });
 
-  // Conv search
-  $id('dm-search')?.addEventListener('input', e => dmFilterConvs(e.target.value));
+  // Conv search — use window.dmFilterConvs so unified inbox override handles groups too
+  $id('dm-search')?.addEventListener('input', e => {
+    if (typeof window.dmFilterConvs === 'function') window.dmFilterConvs(e.target.value);
+    else dmFilterConvs(e.target.value);
+  });
 
   // Send
   $id('dm-send-btn')?.addEventListener('click', dmSend);
@@ -4857,7 +4862,9 @@ async function gcLoadGroups() {
   try {
     const data = await api('GET', '/api/member/groups');
     GC.groups = data || [];
-    gcRenderGroups(GC.groups);
+    // Use window.gcRenderGroups so the unified-inbox IIFE override (inboxRender) is picked up
+    if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+    else gcRenderGroups(GC.groups);
     const total = GC.groups.reduce((s, g) => s + (g.unread_count || 0), 0);
     gcSetBadge(total);
   } catch (e) {
