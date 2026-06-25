@@ -3816,6 +3816,7 @@ const DM = {
   pickerTimer:   null,
   panelVisible:  false,
   pendingBodies: new Set(), // bodies of in-flight optimistic messages (for poll dedup)
+  loadingMsgs:   false,     // true while initial dmLoadMsgs fetch is in flight
 };
 
 const DM_POLL = 5000; // ms
@@ -3983,6 +3984,7 @@ async function dmStartWith(memberId, peerHint) {
 
 async function dmLoadMsgs(prepend) {
   if (!DM.activeKey) return;
+  if (!prepend) DM.loadingMsgs = true;
   try {
     const myId = dmMyId();
     let url = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=40`;
@@ -3995,11 +3997,28 @@ async function dmLoadMsgs(prepend) {
     }
 
     if (prepend) {
-      DM.msgs = [...msgs, ...DM.msgs];
+      // Preserve any optimistic messages already in DM.msgs that aren't in the fetched set
+      const fetchedIds = new Set(msgs.map(m => m.id));
+      const optimistic = DM.msgs.filter(m => m.id.startsWith('tmp-') && !fetchedIds.has(m.id));
+      DM.msgs = [...msgs, ...DM.msgs.filter(m => !fetchedIds.has(m.id) && !m.id.startsWith('tmp-')), ...optimistic];
     } else {
-      DM.msgs = msgs;
+      // Preserve any optimistic (tmp) messages that were added while this fetch was in flight
+      const optimistic = DM.msgs.filter(m => m.id.startsWith('tmp-'));
+      const fetchedIds = new Set(msgs.map(m => m.id));
+      // Also preserve confirmed messages that arrived via poll but aren't in this batch
+      DM.msgs = [...msgs, ...optimistic].filter((m, i, arr) =>
+        !fetchedIds.has(m.id) || arr.findIndex(x => x.id === m.id) === i
+      );
+      // Sort: confirmed msgs first (by sent_at), optimistic at end
+      DM.msgs.sort((a, b) => {
+        const aOpt = a.id.startsWith('tmp-');
+        const bOpt = b.id.startsWith('tmp-');
+        if (aOpt && !bOpt) return 1;
+        if (!aOpt && bOpt) return -1;
+        return new Date(a.sent_at) - new Date(b.sent_at);
+      });
     }
-    DM.oldestSentAt = DM.msgs[0]?.sent_at || null;
+    DM.oldestSentAt = DM.msgs.find(m => !m.id.startsWith('tmp-'))?.sent_at || null;
 
     const list = $id('dm-msg-list');
     if (!list) return;
@@ -4029,6 +4048,8 @@ async function dmLoadMsgs(prepend) {
     dmRenderConvs(DM.convs);
   } catch (e) {
     console.error('[DM] loadMsgs:', e.message);
+  } finally {
+    if (!prepend) DM.loadingMsgs = false;
   }
 }
 
@@ -4089,6 +4110,19 @@ async function dmSend() {
 
   const peerId = DM.activePeer?.id;
   if (!peerId) return;
+
+  // If history is still loading (race: user typed before initial load finished),
+  // disable the send button briefly and retry once the load clears
+  if (DM.loadingMsgs) {
+    const btn = $id('dm-send-btn');
+    if (btn) btn.disabled = true;
+    const waitForLoad = () => new Promise(resolve => {
+      const check = () => { if (!DM.loadingMsgs) resolve(); else setTimeout(check, 50); };
+      check();
+    });
+    await waitForLoad();
+    if (btn) btn.disabled = false;
+  }
 
   // Optimistic bubble
   const myId  = dmMyId();
