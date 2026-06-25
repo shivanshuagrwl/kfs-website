@@ -4465,10 +4465,7 @@
       z-index: 9999;
       pointer-events: none;
       display: none;
-      /* Large enough that no button ever clips — buttons are positioned absolutely
-         within .rxn-wheel which is centered here */
-      width: 160px;
-      height: 160px;
+      /* Size is now set dynamically in JS (_rxnPosition) so all buttons fit */
     }
     #rxn-overlay.visible {
       pointer-events: auto;
@@ -4477,7 +4474,8 @@
     .rxn-wheel {
       position: absolute;
       inset: 0;
-      /* no background, no border — the wheel floats */
+      /* The like-hand button sits at the visual center of this container.
+         Reaction buttons are placed absolutely around it via JS. */
     }
     /* Each rxn-btn is positioned absolutely around the center of .rxn-wheel.
        --dx/--dy (set in JS) point from the wheel's center to this button's

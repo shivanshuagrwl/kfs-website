@@ -2838,21 +2838,29 @@ function _rxnPosition(triggerEl) {
   const rect = triggerEl.getBoundingClientRect();
   const wheel = RXN.pill;
   const N = 5;
-  const OVERLAY = 160;   // must match CSS #rxn-overlay width/height
+  // Overlay must be large enough to contain all buttons without clipping.
+  // Buttons sit at radius R from the center; each button is BTN wide.
+  // Minimum overlay size = 2*(R + BTN/2) + a little padding.
   const BTN = 42;        // must match CSS .rxn-btn width/height
-  const R = 46;          // orbit radius — full circle, buttons evenly spaced with clear gaps
+  const R = 56;          // orbit radius — enough gap so buttons don't crowd the center
+  const OVERLAY = 2 * (R + BTN / 2) + 16; // dynamic, keeps all buttons inside
 
-  // Position each button evenly around a full 360° circle, starting at 12 o'clock
+  // Sync the overlay element's size so CSS clips nothing
+  RXN.overlay.style.width  = `${OVERLAY}px`;
+  RXN.overlay.style.height = `${OVERLAY}px`;
+
+  // Position each button evenly around a full 360° circle, starting at 12 o'clock.
+  // The overlay's center (OVERLAY/2, OVERLAY/2) will be placed exactly on the
+  // like-button's center, so the like hand appears in the middle of the ring.
   wheel.querySelectorAll('.rxn-btn').forEach((btn, i) => {
     const angle = -90 + i * (360 / N);
     const rad = (angle * Math.PI) / 180;
-    // Center of the OVERLAY container
+    // cx/cy = top-left corner of button, relative to overlay top-left
     const cx = OVERLAY / 2 + R * Math.cos(rad) - BTN / 2;
     const cy = OVERLAY / 2 + R * Math.sin(rad) - BTN / 2;
     btn.style.left = `${Math.round(cx)}px`;
     btn.style.top  = `${Math.round(cy)}px`;
-    // Vector from the wheel's center to this button's final position — the entrance
-    // animation uses this to make every button visually burst outward from the hub.
+    // Burst vector for entrance animation
     const dx = (cx + BTN / 2) - OVERLAY / 2;
     const dy = (cy + BTN / 2) - OVERLAY / 2;
     btn.style.setProperty('--dx', `${dx.toFixed(1)}px`);
@@ -2860,17 +2868,17 @@ function _rxnPosition(triggerEl) {
     btn.style.setProperty('--enter-delay', `${i * 30}ms`);
   });
 
-  // Place the container so its center is directly above the trigger button
-  const gap = 8;
-  const btnCx = rect.left + rect.width / 2;  // viewport-relative (fixed positioning)
+  // Center the overlay exactly on the like button (fixed positioning = viewport coords)
+  const btnCx = rect.left + rect.width  / 2;
+  const btnCy = rect.top  + rect.height / 2;
   let left = btnCx - OVERLAY / 2;
-  let top  = rect.top - OVERLAY - gap;
+  let top  = btnCy - OVERLAY / 2;
 
+  // Keep the overlay inside the viewport with a small margin
   const vw = window.innerWidth;
+  const vh = window.innerHeight;
   left = Math.max(4, Math.min(left, vw - OVERLAY - 4));
-  if (top < 4) {
-    top = rect.bottom + gap;
-  }
+  top  = Math.max(4, Math.min(top,  vh - OVERLAY - 4));
 
   RXN.overlay.style.left = `${Math.round(left)}px`;
   RXN.overlay.style.top  = `${Math.round(top)}px`;
