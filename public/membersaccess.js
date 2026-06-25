@@ -3815,6 +3815,7 @@ const DM = {
   members:       [],    // cached member list for picker
   pickerTimer:   null,
   panelVisible:  false,
+  pendingBodies: new Set(), // bodies of in-flight optimistic messages (for poll dedup)
 };
 
 const DM_POLL = 5000; // ms
@@ -4031,16 +4032,20 @@ async function dmLoadMsgs(prepend) {
   }
 }
 
-function dmRenderMsgs(msgs, container, myId) {
-  // Group consecutive messages from same sender
-  let lastSender = null;
-  let group = null;
+function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
+  // Group consecutive messages from same sender.
+  // lastSenderHint: pass the sender_id of the last message already in the DOM
+  // so incremental appends can continue an existing group instead of creating a new one.
+  let lastSender = lastSenderHint || null;
+  let group = (lastSenderHint && container.lastElementChild?.classList.contains('dm-msg-group'))
+    ? container.lastElementChild
+    : null;
 
   msgs.forEach(m => {
     const mine = m.sender_id === myId;
     const senderKey = m.sender_id;
 
-    if (senderKey !== lastSender) {
+    if (senderKey !== lastSender || !group) {
       group = document.createElement('div');
       group.className = `dm-msg-group ${mine ? 'mine' : 'theirs'}`;
       container.appendChild(group);
@@ -4086,13 +4091,25 @@ async function dmSend() {
   if (!peerId) return;
 
   // Optimistic bubble
-  const myId = dmMyId();
-  const tmp  = { id: 'tmp-' + Date.now(), sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null };
+  const myId  = dmMyId();
+  const tmpId = 'tmp-' + Date.now();
+  const tmp   = { id: tmpId, sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null };
   DM.msgs.push(tmp);
+  // Tell the poll not to re-append this message body while the request is in-flight
+  DM.pendingBodies.add(body);
+
   const list = $id('dm-msg-list');
-  // Snapshot child count BEFORE rendering so we can roll back exactly the nodes we added
-  const prevChildCount = list ? list.children.length : 0;
-  if (list) dmRenderMsgs([tmp], list, myId);
+  // Pass the previous sender so incremental append continues the right group
+  const lastRenderedSender = DM.msgs.length > 1 ? DM.msgs[DM.msgs.length - 2].sender_id : null;
+  if (list) {
+    const beforeCount = list.querySelectorAll('.dm-bubble').length;
+    dmRenderMsgs([tmp], list, myId, lastRenderedSender);
+    // Tag the newly added bubble so we can swap it in-place without a full rerender
+    const allBubbles = list.querySelectorAll('.dm-bubble');
+    if (allBubbles.length > beforeCount) {
+      allBubbles[allBubbles.length - 1].dataset.tmpId = tmpId;
+    }
+  }
   dmScrollBottom();
   input.value = '';
   input.style.height = '';
@@ -4103,31 +4120,52 @@ async function dmSend() {
     // If this was a new conversation, update our active key
     if (!DM.activeKey && res.conv_key) DM.activeKey = res.conv_key;
 
-    // Replace temp msg with real
-    DM.msgs = DM.msgs.filter(m => m.id !== tmp.id);
-    if (res.message) DM.msgs.push(res.message);
+    const realMsg = res.message;
+
+    // Replace temp msg in DM.msgs with the real confirmed message
+    DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
+    if (realMsg) DM.msgs.push(realMsg);
+
+    // Swap tmp bubble in-place — no DOM nuke, no flicker
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble && realMsg) {
+      delete tmpBubble.dataset.tmpId;
+      // Update the delete button's data-id so deletion works after confirm
+      const group  = tmpBubble.closest('.dm-msg-group');
+      const delBtn = group?.querySelector('.dm-del-btn');
+      if (delBtn) delBtn.dataset.id = realMsg.id;
+    } else if (list) {
+      // Fallback: full rerender (bubble wasn't tagged somehow)
+      list.innerHTML = '';
+      dmRenderMsgs(DM.msgs, list, myId);
+      dmScrollBottom();
+    }
 
     // Update conv list locally (avoid full refetch on every send)
     const existingConv = DM.convs.find(c => c.conv_key === DM.activeKey);
     if (existingConv) {
       existingConv.last_snippet      = body.slice(0, 80);
-      existingConv.last_msg_at       = res.message?.sent_at || new Date().toISOString();
+      existingConv.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
       existingConv.last_sender_is_me = true;
       dmRenderConvs(DM.convs);
     } else {
       // First message in a brand-new conv — need server data for peer info
       await dmLoadConvs();
     }
-
-    // Re-render messages to replace tmp with confirmed row
-    if (list) { list.innerHTML = ''; dmRenderMsgs(DM.msgs, list, myId); dmScrollBottom(); }
   } catch (e) {
-    // Roll back: remove any group nodes added after the snapshot
-    DM.msgs = DM.msgs.filter(m => m.id !== tmp.id);
-    if (list) {
-      while (list.children.length > prevChildCount) list.lastChild.remove();
+    // Roll back: remove the tmp bubble from the DOM and from DM.msgs
+    DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble) {
+      const group = tmpBubble.closest('.dm-msg-group');
+      const meta  = tmpBubble.nextElementSibling;
+      if (meta?.classList.contains('dm-meta')) meta.remove();
+      tmpBubble.remove();
+      if (group && !group.querySelector('.dm-bubble')) group.remove();
     }
     console.error('[DM] send:', e.message);
+  } finally {
+    DM.pendingBodies.delete(body);
   }
 }
 
@@ -4160,16 +4198,21 @@ async function dmPollTick() {
                  + (newest ? `&since=${encodeURIComponent(newest)}` : '');
     const msgs   = await api('GET', url);
     if (!msgs?.length) return;
-    // Dedup by id as a safety net (shouldn't be needed with since= cursor)
+    // Dedup by id; also skip messages whose body is still in-flight as optimistic bubbles
+    // (race condition: server returns the message before dmSend's try-block finishes)
     const known   = new Set(DM.msgs.map(m => m.id));
-    const newMsgs = msgs.filter(m => !known.has(m.id));
+    const newMsgs = msgs.filter(m => !known.has(m.id) && !DM.pendingBodies.has(m.body));
     if (!newMsgs.length) return;
     DM.msgs.push(...newMsgs);
     const list = $id('dm-msg-list');
     if (!list) return;
     const area  = $id('dm-msgs');
     const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
-    dmRenderMsgs(newMsgs, list, myId);
+    // Pass the last known sender so incremental append chains groups correctly
+    const lastSender = DM.msgs.length > newMsgs.length
+      ? DM.msgs[DM.msgs.length - newMsgs.length - 1].sender_id
+      : null;
+    dmRenderMsgs(newMsgs, list, myId, lastSender);
     if (atEnd) dmScrollBottom();
   } catch { /* silent */ }
 }
