@@ -4104,38 +4104,24 @@
 }
 .gc-msg-header { display:flex; align-items:center; gap:6px; margin-bottom:3px; padding-left:2px; }
 .gc-msg-sender-name { font-size:11px; font-weight:600; letter-spacing:.01em; }
-.gc-msg-sender-name:hover { filter:brightness(1.2); }
+.gc-msg-sender-name:hover { filter:brightness(1.25); }
 
-/* Avatar column — keeps the avatar flush-left beside bubbles */
-.dm-msg-group.theirs { flex-direction:column; align-items:flex-start; }
-.gc-msg-av-wrap { display:flex; align-items:flex-end; }
-
-/* System / activity messages (WhatsApp pill style) */
-.gc-system-msg {
+/* System / activity pill — WhatsApp-style centred label */
+.gc-system-pill {
   display:block;
   text-align:center;
   font-size:11px;
-  color:rgba(255,255,255,.38);
+  color:rgba(255,255,255,.4);
   background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.07);
   border-radius:12px;
-  padding:4px 14px;
-  margin:10px auto;
-  max-width:80%;
+  padding:3px 14px;
+  margin:12px auto 4px;
+  max-width:85%;
   width:fit-content;
-  letter-spacing:.01em;
-  line-height:1.5;
+  line-height:1.6;
   user-select:none;
-}
-
-/* "Theirs" bubbles — slightly different bg to match insta DM style */
-.dm-msg-group.theirs .dm-bubble {
-  background:rgba(255,255,255,.09);
-  color:var(--text);
-  border-radius:4px 18px 18px 18px;
-}
-.dm-msg-group.theirs .dm-bubble:not(:first-of-type) {
-  border-radius:4px 18px 18px 18px;
-  margin-left:0;
+  letter-spacing:.01em;
 }
 .dm-block-active { color: #ef4444 !important; }
 .dm-blocked-banner { padding:10px 16px; background:rgba(239,68,68,.08); border-top:1px solid rgba(239,68,68,.15); color:#ef4444; font-size:12px; text-align:center; line-height:1.5; }
