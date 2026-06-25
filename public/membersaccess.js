@@ -3862,6 +3862,7 @@ function dmSetBadge(n) {
 }
 
 async function dmRefreshBadge() {
+  if (!_token) return; // session not restored yet — avoid a guaranteed 401 during boot
   try {
     const d = await api('GET', '/api/member/dm/unread-count');
     dmSetBadge(d.count || 0);
