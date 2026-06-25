@@ -2127,6 +2127,14 @@ async function deleteCollab(token, btn) {
 
 function handleEnterKey(e) {
   if (e.key !== 'Enter') return;
+  // Once logged in, #auth-screen is hidden — bail immediately. (We can't rely on
+  // each individual step's own inline style.display: showStep() sets it to 'block'
+  // when a step is shown but nothing ever resets it back to 'none' after a
+  // successful login, so step-login.style.display stayed 'block' forever and this
+  // function kept firing handleLogin() on every Enter press anywhere in the app —
+  // including while sending a DM — which silently re-logged in and bounced the
+  // user back to the Strand feed via loadDashboard().)
+  if ($id('auth-screen')?.style.display === 'none') return;
   const loginStep    = $id('step-login');
   const totpStep     = $id('step-totp');
   const changePwStep = $id('step-change-pw');
@@ -4362,7 +4370,7 @@ function initDM() {
   // Send
   $id('dm-send-btn')?.addEventListener('click', dmSend);
   $id('dm-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dmSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); dmSend(); }
   });
 
   // Auto-grow textarea
