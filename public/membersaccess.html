@@ -27,6 +27,7 @@
         --warn: #f59e0b;
         --radius: 12px;
         --sidebar-w: 220px;
+        --dm-reserve: 0px; /* overridden on mobile to dodge the floating bottom nav */
       }
       html,
       body {
@@ -177,6 +178,9 @@
         .btb-dot.show { display: block; }
         /* Push main content up so the floating pill doesn't overlap */
         .main { padding-bottom: 100px !important; }
+        /* Reserve the same space inside the DM chat panel so the message
+           composer / send button are never hidden behind the floating nav */
+        :root { --dm-reserve: 100px; }
         /* Hide old mobile topbar – replaced by top sticky bar */
         .mobile-topbar { display: none !important; }
       }
@@ -903,11 +907,32 @@
         max-width: 900px;
       }
 
-      /* When the strand panel is active, the main area must be full-width and zero-padded */
-      .main:has(#panel-studio.active) {
-        padding: 0;
-        max-width: none;
-        width: calc(100vw - var(--sidebar-w));
+      /* When the strand panel is active, the main area must be full-width and zero-padded.
+         Desktop only: on mobile the sidebar is hidden, so subtracting its width here
+         was squeezing the whole feed into a ~170px column (the "mobile strand page is
+         broken" bug) — mobile gets its own simpler reset below. */
+      @media (min-width: 769px) {
+        .main:has(#panel-studio.active) {
+          padding: 0;
+          max-width: none;
+          width: calc(100vw - var(--sidebar-w));
+        }
+        /* Same treatment for Messages — it's a fixed-height chat layout, not a
+           scrolling document, so it must exactly fill the viewport rather than
+           sit inside .main's 40px padding (which pushed the compose bar off
+           the bottom of the screen) or its 900px max-width (which left a huge
+           dead zone on wide screens). */
+        .main:has(#panel-dms.active) {
+          padding: 0;
+          max-width: none;
+          width: calc(100vw - var(--sidebar-w));
+        }
+      }
+      @media (max-width: 768px) {
+        .main:has(#panel-studio.active),
+        .main:has(#panel-dms.active) {
+          padding: 0;
+        }
       }
 
       /* Section panels */
@@ -3850,8 +3875,11 @@
 }
 
 /* ── DM Chat ───────────────────────────────────────────────────────────── */
+/* --dm-reserve is 0 on desktop (no chrome to dodge) and is set to the
+   floating bottom pill-nav's reserved height inside the mobile media query
+   below, so the composer/send button never sit underneath it. */
 #panel-dms { padding:0!important; overflow:hidden; }
-.dm-panel { height:calc(100vh - 56px); flex-direction:column; }
+.dm-panel { height:calc(100vh - var(--dm-reserve)); flex-direction:column; }
 .dm-panel.active { display:flex; }
 .dm-layout { display:flex; height:100%; overflow:hidden; }
 
@@ -4148,7 +4176,7 @@
 .dm-picker-meta { font-size:11px; color:#444; margin-top:2px; }
 
 /* ── Mobile ── */
-@media (max-width:640px) {
+@media (max-width:768px) {
   .dm-layout { position:relative; }
   .dm-sidebar {
     width:100%; position:absolute; inset:0; z-index:2;
@@ -4406,12 +4434,12 @@
     <!-- ── Bottom Tab Bar (mobile Instagram-style) ───────────────────────── -->
     <nav class="bottom-tab-bar" id="bottom-tab-bar" aria-label="Main navigation">
       <!-- Strand -->
-      <div class="btb-item active" data-panel="studio" id="btb-strand" onclick="btbSwitch(this)">
+      <div class="btb-item active" data-panel="studio" id="btb-strand">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
         <span class="btb-label">Strand</span>
       </div>
       <!-- Network (Collab lives inside as a tab) -->
-      <div class="btb-item" data-panel="network" id="btb-network" onclick="btbSwitch(this)">
+      <div class="btb-item" data-panel="network" id="btb-network">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v6m0 0L6.8 17M12 13.5l5.2 3.5"/></svg>
         <span class="btb-label">Network</span>
       </div>
@@ -4422,7 +4450,7 @@
         </div>
       </div>
       <!-- Messages -->
-      <div class="btb-item" data-panel="dms" id="btb-dms" onclick="btbSwitch(this)" style="position:relative">
+      <div class="btb-item" data-panel="dms" id="btb-dms" style="position:relative">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span class="btb-label">Messages</span>
         <span id="dm-btb-badge" style="display:none;position:absolute;top:6px;right:10px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;min-width:14px;height:14px;padding:0 3px;line-height:14px;text-align:center"></span>

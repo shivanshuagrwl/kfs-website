@@ -335,8 +335,10 @@ function wireStaticButtons() {
   on('mobile-logout-btn', 'click', logoutMember);
   on('sidebar-logout-btn','click', logoutMember);
 
-  // Nav items — delegate on both nav containers
-  document.querySelectorAll('[data-panel]').forEach(el => {
+  // Nav items — delegate on both nav containers.
+  // .btb-item elements are wired separately via btbSwitch() in _wireBtb() —
+  // skip them here so a single tap doesn't fire switchPanel twice.
+  document.querySelectorAll('[data-panel]:not(.btb-item)').forEach(el => {
     el.addEventListener('click', () => switchPanel(el));
   });
 
