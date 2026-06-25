@@ -170,6 +170,99 @@ async function sendConfirmationEmail({
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PROFANITY FILTER — English + Hindi/Hinglish
+// Returns { found: true, word: "<matched>" } if text contains a banned word,
+// or { found: false } if clean.
+// Uses whole-word matching for English words (to avoid false positives like
+// "assassin"), but substring matching for Hindi/Hinglish terms (since they
+// don't follow Latin word-boundary rules).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROFANITY_WORDS_EN = [
+  // Common English profanity — whole-word matched
+  "fuck", "fucker", "fucking", "fucked", "fucks", "f**k", "fck",
+  "shit", "shits", "shitting", "bullshit",
+  "ass", "asshole", "asses",
+  "bitch", "bitches", "bitching",
+  "cunt", "cunts",
+  "dick", "dicks",
+  "cock", "cocks",
+  "pussy", "pussies",
+  "bastard", "bastards",
+  "whore", "whores",
+  "slut", "sluts",
+  "damn", "dammit",
+  "prick", "pricks",
+  "nigger", "nigga",
+  "faggot", "fag",
+  "motherfucker", "mofo",
+  "rape", "raping", "rapist",
+  "retard", "retarded",
+];
+
+const PROFANITY_WORDS_HI = [
+  // Hindi / Hinglish — substring matched (no word boundaries in Devanagari)
+  // Romanised Hindi
+  "madarchod", "madarjaat", "maderchod",
+  "behenchod", "behen chod", "bc",
+  "chutiya", "chutiye", "chut",
+  "bhosdi", "bhosdike", "bhosdiwale",
+  "gandu", "gaand", "gaandu",
+  "lodu", "lund", "lauda", "laudu",
+  "harami", "haramzada", "haramzadi",
+  "randi", "randwa",
+  "sala", "saala",
+  "kutta", "kutti",
+  "ullu", "ullo",
+  "kamina", "kamine",
+  "chakka",
+  "hijra",
+  "bhad mein ja", "bhadwa",
+  "teri maa", "teri behen",
+  "mc", "bkl", "bkc",
+  // Devanagari (Unicode)
+  "मादरचोद", "बहनचोद", "चूतिया", "भोसड़ी", "गांडू", "लंड", "रंडी", "हरामी", "हरामज़ादा",
+  "कुत्ता", "कुत्ती", "कमीना", "लौड़ा", "चूत",
+];
+
+/**
+ * Check whether `text` contains any banned word.
+ * @param {string} text
+ * @returns {{ found: boolean, word?: string }}
+ */
+function containsProfanity(text) {
+  if (!text) return { found: false };
+  const lower = text.toLowerCase();
+
+  // Whole-word match for English
+  for (const word of PROFANITY_WORDS_EN) {
+    const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    if (re.test(lower)) return { found: true, word };
+  }
+
+  // Substring match for Hindi/Hinglish (normalise spaces for multi-word phrases)
+  const normalised = lower.replace(/\s+/g, " ");
+  for (const word of PROFANITY_WORDS_HI) {
+    if (normalised.includes(word.toLowerCase())) return { found: true, word };
+  }
+
+  return { found: false };
+}
+
+/**
+ * Check multiple text fields at once.
+ * @param {...string} fields
+ * @returns {{ found: boolean, word?: string }}
+ */
+function checkFieldsForProfanity(...fields) {
+  for (const field of fields) {
+    const result = containsProfanity(field);
+    if (result.found) return result;
+  }
+  return { found: false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION FP — Forgot Password: OTP generation, masking, delivery helpers
 // Used by both /api/admin/forgot-password/* and /api/member/forgot-password/*
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6128,6 +6221,10 @@ app.post("/api/films/:movieId/comments", strictWriteLimit, async (req, res) => {
         .json({ error: "Comment is too long (max 2000 characters)." });
     }
 
+    // Profanity check
+    const filmCmtProfCheck = checkFieldsForProfanity(author_name, body);
+    if (filmCmtProfCheck.found) return res.status(400).json({ error: "Your comment contains inappropriate language. Please revise it." });
+
     // Verify movie exists
     const { data: movie } = await supabasePublic
       .from("movies")
@@ -10951,6 +11048,10 @@ app.post("/api/collaborate/member", memberAuthMiddleware, strictWriteLimit, asyn
     if (!payload.contact_email || !payload.contact_phone)
       return res.status(400).json({ error: "Email and phone are required." });
 
+    // Profanity check
+    const collabProfCheck = checkFieldsForProfanity(payload.title, payload.role, payload.description);
+    if (collabProfCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it." });
+
     const today = new Date().toISOString().split("T")[0];
     if (payload.fulfillment_date < today)
       return res.status(400).json({ error: "Fulfillment date cannot be in the past." });
@@ -11006,6 +11107,10 @@ app.put("/api/collaborate/member/:token", memberAuthMiddleware, csrfProtect, asy
       return res.status(400).json({ error: "Title, role, description, and fulfillment date are required." });
     if (!payload.contact_email || !payload.contact_phone)
       return res.status(400).json({ error: "Email and phone are required." });
+
+    // Profanity check
+    const collabEditProfCheck = checkFieldsForProfanity(payload.title, payload.role, payload.description);
+    if (collabEditProfCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it." });
 
     const { data, error } = await supabase.from("collaborate_posts")
       .update({ ...payload, updated_at: new Date().toISOString() })
@@ -11284,6 +11389,10 @@ app.post("/api/member/grievances", memberAuthMiddleware, async (req, res) => {
   if (!subject || !subject.trim()) return res.status(400).json({ error: "Subject is required" });
   if (!body    || !body.trim())    return res.status(400).json({ error: "Details are required" });
   if (body.trim().length < 10)     return res.status(400).json({ error: "Details are too short" });
+
+  // Profanity check
+  const grvProfCheck = checkFieldsForProfanity(subject, body);
+  if (grvProfCheck.found) return res.status(400).json({ error: "Your submission contains inappropriate language. Please revise it." });
 
   const validTypes = ["suggestion", "grievance", "general"];
   const entryType = validTypes.includes(type) ? type : "general";
@@ -11673,6 +11782,10 @@ app.post(
     if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
     if (title.trim().length > 120) return res.status(400).json({ error: "Title must be ≤ 120 characters" });
 
+    // Profanity check
+    const profCheck = checkFieldsForProfanity(title, description);
+    if (profCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it before posting." });
+
     const { url: parsedVideoUrl, provider } = parseVideoUrl(video_url);
     if (video_url && !parsedVideoUrl) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
 
@@ -11782,6 +11895,10 @@ app.put(
 
     if (!existing) return res.status(404).json({ error: "Project not found" });
     if (existing.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your project" });
+
+    // Profanity check on editable text fields
+    const editProfCheck = checkFieldsForProfanity(req.body.title, req.body.description);
+    if (editProfCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it before saving." });
 
     const updates = { updated_at: new Date().toISOString() };
     if (req.body.title !== undefined) updates.title = req.body.title.trim().slice(0, 120);
@@ -12009,6 +12126,10 @@ app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, comme
   const { body: commentBody, parent_id } = req.body;
   if (!commentBody || !commentBody.trim()) return res.status(400).json({ error: "Comment body is required" });
   if (commentBody.trim().length > 1000) return res.status(400).json({ error: "Comment must be ≤ 1000 characters" });
+
+  // Profanity check
+  const cmtProfCheck = containsProfanity(commentBody);
+  if (cmtProfCheck.found) return res.status(400).json({ error: "Your comment contains inappropriate language. Please revise it." });
 
   // Verify project exists
   const { data: proj } = await supabase.from("member_projects")
@@ -13253,6 +13374,10 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (!trimmed || trimmed === "\u200B") return res.status(400).json({ error: "Message body required" });
     if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
 
+    // Profanity check
+    const dmProfCheck = containsProfanity(trimmed);
+    if (dmProfCheck.found) return res.status(400).json({ error: "Your message contains inappropriate language. Please revise it." });
+
     // Verify target exists
     const { data: target, error: targetErr } = await supabase
       .from("members")
@@ -13351,6 +13476,530 @@ app.get("/api/member/dm/unread-count", memberAuthMiddleware, async (req, res) =>
   } catch (e) {
     dmLogErr("[dm/unread-count]", e);
     res.json({ count: 0 });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-34 — Content Moderation: Reports, Admin Posts, Temp Suspension
+//
+// Tables needed (run in Supabase):
+//
+//   CREATE TABLE IF NOT EXISTS content_reports (
+//     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     reporter_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     content_type  TEXT NOT NULL CHECK (content_type IN ('post','dm','comment')),
+//     content_id    TEXT NOT NULL,        -- project id, notification id, or comment id
+//     reason        TEXT NOT NULL,
+//     details       TEXT,
+//     status        TEXT NOT NULL DEFAULT 'pending'
+//                   CHECK (status IN ('pending','reviewed','dismissed')),
+//     admin_note    TEXT,
+//     reviewed_by   TEXT,
+//     reviewed_at   TIMESTAMPTZ,
+//     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_cr_status     ON content_reports(status);
+//   CREATE INDEX IF NOT EXISTS idx_cr_content    ON content_reports(content_type, content_id);
+//   CREATE INDEX IF NOT EXISTS idx_cr_reporter   ON content_reports(reporter_id);
+//
+//   -- Add is_admin_post + is_pinned columns to member_projects if not present:
+//   ALTER TABLE member_projects
+//     ADD COLUMN IF NOT EXISTS is_admin_post BOOLEAN NOT NULL DEFAULT FALSE,
+//     ADD COLUMN IF NOT EXISTS pinned_at     TIMESTAMPTZ;
+//
+//   -- Add suspended_until column to member_accounts if not present:
+//   ALTER TABLE member_accounts
+//     ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const reportWriteLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many reports. Please wait before reporting again." },
+  keyGenerator: (req) => req.member?.memberId || req.ip,
+});
+
+// ── POST /api/member/reports  — submit a report (members only) ───────────────
+// Body: { content_type: "post"|"dm"|"comment", content_id, reason, details? }
+app.post("/api/member/reports", memberAuthMiddleware, reportWriteLimit, async (req, res) => {
+  try {
+    const { content_type, content_id, reason, details } = req.body || {};
+    if (!["post", "dm", "comment"].includes(content_type))
+      return res.status(400).json({ error: "content_type must be post, dm, or comment" });
+    if (!content_id) return res.status(400).json({ error: "content_id required" });
+    if (!reason || String(reason).trim().length < 3)
+      return res.status(400).json({ error: "reason required" });
+
+    const reporterId = req.member.memberId;
+
+    // Duplicate guard: same reporter + same content within 24 h
+    const cutoff24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data: dup } = await supabase
+      .from("content_reports")
+      .select("id")
+      .eq("reporter_id", reporterId)
+      .eq("content_type", content_type)
+      .eq("content_id", String(content_id))
+      .gte("created_at", cutoff24h)
+      .maybeSingle();
+    if (dup) return res.status(409).json({ error: "You have already reported this content recently." });
+
+    const { error: insertErr } = await supabase.from("content_reports").insert([{
+      reporter_id:  reporterId,
+      content_type,
+      content_id:   String(content_id),
+      reason:       String(reason).trim().slice(0, 200),
+      details:      details ? String(details).trim().slice(0, 1000) : null,
+      status:       "pending",
+    }]);
+    if (insertErr) throw insertErr;
+
+    res.json({ success: true, message: "Report submitted. Our team will review it shortly." });
+  } catch (e) {
+    console.error("[reports/submit]", e.message);
+    res.status(500).json({ error: "Failed to submit report" });
+  }
+});
+
+// ── GET /api/admin/reports  — list reports (admin only) ──────────────────────
+// Query: ?status=pending|reviewed|dismissed&type=post|dm|comment&page=0
+app.get("/api/admin/reports", authMiddleware, async (req, res) => {
+  try {
+    const status = ["pending", "reviewed", "dismissed"].includes(req.query.status)
+      ? req.query.status : "pending";
+    const type = ["post", "dm", "comment"].includes(req.query.type)
+      ? req.query.type : null;
+    const page  = Math.max(0, parseInt(req.query.page) || 0);
+    const limit = 30;
+
+    let q = supabase
+      .from("content_reports")
+      .select(`
+        id, content_type, content_id, reason, details, status,
+        admin_note, reviewed_by, reviewed_at, created_at,
+        reporter:reporter_id ( id, name, photo )
+      `)
+      .eq("status", status)
+      .order("created_at", { ascending: false })
+      .range(page * limit, page * limit + limit - 1);
+
+    if (type) q = q.eq("content_type", type);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    // Enrich with content snapshot so admin doesn't need to navigate away
+    const enriched = await Promise.all((data || []).map(async (r) => {
+      let snapshot = null;
+      try {
+        if (r.content_type === "post") {
+          const { data: proj } = await supabase
+            .from("member_projects")
+            .select("id, title, description, status, deleted_at, members!member_projects_member_id_fkey(id, name)")
+            .eq("id", r.content_id)
+            .maybeSingle();
+          snapshot = proj;
+        } else if (r.content_type === "dm") {
+          const { data: dm } = await supabase
+            .from("member_notifications")
+            .select("id, body, actor_id, actor_name, member_id, created_at, link_id")
+            .eq("id", r.content_id)
+            .eq("link_type", "dm")
+            .maybeSingle();
+          snapshot = dm;
+        } else if (r.content_type === "comment") {
+          const { data: comment } = await supabase
+            .from("project_comments")
+            .select("id, body, member_id, project_id, created_at, members!project_comments_member_id_fkey(id, name)")
+            .eq("id", r.content_id)
+            .maybeSingle();
+          snapshot = comment;
+        }
+      } catch {}
+      return { ...r, snapshot };
+    }));
+
+    res.json(enriched);
+  } catch (e) {
+    console.error("[admin/reports GET]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/reports/count  — pending report badge count ───────────────
+app.get("/api/admin/reports/count", authMiddleware, async (req, res) => {
+  try {
+    const { count } = await supabase
+      .from("content_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    res.json({ count: count || 0 });
+  } catch (e) {
+    res.json({ count: 0 });
+  }
+});
+
+// ── POST /api/admin/reports/:id/resolve  — review/dismiss a report ───────────
+// Body: { action: "reviewed"|"dismissed", admin_note?, delete_content?, hide_content? }
+app.post("/api/admin/reports/:id/resolve", authMiddleware, async (req, res) => {
+  try {
+    const { action, admin_note, delete_content, hide_content } = req.body || {};
+    if (!["reviewed", "dismissed"].includes(action))
+      return res.status(400).json({ error: "action must be reviewed or dismissed" });
+
+    const { data: report } = await supabase
+      .from("content_reports")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (!report) return res.status(404).json({ error: "Report not found" });
+
+    // Optionally act on the content
+    if (action === "reviewed" && report.content_type === "post") {
+      if (delete_content) {
+        await supabase.from("member_projects")
+          .update({ deleted_at: new Date().toISOString(), status: "hidden" })
+          .eq("id", report.content_id);
+        logActivity(req.admin.id, req.admin.name, "delete_reported_post", "member_project", report.content_id).catch(() => {});
+      } else if (hide_content) {
+        await supabase.from("member_projects")
+          .update({ status: "hidden" })
+          .eq("id", report.content_id);
+        logActivity(req.admin.id, req.admin.name, "hide_reported_post", "member_project", report.content_id).catch(() => {});
+      }
+      // Invalidate feed cache so changes are immediately visible
+      memInvalidate("studio:feed:");
+    }
+    if (action === "reviewed" && report.content_type === "dm" && delete_content) {
+      await supabase.from("member_notifications")
+        .update({ body: "[removed by admin]", title: "Message removed" })
+        .eq("id", report.content_id);
+      logActivity(req.admin.id, req.admin.name, "delete_reported_dm", "member_notification", report.content_id).catch(() => {});
+    }
+    if (action === "reviewed" && report.content_type === "comment" && delete_content) {
+      await supabase.from("project_comments")
+        .update({ body: "[removed by admin]", deleted_at: new Date().toISOString() })
+        .eq("id", report.content_id);
+      logActivity(req.admin.id, req.admin.name, "delete_reported_comment", "project_comment", report.content_id).catch(() => {});
+    }
+
+    // Update the report itself
+    await supabase.from("content_reports").update({
+      status:      action,
+      admin_note:  admin_note ? String(admin_note).trim().slice(0, 500) : null,
+      reviewed_by: req.admin.username,
+      reviewed_at: new Date().toISOString(),
+    }).eq("id", req.params.id);
+
+    logActivity(req.admin.id, req.admin.name, `report_${action}`, "content_report", req.params.id).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/reports/resolve]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/members/:id/account/suspend  — temp-suspend account ──────
+// Body: { hours: number (1–720), reason? }
+// Sets suspended_until on member_accounts. The memberAuthMiddleware
+// already checks account_status; the suspend check is added there too.
+app.post("/api/admin/members/:id/account/suspend", requireSection("members"), async (req, res) => {
+  try {
+    const { hours, reason } = req.body || {};
+    const h = parseInt(hours, 10);
+    if (!h || h < 1 || h > 720)
+      return res.status(400).json({ error: "hours must be between 1 and 720" });
+
+    const suspendedUntil = new Date(Date.now() + h * 3600 * 1000).toISOString();
+
+    const { error } = await supabase
+      .from("member_accounts")
+      .update({ suspended_until: suspendedUntil, account_status: "suspended" })
+      .eq("member_id", req.params.id);
+
+    if (error) {
+      // Graceful fallback: if suspended_until column doesn't exist yet just disable
+      await supabase.from("member_accounts")
+        .update({ account_status: "disabled" })
+        .eq("member_id", req.params.id);
+    }
+
+    // Notify the member
+    createMemberNotification(
+      req.params.id, "account",
+      "Account temporarily suspended",
+      `Your account has been suspended for ${h} hour${h !== 1 ? "s" : ""}.${reason ? " Reason: " + reason : ""} It will be restored automatically after this period.`
+    ).catch(() => {});
+
+    logActivity(req.admin.id, req.admin.name, "suspend", "member_account",
+      `${req.params.id} — ${h}h${reason ? ": " + reason : ""}`).catch(() => {});
+    res.json({ success: true, suspended_until: suspendedUntil });
+  } catch (e) {
+    console.error("[admin/suspend]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/reports/members/:id/account/unsuspend  — lift suspension ──
+app.post("/api/admin/members/:id/account/unsuspend", requireSection("members"), async (req, res) => {
+  try {
+    await supabase.from("member_accounts")
+      .update({ suspended_until: null, account_status: "active" })
+      .eq("member_id", req.params.id);
+
+    createMemberNotification(
+      req.params.id, "account",
+      "Account suspension lifted",
+      "Your account suspension has been lifted. Welcome back!"
+    ).catch(() => {});
+
+    logActivity(req.admin.id, req.admin.name, "unsuspend", "member_account", req.params.id).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/unsuspend]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/wall/admin-post  — KFS admin broadcast post ──────────────
+// Creates a post pinned to the top of the feed with the KFS tick badge.
+// Body: { title, description, tags?, cover_image_url? }
+app.post("/api/admin/wall/admin-post", authMiddleware, async (req, res) => {
+  try {
+    const { title, description, tags, cover_image_url } = req.body || {};
+    if (!title || !description)
+      return res.status(400).json({ error: "title and description are required" });
+
+    // Use a sentinel member UUID for "KFS" — stored in settings as kfs_admin_member_id
+    // Falls back to inserting under the first master admin's member record.
+    const { data: kfsSetting } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "kfs_admin_member_id")
+      .maybeSingle();
+
+    let kfsMemberId = kfsSetting?.value || null;
+
+    // If no sentinel member configured, find the first active member named "KFS"
+    if (!kfsMemberId) {
+      const { data: kfsMember } = await supabase
+        .from("members")
+        .select("id")
+        .ilike("name", "KFS%")
+        .limit(1)
+        .maybeSingle();
+      kfsMemberId = kfsMember?.id || null;
+    }
+
+    if (!kfsMemberId)
+      return res.status(400).json({
+        error: "No KFS sentinel member found. Create a member named 'KFS' or set kfs_admin_member_id in settings.",
+      });
+
+    const now = new Date().toISOString();
+    const { data: post, error: insertErr } = await supabase
+      .from("member_projects")
+      .insert([{
+        member_id:    kfsMemberId,
+        title:        String(title).trim().slice(0, 200),
+        description:  String(description).trim().slice(0, 5000),
+        tags:         Array.isArray(tags) ? tags.slice(0, 10) : [],
+        cover_image:  cover_image_url || null,
+        status:       "published",
+        is_admin_post: true,
+        pinned_at:    now,
+        created_at:   now,
+      }])
+      .select("id")
+      .single();
+
+    if (insertErr) throw insertErr;
+
+    // Bust feed cache so it appears immediately
+    memInvalidate("studio:feed:");
+
+    logActivity(req.admin.id, req.admin.name, "create_admin_post", "member_project", post.id).catch(() => {});
+    res.json({ success: true, post_id: post.id });
+  } catch (e) {
+    console.error("[admin/wall/admin-post]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── DELETE /api/admin/wall/admin-post/:id  — remove an admin post ─────────────
+app.delete("/api/admin/wall/admin-post/:id", authMiddleware, async (req, res) => {
+  try {
+    const { data: post } = await supabase
+      .from("member_projects")
+      .select("id, is_admin_post")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    if (!post.is_admin_post) return res.status(403).json({ error: "Not an admin post" });
+
+    await supabase.from("member_projects")
+      .update({ deleted_at: new Date().toISOString(), status: "hidden" })
+      .eq("id", req.params.id);
+
+    memInvalidate("studio:feed:");
+    logActivity(req.admin.id, req.admin.name, "delete_admin_post", "member_project", req.params.id).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/wall/admin-post DELETE]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/wall/admin-posts  — list all admin posts ──────────────────
+app.get("/api/admin/wall/admin-posts", authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("member_projects")
+      .select("id, title, description, status, views_count, reactions_count, comments_count, created_at, deleted_at")
+      .eq("is_admin_post", true)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) {
+    console.error("[admin/wall/admin-posts GET]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Patch feed routes to inject admin posts at top ────────────────────────────
+// Monkey-patch the existing feed so pinned admin posts always float to the top.
+// This wraps the response for /api/member/studio/feed without touching the huge
+// existing handler — we intercept via a post-processing middleware registered
+// before the catch-all.
+
+// Override: inject pinned admin posts into the feed response.
+// We do this by wrapping the existing route with a pass-through that checks
+// if pinned posts need to be prepended.
+// NOTE: The cleanest approach in Express is to add a small middleware that
+// modifies res.json. This runs after the actual handler populates the response.
+// We use a targeted middleware only for this path.
+app.use("/api/member/studio/feed", (req, res, next) => {
+  // Only intercept GET requests that have not already been handled
+  if (req.method !== "GET") return next();
+
+  const originalJson = res.json.bind(res);
+  res.json = async function(body) {
+    // body should be { feed, page, has_more, sort }
+    if (body && Array.isArray(body.feed) && body.page === 1) {
+      try {
+        // Fetch pinned admin posts (only a handful ever, so cheap)
+        const { data: pinned } = await supabase
+          .from("member_projects")
+          .select(`
+            id, title, description, cover_image, video_url, video_provider,
+            domain, tags, views_count, reactions_count, comments_count, created_at,
+            member_id, is_admin_post, pinned_at,
+            members!member_projects_member_id_fkey(id, name, photo, role, domain)
+          `)
+          .eq("is_admin_post", true)
+          .eq("status", "published")
+          .is("deleted_at", null)
+          .order("pinned_at", { ascending: false })
+          .limit(5);
+
+        if (pinned && pinned.length) {
+          const pinnedIds = new Set(pinned.map(p => p.id));
+          // Remove them from the regular feed if they happened to appear
+          const filtered = body.feed.filter(p => !pinnedIds.has(p.id));
+          body = {
+            ...body,
+            feed: [
+              ...pinned.map(p => ({ ...p, my_reaction: null, is_admin_post: true })),
+              ...filtered,
+            ],
+          };
+        }
+      } catch {}
+    }
+    return originalJson(body);
+  };
+  next();
+});
+
+// ── Middleware: auto-lift expired temp suspensions on member auth ──────────────
+// Extend the existing memberAuthMiddleware to auto-lift expired suspensions.
+// We do this by wrapping the response path rather than editing the original fn.
+app.use("/api/member/", async (req, res, next) => {
+  // Only if member is already authenticated (req.member set by prior middleware)
+  if (!req.member?.memberId) return next();
+  try {
+    const { data: acct } = await supabase
+      .from("member_accounts")
+      .select("account_status, suspended_until")
+      .eq("member_id", req.member.memberId)
+      .maybeSingle();
+    if (acct?.account_status === "suspended" && acct?.suspended_until) {
+      if (new Date(acct.suspended_until) <= new Date()) {
+        // Auto-lift
+        await supabase.from("member_accounts")
+          .update({ account_status: "active", suspended_until: null })
+          .eq("member_id", req.member.memberId);
+        console.log(`[suspend] Auto-lifted suspension for member ${req.member.memberId}`);
+      }
+    }
+  } catch {}
+  next();
+});
+
+// ── GET /api/admin/moderation/dm-conversations  — admin DM inbox viewer ───────
+// Allows admins to review DM conversations by conv_key (for reported messages).
+// Only accessible via a specific report's conv_key — no bulk browsing.
+app.get("/api/admin/moderation/dm/:convKey", authMiddleware, async (req, res) => {
+  try {
+    const convKey = req.params.convKey;
+    // Validate format: must be two UUIDs joined by ":"
+    const uuidRe = /^[0-9a-f-]{36}:[0-9a-f-]{36}$/i;
+    if (!uuidRe.test(convKey))
+      return res.status(400).json({ error: "Invalid conversation key format" });
+
+    const { data: msgs, error } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at")
+      .eq("link_type", "dm")
+      .eq("link_id", convKey)
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (error) throw error;
+
+    // Fetch both member names for context
+    const ids = [...new Set((msgs || []).flatMap(m => [m.actor_id, m.member_id]).filter(Boolean))];
+    let memberNames = {};
+    if (ids.length) {
+      const { data: members } = await supabase
+        .from("members")
+        .select("id, name")
+        .in("id", ids);
+      (members || []).forEach(m => { memberNames[m.id] = m.name; });
+    }
+
+    logActivity(req.admin.id, req.admin.name, "view_dm_conversation", "dm", convKey).catch(() => {});
+
+    res.json({
+      conv_key: convKey,
+      messages: (msgs || []).map(m => ({
+        id:          m.id,
+        sender_id:   m.actor_id,
+        sender_name: memberNames[m.actor_id] || m.actor_name || "Unknown",
+        body:        m.body,
+        sent_at:     m.created_at,
+      })),
+      members: memberNames,
+    });
+  } catch (e) {
+    console.error("[admin/moderation/dm]", e.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

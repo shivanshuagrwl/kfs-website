@@ -11866,9 +11866,12 @@ async function loadMemberAccounts() {
     const lastLogin = hasAccount && acc.last_login
       ? new Date(acc.last_login).toLocaleDateString('en-IN')
       : '—';
+    const isSuspended = hasAccount && acc.account_status === 'suspended';
     const actionBtns = hasAccount
       ? `<div class="action-btns">
-          <button class="btn-sm" onclick="toggleMemberAccountStatus('${m.id}','${acc.account_status}')">${acc.account_status === 'active' ? 'Disable' : 'Enable'}</button>
+          <button class="btn-sm" onclick="toggleMemberAccountStatus('${m.id}','${acc.account_status}')">${acc.account_status === 'active' ? 'Disable' : (isSuspended ? 'Unsuspend' : 'Enable')}</button>
+          ${acc.account_status === 'active' ? `<button class="btn-sm" style="background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33" onclick="openSuspendModal('${m.id}')">Suspend</button>` : ''}
+          ${isSuspended ? `<button class="btn-sm" style="background:rgba(56,161,105,.12);color:#38a169;border-color:#38a16933" onclick="unsuspendMember('${m.id}')">Lift</button>` : ''}
           <button class="btn-sm" onclick="resetMemberPassword('${m.id}')">Reset PW</button>
           <button class="btn-sm danger" onclick="forceMember2FAReset('${m.id}')">Clear 2FA</button>
         </div>`
@@ -13474,3 +13477,348 @@ function pswShowAuthNudge() {
     });
   }
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: Content Moderation — Admin Panel JS
+// Covers: reports inbox, resolve modal, admin post creation, temp suspend
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Moderation sidebar badge ─────────────────────────────────────────────────
+async function loadModerationBadge() {
+  try {
+    const r = await fetch('/api/admin/reports/count', {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (!r.ok) return;
+    const { count } = await r.json();
+    const badge = document.getElementById('moderation-badge');
+    if (!badge) return;
+    if (count > 0) {
+      badge.textContent = count;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
+}
+
+// Call when admin panel loads
+const _origShowAdminPanel = typeof showAdminPanel === 'function' ? showAdminPanel : null;
+
+// Hook into showAdminSection to refresh badge
+const _origShowAdminSection = typeof showAdminSection === 'function' ? showAdminSection : null;
+function showAdminSection(section) {
+  if (_origShowAdminSection) _origShowAdminSection(section);
+  if (section === 'moderation') {
+    loadModReports();
+    loadModerationBadge();
+  }
+  if (section === 'dashboard') loadModerationBadge();
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function modTab(tab) {
+  const panels = ['reports', 'admin-posts'];
+  panels.forEach(t => {
+    const el = document.getElementById('mod-' + t + '-panel');
+    const btn = document.getElementById('mod-tab-' + t);
+    if (!el || !btn) return;
+    if (t === tab) {
+      el.style.display = '';
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'font-size:12px;padding:8px 18px;border-radius:20px';
+    } else {
+      el.style.display = 'none';
+      btn.className = 'btn';
+      btn.style.cssText = 'font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+    }
+  });
+  if (tab === 'reports') loadModReports();
+  if (tab === 'admin-posts') loadAdminPosts();
+}
+
+// ── Load reports ─────────────────────────────────────────────────────────────
+async function loadModReports() {
+  const status = document.getElementById('mod-report-status')?.value || 'pending';
+  const type   = document.getElementById('mod-report-type')?.value   || '';
+  const tbody  = document.getElementById('mod-reports-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">Loading…</td></tr>';
+
+  try {
+    const url = `/api/admin/reports?status=${status}${type ? '&type=' + type : ''}`;
+    const r = await fetch(url, {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">No reports found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(rep => {
+      const date = new Date(rep.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+      const reporterName = rep.reporter?.name || 'Unknown';
+      const preview = buildReportPreview(rep);
+      const typeBadge = { post: '📝 Post', dm: '💬 DM', comment: '🗨️ Comment' }[rep.content_type] || rep.content_type;
+      const actionsBtns = status === 'pending'
+        ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="openModResolveModal('${rep.id}','${rep.content_type}','${rep.content_id}',${JSON.stringify(preview).replace(/"/g,'&quot;')})" class="btn-sm btn-success" style="font-size:11px;padding:4px 10px">Review</button>
+            <button onclick="quickDismissReport('${rep.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">Dismiss</button>
+            ${rep.content_type === 'dm' && rep.snapshot?.link_id ? `<button onclick="viewDmConv('${rep.snapshot.link_id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">View DM</button>` : ''}
+           </div>`
+        : `<span style="font-size:11px;color:var(--grey)">${rep.reviewed_by || '—'} · ${rep.reviewed_at ? new Date(rep.reviewed_at).toLocaleDateString('en-IN') : ''}</span>`;
+
+      return `<tr>
+        <td style="white-space:nowrap">${date}</td>
+        <td>${escHtml(reporterName)}</td>
+        <td>${typeBadge}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(rep.reason)}">${escHtml(rep.reason)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--grey)" title="${escHtml(preview)}">${escHtml(preview)}</td>
+        <td>${actionsBtns}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red,#e53e3e)">Failed to load reports.</td></tr>';
+  }
+}
+
+function buildReportPreview(rep) {
+  if (!rep.snapshot) return '(content unavailable)';
+  if (rep.content_type === 'post') {
+    if (rep.snapshot.deleted_at) return '[deleted]';
+    return rep.snapshot.title || rep.snapshot.description?.slice(0, 60) || '(no preview)';
+  }
+  if (rep.content_type === 'dm') return rep.snapshot.body?.slice(0, 80) || '(empty)';
+  if (rep.content_type === 'comment') return rep.snapshot.body?.slice(0, 80) || '(empty)';
+  return '(no preview)';
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Resolve modal ────────────────────────────────────────────────────────────
+function openModResolveModal(reportId, contentType, contentId, preview) {
+  document.getElementById('mod-resolve-report-id').value  = reportId;
+  document.getElementById('mod-resolve-content-type').value = contentType;
+  document.getElementById('mod-resolve-content-id').value  = contentId;
+  document.getElementById('mod-resolve-preview').textContent = preview || '(no preview available)';
+  document.getElementById('mod-resolve-note').value = '';
+  document.getElementById('mod-resolve-action').value = 'reviewed';
+  document.getElementById('mod-resolve-hide').checked = false;
+  document.getElementById('mod-resolve-delete').checked = false;
+  // Only show hide/delete for post/comment (not DM hide, only delete makes sense for DMs)
+  const contentActions = document.getElementById('mod-resolve-content-actions');
+  if (contentType === 'dm') {
+    contentActions.innerHTML = '<label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Remove this DM (marks it as removed by admin)</label>';
+  } else {
+    contentActions.innerHTML = `
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="mod-resolve-hide"> Hide content (unpublish, reversible)</label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Delete content permanently</label>`;
+  }
+  document.getElementById('mod-resolve-modal').classList.add('active');
+}
+
+function closeModResolveModal() {
+  document.getElementById('mod-resolve-modal').classList.remove('active');
+}
+
+async function submitModResolve() {
+  const reportId    = document.getElementById('mod-resolve-report-id').value;
+  const action      = document.getElementById('mod-resolve-action').value;
+  const note        = document.getElementById('mod-resolve-note').value;
+  const hideContent = document.getElementById('mod-resolve-hide')?.checked   || false;
+  const delContent  = document.getElementById('mod-resolve-delete')?.checked || false;
+
+  try {
+    const r = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ action, admin_note: note, hide_content: hideContent, delete_content: delContent }),
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Failed to resolve report'); return; }
+    closeModResolveModal();
+    loadModReports();
+    loadModerationBadge();
+  } catch { alert('Network error. Please try again.'); }
+}
+
+async function quickDismissReport(reportId) {
+  if (!confirm('Dismiss this report with no action?')) return;
+  try {
+    const r = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ action: 'dismissed' }),
+    });
+    if (!r.ok) { const d = await r.json(); alert(d.error || 'Error'); return; }
+    loadModReports();
+    loadModerationBadge();
+  } catch { alert('Network error'); }
+}
+
+// ── View DM conversation (admin) ─────────────────────────────────────────────
+async function viewDmConv(convKey) {
+  const modal = document.getElementById('mod-dm-modal');
+  const msgBox = document.getElementById('mod-dm-messages');
+  const membersBox = document.getElementById('mod-dm-members');
+  msgBox.innerHTML = '<div style="color:var(--grey);font-size:13px;text-align:center;padding:16px">Loading…</div>';
+  membersBox.textContent = '';
+  modal.classList.add('active');
+
+  try {
+    const r = await fetch(`/api/admin/moderation/dm/${convKey}`, {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const data = await r.json();
+    if (!r.ok) { msgBox.innerHTML = `<div style="color:#e53e3e;font-size:13px">${data.error || 'Failed'}</div>`; return; }
+
+    const memberList = Object.values(data.members || {}).join(' ↔ ');
+    membersBox.textContent = `Conversation between: ${memberList}`;
+
+    if (!data.messages?.length) {
+      msgBox.innerHTML = '<div style="color:var(--grey);font-size:13px;text-align:center;padding:16px">No messages found.</div>';
+      return;
+    }
+
+    msgBox.innerHTML = data.messages.map(m => {
+      const name = m.sender_name || 'Unknown';
+      const time = new Date(m.sent_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const date = new Date(m.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      return `<div style="background:var(--surface,#1a1a1a);border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--grey);margin-bottom:4px">${escHtml(name)} · ${date} ${time}</div>
+        <div style="font-size:13px;white-space:pre-wrap">${escHtml(m.body)}</div>
+      </div>`;
+    }).join('');
+    msgBox.scrollTop = msgBox.scrollHeight;
+  } catch { msgBox.innerHTML = '<div style="color:#e53e3e;font-size:13px">Network error</div>'; }
+}
+
+// ── Admin posts ──────────────────────────────────────────────────────────────
+async function loadAdminPosts() {
+  const tbody = document.getElementById('mod-admin-posts-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--grey)">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/admin/wall/admin-posts', {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const posts = await r.json();
+    if (!posts.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--grey)">No KFS posts yet.</td></tr>'; return; }
+    tbody.innerHTML = posts.map(p => {
+      const date = new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      return `<tr>
+        <td style="white-space:nowrap">${date}</td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.title)}</td>
+        <td>${p.views_count || 0}</td>
+        <td>${p.reactions_count || 0}</td>
+        <td><button onclick="deleteAdminPost('${p.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:6px">Delete</button></td>
+      </tr>`;
+    }).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#e53e3e">Failed to load.</td></tr>';
+  }
+}
+
+async function createAdminPost() {
+  const title = document.getElementById('mod-ap-title')?.value.trim();
+  const body  = document.getElementById('mod-ap-body')?.value.trim();
+  const image = document.getElementById('mod-ap-image')?.value.trim();
+  const tagsRaw = document.getElementById('mod-ap-tags')?.value.trim();
+  const msg   = document.getElementById('mod-ap-msg');
+
+  if (!title || !body) { if (msg) { msg.textContent = 'Title and body are required.'; msg.style.color = '#e53e3e'; } return; }
+  const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  if (msg) { msg.textContent = 'Posting…'; msg.style.color = 'var(--grey)'; }
+  try {
+    const r = await fetch('/api/admin/wall/admin-post', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ title, description: body, tags, cover_image_url: image || null }),
+    });
+    const d = await r.json();
+    if (!r.ok) { if (msg) { msg.textContent = d.error || 'Error'; msg.style.color = '#e53e3e'; } return; }
+    if (msg) { msg.textContent = '✓ Posted successfully!'; msg.style.color = '#38a169'; }
+    document.getElementById('mod-ap-title').value = '';
+    document.getElementById('mod-ap-body').value = '';
+    document.getElementById('mod-ap-image').value = '';
+    document.getElementById('mod-ap-tags').value = '';
+    setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+    loadAdminPosts();
+  } catch { if (msg) { msg.textContent = 'Network error'; msg.style.color = '#e53e3e'; } }
+}
+
+async function deleteAdminPost(id) {
+  if (!confirm('Delete this KFS post? This cannot be undone.')) return;
+  try {
+    const r = await fetch(`/api/admin/wall/admin-post/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' },
+    });
+    if (!r.ok) { const d = await r.json(); alert(d.error || 'Error'); return; }
+    loadAdminPosts();
+  } catch { alert('Network error'); }
+}
+
+// ── Temp Suspend (called from Members section) ───────────────────────────────
+function openSuspendModal(memberId) {
+  document.getElementById('mod-suspend-member-id').value = memberId;
+  document.getElementById('mod-suspend-hours').value = '24';
+  document.getElementById('mod-suspend-reason').value = '';
+  document.getElementById('mod-suspend-modal').classList.add('active');
+}
+
+async function submitSuspend() {
+  const memberId = document.getElementById('mod-suspend-member-id').value;
+  const hours    = parseInt(document.getElementById('mod-suspend-hours').value, 10);
+  const reason   = document.getElementById('mod-suspend-reason').value.trim();
+
+  try {
+    const r = await fetch(`/api/admin/members/${memberId}/account/suspend`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ hours, reason }),
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Failed to suspend'); return; }
+    document.getElementById('mod-suspend-modal').classList.remove('active');
+    alert(`Account suspended for ${hours} hour${hours !== 1 ? 's' : ''}. It will auto-restore on ${new Date(d.suspended_until).toLocaleString('en-IN')}.`);
+    // Refresh members list if open
+    if (typeof loadMembers === 'function') loadMembers();
+  } catch { alert('Network error'); }
+}
+
+async function unsuspendMember(memberId) {
+  if (!confirm('Lift this account suspension?')) return;
+  try {
+    const r = await fetch(`/api/admin/members/${memberId}/account/unsuspend`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+    });
+    if (!r.ok) { const d = await r.json(); alert(d.error || 'Error'); return; }
+    if (typeof loadMembers === 'function') loadMembers();
+  } catch { alert('Network error'); }
+}
+
+// Refresh badge whenever admin section shows
+document.addEventListener('DOMContentLoaded', () => {
+  // Auto-poll badge every 90 seconds when admin panel is visible
+  setInterval(() => {
+    const ap = document.getElementById('admin-panel');
+    if (ap?.classList.contains('active') && adminToken) loadModerationBadge();
+  }, 90000);
+});
+

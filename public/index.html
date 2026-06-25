@@ -4048,6 +4048,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <div data-action="showAdminSection" data-args='["member-movie-submissions"]' class="admin-sidebar-item" data-section="member-movie-submissions"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> Movie Submissions</div>
     <div data-action="showAdminSection" data-args='["work-edit-requests"]' class="admin-sidebar-item" data-section="work-edit-requests"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> Work Edit Requests</div>
     <div data-action="showAdminSection" data-args='["grievances"]' class="admin-sidebar-item" data-section="grievances"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Grievances &amp; Suggestions</div>
+    <div data-action="showAdminSection" data-args='["moderation"]' class="admin-sidebar-item" data-section="moderation" id="sidebar-moderation-link"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> Moderation <span id="moderation-badge" style="display:none;background:#e53e3e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px">0</span></div>
     <div class="admin-sidebar-group">System</div>
     <div data-action="showAdminSection" data-args='["credits"]' class="admin-sidebar-item" data-section="credits"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><polyline points="16 3 18 5 22 1"/></svg></span> Site Credits</div>
     <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
@@ -5332,6 +5333,63 @@ KFS — KIIT Film Society"></textarea>
       </div>
     </div>
 
+    <div class="admin-section" id="section-moderation">
+      <div class="admin-header">
+        <div><h2>Moderation</h2><p>Reports, content actions, temp suspensions, and KFS admin posts</p></div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+        <button onclick="modTab('reports')" id="mod-tab-reports" class="btn btn-primary" style="font-size:12px;padding:8px 18px;border-radius:20px">&#x1F6A8; Reports</button>
+        <button onclick="modTab('admin-posts')" id="mod-tab-admin-posts" class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x1F4E3; KFS Posts</button>
+      </div>
+
+      <!-- Reports tab -->
+      <div id="mod-reports-panel">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+          <select id="mod-report-status" onchange="loadModReports()" style="font-size:12px;padding:8px 12px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">
+            <option value="pending">Pending</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+          <select id="mod-report-type" onchange="loadModReports()" style="font-size:12px;padding:8px 12px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">
+            <option value="">All Types</option>
+            <option value="post">Posts</option>
+            <option value="dm">DMs</option>
+            <option value="comment">Comments</option>
+          </select>
+          <button onclick="loadModReports()" class="btn" style="font-size:12px;padding:8px 14px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x21BB; Refresh</button>
+        </div>
+        <div class="admin-card">
+          <table class="admin-table">
+            <thead><tr><th>Date</th><th>Reporter</th><th>Type</th><th>Reason</th><th>Content Preview</th><th>Actions</th></tr></thead>
+            <tbody id="mod-reports-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">Loading&#x2026;</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Admin Posts tab -->
+      <div id="mod-admin-posts-panel" style="display:none">
+        <div class="admin-card" style="margin-bottom:18px;padding:20px">
+          <h4 style="margin:0 0 14px;font-size:14px">Create KFS Announcement Post</h4>
+          <p style="font-size:12px;color:var(--grey);margin:0 0 14px">This post appears pinned at the top of the Social Strand feed with a &#x2713; KFS badge, visible to all members.</p>
+          <div class="form-group"><label>Title</label><input type="text" id="mod-ap-title" placeholder="e.g. Welcome to KFS Social Strand!"></div>
+          <div class="form-group"><label>Body</label><textarea id="mod-ap-body" rows="4" placeholder="Write your announcement here&#x2026;" style="width:100%;box-sizing:border-box"></textarea></div>
+          <div class="form-group"><label>Cover Image URL (optional)</label><input type="text" id="mod-ap-image" placeholder="https://&#x2026;"></div>
+          <div class="form-group"><label>Tags (comma-separated, optional)</label><input type="text" id="mod-ap-tags" placeholder="announcement, kfs"></div>
+          <button onclick="createAdminPost()" class="btn btn-primary" style="font-size:13px;padding:10px 22px;border-radius:20px">&#x1F4E3; Post as KFS</button>
+          <span id="mod-ap-msg" style="margin-left:12px;font-size:12px;color:var(--grey)"></span>
+        </div>
+        <div class="admin-card">
+          <h4 style="margin:0 0 12px;font-size:14px">Existing KFS Posts</h4>
+          <table class="admin-table">
+            <thead><tr><th>Date</th><th>Title</th><th>Views</th><th>Reactions</th><th>Actions</th></tr></thead>
+            <tbody id="mod-admin-posts-tbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--grey)">Loading&#x2026;</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 <div class="modal-overlay" id="grievance-modal">
@@ -6203,5 +6261,65 @@ KFS — KIIT Film Society"></textarea>
   </div>
 </div>
 
+
+<!-- ── Moderation: Report Resolve Modal ──────────────────────────────── -->
+<div class="modal-overlay" id="mod-resolve-modal">
+  <div class="modal" style="max-width:480px">
+    <h3>Resolve Report</h3>
+    <input type="hidden" id="mod-resolve-report-id">
+    <input type="hidden" id="mod-resolve-content-type">
+    <input type="hidden" id="mod-resolve-content-id">
+    <div class="form-group"><label>Content Preview</label><div id="mod-resolve-preview" style="font-size:13px;color:var(--grey);padding:10px;background:var(--surface);border-radius:8px;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div></div>
+    <div class="form-group"><label>Action</label>
+      <select id="mod-resolve-action">
+        <option value="reviewed">Reviewed (take action below)</option>
+        <option value="dismissed">Dismiss (no action needed)</option>
+      </select>
+    </div>
+    <div id="mod-resolve-content-actions" style="margin-bottom:14px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="mod-resolve-hide"> Hide content (unpublish, reversible)</label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Delete content permanently</label>
+    </div>
+    <div class="form-group"><label>Admin Note (internal)</label><textarea id="mod-resolve-note" rows="2" placeholder="Optional note about this decision&#x2026;"></textarea></div>
+    <div class="modal-actions">
+      <button onclick="closeModResolveModal()" class="btn-sm">Cancel</button>
+      <button onclick="submitModResolve()" class="btn-sm btn-success">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Moderation: View DM Modal ──────────────────────────────────────── -->
+<div class="modal-overlay" id="mod-dm-modal">
+  <div class="modal" style="max-width:540px">
+    <h3>DM Conversation</h3>
+    <div id="mod-dm-members" style="font-size:12px;color:var(--grey);margin-bottom:12px"></div>
+    <div id="mod-dm-messages" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px"></div>
+    <div class="modal-actions"><button onclick="document.getElementById('mod-dm-modal').classList.remove('active')" class="btn-sm">Close</button></div>
+  </div>
+</div>
+
+<!-- ── Moderation: Temp Suspend Modal (launched from Members section) ─── -->
+<div class="modal-overlay" id="mod-suspend-modal">
+  <div class="modal" style="max-width:400px">
+    <h3>Temporarily Suspend Account</h3>
+    <input type="hidden" id="mod-suspend-member-id">
+    <div class="form-group"><label>Suspend for</label>
+      <select id="mod-suspend-hours">
+        <option value="1">1 hour</option>
+        <option value="6">6 hours</option>
+        <option value="24" selected>24 hours (1 day)</option>
+        <option value="72">72 hours (3 days)</option>
+        <option value="168">168 hours (1 week)</option>
+        <option value="720">720 hours (30 days)</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Reason (shown to member)</label><input type="text" id="mod-suspend-reason" placeholder="e.g. Violation of community guidelines"></div>
+    <p style="font-size:12px;color:var(--grey)">The account will be automatically restored after the suspension period. The member will be notified.</p>
+    <div class="modal-actions">
+      <button onclick="document.getElementById('mod-suspend-modal').classList.remove('active')" class="btn-sm">Cancel</button>
+      <button onclick="submitSuspend()" class="btn-sm" style="background:#e53e3e;color:#fff;border:none">Suspend</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

@@ -2417,17 +2417,24 @@ function swFeedCard(p) {
 
   // Reaction popup is now a single body-level portal (#rxn-overlay), not per-card
 
-  return `<article class="ig-post" data-project-id="${swEsc(p.id)}" onclick="swOpenDetail('${swEsc(p.id)}')">
+  // Admin/KFS post indicator
+  const isAdminPost = !!p.is_admin_post;
+  const kfsBadgeHtml = isAdminPost
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;margin-left:6px;vertical-align:middle">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="none"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg> KFS
+       </span>` : '';
+
+  return `<article class="ig-post" data-project-id="${swEsc(p.id)}"${isAdminPost ? ' style="border:1.5px solid #2d6a9f22;background:linear-gradient(180deg,rgba(45,106,159,.04),transparent)"' : ''} onclick="swOpenDetail('${swEsc(p.id)}')">
     <!-- Header -->
     <div class="ig-post-header">
       <div class="ig-post-avatar-wrap" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
         <div class="ig-post-avatar-inner">${avatarInner}</div>
       </div>
       <div class="ig-post-author-block" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
-        <div class="ig-post-author-name">${swEsc(author.name||'Member')}</div>
+        <div class="ig-post-author-name">${swEsc(isAdminPost ? 'KFS' : (author.name||'Member'))}${kfsBadgeHtml}</div>
         <div class="ig-post-time">${swRelTime(p.created_at)}</div>
       </div>
-      <button class="ig-post-options" onclick="event.stopPropagation();swOpenDetail('${swEsc(p.id)}')" title="More">
+      <button class="ig-post-options" onclick="event.stopPropagation();swShowPostMenu(event,'${swEsc(p.id)}','${swEsc(p.member_id)}',${isAdminPost})" title="More" aria-label="Post options">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
       </button>
     </div>
@@ -4396,3 +4403,179 @@ if (document.readyState === 'loading') {
 } else {
   initDM();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: Content Reporting — Member Portal JS
+// Covers: post options menu, report modal, DM report button
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Post options menu (three-dot) ────────────────────────────────────────────
+let _swPostMenuOpen = null;
+
+function swShowPostMenu(event, postId, authorId, isAdminPost) {
+  event.stopPropagation();
+  // Close any open menu first
+  swClosePostMenu();
+
+  const myId = window._memberProfile?.id || '';
+  const isOwn = myId && myId === authorId;
+  const isAdmin = isAdminPost;
+
+  const items = [];
+  items.push({ label: '🔗 Copy link', fn: `swCopyPostLink('${postId}')` });
+  if (!isAdmin) {
+    // Don't show report on KFS official posts
+    items.push({ label: '🚨 Report post', fn: `swOpenReportModal('post','${postId}')`, danger: true });
+  }
+  if (isOwn) {
+    items.push({ label: '🗑 Delete post', fn: `swConfirmDeletePost('${postId}')`, danger: true });
+  }
+
+  const menu = document.createElement('div');
+  menu.id = 'sw-post-menu';
+  menu.style.cssText = 'position:fixed;z-index:9999;background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:6px;min-width:160px';
+  menu.innerHTML = items.map(item =>
+    `<button onclick="event.stopPropagation();swClosePostMenu();${item.fn}" style="display:block;width:100%;text-align:left;background:transparent;border:none;padding:10px 14px;font-size:13px;color:${item.danger?'#e53e3e':'var(--text,#f5f5f5)'};border-radius:8px;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='transparent'">${item.label}</button>`
+  ).join('');
+
+  // Position near the button
+  const btn = event.currentTarget || event.target;
+  const rect = btn.getBoundingClientRect();
+  const menuW = 180;
+  let left = rect.right - menuW;
+  if (left < 8) left = 8;
+  let top = rect.bottom + 4;
+  if (top + 160 > window.innerHeight) top = rect.top - 160;
+  menu.style.left = left + 'px';
+  menu.style.top  = top  + 'px';
+
+  document.body.appendChild(menu);
+  _swPostMenuOpen = menu;
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', swClosePostMenu, { once: true, capture: true });
+  }, 0);
+}
+
+function swClosePostMenu() {
+  if (_swPostMenuOpen) { _swPostMenuOpen.remove(); _swPostMenuOpen = null; }
+}
+
+function swCopyPostLink(postId) {
+  const url = `${location.origin}/social-strand/member/${postId}`;
+  navigator.clipboard?.writeText(url).then(() => {
+    swShowToast('Link copied!');
+  }).catch(() => { swShowToast('Could not copy — try manually.'); });
+}
+
+function swConfirmDeletePost(postId) {
+  if (!confirm('Delete this post? This cannot be undone.')) return;
+  // Use existing delete function if available
+  if (typeof swDeleteProject === 'function') { swDeleteProject(postId); return; }
+  // Fallback
+  fetch(`/api/member/studio/projects/${postId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'Authorization': 'Bearer ' + (window._memberToken || ''), 'X-CSRF-Token': window._csrfToken || '' },
+  }).then(r => {
+    if (r.ok) {
+      const card = document.querySelector(`.ig-post[data-project-id="${CSS.escape(postId)}"]`);
+      if (card) card.remove();
+      swShowToast('Post deleted.');
+    } else { r.json().then(d => alert(d.error || 'Error')); }
+  }).catch(() => alert('Network error'));
+}
+
+function swShowToast(msg, duration = 2800) {
+  let t = document.getElementById('sw-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'sw-toast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#f5f5f5;font-size:13px;padding:10px 20px;border-radius:24px;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.5);transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, duration);
+}
+
+// ── Report modal ─────────────────────────────────────────────────────────────
+// Creates a lightweight report modal inline (no external HTML needed)
+function swOpenReportModal(contentType, contentId, extraLabel) {
+  // Remove any existing modal
+  let existing = document.getElementById('sw-report-modal-overlay');
+  if (existing) existing.remove();
+
+  const typeLabel = { post: 'post', dm: 'DM message', comment: 'comment' }[contentType] || contentType;
+  const reasons = [
+    'Harassment or bullying',
+    'Hate speech or discrimination',
+    'Spam or misleading content',
+    'Inappropriate or explicit content',
+    'Impersonation',
+    'Other',
+  ];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sw-report-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+      <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Report ${typeLabel}</h3>
+      <p style="font-size:12px;color:var(--grey,#888);margin:0 0 18px">Please tell us why you're reporting this. Our team reviews all reports.</p>
+      ${extraLabel ? `<p style="font-size:12px;color:var(--grey);margin:0 0 14px;font-style:italic">${extraLabel}</p>` : ''}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+        ${reasons.map((r, i) => `<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="radio" name="sw-report-reason" value="${r}" ${i===0?'checked':''}> ${r}</label>`).join('')}
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--grey)">Additional details (optional)</label>
+        <textarea id="sw-report-details" rows="2" placeholder="Any extra context…" style="width:100%;box-sizing:border-box;margin-top:6px;font-size:13px;background:var(--bg,#0a0a0a);border:1px solid var(--border,#222);border-radius:8px;padding:8px 10px;color:var(--text,#f5f5f5);resize:vertical"></textarea>
+      </div>
+      <div id="sw-report-msg" style="font-size:12px;color:#e53e3e;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="sw-report-cancel" style="background:transparent;border:1px solid var(--border,#222);color:var(--grey,#888);padding:9px 18px;border-radius:20px;font-size:13px;cursor:pointer">Cancel</button>
+        <button id="sw-report-submit" style="background:#e53e3e;color:#fff;border:none;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer">Submit Report</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#sw-report-cancel').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#sw-report-submit').onclick = async () => {
+    const reasonEl = overlay.querySelector('input[name="sw-report-reason"]:checked');
+    const reason   = reasonEl?.value || '';
+    const details  = overlay.querySelector('#sw-report-details')?.value.trim() || '';
+    const msgEl    = overlay.querySelector('#sw-report-msg');
+
+    if (!reason) { msgEl.textContent = 'Please select a reason.'; msgEl.style.display='block'; return; }
+
+    try {
+      const r = await fetch('/api/member/reports', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._memberToken || '') },
+        body: JSON.stringify({ content_type: contentType, content_id: String(contentId), reason, details }),
+      });
+      const d = await r.json();
+      if (!r.ok) { msgEl.textContent = d.error || 'Error submitting report.'; msgEl.style.display='block'; return; }
+      overlay.remove();
+      swShowToast('✓ Report submitted. Thank you.');
+    } catch { msgEl.textContent = 'Network error. Please try again.'; msgEl.style.display = 'block'; }
+  };
+}
+
+// ── Hook: add Report button in DM conversation view ──────────────────────────
+// Called when DM message context-menu / long-press happens
+function swReportDmMessage(msgId) {
+  swOpenReportModal('dm', msgId, 'You are reporting a direct message.');
+}
+
+// ── Hook: add Report button for comments (in detail view) ────────────────────
+function swReportComment(commentId) {
+  swOpenReportModal('comment', commentId, 'You are reporting a comment.');
+}
+
