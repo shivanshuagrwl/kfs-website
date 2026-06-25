@@ -4667,8 +4667,17 @@ const NICKS = {};
 
 async function nicksLoad(convKey) {
   try {
-    const data = await api('GET', `/api/member/nicknames/${encodeURIComponent(convKey)}`);
-    NICKS[convKey] = Array.isArray(data) ? data : [];
+    // Server returns { [target_id]: nickname } for all nicknames set BY me
+    const data = await api('GET', '/api/member/nicknames');
+    // Convert to array format expected by NICKS cache
+    const myId = dmMyId();
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      NICKS[convKey] = Object.entries(data).map(([target_id, nickname]) => ({
+        giver_id: myId, target_id, nickname
+      }));
+    } else {
+      NICKS[convKey] = [];
+    }
   } catch {
     NICKS[convKey] = [];
   }
@@ -4696,86 +4705,173 @@ function nicksResolveDisplay(convKey, memberId, fallbackName) {
   return fallbackName;
 }
 
-// Open nickname edit modal
+// Open Instagram-style nickname modal — shows BOTH participants with edit per person
 function nicksOpenModal(convKey, targetId, targetName, isGroup) {
-  const myId = dmMyId();
-  const existing = (NICKS[convKey] || []).find(r => r.giver_id === myId && r.target_id === targetId);
-  const currentNick = existing?.nickname || '';
+  const myId      = dmMyId();
+  const myProfile = window._memberProfile || {};
 
-  let modal = $id('nick-modal-overlay');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'nick-modal-overlay';
-    modal.className = 'nick-modal-overlay';
-    modal.innerHTML = `
-      <div class="nick-modal" id="nick-modal">
-        <div class="nick-modal-head">
-          <span id="nick-modal-title">Nickname</span>
-          <button class="dm-icon-btn" id="nick-modal-close" aria-label="Close">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <p class="nick-modal-hint" id="nick-modal-hint"></p>
+  // Build participant list
+  // For DM: [me, peer]. For group: just the target member (single edit).
+  const participants = isGroup
+    ? [{ id: targetId, name: targetName, photo: null, isSelf: false }]
+    : [
+        { id: myId,     name: myProfile.name || 'You', photo: myProfile.photo || null, isSelf: true  },
+        { id: targetId, name: targetName,               photo: DM.activePeer?.photo || null, isSelf: false },
+      ];
+
+  function getCurrentNick(membId) {
+    const rows = NICKS[convKey] || [];
+    const mine = rows.find(r => r.giver_id === myId && r.target_id === membId);
+    return mine?.nickname || '';
+  }
+
+  // Remove any existing modal
+  document.getElementById('nick-modal-overlay')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'nick-modal-overlay';
+  modal.className = 'nick-modal-overlay';
+  modal.innerHTML = `
+    <div class="nick-modal nick-modal-insta" id="nick-modal">
+      <div class="nick-modal-head">
+        <span>${isGroup ? 'Set Nickname' : 'Nicknames'}</span>
+        <button class="dm-icon-btn" id="nick-modal-close" aria-label="Close">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="nick-participants" id="nick-participants"></div>
+      <p class="nick-modal-hint" style="text-align:center;margin-top:14px">
+        ${isGroup ? 'This nickname is visible to everyone in the group.' : 'Nicknames are only visible in this chat.'}
+      </p>
+      <div id="nick-inline-edit" style="display:none;padding:14px 0 4px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="nick-editing-label"></div>
         <input id="nick-input" class="nick-input" type="text" maxlength="40" autocomplete="off" placeholder="Enter nickname…">
-        <div class="nick-modal-actions">
+        <div class="nick-modal-actions" style="margin-top:10px">
           <button class="nick-clear-btn" id="nick-clear-btn">Clear</button>
           <button class="nick-save-btn" id="nick-save-btn">Save</button>
         </div>
-        <div id="nick-error" class="nick-error" style="display:none"></div>
-      </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
-    $id('nick-modal-close')?.addEventListener('click', () => { modal.style.display = 'none'; });
+        <div id="nick-error" class="nick-error" style="display:none;margin-top:8px"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  function renderParticipants(editingId) {
+    const list = document.getElementById('nick-participants');
+    if (!list) return;
+    list.innerHTML = participants.map(p => {
+      const nick = getCurrentNick(p.id);
+      const initials = (p.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      const avatarHtml = p.photo
+        ? `<img src="${swEsc(p.photo)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#1e1e1e">`
+        : `<div style="width:44px;height:44px;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#666;flex-shrink:0">${swEsc(initials)}</div>`;
+      const canEdit = !p.isSelf; // can't nickname yourself
+      return `
+        <div class="nick-participant-row ${editingId === p.id ? 'nick-participant-active' : ''}" data-id="${swEsc(p.id)}" data-name="${swEsc(p.name)}" style="cursor:${canEdit ? 'pointer' : 'default'}">
+          ${avatarHtml}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${swEsc(nick || p.name)}</div>
+            ${nick ? `<div style="font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${swEsc(p.name)}</div>` : ''}
+          </div>
+          ${canEdit ? `<button class="dm-icon-btn nick-edit-btn" data-id="${swEsc(p.id)}" data-name="${swEsc(p.name)}" title="Edit nickname" style="flex-shrink:0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>` : ''}
+        </div>`;
+    }).join('');
+
+    // Wire edit buttons and row clicks
+    list.querySelectorAll('.nick-edit-btn, .nick-participant-row[data-id]').forEach(el => {
+      const id   = el.dataset.id;
+      const name = el.dataset.name;
+      const p    = participants.find(x => x.id === id);
+      if (!p || p.isSelf) return;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openInlineEdit(id, name);
+      });
+    });
   }
 
-  $id('nick-modal-title').textContent = `Nickname for ${targetName}`;
-  $id('nick-modal-hint').textContent = isGroup
-    ? 'This nickname is visible to everyone in the group.'
-    : 'This nickname is visible to both of you in this chat.';
-  const inp = $id('nick-input');
-  inp.value = currentNick;
-  $id('nick-error').style.display = 'none';
-  modal.style.display = 'flex';
-  inp.focus();
-  inp.select();
+  let _editingId = null;
 
-  const saveBtn  = $id('nick-save-btn');
-  const clearBtn = $id('nick-clear-btn');
+  function openInlineEdit(id, name) {
+    _editingId = id;
+    const editBox   = document.getElementById('nick-inline-edit');
+    const label     = document.getElementById('nick-editing-label');
+    const inp       = document.getElementById('nick-input');
+    const errEl     = document.getElementById('nick-error');
+    if (!editBox || !inp) return;
 
-  // Remove old listeners by cloning
-  const newSave  = saveBtn.cloneNode(true);
-  const newClear = clearBtn.cloneNode(true);
-  saveBtn.parentNode.replaceChild(newSave, saveBtn);
-  clearBtn.parentNode.replaceChild(newClear, clearBtn);
+    label.textContent = `Nickname for ${name}`;
+    inp.value = getCurrentNick(id);
+    errEl.style.display = 'none';
+    editBox.style.display = '';
+    inp.focus();
+    inp.select();
 
-  const doSave = async (nick) => {
+    renderParticipants(id);
+  }
+
+  // Save / clear handler
+  async function doSave(nick) {
+    if (!_editingId) return;
+    const errEl   = document.getElementById('nick-error');
+    const saveBtn = document.getElementById('nick-save-btn');
+    if (errEl) errEl.style.display = 'none';
+    if (saveBtn) saveBtn.disabled = true;
     try {
-      newSave.disabled = true;
-      await api('PUT', '/api/member/nicknames', { conv_key: convKey, target_id: targetId, nickname: nick });
+      await api('PUT', `/api/member/nicknames/${encodeURIComponent(_editingId)}`, { nickname: nick });
       // Update local cache
       const rows = NICKS[convKey] || (NICKS[convKey] = []);
-      const idx  = rows.findIndex(r => r.giver_id === myId && r.target_id === targetId);
+      const idx  = rows.findIndex(r => r.giver_id === myId && r.target_id === _editingId);
       if (nick) {
         if (idx >= 0) rows[idx].nickname = nick;
-        else rows.push({ giver_id: myId, target_id: targetId, nickname: nick });
+        else rows.push({ giver_id: myId, target_id: _editingId, nickname: nick });
       } else {
         if (idx >= 0) rows.splice(idx, 1);
       }
-      modal.style.display = 'none';
-      // Refresh display name in topbar + conv list
+      // Refresh participant list
+      renderParticipants(_editingId);
+      // Refresh display names
       dmRefreshDisplayNames(convKey);
+      // Close inline edit after short delay
+      setTimeout(() => {
+        const editBox = document.getElementById('nick-inline-edit');
+        if (editBox) editBox.style.display = 'none';
+        _editingId = null;
+        renderParticipants(null);
+      }, 600);
     } catch (e) {
-      const err = $id('nick-error');
-      err.textContent = e.message || 'Could not save.';
-      err.style.display = '';
+      if (errEl) { errEl.textContent = e.message || 'Could not save.'; errEl.style.display = ''; }
     } finally {
-      newSave.disabled = false;
+      if (saveBtn) saveBtn.disabled = false;
     }
-  };
+  }
 
-  newSave.addEventListener('click', () => doSave(inp.value.trim()));
-  newClear.addEventListener('click', () => doSave(''));
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') doSave(inp.value.trim()); });
+  // Wire inline edit buttons (re-wired on each renderParticipants)
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.getElementById('nick-modal-close')?.addEventListener('click', () => modal.remove());
+
+  // Wire save/clear with event delegation (they're inside nick-inline-edit which is static)
+  modal.addEventListener('click', e => {
+    const btn = e.target.closest('#nick-save-btn');
+    if (btn) { const inp = document.getElementById('nick-input'); doSave(inp?.value.trim() || ''); }
+    const clrBtn = e.target.closest('#nick-clear-btn');
+    if (clrBtn) doSave('');
+  });
+  modal.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && _editingId) {
+      const inp = document.getElementById('nick-input');
+      doSave(inp?.value.trim() || '');
+    }
+    if (e.key === 'Escape') modal.remove();
+  });
+
+  renderParticipants(null);
+
+  // If group (single person) or called directly for a specific person, open edit immediately
+  if (isGroup || (targetId && targetId !== myId)) {
+    openInlineEdit(targetId, targetName);
+  }
 }
 
 // Refresh display names after a nickname change
