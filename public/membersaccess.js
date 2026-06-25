@@ -4362,8 +4362,8 @@ function dmFilterConvs(q) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function initDM() {
-  // New message button
-  $id('dm-new-btn')?.addEventListener('click', dmOpenPicker);
+  // NOTE: dm-new-btn dropdown is wired by initInboxNewBtn() in the unified inbox IIFE.
+  // Do NOT wire it here to dmOpenPicker directly — that breaks the New Message / New Group dropdown.
 
   // Picker close
   $id('dm-picker-close')?.addEventListener('click', dmClosePicker);
@@ -4907,7 +4907,7 @@ async function gcOpenGroup(group) {
   GC.msgs        = [];
   GC.oldestSentAt = null;
 
-  document.querySelectorAll('.gc-conv-row').forEach(el => {
+  document.querySelectorAll('.gc-conv-row, .inbox-group-row').forEach(el => {
     el.classList.toggle('dm-active-row', el.dataset.key === group.id);
   });
 
@@ -4967,8 +4967,9 @@ async function gcLoadMsgs(prepend) {
     if (prepend && GC.oldestSentAt) url += `&before=${encodeURIComponent(GC.oldestSentAt)}`;
 
     const resp = await api('GET', url);
-    const msgs      = resp.messages || [];
-    const nicknames = resp.nicknames || [];
+    // Server returns a plain array (not wrapped in {messages:…})
+    const msgs      = Array.isArray(resp) ? resp : (resp.messages || []);
+    const nicknames = Array.isArray(resp) ? [] : (resp.nicknames || []);
 
     // Merge nicknames into cache
     if (nicknames.length) {
@@ -5034,7 +5035,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     const displayName = mine
       ? 'You'
-      : nicksResolveDisplay(convKey, m.sender_id, m.sender?.name || 'Member');
+      : nicksResolveDisplay(convKey, m.sender_id, m.sender?.name || m.sender_name || 'Member');
 
     if (senderKey !== lastSender || !group) {
       group = document.createElement('div');
@@ -5042,16 +5043,18 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 
       if (!mine) {
         // Show avatar + name for group messages
+        const sName  = m.sender?.name  || m.sender_name  || 'Member';
+        const sPhoto = m.sender?.photo || m.sender_photo || null;
         const header = document.createElement('div');
         header.className = 'gc-msg-header';
         header.innerHTML = `
-          ${gcAvatar(m.sender?.name, m.sender?.photo, 22)}
+          ${gcAvatar(sName, sPhoto, 22)}
           <span class="gc-msg-sender-name" data-member-id="${swEsc(m.sender_id)}" style="cursor:pointer">${swEsc(displayName)}</span>
         `;
         header.querySelector('.gc-msg-sender-name')?.addEventListener('click', (e) => {
           e.stopPropagation();
           // Open nickname modal for this member
-          nicksOpenModal(GC.activeId, m.sender_id, m.sender?.name || 'Member', true);
+          nicksOpenModal(GC.activeId, m.sender_id, sName, true);
         });
         group.appendChild(header);
       }
@@ -5190,15 +5193,15 @@ async function gcPollTick() {
     const url    = `/api/member/groups/${encodeURIComponent(GC.activeId)}/messages?limit=20`
                  + (newest ? `&since=${encodeURIComponent(newest)}` : '');
     const resp   = await api('GET', url);
-    const msgs   = resp.messages || [];
+    const msgs   = Array.isArray(resp) ? resp : (resp.messages || []);
     if (!msgs.length) return;
 
     const known   = new Set(GC.msgs.map(m => m.id));
     const newMsgs = msgs.filter(m => !known.has(m.id) && !GC.pendingBodies.has(m.body));
     if (!newMsgs.length) return;
 
-    // Merge new nicknames
-    if (resp.nicknames?.length) {
+    // Merge new nicknames (only available when resp is an object, not array)
+    if (!Array.isArray(resp) && resp.nicknames?.length) {
       const existing = NICKS[GC.activeId] || [];
       const existMap = new Map(existing.map(n => `${n.giver_id}:${n.target_id}`));
       resp.nicknames.forEach(n => { existMap.set(`${n.giver_id}:${n.target_id}`, n); });
@@ -5481,15 +5484,7 @@ async function gcLeave() {
 function initGC() {
   $id('gc-new-btn')?.addEventListener('click', gcOpenCreateModal);
   $id('gc-back-btn')?.addEventListener('click', gcGoBack);
-  $id('gc-info-btn')?.addEventListener('click', gcOpenInfo);
-  $id('gc-send-btn')?.addEventListener('click', gcSend);
-  $id('gc-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); gcSend(); }
-  });
-  $id('gc-input')?.addEventListener('input', function () {
-    this.style.height = '';
-    this.style.height = Math.min(this.scrollHeight, 110) + 'px';
-  });
+  // NOTE: gc-info-btn and gc-send/input are also wired in initUnifiedInbox — don't double-bind here
   $id('gc-load-earlier')?.addEventListener('click', () => gcLoadMsgs(true));
   gcRefreshBadge();
   setInterval(gcRefreshBadge, 30000);
@@ -5906,7 +5901,7 @@ if (document.readyState === "loading") {
       if (typeof gcLoadMsgs === 'function') gcLoadMsgs(true);
     });
     $id('gc-info-btn')?.addEventListener('click', () => {
-      if (typeof gcOpenInfoModal === 'function' && GC.activeId) gcOpenInfoModal(GC.activeId);
+      if (typeof gcOpenInfo === 'function' && GC.activeId) gcOpenInfo();
     });
   }
 
@@ -6039,7 +6034,7 @@ if (document.readyState === "loading") {
         nicksOpenModal(convKey, DP.peer.id, DP.peer.name);
       }
     } else if (DP.mode === 'group' && DP.group) {
-      if (typeof gcOpenInfoModal === 'function') gcOpenInfoModal(DP.group.id);
+      if (typeof gcOpenInfo === 'function') gcOpenInfo();
     }
   }
 
@@ -6100,8 +6095,8 @@ if (document.readyState === "loading") {
     dpClose();
     if (typeof gcOpenAddMembersModal === 'function' && DP.group) {
       gcOpenAddMembersModal(DP.group.id);
-    } else if (typeof gcOpenInfoModal === 'function' && DP.group) {
-      gcOpenInfoModal(DP.group.id);
+    } else if (typeof gcOpenInfo === 'function' && DP.group) {
+      gcOpenInfo();
     }
   }
 
