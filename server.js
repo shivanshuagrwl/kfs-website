@@ -12991,6 +12991,22 @@ function dmConvKey(a, b) {
   return [a, b].sort().join(":");
 }
 
+/**
+ * Supabase/Postgres errors carry the real diagnostic info in .details/.hint/.code,
+ * not .message. Logging only e.message (as this section used to) hides the actual
+ * cause of 500s — e.g. a missing column shows up as "column actor_id does not
+ * exist" in .message but the .code (42703) and .hint are what make it obvious at
+ * a glance. Route handlers below log through this instead of e.message.
+ */
+function dmLogErr(label, e) {
+  console.error(label, {
+    message: e?.message,
+    details: e?.details,
+    hint:    e?.hint,
+    code:    e?.code,
+  });
+}
+
 // ── GET /api/member/dm/conversations ─────────────────────────────────────────
 // Returns all unique conversations the logged-in member has participated in,
 // sorted newest-first, with peer info + last snippet + unread count.
@@ -13092,7 +13108,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
 
     res.json(result);
   } catch (e) {
-    console.error("[dm/conversations]", e.message);
+    dmLogErr("[dm/conversations]", e);
     res.status(500).json({ error: "Failed to load conversations" });
   }
 });
@@ -13176,7 +13192,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       is_read:   m.is_read,
     })));
   } catch (e) {
-    console.error("[dm/messages GET]", e.message);
+    dmLogErr("[dm/messages GET]", e);
     res.status(500).json({ error: "Failed to load messages" });
   }
 });
@@ -13196,12 +13212,13 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
 
     // Verify target exists
-    const { data: target } = await supabase
+    const { data: target, error: targetErr } = await supabase
       .from("members")
       .select("id, name")
       .eq("id", to_member_id)
       .is("deleted_at", null)
       .maybeSingle();
+    if (targetErr) throw targetErr;
     if (!target) return res.status(404).json({ error: "Member not found" });
 
     // Fetch sender info for snapshot
@@ -13245,7 +13262,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
       },
     });
   } catch (e) {
-    console.error("[dm/send]", e.message);
+    dmLogErr("[dm/send]", e);
     res.status(500).json({ error: "Failed to send message" });
   }
 });
@@ -13273,7 +13290,7 @@ app.delete("/api/member/dm/messages/:msgId", memberAuthMiddleware, async (req, r
 
     res.json({ success: true });
   } catch (e) {
-    console.error("[dm/delete]", e.message);
+    dmLogErr("[dm/delete]", e);
     res.status(500).json({ error: "Failed to delete message" });
   }
 });
@@ -13290,6 +13307,7 @@ app.get("/api/member/dm/unread-count", memberAuthMiddleware, async (req, res) =>
       .eq("is_read", false);
     res.json({ count: count || 0 });
   } catch (e) {
+    dmLogErr("[dm/unread-count]", e);
     res.json({ count: 0 });
   }
 });
