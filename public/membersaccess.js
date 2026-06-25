@@ -4482,18 +4482,14 @@ function swConfirmDeletePost(postId) {
   if (!confirm('Delete this post? This cannot be undone.')) return;
   // Use existing delete function if available
   if (typeof swDeleteProject === 'function') { swDeleteProject(postId); return; }
-  // Fallback
-  fetch(`/api/member/studio/projects/${postId}`, {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: { 'Authorization': 'Bearer ' + (window._memberToken || ''), 'X-CSRF-Token': window._csrfToken || '' },
-  }).then(r => {
-    if (r.ok) {
+  // Fallback — use api() helper so CSRF is automatically attached
+  api('DELETE', `/api/member/studio/projects/${postId}`)
+    .then(() => {
       const card = document.querySelector(`.ig-post[data-project-id="${CSS.escape(postId)}"]`);
       if (card) card.remove();
       swShowToast('Post deleted.');
-    } else { r.json().then(d => alert(d.error || 'Error')); }
-  }).catch(() => alert('Network error'));
+    })
+    .catch(e => alert(e.message || 'Error deleting post. Please try again.'));
 }
 
 function swShowToast(msg, duration = 2800) {
@@ -4531,27 +4527,34 @@ function swOpenReportModal(contentType, contentId, extraLabel) {
   overlay.id = 'sw-report-modal-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML = `
-    <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)">
-      <h3 style="margin:0 0 6px;font-size:16px;font-weight:700">Report ${typeLabel}</h3>
-      <p style="font-size:12px;color:var(--grey,#888);margin:0 0 18px">Please tell us why you're reporting this. Our team reviews all reports.</p>
-      ${extraLabel ? `<p style="font-size:12px;color:var(--grey);margin:0 0 14px;font-style:italic">${extraLabel}</p>` : ''}
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-        ${reasons.map((r, i) => `<label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="radio" name="sw-report-reason" value="${r}" ${i===0?'checked':''}> ${r}</label>`).join('')}
+    <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:28px 24px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h3 style="margin:0;font-size:16px;font-weight:700;letter-spacing:-0.01em">Report ${typeLabel}</h3>
+        <button id="sw-report-x" style="background:none;border:none;color:#666;cursor:pointer;padding:2px;line-height:1;font-size:18px">&#x2715;</button>
       </div>
-      <div style="margin-bottom:16px">
-        <label style="font-size:12px;color:var(--grey)">Additional details (optional)</label>
-        <textarea id="sw-report-details" rows="2" placeholder="Any extra context…" style="width:100%;box-sizing:border-box;margin-top:6px;font-size:13px;background:var(--bg,#0a0a0a);border:1px solid var(--border,#222);border-radius:8px;padding:8px 10px;color:var(--text,#f5f5f5);resize:vertical"></textarea>
+      <p style="font-size:13px;color:#888;margin:0 0 20px;line-height:1.5">Please tell us why you're reporting this. Our team reviews all reports.</p>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:20px">
+        ${reasons.map((r, i) => `
+          <label style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+            <input type="radio" name="sw-report-reason" value="${r}" ${i===0?'checked':''} style="width:16px;height:16px;accent-color:#ef4444;cursor:pointer;flex-shrink:0">
+            <span style="font-size:13px;color:var(--text,#f5f5f5)">${r}</span>
+          </label>`).join('')}
       </div>
-      <div id="sw-report-msg" style="font-size:12px;color:#e53e3e;margin-bottom:10px;display:none"></div>
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:#666;text-transform:uppercase;margin-bottom:8px">Additional Details (optional)</div>
+        <textarea id="sw-report-details" rows="3" placeholder="Any extra context…" style="width:100%;box-sizing:border-box;font-size:13px;background:rgba(0,0,0,0.3);border:1px solid var(--border,#222);border-radius:10px;padding:10px 12px;color:var(--text,#f5f5f5);resize:vertical;font-family:inherit;outline:none;line-height:1.5"></textarea>
+      </div>
+      <div id="sw-report-msg" style="font-size:12px;color:#ef4444;margin-bottom:12px;display:none;padding:8px 12px;background:rgba(239,68,68,0.1);border-radius:8px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button id="sw-report-cancel" style="background:transparent;border:1px solid var(--border,#222);color:var(--grey,#888);padding:9px 18px;border-radius:20px;font-size:13px;cursor:pointer">Cancel</button>
-        <button id="sw-report-submit" style="background:#e53e3e;color:#fff;border:none;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer">Submit Report</button>
+        <button id="sw-report-cancel" style="background:transparent;border:1px solid var(--border,#333);color:#888;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;transition:border-color 0.15s,color 0.15s" onmouseover="this.style.borderColor='#555';this.style.color='#f5f5f5'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">Cancel</button>
+        <button id="sw-report-submit" style="background:#ef4444;color:#fff;border:none;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.88'" onmouseout="this.style.opacity='1'">Submit Report</button>
       </div>
     </div>`;
 
   document.body.appendChild(overlay);
 
   overlay.querySelector('#sw-report-cancel').onclick = () => overlay.remove();
+  overlay.querySelector('#sw-report-x').onclick = () => overlay.remove();
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
   overlay.querySelector('#sw-report-submit').onclick = async () => {
@@ -4559,21 +4562,28 @@ function swOpenReportModal(contentType, contentId, extraLabel) {
     const reason   = reasonEl?.value || '';
     const details  = overlay.querySelector('#sw-report-details')?.value.trim() || '';
     const msgEl    = overlay.querySelector('#sw-report-msg');
+    const submitBtn = overlay.querySelector('#sw-report-submit');
 
     if (!reason) { msgEl.textContent = 'Please select a reason.'; msgEl.style.display='block'; return; }
 
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+
     try {
-      const r = await fetch('/api/member/reports', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._memberToken || '') },
-        body: JSON.stringify({ content_type: contentType, content_id: String(contentId), reason, details }),
+      await api('POST', '/api/member/reports', {
+        content_type: contentType,
+        content_id: String(contentId),
+        reason,
+        details,
       });
-      const d = await r.json();
-      if (!r.ok) { msgEl.textContent = d.error || 'Error submitting report.'; msgEl.style.display='block'; return; }
       overlay.remove();
       swShowToast('✓ Report submitted. Thank you.');
-    } catch { msgEl.textContent = 'Network error. Please try again.'; msgEl.style.display = 'block'; }
+    } catch (e) {
+      msgEl.textContent = e.message || 'Error submitting report. Please try again.';
+      msgEl.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Report';
+    }
   };
 }
 
@@ -5738,7 +5748,9 @@ if (document.readyState === "loading") {
     const container = $id('dm-conv-list');
     if (!container) return;
 
-    $id('dm-conv-loading') && ($id('dm-conv-loading').style.display = 'none');
+    // Always hide loading state — render either content or empty state
+    const loadingEl = $id('dm-conv-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
     container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
 
     const dms    = DM.convs  || [];
@@ -5884,18 +5896,28 @@ if (document.readyState === "loading") {
 
   // ── Unified load: fetch both convs + groups, then render ─────────────────
   async function inboxLoad() {
+    // Always clear the "Loading…" spinner immediately so it never gets stuck
+    const loadingEl = $id('dm-conv-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+
     await Promise.all([
       (async () => {
         try {
           const data = await api('GET', '/api/member/dm/conversations');
-          DM.convs = data || [];
-        } catch { DM.convs = []; }
+          DM.convs = Array.isArray(data) ? data : [];
+        } catch (e) {
+          console.error('[inbox] DM convs load failed:', e.message);
+          DM.convs = DM.convs || [];
+        }
       })(),
       (async () => {
         try {
           const data = await api('GET', '/api/member/groups');
-          GC.groups = data || [];
-        } catch { GC.groups = []; }
+          GC.groups = Array.isArray(data) ? data : [];
+        } catch (e) {
+          console.error('[inbox] Groups load failed:', e.message);
+          GC.groups = GC.groups || [];
+        }
       })(),
     ]);
     inboxRender();
