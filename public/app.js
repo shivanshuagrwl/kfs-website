@@ -13503,19 +13503,6 @@ async function loadModerationBadge() {
   } catch {}
 }
 
-// Call when admin panel loads
-const _origShowAdminPanel = typeof showAdminPanel === 'function' ? showAdminPanel : null;
-
-// Hook into showAdminSection to refresh badge
-const _origShowAdminSection = typeof showAdminSection === 'function' ? showAdminSection : null;
-function showAdminSection(section) {
-  if (_origShowAdminSection) _origShowAdminSection(section);
-  if (section === 'moderation') {
-    loadModReports();
-    loadModerationBadge();
-  }
-  if (section === 'dashboard') loadModerationBadge();
-}
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 function modTab(tab) {

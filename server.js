@@ -557,6 +557,7 @@ app.use(helmet({
         "https://api.razorpay.com",      // Razorpay order/payment API
         "https://lumberjack.razorpay.com", // Razorpay analytics/logging
         "https://accounts.google.com/gsi/", // Google Identity Services background calls
+        "https://cdnjs.cloudflare.com",  // DOMPurify + other CDN libs (source maps)
       ],
       frameSrc: [
         "https://www.youtube.com",       // YouTube embeds
@@ -12475,12 +12476,12 @@ app.get("/api/studio/projects/:id", publicStudioLimit, async (req, res) => {
 app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res) => {
   const id = req.params.id;
   try {
-    const { data: top, error } = await supabasePublic
-      .from("studio_comments")
+    const { data: top, error } = await supabase
+      .from("project_comments")
       .select(`
         id, body, created_at, is_pinned,
         member_id,
-        members!studio_comments_member_id_fkey(id, name, photo, role)
+        members!project_comments_member_id_fkey(id, name, photo, role)
       `)
       .eq("project_id", id)
       .is("parent_id", null)
@@ -12494,12 +12495,12 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
     const topIds = (top || []).map(c => c.id);
     let replies = [];
     if (topIds.length) {
-      const { data: r } = await supabasePublic
-        .from("studio_comments")
+      const { data: r } = await supabase
+        .from("project_comments")
         .select(`
           id, body, created_at, parent_id,
           member_id,
-          members!studio_comments_member_id_fkey(id, name, photo, role)
+          members!project_comments_member_id_fkey(id, name, photo, role)
         `)
         .in("parent_id", topIds)
         .is("deleted_at", null)

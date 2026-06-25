@@ -4425,7 +4425,7 @@ function swShowPostMenu(event, postId, authorId, isAdminPost) {
   items.push({ label: '🔗 Copy link', fn: `swCopyPostLink('${postId}')` });
   if (!isAdmin) {
     // Don't show report on KFS official posts
-    items.push({ label: '🚨 Report post', fn: `swOpenReportModal('post','${postId}')`, danger: true });
+    items.push({ label: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Report post', fn: `swOpenReportModal('post','${postId}')`, danger: true });
   }
   if (isOwn) {
     items.push({ label: '🗑 Delete post', fn: `swConfirmDeletePost('${postId}')`, danger: true });
