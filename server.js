@@ -12476,7 +12476,7 @@ app.get("/api/studio/projects/:id", publicStudioLimit, async (req, res) => {
 app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res) => {
   const id = req.params.id;
   try {
-    const { data: top, error } = await supabase
+    const { data: top, error } = await supabasePublic
       .from("project_comments")
       .select(`
         id, body, created_at, is_pinned,
@@ -12495,7 +12495,7 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
     const topIds = (top || []).map(c => c.id);
     let replies = [];
     if (topIds.length) {
-      const { data: r } = await supabase
+      const { data: r } = await supabasePublic
         .from("project_comments")
         .select(`
           id, body, created_at, parent_id,
@@ -13389,6 +13389,14 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (targetErr) throw targetErr;
     if (!target) return res.status(404).json({ error: "Member not found" });
 
+    // Block check — prevent sending if either party has blocked the other
+    const [{ data: iBlocked }, { data: blockedMe }] = await Promise.all([
+      supabase.from("member_blocks").select("id").eq("blocker_id", myId).eq("blocked_id", to_member_id).maybeSingle(),
+      supabase.from("member_blocks").select("id").eq("blocker_id", to_member_id).eq("blocked_id", myId).maybeSingle(),
+    ]);
+    if (iBlocked) return res.status(403).json({ error: "You have blocked this member." });
+    if (blockedMe) return res.status(403).json({ error: "You can't message this person." });
+
     // Fetch sender info for snapshot
     const { data: sender } = await supabase
       .from("members")
@@ -14052,6 +14060,419 @@ app.use((err, req, res, next) => {
   const status = typeof err.status === 'number' ? err.status : 500;
   res.status(status).json({ error: status < 500 ? (err.message || 'Bad request') : 'Internal server error' });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-35 — Social: Block/Unblock · Nicknames · Group Chats
+//
+// SQL migration (run once in Supabase):
+//
+//   -- Block list
+//   CREATE TABLE IF NOT EXISTS member_blocks (
+//     blocker_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     blocked_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (blocker_id, blocked_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON member_blocks(blocker_id);
+//   CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON member_blocks(blocked_id);
+//
+//   -- Nicknames (one per direction — giver → target)
+//   CREATE TABLE IF NOT EXISTS member_nicknames (
+//     giver_id    UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     target_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     nickname    TEXT NOT NULL CHECK (char_length(nickname) BETWEEN 1 AND 40),
+//     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (giver_id, target_id)
+//   );
+//
+//   -- Group chats
+//   CREATE TABLE IF NOT EXISTS dm_group_chats (
+//     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     name         TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
+//     created_by   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE TABLE IF NOT EXISTS dm_group_members (
+//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
+//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     nickname    TEXT,                -- group-scoped nickname for this member (visible to all)
+//     joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (group_id, member_id)
+//   );
+//   CREATE TABLE IF NOT EXISTS dm_group_messages (
+//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
+//     sender_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     body        TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
+//     deleted_at  TIMESTAMPTZ,
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_grp_msgs_group ON dm_group_messages(group_id, created_at);
+//   CREATE INDEX IF NOT EXISTS idx_grp_members_member ON dm_group_members(member_id);
+// ─────────────────────────────────────────────────────────────────────────────
+
+const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+
+// ── Blocks ────────────────────────────────────────────────────────────────────
+
+// GET /api/member/blocks — list of IDs the caller has blocked
+app.get("/api/member/blocks", memberAuthMiddleware, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from("member_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", req.member.memberId);
+    res.json((data || []).map(r => r.blocked_id));
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load block list" });
+  }
+});
+
+// POST /api/member/blocks  { blocked_id }
+app.post("/api/member/blocks", memberAuthMiddleware, blockWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { blocked_id } = req.body || {};
+    if (!blocked_id) return res.status(400).json({ error: "blocked_id required" });
+    if (blocked_id === myId) return res.status(400).json({ error: "Cannot block yourself" });
+    await supabase.from("member_blocks").upsert([{ blocker_id: myId, blocked_id }], { onConflict: "blocker_id,blocked_id" });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to block member" });
+  }
+});
+
+// DELETE /api/member/blocks/:id
+app.delete("/api/member/blocks/:id", memberAuthMiddleware, blockWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    await supabase.from("member_blocks").delete().eq("blocker_id", myId).eq("blocked_id", req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to unblock member" });
+  }
+});
+
+// ── Nicknames ─────────────────────────────────────────────────────────────────
+
+// GET /api/member/nicknames — all nicknames the caller has set (giver=me)
+app.get("/api/member/nicknames", memberAuthMiddleware, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from("member_nicknames")
+      .select("target_id, nickname")
+      .eq("giver_id", req.member.memberId);
+    res.json(Object.fromEntries((data || []).map(r => [r.target_id, r.nickname])));
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load nicknames" });
+  }
+});
+
+// PUT /api/member/nicknames/:targetId  { nickname }  — set or clear (empty = delete)
+app.put("/api/member/nicknames/:targetId", memberAuthMiddleware, nicknameLimit, async (req, res) => {
+  try {
+    const myId     = req.member.memberId;
+    const targetId = req.params.targetId;
+    const nickname = (req.body?.nickname || "").trim().slice(0, 40);
+    if (targetId === myId) return res.status(400).json({ error: "Cannot nickname yourself" });
+    if (!nickname) {
+      await supabase.from("member_nicknames").delete().eq("giver_id", myId).eq("target_id", targetId);
+    } else {
+      await supabase.from("member_nicknames").upsert(
+        [{ giver_id: myId, target_id: targetId, nickname, updated_at: new Date().toISOString() }],
+        { onConflict: "giver_id,target_id" }
+      );
+    }
+    res.json({ success: true, nickname: nickname || null });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to set nickname" });
+  }
+});
+
+// ── Group chats ───────────────────────────────────────────────────────────────
+
+// GET /api/member/groups — all group chats the caller is in
+app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    // Groups I belong to
+    const { data: membership } = await supabase
+      .from("dm_group_members")
+      .select("group_id")
+      .eq("member_id", myId);
+    if (!membership?.length) return res.json([]);
+
+    const groupIds = membership.map(r => r.group_id);
+    // Chat metadata
+    const { data: groups } = await supabase
+      .from("dm_group_chats")
+      .select("id, name, created_by, created_at")
+      .in("id", groupIds);
+
+    // All members of all groups
+    const { data: allMembers } = await supabase
+      .from("dm_group_members")
+      .select("group_id, member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role)")
+      .in("group_id", groupIds);
+
+    // Last message per group
+    const lastMsgMap = {};
+    await Promise.all(groupIds.map(async gid => {
+      const { data: msgs } = await supabase
+        .from("dm_group_messages")
+        .select("id, sender_id, body, created_at")
+        .eq("group_id", gid)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (msgs?.[0]) lastMsgMap[gid] = msgs[0];
+    }));
+
+    // Unread count: messages after my last_read_at — simplified: count messages not from me since joined
+    // (full read-receipts are out of scope for v1 — just return 0 and let client track)
+
+    const membersByGroup = {};
+    (allMembers || []).forEach(m => {
+      if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
+      membersByGroup[m.group_id].push({ ...m.members, nickname: m.nickname });
+    });
+
+    const result = (groups || []).map(g => ({
+      id:         g.id,
+      name:       g.name,
+      created_by: g.created_by,
+      created_at: g.created_at,
+      members:    membersByGroup[g.id] || [],
+      last_msg:   lastMsgMap[g.id] || null,
+    })).sort((a, b) => {
+      const at = a.last_msg?.created_at || a.created_at;
+      const bt = b.last_msg?.created_at || b.created_at;
+      return new Date(bt) - new Date(at);
+    });
+
+    res.json(result);
+  } catch (e) {
+    console.error("[groups GET]", e.message);
+    res.status(500).json({ error: "Failed to load groups" });
+  }
+});
+
+// POST /api/member/groups  { name, member_ids: [] }  — create group
+app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId       = req.member.memberId;
+    const name       = (req.body?.name || "").trim().slice(0, 60);
+    const memberIds  = (req.body?.member_ids || []).filter(id => id !== myId).slice(0, 49); // cap at 50 total
+    if (!name)                return res.status(400).json({ error: "Group name required" });
+    if (!memberIds.length)    return res.status(400).json({ error: "Add at least one other member" });
+
+    const { data: group, error } = await supabase
+      .from("dm_group_chats")
+      .insert([{ name, created_by: myId }])
+      .select("id, name, created_by, created_at")
+      .single();
+    if (error) throw error;
+
+    const rows = [myId, ...memberIds].map(mid => ({ group_id: group.id, member_id: mid }));
+    await supabase.from("dm_group_members").insert(rows);
+
+    res.json({ success: true, group });
+  } catch (e) {
+    console.error("[groups POST]", e.message);
+    res.status(500).json({ error: "Failed to create group" });
+  }
+});
+
+// PATCH /api/member/groups/:id/name  { name }  — rename (any member can rename)
+app.patch("/api/member/groups/:id/name", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const name = (req.body?.name || "").trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: "Name required" });
+    // Verify membership
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+    await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    res.json({ success: true, name });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to rename group" });
+  }
+});
+
+// POST /api/member/groups/:id/members  { member_id }  — add member (any member can add)
+app.post("/api/member/groups/:id/members", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId     = req.member.memberId;
+    const gid      = req.params.id;
+    const memberId = req.body?.member_id;
+    if (!memberId) return res.status(400).json({ error: "member_id required" });
+    // Verify caller is in group
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+    // Check group size
+    const { count } = await supabase.from("dm_group_members").select("*", { count: "exact", head: true }).eq("group_id", gid);
+    if ((count || 0) >= 50) return res.status(400).json({ error: "Group is full (50 members max)" });
+    await supabase.from("dm_group_members").upsert([{ group_id: gid, member_id: memberId }], { onConflict: "group_id,member_id" });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to add member" });
+  }
+});
+
+// DELETE /api/member/groups/:id/members/:memberId  — leave / remove self
+app.delete("/api/member/groups/:id/members/:memberId", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId     = req.member.memberId;
+    const gid      = req.params.id;
+    const memberId = req.params.memberId;
+    // Can only remove yourself (leave) — creator can't forcibly remove others in v1
+    if (memberId !== myId) return res.status(403).json({ error: "You can only remove yourself" });
+    await supabase.from("dm_group_members").delete().eq("group_id", gid).eq("member_id", myId);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to leave group" });
+  }
+});
+
+// PUT /api/member/groups/:id/members/:memberId/nickname  { nickname }  — set group nickname visible to all
+app.put("/api/member/groups/:id/members/:memberId/nickname", memberAuthMiddleware, nicknameLimit, async (req, res) => {
+  try {
+    const myId     = req.member.memberId;
+    const gid      = req.params.id;
+    const memberId = req.params.memberId;
+    const nickname = (req.body?.nickname || "").trim().slice(0, 40);
+    // Caller must be in the group
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+    await supabase.from("dm_group_members").update({ nickname: nickname || null }).eq("group_id", gid).eq("member_id", memberId);
+    res.json({ success: true, nickname: nickname || null });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to set group nickname" });
+  }
+});
+
+// GET /api/member/groups/:id/messages?before=<ISO>&limit=40
+app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const limit = Math.min(parseInt(req.query.limit) || 40, 80);
+    const before = req.query.before;
+    const since  = req.query.since;
+
+    // Verify membership
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    // Pull nicknames for this group
+    const { data: nickRows } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid);
+    const nickMap = Object.fromEntries((nickRows || []).map(r => [r.member_id, r.nickname]));
+
+    let q = supabase
+      .from("dm_group_messages")
+      .select("id, sender_id, body, created_at, members!dm_group_messages_sender_id_fkey(id, name, photo)")
+      .eq("group_id", gid)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: !!since })
+      .limit(limit);
+
+    if (before) q = q.lt("created_at", before);
+    if (since)  q = q.gt("created_at", since);
+
+    const { data: msgs, error } = await q;
+    if (error) throw error;
+
+    const result = (msgs || [])
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .map(m => ({
+        id:          m.id,
+        group_id:    gid,
+        sender_id:   m.sender_id,
+        sender_name: nickMap[m.sender_id] || m.members?.name || "Member",
+        sender_photo: m.members?.photo || null,
+        body:        m.body,
+        sent_at:     m.created_at,
+      }));
+
+    res.json(result);
+  } catch (e) {
+    console.error("[groups/messages GET]", e.message);
+    res.status(500).json({ error: "Failed to load messages" });
+  }
+});
+
+// POST /api/member/groups/:id/messages  { body }
+app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const body = (req.body?.body || "").trim();
+    if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
+
+    const profCheck = containsProfanity(body);
+    if (profCheck.found) return res.status(400).json({ error: "Message contains inappropriate language." });
+
+    // Verify membership
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
+
+    const { data: msg, error } = await supabase
+      .from("dm_group_messages")
+      .insert([{ group_id: gid, sender_id: myId, body }])
+      .select("id, sender_id, body, created_at")
+      .single();
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      message: {
+        id:           msg.id,
+        group_id:     gid,
+        sender_id:    myId,
+        sender_name:  mem.nickname || sender?.name || "Member",
+        sender_photo: sender?.photo || null,
+        body:         msg.body,
+        sent_at:      msg.created_at,
+      },
+    });
+  } catch (e) {
+    console.error("[groups/messages POST]", e.message);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// DELETE /api/member/groups/:id/messages/:msgId  — soft-delete own message
+app.delete("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const msgId = req.params.msgId;
+    const { data: msg } = await supabase.from("dm_group_messages").select("sender_id, group_id").eq("id", msgId).maybeSingle();
+    if (!msg || msg.group_id !== gid) return res.status(404).json({ error: "Not found" });
+    if (msg.sender_id !== myId) return res.status(403).json({ error: "Cannot delete another member's message" });
+    await supabase.from("dm_group_messages").update({ deleted_at: new Date().toISOString(), body: "[deleted]" }).eq("id", msgId);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// ── init check ────────────────────────────────────────────────────────────────
+async function initSocialDB() {
+  const tables = ["member_blocks", "member_nicknames", "dm_group_chats"];
+  for (const t of tables) {
+    const { error } = await supabase.from(t).select("*", { count: "exact", head: true }).limit(1);
+    if (error?.code === "42P01") {
+      console.warn(`[social] Table "${t}" not found — run MA-35 SQL migration in Supabase`);
+    }
+  }
+}
 
 // Catch unhandled promise rejections — log them, don't crash
 process.on('unhandledRejection', (reason) => {

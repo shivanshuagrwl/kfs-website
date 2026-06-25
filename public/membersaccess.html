@@ -2413,6 +2413,7 @@
               Messages
               <span class="dm-nav-badge" id="dm-nav-badge" style="display:none;margin-left:auto"></span>
             </div>
+
             <div class="nav-item" data-panel="activity">
               <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
               Activity
@@ -3407,13 +3408,23 @@
               <div class="dm-sidebar" id="dm-sidebar">
                 <div class="dm-header">
                   <span class="dm-header-title">Messages</span>
-                  <button class="dm-icon-btn" id="dm-new-btn" title="New message">
-                    <!-- compose / pencil icon -->
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 20h9"/>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                    </svg>
-                  </button>
+                  <div style="position:relative" id="dm-new-btn-wrap">
+                    <button class="dm-icon-btn" id="dm-new-btn" title="New message or group">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                      </svg>
+                    </button>
+                    <div id="dm-new-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;z-index:50;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+                      <button id="dm-new-msg-btn" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:none;border:none;color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        New Message
+                      </button>
+                      <button id="dm-new-grp-btn" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:none;border:none;color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left;border-top:1px solid var(--border)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        New Group
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div class="dm-search-wrap">
                   <svg class="dm-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -3474,6 +3485,42 @@
                 </div>
 
               </div><!-- /.dm-window -->
+
+              <!-- ── Group chat window (lives inside panel-dms) ─── -->
+              <div class="dm-window" id="gc-window" style="display:none">
+                <div class="dm-window-empty" id="gc-window-empty" style="display:none"></div>
+                <div class="dm-active" id="gc-active" style="display:flex;flex-direction:column;height:100%">
+                  <div class="dm-topbar" id="gc-topbar">
+                    <button class="dm-icon-btn dm-back" id="gc-back-btn">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <div class="dm-topbar-avatar" id="gc-topbar-avatar"></div>
+                    <div class="dm-topbar-info">
+                      <div class="dm-topbar-name" id="gc-topbar-name"></div>
+                      <div class="dm-topbar-sub" id="gc-topbar-sub"></div>
+                    </div>
+                    <button class="dm-icon-btn" id="gc-info-btn" title="Group info" style="margin-left:auto">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </button>
+                  </div>
+                  <div class="dm-msgs" id="gc-msgs">
+                    <div id="gc-load-earlier-wrap" style="display:none">
+                      <button id="gc-load-earlier">Load earlier</button>
+                    </div>
+                    <div id="gc-msg-list"></div>
+                  </div>
+                  <div class="dm-compose" id="gc-compose">
+                    <textarea id="gc-input" class="dm-textarea" placeholder="Message group…" rows="1" maxlength="2000"></textarea>
+                    <button class="dm-send" id="gc-send-btn" aria-label="Send">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"/>
+                        <polyline points="5 12 12 5 19 12"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div><!-- /#gc-window -->
+
             </div><!-- /.dm-layout -->
 
             <!-- Member picker modal -->
@@ -3879,6 +3926,47 @@
    floating bottom pill-nav's reserved height inside the mobile media query
    below, so the composer/send button never sit underneath it. */
 #panel-dms { padding:0!important; overflow:hidden; }
+#panel-groups { padding:0!important; overflow:hidden; }
+
+/* ── MA-35: Group chat avatar ───────────────────────────────────────────── */
+.gc-group-av {
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #888;
+  flex-shrink: 0;
+}
+.gc-msg-header { display:flex; align-items:center; gap:6px; margin-bottom:3px; padding-left:2px; }
+.gc-msg-sender-name { font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.01em; }
+.gc-msg-sender-name:hover { color:var(--text); }
+.dm-block-active { color: #ef4444 !important; }
+.dm-blocked-banner { padding:10px 16px; background:rgba(239,68,68,.08); border-top:1px solid rgba(239,68,68,.15); color:#ef4444; font-size:12px; text-align:center; line-height:1.5; }
+#dm-topbar-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
+#dm-topbar-actions .dm-icon-btn { font-size:11px; padding:3px 8px; border-radius:8px; gap:4px; display:flex; align-items:center; }
+.nick-modal-overlay { position:fixed; inset:0; z-index:700; background:rgba(0,0,0,.75); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:20px; }
+.nick-modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; width:100%; max-width:340px; padding:20px; }
+.nick-modal-head { display:flex; align-items:center; justify-content:space-between; font-size:14px; font-weight:600; margin-bottom:12px; }
+.nick-modal-hint { font-size:11px; color:var(--muted); margin:0 0 10px; line-height:1.5; }
+.nick-input { width:100%; box-sizing:border-box; background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; padding:9px 12px; outline:none; font-family:inherit; }
+.nick-input:focus { border-color:rgba(255,255,255,.25); }
+.nick-modal-actions { display:flex; gap:8px; margin-top:12px; }
+.nick-clear-btn { flex:1; padding:9px; border-radius:8px; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--muted); font-size:13px; cursor:pointer; font-family:inherit; }
+.nick-clear-btn:hover { background:rgba(255,255,255,.09); color:var(--text); }
+.nick-save-btn { flex:2; padding:9px; border-radius:8px; background:var(--text); border:none; color:var(--bg); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+.nick-save-btn:disabled { opacity:.5; cursor:not-allowed; }
+.nick-error { font-size:12px; color:#ef4444; margin-top:8px; text-align:center; }
+.gc-create-modal { max-width:380px; }
+.gc-create-search-wrap { position:relative; }
+.gc-chip { display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); border-radius:20px; padding:3px 8px 3px 10px; font-size:12px; color:var(--text); }
+.gc-chip-remove { background:none; border:none; color:var(--muted); cursor:pointer; padding:0; font-size:14px; line-height:1; }
+.gc-chip-remove:hover { color:#ef4444; }
+.gc-info-modal { max-width:360px; max-height:80vh; overflow-y:auto; }
+.gc-info-member-row { display:flex; align-items:center; gap:10px; padding:6px 4px; border-radius:8px; }
+.gc-info-member-row:hover { background:rgba(255,255,255,.04); }
 .dm-panel { height:calc(100vh - var(--dm-reserve)); flex-direction:column; }
 .dm-panel.active { display:flex; }
 .dm-layout { display:flex; height:100%; overflow:hidden; }
