@@ -8997,7 +8997,7 @@ const registrationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20, // raised from 5 — campus users share the same NAT IP
   message: { error: "Too many registration attempts. Please wait 15 minutes." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
 });
 
 app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
@@ -13295,7 +13295,7 @@ const dmRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Slow down — too many messages." },
-  keyGenerator: (req) => req.member?.memberId || req.ip,
+  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
 });
 
 /** Stable conversation key for any two member UUIDs */
@@ -13676,7 +13676,7 @@ const reportWriteLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many reports. Please wait before reporting again." },
-  keyGenerator: (req) => req.member?.memberId || req.ip,
+  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
 });
 
 // ── POST /api/member/reports  — submit a report (members only) ───────────────
@@ -14725,6 +14725,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
+    if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid  = req.params.id;
     const body = (req.body?.body || "").trim();
     if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
