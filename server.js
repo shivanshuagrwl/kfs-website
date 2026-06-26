@@ -8997,7 +8997,7 @@ const registrationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20, // raised from 5 — campus users share the same NAT IP
   message: { error: "Too many registration attempts. Please wait 15 minutes." },
-  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
+  keyGenerator: (req) => req.ip,
 });
 
 app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
@@ -13295,7 +13295,7 @@ const dmRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Slow down — too many messages." },
-  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
+  keyGenerator: (req) => req.member?.memberId || req.ip,
 });
 
 /** Stable conversation key for any two member UUIDs */
@@ -13676,7 +13676,7 @@ const reportWriteLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many reports. Please wait before reporting again." },
-  keyGenerator: (req) => req.member?.memberId || ipKeyGenerator(req),
+  keyGenerator: (req) => req.member?.memberId || req.ip,
 });
 
 // ── POST /api/member/reports  — submit a report (members only) ───────────────
@@ -14361,10 +14361,8 @@ app.put("/api/member/nicknames/:targetId", memberAuthMiddleware, nicknameLimit, 
 app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
-    // Guard: memberId missing from token (old token or unlinked account)
     if (!myId) return res.json([]);
 
-    // Groups I belong to
     const { data: membership, error: memErr } = await supabase
       .from("dm_group_members")
       .select("group_id")
@@ -14374,21 +14372,18 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
 
     const groupIds = membership.map(r => r.group_id);
 
-    // Chat metadata
     const { data: groups, error: groupsErr } = await supabase
       .from("dm_group_chats")
       .select("id, name, created_by, created_at")
       .in("id", groupIds);
     if (groupsErr) { console.error("[groups GET] chats:", groupsErr.message); return res.json([]); }
 
-    // All members of all groups (with their profile data)
     const { data: allMembers, error: allMembErr } = await supabase
       .from("dm_group_members")
       .select("group_id, member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role)")
       .in("group_id", groupIds);
     if (allMembErr) console.error("[groups GET] allMembers join:", allMembErr.message);
 
-    // Last message per group
     const lastMsgMap = {};
     await Promise.all(groupIds.map(async gid => {
       try {
@@ -14399,22 +14394,16 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
           .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(1);
-        if (msgErr) { console.error("[groups GET] lastMsg for", gid, ":", msgErr.message); return; }
+        if (msgErr) { console.error("[groups GET] lastMsg:", msgErr.message); return; }
         if (msgs?.[0]) lastMsgMap[gid] = msgs[0];
-      } catch (e) {
-        console.error("[groups GET] lastMsg exception:", e.message);
-      }
+      } catch (e) { console.error("[groups GET] lastMsg ex:", e.message); }
     }));
-
-    // (full read-receipts are out of scope for v1 — just return 0 and let client track)
 
     const membersByGroup = {};
     (allMembers || []).forEach(m => {
       if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
       membersByGroup[m.group_id].push({ ...m.members, nickname: m.nickname });
     });
-
-    // Build member-id → name map for last_sender_name
     const memberNameMap = {};
     (allMembers || []).forEach(m => {
       if (m.members?.id) memberNameMap[m.members.id] = m.members.name || 'Member';
@@ -14422,7 +14411,6 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
 
     const result = (groups || []).map(g => {
       const lm = lastMsgMap[g.id] || null;
-      // Strip sentinel prefix from snippet so list previews show clean text
       const rawSnippet = lm ? (lm.body || '').slice(0, 80) : null;
       const isSysSnippet = rawSnippet?.startsWith('\x1fsys\x1f');
       return {
@@ -14458,15 +14446,19 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
     if (!name)                return res.status(400).json({ error: "Group name required" });
     if (!memberIds.length)    return res.status(400).json({ error: "Add at least one other member" });
 
-    const { data: group, error } = await supabase
+    const { data: group, error: chatErr } = await supabase
       .from("dm_group_chats")
       .insert([{ name, created_by: myId }])
       .select("id, name, created_by, created_at")
       .single();
-    if (error) throw error;
+    if (chatErr) {
+      console.error("[groups POST] dm_group_chats insert:", chatErr.message, chatErr.code);
+      throw chatErr;
+    }
 
     const rows = [myId, ...memberIds].map(mid => ({ group_id: group.id, member_id: mid }));
-    await supabase.from("dm_group_members").insert(rows);
+    const { error: membersErr } = await supabase.from("dm_group_members").insert(rows);
+    if (membersErr) console.error("[groups POST] dm_group_members insert:", membersErr.message, membersErr.code);
 
     // Insert activity message as plain body with sentinel prefix \x1fsys\x1f
     // (no schema change needed — body column already stores text)
@@ -14495,8 +14487,8 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
       },
     });
   } catch (e) {
-    console.error("[groups POST]", e.message, e.stack);
-    res.status(500).json({ error: "Failed to create group" });
+    console.error("[groups POST] unhandled:", e.message, e.code || "", e.stack);
+    res.status(500).json({ error: e.message || "Failed to create group" });
   }
 });
 
@@ -14782,13 +14774,25 @@ app.delete("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWri
 
 // ── init check ────────────────────────────────────────────────────────────────
 async function initSocialDB() {
-  const tables = ["member_blocks", "member_nicknames", "dm_group_chats"];
+  const tables = [
+    "member_blocks",
+    "member_nicknames",
+    "dm_group_chats",
+    "dm_group_members",
+    "dm_group_messages",
+  ];
+  let allOk = true;
   for (const t of tables) {
     const { error } = await supabase.from(t).select("*", { count: "exact", head: true }).limit(1);
     if (error?.code === "42P01") {
       console.warn(`[social] Table "${t}" not found — run MA-35 SQL migration in Supabase`);
+      allOk = false;
+    } else if (error) {
+      console.warn(`[social] Table "${t}" check failed: ${error.message}`);
+      allOk = false;
     }
   }
+  if (allOk) console.log("[social] All social tables OK");
 }
 
 // Catch unhandled promise rejections — log them, don't crash
@@ -14808,6 +14812,7 @@ app.listen(PORT, async () => {
   await initDB();
   await initMemberDB();      // ← member portal init
   await initStudioWallDB();  // ← studio wall table check
+  await initSocialDB();      // ← social: blocks, nicknames, group chats
   await loadRevokedTokens();
   await loadActiveLockouts();
   console.log("DB initialized");
