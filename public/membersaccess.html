@@ -4357,72 +4357,117 @@
 .dm-msg-group.mine .dm-bubble.dm-deleted { color:#444; }
 
 /* ── Instagram-style reply quote inside bubble ── */
+/* ── Reply quote — Instagram style ── */
 .dm-reply-quote {
-  display:flex; flex-direction:column; gap:1px;
-  background:rgba(0,0,0,.16);
-  border-left:3px solid var(--accent,#3b82f6);
-  border-radius:10px; padding:6px 10px; margin-bottom:6px;
-  max-width:100%; overflow:hidden; cursor:pointer;
-  transition:background .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(255,255,255,.07);
+  border-left: 3px solid var(--accent,#3b82f6);
+  border-radius: 8px 8px 4px 4px;
+  padding: 5px 10px 5px 9px;
+  margin-bottom: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background .15s;
 }
-.dm-reply-quote:hover { background:rgba(0,0,0,.24); }
+.dm-reply-quote:hover { background: rgba(255,255,255,.12); }
+/* mine bubble sits on light bg — use a dark translucent tint */
+.dm-msg-group.mine .dm-reply-quote {
+  background: rgba(0,0,0,.12);
+  border-left-color: rgba(0,0,0,.3);
+}
+.dm-msg-group.mine .dm-reply-quote:hover { background: rgba(0,0,0,.18); }
 .dm-reply-sender {
-  font-size:11px; font-weight:700; color:var(--accent,#3b82f6);
-  letter-spacing:.01em; line-height:1.3; display:flex; align-items:center; gap:4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent,#3b82f6);
+  line-height: 1.3;
 }
-.dm-reply-sender::before {
-  content:''; display:inline-block; width:10px; height:10px; flex-shrink:0;
-  background:currentColor; opacity:.85;
-  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 17 4 12 9 7'/%3E%3Cpath d='M20 18v-2a4 4 0 0 0-4-4H4'/%3E%3C/svg%3E") center/contain no-repeat;
-  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 17 4 12 9 7'/%3E%3Cpath d='M20 18v-2a4 4 0 0 0-4-4H4'/%3E%3C/svg%3E") center/contain no-repeat;
-}
-/* theirs bubble: dark bg → light text */
-.dm-msg-group.theirs .dm-reply-body { color:rgba(255,255,255,.65); }
-/* mine bubble: light bg (#f0f0f0) → dark text */
-.dm-msg-group.mine .dm-reply-body   { color:rgba(0,0,0,.5); }
+/* no arrow icon — clean Instagram look */
+.dm-reply-sender::before { display:none; }
+.dm-msg-group.mine .dm-reply-sender { color: rgba(0,0,0,.5); }
 .dm-reply-body {
-  font-size:12px; line-height:1.4; display:block;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size: 11.5px;
+  color: rgba(255,255,255,.45);
+  line-height: 1.4;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* mine bubble: dark border-left accent */
-.dm-msg-group.mine .dm-reply-quote  { background:rgba(0,0,0,.1); }
-.dm-bubble-text { display:block; }
+.dm-msg-group.mine .dm-reply-body { color: rgba(0,0,0,.38); }
+.dm-bubble-text { display: block; }
 
 /* ── Reply bar (above compose) — Instagram DM style: a floating rounded card ── */
+/* ── Reply bar (above compose) — Instagram DM style ── */
 .dm-reply-bar {
-  display:flex; align-items:stretch;
-  padding:8px 14px;
-  border-top:1px solid rgba(255,255,255,.07);
-  background:transparent;
-  animation:replyBarSlide .18s cubic-bezier(.34,1.56,.64,1);
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 6px;
+  background: transparent;
+  border-top: 1px solid rgba(255,255,255,.06);
+  animation: replyBarSlide .16s ease-out;
+  gap: 10px;
 }
 @keyframes replyBarSlide {
-  from { opacity:0; transform:translateY(6px); }
+  from { opacity:0; transform:translateY(4px); }
   to   { opacity:1; transform:translateY(0); }
 }
 .dm-reply-bar-inner {
-  display:flex; align-items:center; gap:10px; flex:1; min-width:0;
-  background:rgba(255,255,255,.06);
-  border-radius:14px; padding:7px 10px 7px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  background: rgba(255,255,255,.05);
+  border-radius: 12px;
+  border-left: 3px solid var(--accent,#3b82f6);
 }
+/* The SVG reply arrow before the content */
+.dm-reply-bar-inner > svg { opacity: .5; flex-shrink: 0; }
 .dm-reply-bar-content {
-  display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;
-  border-left:3px solid var(--accent,#3b82f6);
-  padding-left:10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 .dm-reply-bar-sender {
-  font-size:11px; font-weight:700; color:var(--accent,#3b82f6); line-height:1.3;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent,#3b82f6);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dm-reply-bar-body {
-  font-size:12.5px; color:#999; line-height:1.3;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size: 12px;
+  color: rgba(255,255,255,.45);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dm-reply-bar-cancel {
-  background:rgba(255,255,255,.08); border:none; color:#aaa; cursor:pointer;
-  width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  flex-shrink:0; margin-right:8px; transition:background .15s, color .15s;
+  background: rgba(255,255,255,.1);
+  border: none;
+  color: rgba(255,255,255,.6);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .12s, color .12s;
+  padding: 0;
 }
-.dm-reply-bar-cancel:hover { background:rgba(255,255,255,.16); color:#fff; }
+.dm-reply-bar-cancel:hover { background: rgba(255,255,255,.2); color: #fff; }
 
 /* ── Message context menu (right-click / long-press) ── */
 .dm-ctx-menu {
@@ -4518,7 +4563,8 @@
   cursor:pointer; user-select:none;
   box-shadow:0 2px 8px rgba(0,0,0,.6);
   transition:transform .12s ease, background .12s;
-  animation:rxnPopIn .2s cubic-bezier(.34,1.56,.64,1);
+  animation:rxnPopIn .2s cubic-bezier(.34,1.56,.64,1) forwards;
+  opacity:1;
 }
 .dm-rxn-pill:hover { transform:scale(1.14); background:#2e2e2e; }
 .dm-rxn-pill.dm-rxn-mine {
@@ -4531,6 +4577,14 @@
 @keyframes rxnPopIn {
   from { opacity:0; transform:scale(.3) translateY(4px); }
   to   { opacity:1; transform:scale(1)  translateY(0);   }
+}
+/* Suppress animation replay when updating an existing pill in-place.
+   Without this the pill would re-animate from opacity:0 on every poll tick,
+   making reactions appear to vanish and reappear. */
+.dm-rxn-pill.dm-rxn-no-anim {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: scale(1) translateY(0) !important;
 }
 
 /* ── Double-tap quick-react heart burst ── */
@@ -4657,6 +4711,32 @@
   .dm-back { display:inline-flex!important; }
   .dm-bubble-wrap { max-width:78%; }
   .dm-hover-actions { display:none !important; }
+
+  /* ── Fix 2: Detail panel slides in from the right as a full-screen overlay ── */
+  .dm-detail-panel {
+    position:fixed; inset:0; z-index:500;
+    width:100%; border-left:none;
+    transform:translateX(100%);
+    transition:transform .24s cubic-bezier(.4,0,.2,1);
+  }
+  .dm-detail-panel.open {
+    transform:translateX(0);
+  }
+  /* Scrim behind the panel so the rest of the UI is dimmed but not blocked */
+  .dm-detail-scrim {
+    display:none; position:fixed; inset:0; z-index:499;
+    background:rgba(0,0,0,.55);
+  }
+  .dm-detail-scrim.visible { display:block; }
+}
+
+/* ── Fix 4: Highlight animation when scrolling to a replied-to message ── */
+.dm-msg-highlight {
+  animation: dmMsgHighlight 1.6s ease forwards;
+}
+@keyframes dmMsgHighlight {
+  0%,15% { background:rgba(59,130,246,.18); border-radius:14px; }
+  100%    { background:transparent; }
 }
 </style>
 

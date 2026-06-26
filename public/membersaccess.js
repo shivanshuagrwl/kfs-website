@@ -4117,6 +4117,15 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
       const quote = document.createElement('div');
       quote.className = 'dm-reply-quote';
       quote.innerHTML = `<span class="dm-reply-sender">${swEsc(m.replied_to_sender || 'Member')}</span><span class="dm-reply-body">${swEsc((m.replied_to_body || '').slice(0, 120))}</span>`;
+      // Tap/click → scroll to the original message
+      quote.addEventListener('click', e => {
+        e.stopPropagation();
+        const target = document.querySelector(`[data-msg-id="${CSS.escape(m.replied_to_id)}"]`);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('dm-msg-highlight');
+        setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600);
+      });
       bubble.appendChild(quote);
     }
     const bodyNode = document.createElement('span');
@@ -5027,27 +5036,61 @@ function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onR
 // like Instagram DMs.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** (Re)draw the little overlapping reaction-pill row on a bubble. */
+/** (Re)draw the little overlapping reaction-pill row on a bubble.
+ *  Update in-place when the container already exists so the CSS animation
+ *  only fires on genuinely new pills — not on every poll-refresh tick. */
 function _renderReactionPills(bubble, reactions, onPick) {
-  bubble.querySelector('.dm-bubble-reactions')?.remove();
   const wrap = bubble.closest('.dm-bubble-wrap');
   if (!reactions || !reactions.length) {
+    bubble.querySelector('.dm-bubble-reactions')?.remove();
     wrap?.classList.remove('dm-has-reactions');
     return;
   }
   wrap?.classList.add('dm-has-reactions');
-  const pills = document.createElement('div');
-  pills.className = 'dm-bubble-reactions';
-  reactions.forEach(r => {
-    const pill = document.createElement('button');
-    pill.type = 'button';
-    pill.className = `dm-rxn-pill${r.mine ? ' dm-rxn-mine' : ''}`;
-    pill.title = r.mine ? 'Remove your reaction' : `React with ${r.emoji}`;
-    pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
-    pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
-    pills.appendChild(pill);
+
+  // Build a key → reaction map for easy lookup
+  const rxnMap = {};
+  reactions.forEach(r => { rxnMap[r.emoji] = r; });
+
+  let pills = bubble.querySelector('.dm-bubble-reactions');
+  const isNew = !pills;
+  if (isNew) {
+    pills = document.createElement('div');
+    pills.className = 'dm-bubble-reactions';
+  }
+
+  // Remove pills that are no longer in the list
+  pills.querySelectorAll('.dm-rxn-pill').forEach(el => {
+    if (!rxnMap[el.dataset.emoji]) el.remove();
   });
-  bubble.appendChild(pills);
+
+  // Update existing or insert new pills (preserve DOM order = reaction order)
+  reactions.forEach((r, idx) => {
+    let pill = pills.querySelector(`.dm-rxn-pill[data-emoji="${CSS.escape(r.emoji)}"]`);
+    if (pill) {
+      // Update in-place — add dm-rxn-no-anim so CSS animation doesn't replay
+      // (browsers restart the animation whenever className is reassigned)
+      pill.className = `dm-rxn-pill dm-rxn-no-anim${r.mine ? ' dm-rxn-mine' : ''}`;
+      pill.title = r.mine ? 'Remove your reaction' : `React with ${r.emoji}`;
+      pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
+      // Re-wire click (innerHTML wipe removes old listener)
+      pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
+    } else {
+      pill = document.createElement('button');
+      pill.type = 'button';
+      pill.dataset.emoji = r.emoji;
+      pill.className = `dm-rxn-pill${r.mine ? ' dm-rxn-mine' : ''}`;
+      pill.title = r.mine ? 'Remove your reaction' : `React with ${r.emoji}`;
+      pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
+      pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
+      // Insert at correct index position
+      const sibling = pills.children[idx];
+      if (sibling) pills.insertBefore(pill, sibling);
+      else pills.appendChild(pill);
+    }
+  });
+
+  if (isNew) bubble.appendChild(pills);
 }
 
 // Tracks "type:msgId" keys that currently have a reaction toggle in flight.
@@ -5956,6 +5999,15 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       qBody.textContent = (m.replied_to_body || '').slice(0, 120);
       quote.appendChild(qSender);
       quote.appendChild(qBody);
+      // Tap/click → scroll to the original message (same as DM)
+      quote.addEventListener('click', e => {
+        e.stopPropagation();
+        const target = document.querySelector(`[data-msg-id="${CSS.escape(m.replied_to_id)}"]`);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('dm-msg-highlight');
+        setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600);
+      });
       bubble.appendChild(quote);
     }
     const bodyNode = document.createElement('span');
@@ -6377,8 +6429,22 @@ function gcCloseCreateModal() {
 
 // ─── Group info panel ─────────────────────────────────────────────────────────
 
+// Override gcOpenInfo to use the Instagram-style detail panel (dpShowGroup)
+// instead of the old nick-modal-overlay (z-index:700) which was blocking the
+// sidebar. The detail panel IIFE below exposes window._dpShowGroup for this.
 async function gcOpenInfo() {
   if (!GC.activeId) return;
+  // If the new detail-panel system is available, use it — it won't block the sidebar
+  if (typeof window._dpShowGroup === 'function' && GC.activeGroup) {
+    // Fetch fresh member list first so the panel shows accurate info
+    try {
+      const data = await api('GET', `/api/member/groups/${GC.activeId}`);
+      GC.activeGroup = { ...GC.activeGroup, ...data };
+    } catch { /* use cached data */ }
+    window._dpShowGroup(GC.activeGroup);
+    return;
+  }
+  // Fallback: old modal (only used if detail panel isn't loaded yet)
   try {
     const data    = await api('GET', `/api/member/groups/${GC.activeId}`);
     GC.activeGroup = { ...GC.activeGroup, ...data };
@@ -6989,9 +7055,7 @@ if (document.readyState === "loading") {
     $id('gc-load-earlier')?.addEventListener('click', () => {
       if (typeof gcLoadMsgs === 'function') gcLoadMsgs(true);
     });
-    $id('gc-info-btn')?.addEventListener('click', () => {
-      if (typeof gcOpenInfo === 'function' && GC.activeId) gcOpenInfo();
-    });
+    // NOTE: gc-info-btn is wired in the Detail Panel IIFE below (dpShowGroup) — don't double-bind here
   }
 
   if (document.readyState === 'loading') {
@@ -7019,7 +7083,18 @@ if (document.readyState === "loading") {
     const panel = document.getElementById('dm-detail-panel');
     if (!panel) return;
     panel.style.display = 'flex';
-    // Mobile: animate in
+    // Mobile: show scrim + animate in
+    if (window.innerWidth <= 768) {
+      let scrim = document.getElementById('dm-detail-scrim');
+      if (!scrim) {
+        scrim = document.createElement('div');
+        scrim.id = 'dm-detail-scrim';
+        scrim.className = 'dm-detail-scrim';
+        scrim.addEventListener('click', dpClose);
+        document.body.appendChild(scrim);
+      }
+      requestAnimationFrame(() => scrim.classList.add('visible'));
+    }
     requestAnimationFrame(() => panel.classList.add('open'));
   }
 
@@ -7027,10 +7102,14 @@ if (document.readyState === "loading") {
     const panel = document.getElementById('dm-detail-panel');
     if (!panel) return;
     panel.classList.remove('open');
-    // Desktop: hide immediately; mobile waits for transition
     const isMobile = window.innerWidth <= 768;
-    if (!isMobile) panel.style.display = 'none';
-    else panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+    const scrim = document.getElementById('dm-detail-scrim');
+    if (scrim) scrim.classList.remove('visible');
+    if (!isMobile) {
+      panel.style.display = 'none';
+    } else {
+      panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+    }
   }
 
   function dpToggle() {
@@ -7198,15 +7277,24 @@ if (document.readyState === "loading") {
     document.getElementById('dm-detail-leave-btn')?.addEventListener('click', dpLeaveGroup);
     document.getElementById('dm-detail-add-member-btn')?.addEventListener('click', dpAddMembers);
 
-    // DM topbar ⓘ button
-    document.getElementById('dm-info-btn')?.addEventListener('click', () => {
+    // DM topbar ⓘ button — stopPropagation so the document click-outside
+    // handler (below) doesn't fire on the same event and immediately close the panel.
+    document.getElementById('dm-info-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (!DM.activePeer) return;
+      const panel = document.getElementById('dm-detail-panel');
+      const isOpen = panel && panel.classList.contains('open');
+      if (isOpen && DP.mode === 'dm') { dpClose(); return; }
       dpShowDm(DM.activePeer);
     });
 
     // GC topbar ⓘ button (re-wire to use dpShowGroup)
-    document.getElementById('gc-info-btn')?.addEventListener('click', () => {
+    document.getElementById('gc-info-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (!GC.activeGroup) return;
+      const panel = document.getElementById('dm-detail-panel');
+      const isOpen = panel && panel.classList.contains('open');
+      if (isOpen && DP.mode === 'group') { dpClose(); return; }
       // Load fresh member details first
       if (GC.activeGroup.members?.length) {
         dpShowGroup(GC.activeGroup);
@@ -7217,14 +7305,16 @@ if (document.readyState === "loading") {
       }
     });
 
-    // Close when clicking outside on desktop
+    // Close panel only when clicking the left nav sidebar (switching panels)
+    // — NOT when clicking chat messages or the compose area (Instagram keeps it open).
+    // Mobile uses a scrim overlay instead.
     document.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768) return; // mobile uses scrim
       const panel = document.getElementById('dm-detail-panel');
-      if (!panel || panel.style.display === 'none') return;
-      const infoBtn = document.getElementById('dm-info-btn');
-      const gcInfoBtn = document.getElementById('gc-info-btn');
-      if (!panel.contains(e.target) && e.target !== infoBtn && e.target !== gcInfoBtn
-          && !infoBtn?.contains(e.target) && !gcInfoBtn?.contains(e.target)) {
+      if (!panel || !panel.classList.contains('open')) return;
+      // Only close if the click is on the left sidebar nav (switching away from DMs)
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar && sidebar.contains(e.target)) {
         dpClose();
       }
     });
