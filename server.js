@@ -13786,10 +13786,15 @@ app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
         } else if (r.content_type === "group_message") {
           const { data: gmsg } = await supabase
             .from("dm_group_messages")
-            .select("id, body, sender_id, group_id, created_at, members!dm_group_messages_sender_id_fkey(id, name)")
+            .select("id, body, sender_id, group_id, created_at")
             .eq("id", r.content_id)
             .maybeSingle();
-          snapshot = gmsg;
+          if (gmsg?.sender_id) {
+            const { data: sndr } = await supabase.from("members").select("id, name").eq("id", gmsg.sender_id).maybeSingle();
+            snapshot = { ...gmsg, members: sndr || null };
+          } else {
+            snapshot = gmsg;
+          }
         } else if (r.content_type === "member") {
           const { data: mem } = await supabase
             .from("members")
@@ -14415,11 +14420,24 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
       .in("id", groupIds);
     if (groupsErr) { console.error("[groups GET] chats:", groupsErr.message); return res.json([]); }
 
-    const { data: allMembers, error: allMembErr } = await supabase
+    // Two-step member lookup (avoids relying on a specific FK constraint name)
+    const { data: allMemberRows, error: allMembErr } = await supabase
       .from("dm_group_members")
-      .select("group_id, member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role)")
+      .select("group_id, member_id, nickname, joined_at")
       .in("group_id", groupIds);
-    if (allMembErr) console.error("[groups GET] allMembers join:", allMembErr.message);
+    if (allMembErr) console.error("[groups GET] allMembers:", allMembErr.message);
+
+    // Fetch member profiles for all unique member_ids
+    const uniqueMemberIds = [...new Set((allMemberRows || []).map(r => r.member_id))];
+    const memberProfileMap = {};
+    if (uniqueMemberIds.length) {
+      const { data: profiles, error: profErr } = await supabase
+        .from("members")
+        .select("id, name, photo, role")
+        .in("id", uniqueMemberIds);
+      if (profErr) console.error("[groups GET] member profiles:", profErr.message);
+      (profiles || []).forEach(p => { memberProfileMap[p.id] = p; });
+    }
 
     const lastMsgMap = {};
     await Promise.all(groupIds.map(async gid => {
@@ -14437,13 +14455,15 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
     }));
 
     const membersByGroup = {};
-    (allMembers || []).forEach(m => {
+    (allMemberRows || []).forEach(m => {
       if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
-      membersByGroup[m.group_id].push({ ...m.members, nickname: m.nickname });
+      const profile = memberProfileMap[m.member_id] || { id: m.member_id };
+      membersByGroup[m.group_id].push({ ...profile, nickname: m.nickname });
     });
     const memberNameMap = {};
-    (allMembers || []).forEach(m => {
-      if (m.members?.id) memberNameMap[m.members.id] = m.members.name || 'Member';
+    (allMemberRows || []).forEach(m => {
+      const profile = memberProfileMap[m.member_id];
+      if (profile?.id) memberNameMap[profile.id] = profile.name || 'Member';
     });
 
     const result = (groups || []).map(g => {
@@ -14564,19 +14584,31 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
       .from("dm_group_chats").select("id, name, created_by, created_at").eq("id", gid).maybeSingle();
     if (!group) return res.status(404).json({ error: "Group not found" });
 
-    const { data: members, error: memJoinErr } = await supabase
+    // Two-step: get member rows first, then profiles (avoids FK name dependency)
+    const { data: memberRows, error: memJoinErr } = await supabase
       .from("dm_group_members")
-      .select("member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role, batch, domain)")
+      .select("member_id, nickname, joined_at")
       .eq("group_id", gid);
-    if (memJoinErr) console.error("[groups GET :id] members join:", memJoinErr.message, memJoinErr.code);
+    if (memJoinErr) console.error("[groups GET :id] members:", memJoinErr.message, memJoinErr.code);
+
+    const memberIds = (memberRows || []).map(r => r.member_id);
+    const profileMap = {};
+    if (memberIds.length) {
+      const { data: profiles, error: profErr } = await supabase
+        .from("members")
+        .select("id, name, photo, role, batch, domain")
+        .in("id", memberIds);
+      if (profErr) console.error("[groups GET :id] profiles:", profErr.message);
+      (profiles || []).forEach(p => { profileMap[p.id] = p; });
+    }
 
     res.json({
       id:         group.id,
       name:       group.name,
       created_by: group.created_by,
       created_at: group.created_at,
-      members:    (members || []).map(m => ({
-        ...m.members,
+      members:    (memberRows || []).map(m => ({
+        ...(profileMap[m.member_id] || { id: m.member_id }),
         nickname:   m.nickname,
         joined_at:  m.joined_at,
         is_me:      m.member_id === myId,
@@ -14723,7 +14755,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, members!dm_group_messages_sender_id_fkey(id, name, photo)")
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -14735,17 +14767,30 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const { data: msgs, error } = await q;
     if (error) throw error;
 
+    // Two-step: fetch sender profiles for all unique sender_ids
+    const senderIds = [...new Set((msgs || []).map(m => m.sender_id).filter(Boolean))];
+    const senderMap = {};
+    if (senderIds.length) {
+      const { data: senders, error: sErr } = await supabase
+        .from("members")
+        .select("id, name, photo")
+        .in("id", senderIds);
+      if (sErr) console.error("[groups/messages GET] senders:", sErr.message);
+      (senders || []).forEach(s => { senderMap[s.id] = s; });
+    }
+
     const result = (msgs || [])
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map(m => {
         const isSystem = m.body?.startsWith('\x1fsys\x1f');
         const cleanBody = isSystem ? m.body.slice(6) : m.body;
+        const sender = senderMap[m.sender_id] || {};
         return {
           id:               m.id,
           group_id:         gid,
           sender_id:        m.sender_id,
-          sender_name:      nickMap[m.sender_id] || m.members?.name || "Member",
-          sender_photo:     m.members?.photo || null,
+          sender_name:      nickMap[m.sender_id] || sender.name || "Member",
+          sender_photo:     sender.photo || null,
           body:             cleanBody,
           sent_at:          m.created_at,
           is_system:        isSystem,
