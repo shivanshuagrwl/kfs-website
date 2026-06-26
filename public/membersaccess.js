@@ -3966,9 +3966,11 @@ async function dmOpenConv(conv) {
   $id('dm-window-empty') && ($id('dm-window-empty').style.display = 'none');
   $id('dm-active') && ($id('dm-active').style.display = 'flex');
 
-  // Mobile slide
-  $id('dm-sidebar')?.classList.add('dm-slide-out');
-  $id('dm-window')?.classList.add('dm-slide-in');
+  // Mobile only: slide sidebar out to reveal chat window
+  if (window.innerWidth <= 768) {
+    $id('dm-sidebar')?.classList.add('dm-slide-out');
+    $id('dm-window')?.classList.add('dm-slide-in');
+  }
 
   await dmLoadMsgs(false);
   $id('dm-input')?.focus();
@@ -4000,8 +4002,10 @@ async function dmStartWith(memberId, peerHint) {
   $id('dm-active') && ($id('dm-active').style.display = 'flex');
   $id('dm-msg-list') && ($id('dm-msg-list').innerHTML = '');
   $id('dm-load-earlier-wrap') && ($id('dm-load-earlier-wrap').style.display = 'none');
-  $id('dm-sidebar')?.classList.add('dm-slide-out');
-  $id('dm-window')?.classList.add('dm-slide-in');
+  if (window.innerWidth <= 768) {
+    $id('dm-sidebar')?.classList.add('dm-slide-out');
+    $id('dm-window')?.classList.add('dm-slide-in');
+  }
   $id('dm-input')?.focus();
 }
 
@@ -4358,8 +4362,10 @@ async function dmPanelOpened() {
 
 function dmGoBack() {
   if (typeof window._dpClose === 'function') window._dpClose();
-  $id('dm-sidebar')?.classList.remove('dm-slide-out');
-  $id('dm-window')?.classList.remove('dm-slide-in');
+  if (window.innerWidth <= 768) {
+    $id('dm-sidebar')?.classList.remove('dm-slide-out');
+    $id('dm-window')?.classList.remove('dm-slide-in');
+  }
   $id('dm-active') && ($id('dm-active').style.display = 'none');
   $id('dm-window-empty') && ($id('dm-window-empty').style.display = '');
   DM.activeKey  = null;
@@ -5111,10 +5117,12 @@ async function gcOpenGroup(group) {
 
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = 'none');
   $id('gc-active') && ($id('gc-active').style.display = 'flex');
-  // Mobile: slide the sidebar out and bring gc-window forward
-  // NOTE: unified inbox uses dm-sidebar (gc-sidebar doesn't exist)
-  $id('dm-sidebar')?.classList.add('dm-slide-out');
-  $id('gc-window')?.classList.add('dm-slide-in');
+  // Mobile only: slide the sidebar out and bring gc-window forward
+  // On desktop the sidebar stays visible alongside the chat window
+  if (window.innerWidth <= 768) {
+    $id('dm-sidebar')?.classList.add('dm-slide-out');
+    $id('gc-window')?.classList.add('dm-slide-in');
+  }
 
   // Load nicknames
   await nicksLoad(group.id);
@@ -5448,8 +5456,10 @@ async function gcPanelOpened() {
 }
 
 function gcGoBack() {
-  $id('dm-sidebar')?.classList.remove('dm-slide-out');
-  $id('gc-window')?.classList.remove('dm-slide-in');
+  if (window.innerWidth <= 768) {
+    $id('dm-sidebar')?.classList.remove('dm-slide-out');
+    $id('gc-window')?.classList.remove('dm-slide-in');
+  }
   $id('gc-active') && ($id('gc-active').style.display = 'none');
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
   GC.activeId    = null;
@@ -6007,9 +6017,11 @@ if (document.readyState === "loading") {
     $id('gc-active') && ($id('gc-active').style.display = 'none');
     $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
 
-    // Mobile: slide sidebar back
-    $id('dm-sidebar')?.classList.remove('dm-slide-out');
-    $id('gc-window')?.classList.remove('dm-slide-in');
+    // Mobile only: slide sidebar back
+    if (window.innerWidth <= 768) {
+      $id('dm-sidebar')?.classList.remove('dm-slide-out');
+      $id('gc-window')?.classList.remove('dm-slide-in');
+    }
 
     GC.activeId    = null;
     GC.activeGroup = null;
