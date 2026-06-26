@@ -42,7 +42,11 @@ async function api(method, path, body, isForm = false) {
   if (body) opts.body = isForm ? body : JSON.stringify(body);
   const r = await fetch(API + path, opts);
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'Request failed');
+  if (!r.ok) {
+    const err = new Error(d.error || 'Request failed');
+    err._data = d; // attach full response so callers can read warned/muted/banned
+    throw err;
+  }
   return d;
 }
 
@@ -4218,13 +4222,75 @@ async function dmSend() {
       tmpBubble.remove();
       if (group && !group.querySelector('.dm-bubble')) group.remove();
     }
-    console.error('[DM] send:', e.message);
+    // Restore input text only for non-violation errors
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned) {
+      _vioShowClientNotice(ed, e.message, 'dm-input', 'dm-send-btn');
+    } else {
+      input.value = body;
+      console.error('[DM] send:', e.message);
+    }
   } finally {
     DM.pendingBodies.delete(body);
   }
 }
 
-// ─── Delete message ────────────────────────────────────────────────────────────
+// ── Violation notice (warning / mute / ban) shown to the member ───────────────
+// Called from dmSend and gcSendMsg catch blocks when server returns a violation.
+function _vioShowClientNotice(data, msg, inputId, sendBtnId) {
+  // Show toast with the server message (already friendly)
+  swShowToast(msg || 'Message blocked.', 6000);
+
+  if (data.banned) {
+    // Permanently disable the compose input
+    const inp = $id(inputId);
+    const btn = $id(sendBtnId);
+    if (inp) { inp.disabled = true; inp.placeholder = 'Your account has been disabled.'; }
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  if (data.muted && data.muted_until) {
+    const muteUntil = new Date(data.muted_until).getTime();
+    const inp = $id(inputId);
+    const btn = $id(sendBtnId);
+
+    function applyMute() {
+      const remaining = muteUntil - Date.now();
+      if (remaining <= 0) {
+        if (inp) { inp.disabled = false; inp.placeholder = ''; }
+        if (btn) btn.disabled = false;
+        return;
+      }
+      const label = _vioFormatMs(remaining);
+      if (inp) { inp.disabled = true; inp.placeholder = `Muted — ${label} remaining`; }
+      if (btn) btn.disabled = true;
+    }
+
+    applyMute();
+    const timer = setInterval(() => {
+      const rem = muteUntil - Date.now();
+      if (rem <= 0) {
+        clearInterval(timer);
+        const inp2 = $id(inputId);
+        const btn2 = $id(sendBtnId);
+        if (inp2) { inp2.disabled = false; inp2.placeholder = ''; }
+        if (btn2) btn2.disabled = false;
+        swShowToast('You are no longer muted. Please keep the conversation respectful.');
+      } else {
+        const inp2 = $id(inputId);
+        if (inp2) inp2.placeholder = `Muted — ${_vioFormatMs(rem)} remaining`;
+      }
+    }, 1000);
+  }
+}
+
+function _vioFormatMs(ms) {
+  const s = Math.ceil(ms / 1000);
+  if (s < 3600)  return `${Math.ceil(s / 60)}m`;
+  if (s < 86400) return `${Math.ceil(s / 3600)}h`;
+  return `${Math.ceil(s / 86400)}d`;
+}
 
 async function dmDeleteMsg(msgId, bubble, btn) {
   if (!confirm('Delete this message?')) return;
@@ -4624,7 +4690,7 @@ async function blocksToggle(memberId, btn) {
       await api('DELETE', `/api/member/blocks/${memberId}`);
       BLOCKS.set.delete(memberId);
     } else {
-      await api('POST', '/api/member/blocks', { member_id: memberId });
+      await api('POST', '/api/member/blocks', { blocked_id: memberId });
       BLOCKS.set.add(memberId);
     }
     // Update all block buttons for this member in the DOM
@@ -5300,7 +5366,13 @@ async function gcSend() {
       tmpBubble.remove();
       if (grp && !grp.querySelector('.dm-bubble')) grp.remove();
     }
-    console.error('[GC] send:', e.message);
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned) {
+      _vioShowClientNotice(ed, e.message, 'gc-input', 'gc-send-btn');
+    } else {
+      input.value = body; // restore on non-violation errors
+      console.error('[GC] send:', e.message);
+    }
   } finally {
     GC.pendingBodies.delete(body);
   }
@@ -5441,7 +5513,7 @@ function gcOpenCreateModal() {
     const results = $id('gc-member-results');
     const query   = (q || '').toLowerCase().trim();
     const myId    = gcMyId();
-    const pool    = DM.members.length ? DM.members : [];
+    const pool    = DM.members.length ? DM.members : (_portalMembers || []);
     const hits    = query
       ? pool.filter(m => (m.name || '').toLowerCase().includes(query) && !selected.has(m.id))
       : pool.filter(m => !selected.has(m.id)).slice(0, 8);

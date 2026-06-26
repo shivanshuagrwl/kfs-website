@@ -263,6 +263,154 @@ function checkFieldsForProfanity(...fields) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECTION VIO — Member Violation Tracking (Warning → Mute → Ban)
+//
+// Escalation ladder (per member, in-memory, resets on server restart):
+//   Offense 1 → warning + 5-minute mute   (live countdown shown client-side)
+//   Offense 2 → warning + 60-minute mute  (harsher)
+//   Offense 3+ → permanent ban (account_status = 'disabled') — admin must unban
+//
+// SQL needed (run once in Supabase if you want violations to survive restarts):
+//   CREATE TABLE IF NOT EXISTS member_violations (
+//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     offense     INTEGER NOT NULL DEFAULT 1,
+//     muted_until TIMESTAMPTZ,
+//     banned      BOOLEAN NOT NULL DEFAULT FALSE,
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE UNIQUE INDEX IF NOT EXISTS idx_violations_member ON member_violations(member_id);
+//
+// In v1 we store state in-memory and optionally sync to DB.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// In-memory store:  memberId → { offense: N, mutedUntil: Date|null, banned: bool }
+const _violations = new Map();
+
+function vioGet(memberId) {
+  return _violations.get(memberId) || { offense: 0, mutedUntil: null, banned: false };
+}
+
+function vioIsMuted(memberId) {
+  const v = vioGet(memberId);
+  if (v.banned) return true;
+  if (!v.mutedUntil) return false;
+  if (new Date() < v.mutedUntil) return true;
+  // Mute expired — clear it
+  _violations.set(memberId, { ...v, mutedUntil: null });
+  return false;
+}
+
+function vioMuteRemaining(memberId) {
+  const v = vioGet(memberId);
+  if (!v.mutedUntil) return 0;
+  return Math.max(0, v.mutedUntil - Date.now());
+}
+
+/**
+ * Record a profanity offense and return what to tell the client.
+ * @returns {{ action: 'warn'|'mute'|'ban', offense: number, mutedUntil?: string, muteLabel?: string }}
+ */
+async function vioRecord(memberId) {
+  const v   = vioGet(memberId);
+  const n   = v.offense + 1;
+
+  let mutedUntil = null;
+  let banned     = false;
+  let muteMs     = 0;
+
+  if (n === 1) {
+    muteMs = 5 * 60 * 1000;        // warning + 5-minute mute
+  } else if (n === 2) {
+    muteMs = 60 * 60 * 1000;       // harsher: 60-minute mute
+  } else {
+    banned = true;                 // 3rd offense — permanent ban, admin must unban
+  }
+
+  if (banned) {
+    _violations.set(memberId, { offense: n, mutedUntil: null, banned: true });
+    // Persist ban to DB
+    try {
+      await supabase.from("member_accounts")
+        .update({ account_status: "disabled" })
+        .eq("member_id", memberId);
+    } catch (e) { console.error("[vio] ban DB update failed:", e.message); }
+    return { action: "ban", offense: n };
+  }
+
+  mutedUntil = muteMs > 0 ? new Date(Date.now() + muteMs) : null;
+  _violations.set(memberId, { offense: n, mutedUntil, banned: false });
+
+  // Optional: sync offense count to DB (non-fatal)
+  try {
+    await supabase.from("member_violations")
+      .upsert([{ member_id: memberId, offense: n, muted_until: mutedUntil?.toISOString() || null, updated_at: new Date().toISOString() }],
+              { onConflict: "member_id" });
+  } catch { /* table may not exist yet — safe to ignore */ }
+
+  return {
+    action:     muteMs ? "mute" : "warn",
+    offense:    n,
+    mutedUntil: mutedUntil?.toISOString() || null,
+    muteLabel:  muteMs ? _muteLabel(muteMs) : null,
+  };
+}
+
+function _muteLabel(ms) {
+  const s = Math.ceil(ms / 1000);
+  if (s < 3600)  return `${Math.ceil(s / 60)} minute${Math.ceil(s/60) !== 1 ? 's' : ''}`;
+  if (s < 86400) return `${Math.ceil(s / 3600)} hour${Math.ceil(s/3600) !== 1 ? 's' : ''}`;
+  return `${Math.ceil(s / 86400)} day${Math.ceil(s/86400) !== 1 ? 's' : ''}`;
+}
+
+// Shared profanity gate used by DM send + group message send.
+// Returns null if clean/allowed, or an Express response (already sent) if blocked.
+async function vioGate(req, res, memberId, text) {
+  // 1. Already muted or banned?
+  if (vioIsMuted(memberId)) {
+    const v = vioGet(memberId);
+    if (v.banned) {
+      return res.status(403).json({ error: "Your account has been disabled due to repeated violations.", banned: true });
+    }
+    const remaining = vioMuteRemaining(memberId);
+    return res.status(403).json({
+      error:        `You are muted for inappropriate language. Please wait ${_muteLabel(remaining)}.`,
+      muted:        true,
+      muted_until:  _violations.get(memberId)?.mutedUntil?.toISOString(),
+      offense:      vioGet(memberId).offense,
+    });
+  }
+
+  // 2. Check current message
+  const check = containsProfanity(text);
+  if (!check.found) return null; // clean — caller may proceed
+
+  // 3. Record offense and respond
+  const vio = await vioRecord(memberId);
+
+  if (vio.action === "ban") {
+    return res.status(403).json({
+      error:   "You have been permanently banned for repeated use of inappropriate language.",
+      banned:  true,
+      offense: vio.offense,
+    });
+  }
+
+  const warningMsg = vio.action === "mute"
+    ? `⚠️ Warning #${vio.offense}: Your message was blocked for inappropriate language. You are muted for ${vio.muteLabel}.`
+    : `⚠️ Warning #${vio.offense}: Your message was blocked for inappropriate language. One more offense and you will be muted.`;
+
+  return res.status(400).json({
+    error:        warningMsg,
+    warned:       true,
+    offense:      vio.offense,
+    muted:        vio.action === "mute",
+    muted_until:  vio.mutedUntil || null,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION FP — Forgot Password: OTP generation, masking, delivery helpers
 // Used by both /api/admin/forgot-password/* and /api/member/forgot-password/*
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12128,9 +12276,9 @@ app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, comme
   if (!commentBody || !commentBody.trim()) return res.status(400).json({ error: "Comment body is required" });
   if (commentBody.trim().length > 1000) return res.status(400).json({ error: "Comment must be ≤ 1000 characters" });
 
-  // Profanity check
-  const cmtProfCheck = containsProfanity(commentBody);
-  if (cmtProfCheck.found) return res.status(400).json({ error: "Your comment contains inappropriate language. Please revise it." });
+  // Profanity check — routed through the warning → mute → ban escalation system
+  const vioResponse = await vioGate(req, res, req.member.memberId, commentBody);
+  if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
 
   // Verify project exists
   const { data: proj } = await supabase.from("member_projects")
@@ -13375,9 +13523,9 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (!trimmed || trimmed === "\u200B") return res.status(400).json({ error: "Message body required" });
     if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
 
-    // Profanity check
-    const dmProfCheck = containsProfanity(trimmed);
-    if (dmProfCheck.found) return res.status(400).json({ error: "Your message contains inappropriate language. Please revise it." });
+    // Profanity gate — warning / mute / ban escalation
+    const vioResponse = await vioGate(req, res, myId, trimmed);
+    if (vioResponse) return; // response already sent
 
     // Verify target exists
     const { data: target, error: targetErr } = await supabase
@@ -14145,6 +14293,21 @@ app.post("/api/member/blocks", memberAuthMiddleware, blockWriteLimit, async (req
   }
 });
 
+// GET /api/member/blocks/check/:id — am I blocked by them, or have I blocked them?
+app.get("/api/member/blocks/check/:id", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId   = req.member.memberId;
+    const otherId = req.params.id;
+    const [{ data: iBlockedThem }, { data: theyBlockedMe }] = await Promise.all([
+      supabase.from("member_blocks").select("id").eq("blocker_id", myId).eq("blocked_id", otherId).maybeSingle(),
+      supabase.from("member_blocks").select("id").eq("blocker_id", otherId).eq("blocked_id", myId).maybeSingle(),
+    ]);
+    res.json({ blocked: !!iBlockedThem, blocked_me: !!theyBlockedMe });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to check block status" });
+  }
+});
+
 // DELETE /api/member/blocks/:id
 app.delete("/api/member/blocks/:id", memberAuthMiddleware, blockWriteLimit, async (req, res) => {
   try {
@@ -14325,6 +14488,57 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
   }
 });
 
+// GET /api/member/groups/unread-count — total unread across all my group chats
+// (placed before the /:id route so "unread-count" isn't swallowed as an id param)
+app.get("/api/member/groups/unread-count", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    // Full read-receipts are out of scope for v1 — return 0 so the client badge stays quiet
+    // rather than erroring (matches the `unread_count: 0` placeholder used in the list route).
+    res.json({ count: 0 });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load unread count" });
+  }
+});
+
+// GET /api/member/groups/:id — single group with full member list (used by topbar + info panel)
+app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+
+    const { data: mem } = await supabase
+      .from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const { data: group } = await supabase
+      .from("dm_group_chats").select("id, name, created_by, created_at").eq("id", gid).maybeSingle();
+    if (!group) return res.status(404).json({ error: "Group not found" });
+
+    const { data: members } = await supabase
+      .from("dm_group_members")
+      .select("member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role, batch, domain)")
+      .eq("group_id", gid);
+
+    res.json({
+      id:         group.id,
+      name:       group.name,
+      created_by: group.created_by,
+      created_at: group.created_at,
+      members:    (members || []).map(m => ({
+        ...m.members,
+        nickname:   m.nickname,
+        joined_at:  m.joined_at,
+        is_me:      m.member_id === myId,
+        group_role: m.member_id === group.created_by ? "owner" : "member",
+      })),
+      my_role:    group.created_by === myId ? "owner" : "member",
+    });
+  } catch (e) {
+    console.error("[groups GET :id]", e.message);
+    res.status(500).json({ error: "Failed to load group" });
+  }
+});
+
 // PATCH /api/member/groups/:id  { name }  — rename alias (client sends to :id directly)
 app.patch("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {
@@ -14501,8 +14715,9 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
     const body = (req.body?.body || "").trim();
     if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
 
-    const profCheck = containsProfanity(body);
-    if (profCheck.found) return res.status(400).json({ error: "Message contains inappropriate language." });
+    // Profanity gate — warning / mute / ban escalation
+    const vioResponse = await vioGate(req, res, myId, body);
+    if (vioResponse) return; // response already sent
 
     // Verify membership
     const { data: mem } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid).eq("member_id", myId).maybeSingle();
