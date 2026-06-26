@@ -14465,11 +14465,11 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
     const { data: creator } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
     const creatorName = creator?.name || "Someone";
     const totalCount  = memberIds.length + 1;
-    await supabase.from("dm_group_messages").insert([{
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  group.id,
       sender_id: myId,
       body:      `\x1fsys\x1f\uD83C\uDF89 ${creatorName} created "${group.name}" \u00B7 ${totalCount} member${totalCount !== 1 ? 's' : ''}`,
-    }]).catch(e => console.error("[groups] system msg:", e.message));
+    }]); } catch(e) { console.error("[groups] system msg:", e.message); } })();
 
     // Return enriched group so client can open it immediately without a round-trip
     res.json({
@@ -14556,11 +14556,11 @@ app.patch("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (r
     await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
     // Activity message (sentinel prefix, no schema change)
     const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
-    await supabase.from("dm_group_messages").insert([{
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
       sender_id: myId,
       body:      `\x1fsys\x1f\u270F\uFE0F ${actor?.name || "Someone"} changed the group name to \u201C${name}\u201D`,
-    }]).catch(e => console.error("[groups] rename sys msg:", e.message));
+    }]); } catch(e) { console.error("[groups] rename sys msg:", e.message); } })();
     res.json({ success: true, name });
   } catch (e) {
     res.status(500).json({ error: "Failed to rename group" });
@@ -14578,11 +14578,11 @@ app.patch("/api/member/groups/:id/name", memberAuthMiddleware, gcWriteLimit, asy
     if (!mem) return res.status(403).json({ error: "Not in this group" });
     await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
     const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
-    await supabase.from("dm_group_messages").insert([{
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
       sender_id: myId,
       body:      `\x1fsys\x1f\u270F\uFE0F ${actor?.name || "Someone"} changed the group name to \u201C${name}\u201D`,
-    }]).catch(e => console.error("[groups] rename sys msg:", e.message));
+    }]); } catch(e) { console.error("[groups] rename sys msg:", e.message); } })();
     res.json({ success: true, name });
   } catch (e) {
     res.status(500).json({ error: "Failed to rename group" });
@@ -14608,11 +14608,11 @@ app.post("/api/member/groups/:id/members", memberAuthMiddleware, gcWriteLimit, a
       supabase.from("members").select("name").eq("id", myId).maybeSingle(),
       supabase.from("members").select("name").eq("id", memberId).maybeSingle(),
     ]);
-    await supabase.from("dm_group_messages").insert([{
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
       sender_id: myId,
       body:      `\x1fsys\x1f\uD83D\uDC64 ${actor?.name || "Someone"} added ${added?.name || "a member"}`,
-    }]).catch(e => console.error("[groups] add-member sys msg:", e.message));
+    }]); } catch(e) { console.error("[groups] add-member sys msg:", e.message); } })();
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to add member" });
@@ -14629,11 +14629,11 @@ app.delete("/api/member/groups/:id/members/:memberId", memberAuthMiddleware, gcW
     if (memberId !== myId) return res.status(403).json({ error: "You can only remove yourself" });
     const { data: leaver } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
     await supabase.from("dm_group_members").delete().eq("group_id", gid).eq("member_id", myId);
-    await supabase.from("dm_group_messages").insert([{
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
       sender_id: myId,
       body:      `\x1fsys\x1f\uD83D\uDC4B ${leaver?.name || "Someone"} left the group`,
-    }]).catch(e => console.error("[groups] leave sys msg:", e.message));
+    }]); } catch(e) { console.error("[groups] leave sys msg:", e.message); } })();
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to leave group" });
