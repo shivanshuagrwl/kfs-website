@@ -11931,9 +11931,9 @@ app.post(
     if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
     if (title.trim().length > 120) return res.status(400).json({ error: "Title must be ≤ 120 characters" });
 
-    // Profanity check
-    const profCheck = checkFieldsForProfanity(title, description);
-    if (profCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it before posting." });
+    // Profanity check — routed through the warning → mute → ban escalation system
+    const vioResponse = await vioGate(req, res, req.member.memberId, `${title} ${description || ""}`);
+    if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
 
     const { url: parsedVideoUrl, provider } = parseVideoUrl(video_url);
     if (video_url && !parsedVideoUrl) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
@@ -12045,9 +12045,9 @@ app.put(
     if (!existing) return res.status(404).json({ error: "Project not found" });
     if (existing.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your project" });
 
-    // Profanity check on editable text fields
-    const editProfCheck = checkFieldsForProfanity(req.body.title, req.body.description);
-    if (editProfCheck.found) return res.status(400).json({ error: "Your post contains inappropriate language. Please revise it before saving." });
+    // Profanity check on editable text fields — routed through the warning → mute → ban escalation system
+    const vioResponse = await vioGate(req, res, req.member.memberId, `${req.body.title || ""} ${req.body.description || ""}`);
+    if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
 
     const updates = { updated_at: new Date().toISOString() };
     if (req.body.title !== undefined) updates.title = req.body.title.trim().slice(0, 120);
@@ -13523,9 +13523,9 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (!trimmed || trimmed === "\u200B") return res.status(400).json({ error: "Message body required" });
     if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
 
-    // Profanity gate — warning / mute / ban escalation
-    const vioResponse = await vioGate(req, res, myId, trimmed);
-    if (vioResponse) return; // response already sent
+    // NOTE: DMs are a private, unmoderated space by design — no profanity gate here.
+    // (Profanity checks still apply to group chats, posts, and comments, which are
+    // visible to people other than just the recipient.)
 
     // Verify target exists
     const { data: target, error: targetErr } = await supabase
