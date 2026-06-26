@@ -5111,7 +5111,9 @@ async function gcOpenGroup(group) {
 
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = 'none');
   $id('gc-active') && ($id('gc-active').style.display = 'flex');
-  $id('gc-sidebar')?.classList.add('dm-slide-out');
+  // Mobile: slide the sidebar out and bring gc-window forward
+  // NOTE: unified inbox uses dm-sidebar (gc-sidebar doesn't exist)
+  $id('dm-sidebar')?.classList.add('dm-slide-out');
   $id('gc-window')?.classList.add('dm-slide-in');
 
   // Load nicknames
@@ -5446,7 +5448,7 @@ async function gcPanelOpened() {
 }
 
 function gcGoBack() {
-  $id('gc-sidebar')?.classList.remove('dm-slide-out');
+  $id('dm-sidebar')?.classList.remove('dm-slide-out');
   $id('gc-window')?.classList.remove('dm-slide-in');
   $id('gc-active') && ($id('gc-active').style.display = 'none');
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
@@ -5983,8 +5985,10 @@ if (document.readyState === "loading") {
     });
 
     // gcOpenGroup handles topbar, messages, polling
+    // Use window.gcOpenGroup so the IIFE's mobile slide-in override runs
     if (typeof window._dpClose === 'function') window._dpClose();
-    if (typeof gcOpenGroup === 'function') gcOpenGroup(group);
+    const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
+    opener(group);
   }
 
   // ── Override gcGoBack to return to unified list ───────────────────────────
@@ -6001,7 +6005,7 @@ if (document.readyState === "loading") {
 
     // Mobile: slide sidebar back
     $id('dm-sidebar')?.classList.remove('dm-slide-out');
-    $id('dm-window')?.classList.remove('dm-slide-in');
+    $id('gc-window')?.classList.remove('dm-slide-in');
 
     GC.activeId    = null;
     GC.activeGroup = null;
@@ -6009,17 +6013,15 @@ if (document.readyState === "loading") {
     document.querySelectorAll('.dm-conv-row').forEach(el => el.classList.remove('dm-active-row'));
   };
 
-  // ── Also patch gcOpenGroup mobile slide to use dm-sidebar/dm-window ───────
-  // Capture the original NOW (gcOpenGroup is defined before this IIFE) and store on the wrapper
-  // so later callers that go through window.gcOpenGroup still reach the real implementation.
+  // ── Also patch gcOpenGroup to ensure display is set (unified inbox uses style, not class) ──
   const _origGcOpenGroup = typeof gcOpenGroup === 'function' ? gcOpenGroup : null;
   window.gcOpenGroup = async function(group) {
+    // Make gc-window visible (unified inbox sets display via style, not class)
+    const gcWin = $id('gc-window');
+    const dmWin = $id('dm-window');
+    if (dmWin) dmWin.style.display = 'none';
+    if (gcWin) gcWin.style.display = '';
     if (_origGcOpenGroup) await _origGcOpenGroup(group);
-    // Swap the slide classes from gc-* to dm-* (unified inbox uses dm-sidebar)
-    $id('gc-sidebar')?.classList.remove('dm-slide-out');
-    $id('gc-window')?.classList.remove('dm-slide-in');
-    $id('dm-sidebar')?.classList.add('dm-slide-out');
-    $id('gc-window')?.classList.add('dm-slide-in');
   };
 
   // ── Unified load: fetch both convs + groups, then render ─────────────────
