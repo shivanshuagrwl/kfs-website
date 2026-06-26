@@ -830,6 +830,24 @@ function on(id, evt, fn) {
   if (el) el.addEventListener(evt, fn);
 }
 
+// ── Emoji rendering (Twemoji) ──────────────────────────────────────────────
+// Reaction emoji (quick-react picker, message reaction pills, the double-tap
+// heart burst) are rendered through Twemoji so every member sees the same
+// clean, flat vector style regardless of OS — Windows' native emoji font in
+// particular looks rough/inconsistent compared to iOS. Twemoji just walks the
+// element's text nodes and swaps any emoji characters for <img> tags, so it's
+// safe to call on small, already-built bits of DOM.
+function _emojify(el) {
+  if (!el || typeof window.twemoji === 'undefined') return;
+  try {
+    window.twemoji.parse(el, {
+      base: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/',
+      folder: 'svg',
+      ext: '.svg',
+    });
+  } catch { /* never let emoji rendering break the UI */ }
+}
+
 // ── Auth screen ───────────────────────────────────────────────────────────────
 
 function showLoginScreen() {
@@ -4354,10 +4372,13 @@ function dmRenderConvs(list) {
     const preview = c.last_snippet
       ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
       : 'No messages yet';
+    const displayName = (typeof nicksResolveDisplay === 'function')
+      ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
+      : (c.peer?.name || 'Member');
     row.innerHTML = `
       ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
       <div class="dm-conv-info">
-        <div class="dm-conv-name">${swEsc(c.peer?.name || 'Member')}</div>
+        <div class="dm-conv-name">${swEsc(displayName)}</div>
         <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
       </div>
       <div class="dm-conv-right">
@@ -5424,6 +5445,7 @@ function _showEmojiPicker(anchorBtn, onPick) {
   });
 
   document.body.appendChild(popup);
+  _emojify(popup);
 
   // Position above the anchor (bubble or react button), centred
   const rect = anchorBtn.getBoundingClientRect();
@@ -5550,6 +5572,7 @@ function _renderReactionPills(bubble, reactions, onPick) {
       pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
       // Re-wire click (innerHTML wipe removes old listener)
       pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
+      _emojify(pill);
     } else {
       pill = document.createElement('button');
       pill.type = 'button';
@@ -5558,6 +5581,7 @@ function _renderReactionPills(bubble, reactions, onPick) {
       pill.title = r.mine ? 'Remove your reaction' : `React with ${r.emoji}`;
       pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
       pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
+      _emojify(pill);
       // Insert at correct index position
       const sibling = pills.children[idx];
       if (sibling) pills.insertBefore(pill, sibling);
@@ -5645,6 +5669,7 @@ function _attachQuickHeart(bubble, onReact) {
       heart.className = 'dm-heart-burst';
       heart.textContent = '❤️';
       bubble.appendChild(heart);
+      _emojify(heart);
       heart.addEventListener('animationend', () => heart.remove());
       onReact('❤️');
     } else {
@@ -5933,6 +5958,31 @@ function dmUpdateBlockedBanner() {
 
 // In-memory store: conv_key → [{giver_id, target_id, nickname}]
 const NICKS = {};
+// Global DM-nickname cache, keyed by target_id only. DM nicknames aren't actually
+// scoped to a conversation (the server endpoint returns ALL of my nicknames at
+// once) — they were just being filed away under whichever convKey happened to
+// call nicksLoad(). That meant any convKey nicksLoad() was never called for
+// (e.g. every row in the sidebar list, or a conv reopened on a fresh page load
+// before its own nicksLoad() round-trip finished) showed the real name instead.
+// This flat cache is the source of truth that survives across conv keys and a
+// page refresh's first render, while NICKS[convKey] is still kept in sync for
+// existing call sites (group nicknames, in-place edits) that key off it.
+let NICKS_GLOBAL_LOADED = false;
+const NICKS_BY_TARGET = {};
+
+async function nicksLoadGlobal() {
+  try {
+    const data = await api('GET', '/api/member/nicknames');
+    const myId = dmMyId();
+    Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      Object.entries(data).forEach(([target_id, nickname]) => {
+        NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+      });
+    }
+    NICKS_GLOBAL_LOADED = true;
+  } catch { /* keep whatever was cached before; a transient failure shouldn't blank nicknames out */ }
+}
 
 async function nicksLoad(convKey) {
   try {
@@ -5944,6 +5994,12 @@ async function nicksLoad(convKey) {
       NICKS[convKey] = Object.entries(data).map(([target_id, nickname]) => ({
         giver_id: myId, target_id, nickname
       }));
+      // Keep the flat global cache in sync too, so other conv keys / the
+      // sidebar list benefit from this round-trip without a separate fetch.
+      Object.entries(data).forEach(([target_id, nickname]) => {
+        NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+      });
+      NICKS_GLOBAL_LOADED = true;
     } else {
       NICKS[convKey] = [];
     }
@@ -5990,6 +6046,11 @@ function nicksResolveDisplay(convKey, memberId, fallbackName) {
   // Then any other
   const any = rows.find(r => r.target_id === memberId);
   if (any) return any.nickname;
+  // Fall back to the flat global cache — covers DM nicknames for a convKey
+  // that nicksLoad() hasn't (yet) been called for, e.g. sidebar list rows on
+  // a fresh page load, or a conv reopened before its own round-trip resolves.
+  const global = NICKS_BY_TARGET[memberId];
+  if (global) return global.nickname;
   return fallbackName;
 }
 
@@ -6122,6 +6183,12 @@ function nicksOpenModal(convKey, targetId, targetName, isGroup) {
         else rows.push({ giver_id: myId, target_id: _editingId, nickname: nick });
       } else {
         if (idx >= 0) rows.splice(idx, 1);
+      }
+      // Mirror into the flat global cache too (DM nicknames only — group
+      // nicknames stay scoped to NICKS[convKey] since they're per-group).
+      if (!isGroupConv) {
+        if (nick) NICKS_BY_TARGET[_editingId] = { giver_id: myId, target_id: _editingId, nickname: nick };
+        else delete NICKS_BY_TARGET[_editingId];
       }
       // Refresh participant list
       renderParticipants(_editingId);
@@ -7555,10 +7622,13 @@ if (document.readyState === "loading") {
           const preview = c.last_snippet
             ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
             : 'No messages yet';
+          const displayName = (typeof nicksResolveDisplay === 'function')
+            ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
+            : (c.peer?.name || 'Member');
           row.innerHTML = `
             ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
             <div class="dm-conv-info">
-              <div class="dm-conv-name">${swEsc(c.peer?.name || 'Member')}</div>
+              <div class="dm-conv-name">${swEsc(displayName)}</div>
               <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
             </div>
             <div class="dm-conv-right">
@@ -7731,12 +7801,16 @@ if (document.readyState === "loading") {
           // suddenly comes back with zero, treat it as a possible transient
           // read race rather than trusting it outright — re-check once before
           // accepting the empty result, so a group never silently vanishes
-          // from the sidebar because of a momentary blip.
-          if (!fresh.length && (GC.groups || []).length) {
+          // from the sidebar because of a momentary blip. This also covers a
+          // COLD load (page refresh): GC.groups starts out empty either way,
+          // so the retry must not be gated on "did we already have groups in
+          // memory" — a brand-new group can hit the exact same replication
+          // lag on the very first request after a refresh.
+          if (!fresh.length) {
             await new Promise(r => setTimeout(r, 400));
             const retryData = await api('GET', '/api/member/groups').catch(() => null);
             const retryFresh = Array.isArray(retryData) ? retryData : null;
-            GC.groups = (retryFresh && retryFresh.length) ? retryFresh : GC.groups;
+            GC.groups = (retryFresh && retryFresh.length) ? retryFresh : (retryFresh || fresh);
           } else {
             GC.groups = fresh;
           }
@@ -7745,6 +7819,10 @@ if (document.readyState === "loading") {
           GC.groups = GC.groups || [];
         }
       })(),
+      // Nicknames apply globally (by target_id), not per-conversation — load
+      // them once here so the sidebar list can resolve them on first paint
+      // instead of only after a specific conv is opened.
+      nicksLoadGlobal(),
     ]);
     inboxRender();
 

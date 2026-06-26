@@ -5722,8 +5722,18 @@
     }
     .composer-input::placeholder { color: #444; }
     .composer-input-title { font-size: 15px; font-weight: 600; }
+    /* Twemoji — keeps reaction/emoji-picker glyphs sized + aligned like normal
+       inline text instead of their native (often huge) SVG dimensions. */
+    img.emoji {
+      height: 1.1em;
+      width: 1.1em;
+      margin: 0 .03em 0 .03em;
+      vertical-align: -0.18em;
+      object-fit: contain;
+    }
     </style>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script src="/membersaccess.js" defer></script>
   </body>
 </html>
