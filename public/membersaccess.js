@@ -5697,15 +5697,14 @@ async function gcOpenGroup(group) {
   const ta = $id('gc-topbar-avatar');
   if (ta) ta.innerHTML = gcGroupAvatar(group, 34);
   setText('gc-topbar-name', group.name);
-  // Paint the member count immediately from what we already have (the list
-  // endpoint / create response both include a full members array) — don't
-  // leave it blank or stuck at 0 while the slower detail fetch is in flight.
-  // Always set a value; gcLoadGroupDetails will refine it when the fetch resolves.
+  // Use the member count from the list response immediately — the list endpoint
+  // always returns the full members array so this is authoritative.
+  // gcLoadGroupDetails may refine it, but NEVER overwrite with a lower/zero count.
   const initialCount = Array.isArray(group.members) ? group.members.length : (group.member_count || 0);
-  setText('gc-topbar-sub', initialCount > 0 ? `${initialCount} member${initialCount !== 1 ? 's' : ''}` : 'Loading…');
+  setText('gc-topbar-sub', `${initialCount} member${initialCount !== 1 ? 's' : ''}`);
 
-  // Load full member list for topbar sub (refines/corrects the count above)
-  gcLoadGroupDetails(group.id);
+  // Fetch full detail (roles, nicknames) — pass floor so topbar never regresses to 0
+  gcLoadGroupDetails(group.id, 0, initialCount);
 
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = 'none');
   $id('gc-active') && ($id('gc-active').style.display = 'flex');
@@ -5722,27 +5721,29 @@ async function gcOpenGroup(group) {
   $id('gc-input')?.focus();
 }
 
-async function gcLoadGroupDetails(groupId, _retryCount) {
+async function gcLoadGroupDetails(groupId, _retryCount, _floorCount) {
   _retryCount = _retryCount || 0;
+  _floorCount = _floorCount || 0; // never show a count lower than this
   try {
     const data = await api('GET', `/api/member/groups/${groupId}`);
     GC.activeGroup = { ...GC.activeGroup, ...data };
     const count = data.members?.length || 0;
-    // If server returns 0 members (can happen on freshly-created group due to
-    // replication lag), retry up to 3 times with short backoff before showing 0.
-    if (count === 0 && _retryCount < 3) {
-      setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1), 600);
-      return;
+    // If the detail endpoint returns fewer members than we already know about,
+    // keep the higher number (avoids regressing to 0 due to DB lag or auth issues).
+    const displayCount = Math.max(count, _floorCount);
+    if (displayCount > 0) {
+      setText('gc-topbar-sub', `${displayCount} member${displayCount !== 1 ? 's' : ''}`);
     }
-    setText('gc-topbar-sub', `${count} member${count !== 1 ? 's' : ''}`);
+    // If still 0 and haven't retried enough, try again with backoff
+    if (count === 0 && _retryCount < 3) {
+      setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount), 800);
+    }
 
-    // Topbar nickname button: show "Nicknames" button
+    // Topbar nickname button / role update (always run even if count is uncertain)
     gcRefreshTopbarNicknames(groupId, data);
-
-    // Update my_role for input/delete controls
     gcUpdateInputState();
   } catch (e) {
-    if (_retryCount < 2) setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1), 1200);
+    if (_retryCount < 2) setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount), 1200);
   }
 }
 
