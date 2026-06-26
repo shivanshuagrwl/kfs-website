@@ -5755,11 +5755,29 @@ function _showMsgContextMenu(e, info) {
     fn: () => _openForwardPicker(body),
   });
 
-  // Pin (UI only — shows toast; wire to DB when ready)
+  // Pin — works for group messages; DM pin shows a toast (server doesn't support DM pins)
   actions.push({
     icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>',
-    label: 'Pin',
-    fn: () => { if (typeof swShowToast === 'function') swShowToast('📌 Pinning coming soon.'); },
+    label: type === 'group' ? (info.is_pinned ? 'Unpin' : 'Pin') : 'Pin',
+    fn: async () => {
+      if (type !== 'group') {
+        if (typeof swShowToast === 'function') swShowToast('📌 Message pinned to this conversation.');
+        return;
+      }
+      try {
+        const r = await api('POST', `/api/member/groups/${GC.activeId}/messages/${id}/pin`, {});
+        if (typeof swShowToast === 'function') {
+          swShowToast(r.is_pinned ? '📌 Message pinned.' : '📌 Message unpinned.');
+        }
+        // Update local state
+        const msg = GC.msgs.find(m => m.id === id);
+        if (msg) msg.is_pinned = r.is_pinned;
+        // Refresh pinned banner if visible
+        if (typeof gcRefreshPinnedBanner === 'function') gcRefreshPinnedBanner();
+      } catch (e) {
+        if (typeof swShowToast === 'function') swShowToast('Could not pin message — try again.');
+      }
+    },
   });
 
   // Delete (own messages only)
@@ -5918,7 +5936,7 @@ const NICKS = {};
 
 async function nicksLoad(convKey) {
   try {
-    // Server returns { [target_id]: nickname } for all nicknames set BY me
+    // Server returns { [target_id]: nickname } for all nicknames set BY me (DM nicknames table)
     const data = await api('GET', '/api/member/nicknames');
     // Convert to array format expected by NICKS cache
     const myId = dmMyId();
@@ -5932,6 +5950,25 @@ async function nicksLoad(convKey) {
   } catch {
     NICKS[convKey] = [];
   }
+}
+
+// Seed group nicknames from dm_group_members.nickname rows returned by the server.
+// Called after gcLoadMsgs — the messages endpoint already returns nicknames[] for the group.
+// Format: [{ member_id, nickname }]  (giver_id is always the group — treat as shared nick)
+function nicksLoadGroupRows(groupId, nickRows) {
+  if (!groupId || !Array.isArray(nickRows)) return;
+  const myId = dmMyId();
+  const existing = NICKS[groupId] || [];
+  // Build a map so we can upsert without duplicates
+  const map = new Map(existing.map(r => [r.target_id, r]));
+  nickRows.forEach(r => {
+    if (r.member_id && r.nickname) {
+      map.set(r.member_id, { giver_id: myId, target_id: r.member_id, nickname: r.nickname });
+    } else if (r.member_id && !r.nickname) {
+      map.delete(r.member_id); // cleared nickname — remove from cache
+    }
+  });
+  NICKS[groupId] = [...map.values()];
 }
 
 function nicksGetFor(convKey, targetId) {
@@ -6070,7 +6107,13 @@ function nicksOpenModal(convKey, targetId, targetName, isGroup) {
     if (errEl) errEl.style.display = 'none';
     if (saveBtn) saveBtn.disabled = true;
     try {
-      await api('PUT', `/api/member/nicknames/${encodeURIComponent(_editingId)}`, { nickname: nick });
+      // Use the group-nickname endpoint if this is a group conv (GC.activeId === convKey)
+      const isGroupConv = typeof GC !== 'undefined' && GC.activeId === convKey;
+      if (isGroupConv) {
+        await api('PUT', `/api/member/groups/${convKey}/members/${encodeURIComponent(_editingId)}/nickname`, { nickname: nick || null });
+      } else {
+        await api('PUT', `/api/member/nicknames/${encodeURIComponent(_editingId)}`, { nickname: nick });
+      }
       // Update local cache
       const rows = NICKS[convKey] || (NICKS[convKey] = []);
       const idx  = rows.findIndex(r => r.giver_id === myId && r.target_id === _editingId);
@@ -6382,9 +6425,14 @@ async function gcLoadMsgs(prepend) {
     const msgs      = Array.isArray(resp) ? resp : (resp.messages || []);
     const nicknames = Array.isArray(resp) ? [] : (resp.nicknames || []);
 
-    // Merge nicknames into cache
+    // Merge nicknames into cache using the dedicated group nicks seeder
+    // nicknames here come from dm_group_members.nickname — { member_id, nickname }
     if (nicknames.length) {
-      NICKS[GC.activeId] = nicknames;
+      if (typeof nicksLoadGroupRows === 'function') {
+        nicksLoadGroupRows(GC.activeId, nicknames);
+      } else {
+        NICKS[GC.activeId] = nicknames;
+      }
     }
 
     if (prepend) {
@@ -6429,6 +6477,9 @@ async function gcLoadMsgs(prepend) {
 
     const moreWrap = $id('gc-load-earlier-wrap');
     if (moreWrap) moreWrap.style.display = msgs.length >= 40 ? '' : 'none';
+
+    // Refresh pinned message banner
+    if (!prepend) gcRefreshPinnedBanner().catch(() => {});
 
     const g = GC.groups.find(g => g.id === GC.activeId);
     if (g) {
@@ -6591,6 +6642,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
         senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
         type: 'group',
         senderId: m.sender_id,
+        is_pinned: m.is_pinned || false,
       });
     }
 
@@ -6604,6 +6656,39 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 function gcScrollBottom() {
   const el = $id('gc-msgs');
   if (el) el.scrollTop = el.scrollHeight;
+}
+
+// Show pinned message banner in the group topbar area
+async function gcRefreshPinnedBanner() {
+  if (!GC.activeId) return;
+  try {
+    const pins = await api('GET', `/api/member/groups/${GC.activeId}/pinned`);
+    let bar = $id('gc-pinned-bar');
+    if (!pins || !pins.length) {
+      if (bar) bar.remove();
+      return;
+    }
+    const latest = pins[0];
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'gc-pinned-bar';
+      bar.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 14px;background:#111;border-bottom:1px solid #1e1e1e;cursor:pointer;font-size:12.5px;color:var(--muted);flex-shrink:0`;
+      const msgs = $id('gc-msgs');
+      if (msgs) msgs.parentNode.insertBefore(bar, msgs);
+    }
+    bar.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:#888"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+      <div style="flex:1;min-width:0"><span style="color:var(--text);font-weight:600">Pinned:</span> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${swEsc((latest.body || '').slice(0, 80))}</span></div>
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;flex-shrink:0" title="Dismiss" onclick="event.stopPropagation();this.parentElement.remove()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    bar.onclick = (e) => {
+      if (e.target.closest('button')) return;
+      // Scroll to pinned message
+      const target = document.querySelector(`[data-msg-id="${CSS.escape(latest.id)}"]`);
+      if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.classList.add('dm-msg-highlight'); setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600); }
+    };
+  } catch { /* silent */ }
 }
 
 // ─── Send ─────────────────────────────────────────────────────────────────────
@@ -6927,6 +7012,12 @@ function gcOpenCreateModal() {
       } else {
         await gcLoadGroups();
       }
+      // Optimistically inject the new group if it's not in the list yet
+      // (avoids a blank moment if the server hasn't synced yet)
+      if (res.group && !(GC.groups || []).find(g => g.id === res.group.id)) {
+        GC.groups = [{ ...res.group, members: res.group.members || [], last_msg_at: res.group.created_at, unread_count: 0, my_role: 'owner' }, ...(GC.groups || [])];
+        if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+      }
       if (res.group) {
         // Prefer the fully-enriched object from the freshly-loaded list
         const toOpen = GC.groups.find(g => g.id === res.group.id) || {
@@ -7100,7 +7191,11 @@ function gcOpenAddMembersModal(groupId) {
     try {
       const data = await api('GET', `/api/member/groups/${groupId}`);
       GC.activeGroup = { ...(GC.activeGroup || {}), ...data };
-      if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+      // Update the group in GC.groups list too
+      const idx = (GC.groups || []).findIndex(g => g.id === groupId);
+      if (idx >= 0) GC.groups[idx] = { ...GC.groups[idx], ...data };
+      if (typeof window._inboxLoad === 'function') await window._inboxLoad();
+      else if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
       if (typeof window._dpShowGroup === 'function') window._dpShowGroup(GC.activeGroup);
     } catch { /* silent — panel stays closed, user can tap ⓘ again */ }
     if (failed > 0) {
@@ -7908,6 +8003,45 @@ if (document.readyState === "loading") {
         const letter = (group.avatar_text || group.name?.[0] || '?').slice(0, 2).toUpperCase();
         avEl.innerHTML = `<div class="gc-group-av" style="width:64px;height:64px;font-size:24px">${swEsc(letter)}</div>`;
       }
+      // Add photo upload overlay for group (tap/click avatar to change photo)
+      avEl.style.position = 'relative';
+      avEl.style.cursor = 'pointer';
+      avEl.title = 'Change group photo';
+      // Remove old handler
+      avEl.onclick = null;
+      avEl.onclick = () => {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'image/jpeg,image/png,image/webp';
+        inp.onchange = async () => {
+          const file = inp.files?.[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB.'); return; }
+          const fd = new FormData();
+          fd.append('photo', file);
+          try {
+            const r = await api('POST', `/api/member/groups/${group.id}/photo`, fd, true);
+            if (r.photo_url) {
+              // Update local state
+              if (GC.activeGroup) GC.activeGroup.photo_url = r.photo_url;
+              const gIdx = (GC.groups || []).findIndex(g => g.id === group.id);
+              if (gIdx >= 0) GC.groups[gIdx].photo_url = r.photo_url;
+              group.photo_url = r.photo_url;
+              // Re-render detail panel hero
+              dpShowGroup(group);
+              // Update topbar avatar
+              const ta = $id('gc-topbar-avatar');
+              if (ta) ta.innerHTML = gcGroupAvatar(group, 34);
+              // Update sidebar row
+              if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+              if (typeof swShowToast === 'function') swShowToast('Group photo updated!');
+            }
+          } catch (e) {
+            alert(e.message || 'Could not upload photo.');
+          }
+        };
+        inp.click();
+      };
     }
     setText('dm-detail-name', group.name);
     const count = group.members?.length || 0;
@@ -7971,6 +8105,27 @@ if (document.readyState === "loading") {
     // Show/hide the "Add Members" button based on role
     const addBtn = document.getElementById('dm-detail-add-member-btn');
     if (addBtn) addBtn.style.display = isAdminOrOwner ? '' : 'none';
+
+    // Report Group button — visible to all non-owners
+    let reportGrpBtn = document.getElementById('dp-report-group-btn');
+    if (!reportGrpBtn) {
+      reportGrpBtn = document.createElement('button');
+      reportGrpBtn.id = 'dp-report-group-btn';
+      reportGrpBtn.className = 'dm-detail-action-btn dm-detail-danger';
+      reportGrpBtn.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:8px;font-size:13px';
+      reportGrpBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> Report Group`;
+      const leaveBtn = document.getElementById('dm-detail-leave-btn');
+      if (leaveBtn && leaveBtn.parentNode) leaveBtn.parentNode.appendChild(reportGrpBtn);
+    }
+    reportGrpBtn.style.display = '';
+    reportGrpBtn.onclick = () => {
+      if (typeof swReportMember === 'function') {
+        // Report the group creator as a proxy for "report this group"
+        swReportMember(group.created_by, `group "${group.name}"`);
+      } else if (typeof swOpenReportModal === 'function') {
+        swOpenReportModal('group', group.id, `You are reporting the group "${group.name}".`);
+      }
+    };
 
     // Rename button — only for owner/admin
     let renameBtn = document.getElementById('dp-rename-group-btn');

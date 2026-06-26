@@ -14674,7 +14674,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
 
     const { data: groups, error: groupsErr } = await supabase
       .from("dm_group_chats")
-      .select("id, name, created_by, created_at")
+      .select("id, name, created_by, created_at, photo_url")
       .in("id", groupIds);
     if (groupsErr) { console.error("[groups GET] chats:", groupsErr.message); return res.json([]); }
 
@@ -14738,6 +14738,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
       return {
         id:                g.id,
         name:              g.name,
+        photo_url:         g.photo_url || null,
         created_by:        g.created_by,
         created_at:        g.created_at,
         members:           membersByGroup[g.id] || [],
@@ -14876,7 +14877,7 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
     if (!mem) return res.status(403).json({ error: "Not in this group" });
 
     const { data: group } = await supabase
-      .from("dm_group_chats").select("id, name, created_by, created_at").eq("id", gid).maybeSingle();
+      .from("dm_group_chats").select("id, name, created_by, created_at, photo_url").eq("id", gid).maybeSingle();
     if (!group) return res.status(404).json({ error: "Group not found" });
 
     // Two-step: get member rows first, then profiles (avoids FK name dependency)
@@ -14908,6 +14909,7 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
     res.json({
       id:         group.id,
       name:       group.name,
+      photo_url:  group.photo_url || null,
       created_by: group.created_by,
       created_at: group.created_at,
       members:    (memberRows || []).map(m => ({
@@ -14945,6 +14947,119 @@ app.patch("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (r
     res.json({ success: true, name });
   } catch (e) {
     res.status(500).json({ error: "Failed to rename group" });
+  }
+});
+
+// POST /api/member/groups/:id/photo  — upload group profile picture (multipart)
+app.post("/api/member/groups/:id/photo", memberAuthMiddleware, gcWriteLimit,
+  multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }).single("photo"),
+  async (req, res) => {
+    try {
+      const myId = req.member.memberId;
+      const gid  = req.params.id;
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      // Caller must be in the group
+      const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+      // Resize to 200×200 square, JPEG, quality 85
+      const resized = await sharp(req.file.buffer)
+        .resize(200, 200, { fit: "cover", position: "centre" })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+
+      // Upload to Cloudinary
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "kfs-group-photos", public_id: `group_${gid}`, overwrite: true, resource_type: "image" },
+          (err, result) => err ? reject(err) : resolve(result)
+        ).end(resized);
+      });
+
+      const photoUrl = uploadResult.secure_url;
+      await supabase.from("dm_group_chats").update({ photo_url: photoUrl }).eq("id", gid);
+
+      // System message
+      const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+      (async () => { try { await supabase.from("dm_group_messages").insert([{
+        group_id: gid, sender_id: myId,
+        body: `\x1fsys\x1f\uD83D\uDDBC\uFE0F ${actor?.name || "Someone"} updated the group photo`,
+      }]); } catch(e) {} })();
+
+      res.json({ success: true, photo_url: photoUrl });
+    } catch (e) {
+      console.error("[groups/photo POST]", e.message);
+      res.status(500).json({ error: "Failed to upload group photo" });
+    }
+  }
+);
+
+// POST /api/member/groups/:id/messages/:msgId/pin  — pin/unpin a group message
+app.post("/api/member/groups/:id/messages/:msgId/pin", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const msgId = req.params.msgId;
+
+    // Must be in group
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    // Check current pin state
+    const { data: msg } = await supabase.from("dm_group_messages").select("id, group_id, is_pinned").eq("id", msgId).eq("group_id", gid).is("deleted_at", null).maybeSingle();
+    if (!msg) return res.status(404).json({ error: "Message not found" });
+
+    const newPinned = !msg.is_pinned;
+    await supabase.from("dm_group_messages").update({ is_pinned: newPinned }).eq("id", msgId);
+
+    // System message
+    const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    const sysBody = newPinned
+      ? `\x1fsys\x1f\uD83D\uDCCC ${actor?.name || "Someone"} pinned a message`
+      : `\x1fsys\x1f\uD83D\uDCCC ${actor?.name || "Someone"} unpinned a message`;
+    (async () => { try { await supabase.from("dm_group_messages").insert([{
+      group_id: gid, sender_id: myId, body: sysBody,
+    }]); } catch(e) {} })();
+
+    res.json({ success: true, is_pinned: newPinned });
+  } catch (e) {
+    console.error("[groups/pin]", e.message);
+    res.status(500).json({ error: "Failed to pin message" });
+  }
+});
+
+// GET /api/member/groups/:id/pinned  — get pinned messages
+app.get("/api/member/groups/:id/pinned", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const { data: msgs } = await supabase
+      .from("dm_group_messages")
+      .select("id, sender_id, body, created_at")
+      .eq("group_id", gid)
+      .eq("is_pinned", true)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const senderIds = [...new Set((msgs || []).map(m => m.sender_id))];
+    const senderMap = {};
+    if (senderIds.length) {
+      const { data: senders } = await supabase.from("members").select("id, name").in("id", senderIds);
+      (senders || []).forEach(s => { senderMap[s.id] = s.name; });
+    }
+
+    res.json((msgs || []).map(m => ({
+      id: m.id,
+      body: m.body?.startsWith('\x1fsys\x1f') ? m.body.slice(6) : m.body,
+      sender_name: senderMap[m.sender_id] || "Member",
+      sent_at: m.created_at,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load pinned messages" });
   }
 });
 
@@ -15294,6 +15409,14 @@ app.get("/api/member/messages/reactions", memberAuthMiddleware, reactionLimit, a
 });
 
 // ── init check ────────────────────────────────────────────────────────────────
+// ── SQL MIGRATION REQUIRED for pin + group photo features ─────────────────────
+// Run once in Supabase SQL editor:
+//
+//   ALTER TABLE dm_group_chats ADD COLUMN IF NOT EXISTS photo_url TEXT;
+//   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+//   CREATE INDEX IF NOT EXISTS idx_group_msgs_pinned ON dm_group_messages(group_id, is_pinned) WHERE is_pinned = TRUE;
+//
+// ─────────────────────────────────────────────────────────────────────────────
 async function initSocialDB() {
   const tables = [
     "member_blocks",
