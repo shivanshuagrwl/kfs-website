@@ -13289,6 +13289,109 @@ app.get("/scanner.js", (req, res) => {
 // join with ":", guaranteeing a stable unique ID for any pair of members.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── E2EE key-management rate limit ───────────────────────────────────────────
+const e2eeKeyLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
+});
+
+// ── POST /api/member/e2ee/publish-key ────────────────────────────────────────
+// Upsert caller's ECDH P-256 public key. Called on every login after key-gen.
+// Server validates structure but NEVER receives or stores private keys.
+app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { public_key_jwk } = req.body || {};
+    if (!public_key_jwk || typeof public_key_jwk !== 'object')
+      return res.status(400).json({ error: "public_key_jwk (JWK object) required" });
+    if (public_key_jwk.kty !== 'EC' || public_key_jwk.crv !== 'P-256' || !public_key_jwk.x || !public_key_jwk.y)
+      return res.status(400).json({ error: "Invalid public key: must be ECDH P-256 JWK with x, y coords" });
+    if (public_key_jwk.d)
+      return res.status(400).json({ error: "Private key component (d) must never be sent to the server" });
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("member_e2ee_keys")
+      .upsert([{ member_id: myId, public_key_jwk, fingerprint: null, published_at: now, updated_at: now }],
+              { onConflict: "member_id" });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[e2ee/publish-key]", e.message);
+    res.status(500).json({ error: "Failed to publish key" });
+  }
+});
+
+// ── GET /api/member/e2ee/public-key/:memberId ─────────────────────────────────
+// Fetch a member's ECDH public key so the caller can encrypt to them.
+// Public keys are not secret — any authenticated member can fetch any other's.
+app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("member_e2ee_keys")
+      .select("public_key_jwk, fingerprint, updated_at")
+      .eq("member_id", req.params.memberId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "No E2EE key found for this member" });
+    res.json({ member_id: req.params.memberId, public_key_jwk: data.public_key_jwk, fingerprint: data.fingerprint, updated_at: data.updated_at });
+  } catch (e) {
+    console.error("[e2ee/public-key GET]", e.message);
+    res.status(500).json({ error: "Failed to fetch key" });
+  }
+});
+
+// ── GET /api/member/e2ee/public-keys?ids=a,b,c ───────────────────────────────
+// Batch-fetch public keys for all members in a group chat.
+app.get("/api/member/e2ee/public-keys", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+  try {
+    const ids = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 60);
+    if (!ids.length) return res.json({});
+    const { data, error } = await supabase
+      .from("member_e2ee_keys")
+      .select("member_id, public_key_jwk, fingerprint")
+      .in("member_id", ids);
+    if (error) throw error;
+    const out = {};
+    (data || []).forEach(r => { out[r.member_id] = { public_key_jwk: r.public_key_jwk, fingerprint: r.fingerprint }; });
+    res.json(out);
+  } catch (e) {
+    console.error("[e2ee/public-keys batch GET]", e.message);
+    res.status(500).json({ error: "Failed to fetch keys" });
+  }
+});
+
+// ── GET /api/admin/e2ee/report-decrypt/:reportId ─────────────────────────────
+// Master-only: read the decrypted plaintext snapshot for an E2EE message report.
+// Plaintext was sent by the reporter's client — no server-side decryption ever happens.
+app.get("/api/admin/e2ee/report-decrypt/:reportId", masterMiddleware, async (req, res) => {
+  try {
+    const { data: report, error } = await supabase
+      .from("content_reports")
+      .select("id, content_type, content_id, reason, details, decrypted_snapshot, e2ee_report, reporter_id, created_at")
+      .eq("id", req.params.reportId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!report) return res.status(404).json({ error: "Report not found" });
+    logActivity(req.admin.id, req.admin.name, "view_e2ee_report", "report", req.params.reportId).catch(() => {});
+    res.json({
+      report_id:          report.id,
+      content_type:       report.content_type,
+      content_id:         report.content_id,
+      reason:             report.reason,
+      details:            report.details,
+      e2ee:               report.e2ee_report,
+      decrypted_snapshot: report.e2ee_report ? report.decrypted_snapshot : null,
+      created_at:         report.created_at,
+    });
+  } catch (e) {
+    console.error("[admin/e2ee/report-decrypt]", e.message);
+    res.status(500).json({ error: "Failed to load report" });
+  }
+});
+
 const dmRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 40,
@@ -13449,9 +13552,10 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const asc = !!since;
 
     // Fetch both sides: messages received by me + messages I sent in this conv
+    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self";
     let qRecv = supabase
       .from("member_notifications")
-      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender")
+      .select(_dmSelect)
       .eq("member_id", myId)
       .eq("link_type", "dm")
       .eq("link_id", convKey)
@@ -13459,7 +13563,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       .limit(limit);
     let qSent = supabase
       .from("member_notifications")
-      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender")
+      .select(_dmSelect)
       .eq("actor_id", myId)
       .eq("link_type", "dm")
       .eq("link_id", convKey)
@@ -13499,15 +13603,19 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const reactionMap = await fetchReactionsFor(msgs.map(m => m.id), "dm", myId);
 
     res.json(msgs.map(m => ({
-      id:               m.id,
-      sender_id:        m.actor_id,
-      body:             m.body,
-      sent_at:          m.created_at,
-      is_read:          m.is_read,
-      replied_to_id:    m.replied_to_id    || null,
-      replied_to_body:  m.replied_to_body  || null,
-      replied_to_sender:m.replied_to_sender || null,
-      reactions:        reactionMap[m.id] || [],
+      id:                   m.id,
+      sender_id:            m.actor_id,
+      body:                 m.body,
+      sent_at:              m.created_at,
+      is_read:              m.is_read,
+      replied_to_id:        m.replied_to_id    || null,
+      replied_to_body:      m.replied_to_body  || null,
+      replied_to_sender:    m.replied_to_sender || null,
+      reactions:            reactionMap[m.id] || [],
+      // E2EE fields (null for legacy plaintext messages)
+      e2ee:                 m.e2ee || false,
+      cipher_for_recipient: m.cipher_for_recipient || null,
+      cipher_for_self:      m.cipher_for_self || null,
     })));
   } catch (e) {
     dmLogErr("[dm/messages GET]", e);
@@ -13516,18 +13624,30 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
 });
 
 // ── POST /api/member/dm/send ──────────────────────────────────────────────────
-// Body: { to_member_id, body }
+// Body: { to_member_id, body } — or E2EE: { to_member_id, e2ee: true, cipher_for_recipient, cipher_for_self, body: "" }
 app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, res) => {
   try {
-    const myId              = req.member.memberId;
-    const { to_member_id, body, replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
+    const myId = req.member.memberId;
+    const { to_member_id, body, replied_to_id, replied_to_body, replied_to_sender,
+            e2ee, cipher_for_recipient, cipher_for_self } = req.body || {};
 
     if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
     if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
 
+    // E2EE messages arrive with e2ee:true and empty body; validate ciphertexts present
+    if (e2ee) {
+      if (!cipher_for_recipient || !cipher_for_self)
+        return res.status(400).json({ error: "E2EE message missing cipher_for_recipient or cipher_for_self" });
+      if (typeof cipher_for_recipient !== 'string' || cipher_for_recipient.length > 8000)
+        return res.status(400).json({ error: "cipher_for_recipient invalid" });
+      if (typeof cipher_for_self !== 'string' || cipher_for_self.length > 8000)
+        return res.status(400).json({ error: "cipher_for_self invalid" });
+    }
+
     const trimmed = (body || "").trim();
-    if (!trimmed || trimmed === "\u200B") return res.status(400).json({ error: "Message body required" });
-    if (trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
+    // For E2EE messages body is an empty sentinel — skip the plaintext length check
+    if (!e2ee && (!trimmed || trimmed === "\u200B")) return res.status(400).json({ error: "Message body required" });
+    if (!e2ee && trimmed.length > 2000) return res.status(400).json({ error: "Message too long (max 2000 chars)" });
 
     // NOTE: DMs are a private, unmoderated space by design — no profanity gate here.
     // (Profanity checks still apply to group chats, posts, and comments, which are
@@ -13564,21 +13684,26 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     const { data: msg, error: insertErr } = await supabase
       .from("member_notifications")
       .insert([{
-        member_id:        to_member_id,
-        type:             "dm",
-        title:            `Message from ${sender?.name || req.member.username}`,
-        body:             trimmed,
-        actor_id:         myId,
-        actor_name:       sender?.name   || req.member.username,
-        actor_photo:      sender?.photo  || null,
-        link_type:        "dm",
-        link_id:          key,
-        is_read:          false,
-        replied_to_id:    replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
-        replied_to_body:  replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
-        replied_to_sender:replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
+        member_id:             to_member_id,
+        type:                  "dm",
+        title:                 `Message from ${sender?.name || req.member.username}`,
+        // E2EE: body is empty sentinel; plaintext never touches the server
+        body:                  e2ee ? "" : trimmed,
+        actor_id:              myId,
+        actor_name:            sender?.name   || req.member.username,
+        actor_photo:           sender?.photo  || null,
+        link_type:             "dm",
+        link_id:               key,
+        is_read:               false,
+        replied_to_id:         replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
+        replied_to_body:       replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
+        replied_to_sender:     replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
+        // E2EE columns (null for legacy plaintext messages)
+        e2ee:                  e2ee ? true : false,
+        cipher_for_recipient:  e2ee ? cipher_for_recipient : null,
+        cipher_for_self:       e2ee ? cipher_for_self : null,
       }])
-      .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender")
+      .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self")
       .single();
 
     if (insertErr) throw insertErr;
@@ -13587,15 +13712,19 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
       success:         true,
       conv_key:        key,
       message: {
-        id:               msg.id,
-        sender_id:        myId,
-        body:             msg.body,
-        sent_at:          msg.created_at,
-        read_at:          null,
-        replied_to_id:    msg.replied_to_id    || null,
-        replied_to_body:  msg.replied_to_body  || null,
-        replied_to_sender:msg.replied_to_sender || null,
-        reactions:        [],
+        id:                   msg.id,
+        sender_id:            myId,
+        body:                 msg.body,
+        sent_at:              msg.created_at,
+        read_at:              null,
+        replied_to_id:        msg.replied_to_id    || null,
+        replied_to_body:      msg.replied_to_body  || null,
+        replied_to_sender:    msg.replied_to_sender || null,
+        reactions:            [],
+        // E2EE fields — client uses these to render/decrypt
+        e2ee:                 msg.e2ee || false,
+        cipher_for_recipient: msg.cipher_for_recipient || null,
+        cipher_for_self:      msg.cipher_for_self || null,
       },
     });
   } catch (e) {
@@ -13722,15 +13851,24 @@ const reportWriteLimit = rateLimit({
 });
 
 // ── POST /api/member/reports  — submit a report (members only) ───────────────
-// Body: { content_type: "post"|"dm"|"comment"|"group_message"|"member", content_id, reason, details? }
+// Body: { content_type: "post"|"dm"|"comment"|"group_message"|"member", content_id, reason, details?,
+//          e2ee_report?: boolean, decrypted_snapshot?: string }
 app.post("/api/member/reports", memberAuthMiddleware, reportWriteLimit, async (req, res) => {
   try {
-    const { content_type, content_id, reason, details } = req.body || {};
+    const { content_type, content_id, reason, details, e2ee_report, decrypted_snapshot } = req.body || {};
     if (!["post", "dm", "comment", "group_message", "member"].includes(content_type))
       return res.status(400).json({ error: "content_type must be post, dm, comment, group_message, or member" });
     if (!content_id) return res.status(400).json({ error: "content_id required" });
     if (!reason || String(reason).trim().length < 3)
       return res.status(400).json({ error: "reason required" });
+
+    // E2EE snapshot validation: only allowed for dm/group_message types, max 4000 chars
+    let safeSnapshot = null;
+    if (e2ee_report && decrypted_snapshot) {
+      if (!["dm", "group_message"].includes(content_type))
+        return res.status(400).json({ error: "e2ee_report only valid for dm or group_message" });
+      safeSnapshot = String(decrypted_snapshot).slice(0, 4000);
+    }
 
     const reporterId = req.member.memberId;
 
@@ -13747,12 +13885,16 @@ app.post("/api/member/reports", memberAuthMiddleware, reportWriteLimit, async (r
     if (dup) return res.status(409).json({ error: "You have already reported this content recently." });
 
     const { error: insertErr } = await supabase.from("content_reports").insert([{
-      reporter_id:  reporterId,
+      reporter_id:         reporterId,
       content_type,
-      content_id:   String(content_id),
-      reason:       String(reason).trim().slice(0, 200),
-      details:      details ? String(details).trim().slice(0, 1000) : null,
-      status:       "pending",
+      content_id:          String(content_id),
+      reason:              String(reason).trim().slice(0, 200),
+      details:             details ? String(details).trim().slice(0, 1000) : null,
+      status:              "pending",
+      // E2EE: reporter's client decrypts the flagged message and sends us the plaintext.
+      // This is the Signal/iMessage approach — server never decrypts anything itself.
+      e2ee_report:         e2ee_report ? true : false,
+      decrypted_snapshot:  safeSnapshot,
     }]);
     if (insertErr) throw insertErr;
 
@@ -13779,6 +13921,7 @@ app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
       .select(`
         id, content_type, content_id, reason, details, status,
         admin_note, reviewed_by, reviewed_at, created_at,
+        e2ee_report, decrypted_snapshot,
         reporter:reporter_id ( id, name, photo )
       `)
       .eq("status", status)
@@ -13837,7 +13980,15 @@ app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
           snapshot = mem;
         }
       } catch {}
-      return { ...r, snapshot };
+      return {
+        ...r,
+        snapshot,
+        // E2EE: surface decrypted snapshot for master admins only.
+        // This is the plaintext the reporter's client decrypted and submitted.
+        // The live message on the server is still encrypted and unreadable.
+        e2ee_report:        r.e2ee_report || false,
+        decrypted_snapshot: r.e2ee_report ? (r.decrypted_snapshot || null) : null,
+      };
     }));
 
     res.json(enriched);
@@ -14919,7 +15070,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender")
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -14964,6 +15115,10 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           replied_to_body:  m.replied_to_body  || null,
           replied_to_sender:m.replied_to_sender || null,
           reactions:        reactionMap[m.id] || [],
+          // E2EE fields
+          e2ee:             m.e2ee || false,
+          ciphertext:       m.ciphertext || null,
+          wrapped_keys:     m.wrapped_keys || null,
         };
       });
 
@@ -14974,15 +15129,25 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
   }
 });
 
-// POST /api/member/groups/:id/messages  { body }
+// POST /api/member/groups/:id/messages  { body } — or E2EE: { e2ee: true, ciphertext, wrapped_keys, body: "" }
 app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
     if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid  = req.params.id;
-    const { body: rawBody, replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
+    const { body: rawBody, replied_to_id, replied_to_body, replied_to_sender,
+            e2ee, ciphertext, wrapped_keys } = req.body || {};
     const body = (rawBody || "").trim();
-    if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
+
+    // E2EE validation
+    if (e2ee) {
+      if (!ciphertext || typeof ciphertext !== 'string' || ciphertext.length > 8000)
+        return res.status(400).json({ error: "E2EE ciphertext missing or invalid" });
+      if (!wrapped_keys || typeof wrapped_keys !== 'object' || Array.isArray(wrapped_keys))
+        return res.status(400).json({ error: "E2EE wrapped_keys must be an object { memberId: wrappedKey }" });
+    } else {
+      if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
+    }
 
     // NOTE: Group chats are a private, unmoderated space (like DMs) — no profanity gate here.
     // (Profanity checks still apply to posts and comments, which are public-facing.)
@@ -14998,12 +15163,17 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
       .insert([{
         group_id:          gid,
         sender_id:         myId,
-        body,
+        // E2EE: body is empty sentinel; plaintext never stored server-side
+        body:              e2ee ? "" : body,
         replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
         replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
         replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
+        // E2EE columns
+        e2ee:              e2ee ? true : false,
+        ciphertext:        e2ee ? ciphertext : null,
+        wrapped_keys:      e2ee ? wrapped_keys : null,
       }])
-      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender")
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
       .single();
     if (error) throw error;
 
@@ -15021,6 +15191,10 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         replied_to_body:  msg.replied_to_body  || null,
         replied_to_sender:msg.replied_to_sender || null,
         reactions:        [],
+        // E2EE fields
+        e2ee:             msg.e2ee || false,
+        ciphertext:       msg.ciphertext || null,
+        wrapped_keys:     msg.wrapped_keys || null,
       },
     });
   } catch (e) {

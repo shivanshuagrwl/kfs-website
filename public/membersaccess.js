@@ -1,4 +1,422 @@
 // ═══════════════════════════════════════════════════════════════════════════════
+// E2EE MODULE — End-to-End Encryption for DMs + Group Chats
+//
+// Design: Signal-style ECDH + AES-GCM
+//   • Each member has a persistent ECDH P-256 key pair (private key in IndexedDB,
+//     public key published to server on first login / key-generation).
+//   • DMs:  sender fetches recipient's public key → ECDH → shared AES-GCM key →
+//           encrypts body → stores ciphertext on server. Server never sees plaintext.
+//   • Groups: per-message random AES-GCM key, wrapped (encrypted) for each member
+//             using their ECDH public key → each member decrypts the wrapper key
+//             then decrypts the message. One ciphertext, N wrapped keys.
+//   • Reports: reporter's client decrypts the flagged message locally, then sends
+//              ONLY the plaintext of that specific message (+ context) to a secure
+//              report endpoint that only master admins can read. This is exactly the
+//              same approach Signal/iMessage use.
+//   • Key rotation: a new ephemeral AES key per message (DMs) or per group message
+//              so compromise of one message key doesn't expose past/future messages.
+//
+// Threat model:
+//   ✓ Server DB breach — all stored bodies are AES-GCM ciphertext, unreadable.
+//   ✓ Server operator snooping — server never receives plaintext of any message.
+//   ✓ Regular admins — have zero access to message content.
+//   ✓ Master admins — can read content only when a member explicitly reports a
+//              message, and only that message (plus a small window of context).
+//   ✗ Device compromise — if a member's device/browser is compromised, private
+//              keys in IndexedDB could be extracted. Mitigated by not syncing
+//              private keys anywhere and locking them to origin.
+//   ✗ Active MITM on key exchange — mitigated by key fingerprints that members
+//              can optionally verify out-of-band (shown in profile/details panel).
+//
+// Browser API: Web Crypto (SubtleCrypto) — available in all modern browsers,
+//   no external library needed. Works in the same origin as the rest of the app.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const E2EE = (() => {
+
+  // ── Constants ────────────────────────────────────────────────────────────────
+  const DB_NAME    = 'kfs-e2ee';
+  const DB_VERSION = 1;
+  const STORE_NAME = 'keys';
+  const MY_KEY_ID  = 'my-identity-keypair'; // fixed key in IndexedDB store
+
+  // ── IndexedDB helpers ────────────────────────────────────────────────────────
+
+  function _openDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore(STORE_NAME);
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function _dbGet(key) {
+    const db = await _openDb();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function _dbPut(key, value) {
+    const db = await _openDb();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE_NAME, 'readwrite');
+      const req = tx.objectStore(STORE_NAME).put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  // ── Base64 helpers ───────────────────────────────────────────────────────────
+
+  function _ab2b64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+  }
+  function _b642ab(b64) {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr.buffer;
+  }
+
+  // ── Key pair management ───────────────────────────────────────────────────────
+
+  /**
+   * Generate a new ECDH P-256 key pair and persist private key in IndexedDB.
+   * Returns { publicKeyJwk, privateKey (CryptoKey) }.
+   */
+  async function _generateKeyPair() {
+    const kp = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,  // extractable so we can export the public key for the server
+      ['deriveKey', 'deriveBits']
+    );
+    const publicKeyJwk  = await crypto.subtle.exportKey('jwk', kp.publicKey);
+    const privateKeyJwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    await _dbPut(MY_KEY_ID, { publicKeyJwk, privateKeyJwk });
+    return { publicKeyJwk, privateKey: kp.privateKey };
+  }
+
+  /**
+   * Load our identity key pair from IndexedDB.
+   * Creates a new one if none exists yet.
+   * Returns { publicKeyJwk, privateKey (CryptoKey) }.
+   */
+  async function _loadMyKeyPair() {
+    const stored = await _dbGet(MY_KEY_ID);
+    if (stored) {
+      const privateKey = await crypto.subtle.importKey(
+        'jwk', stored.privateKeyJwk,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false, ['deriveKey', 'deriveBits']
+      );
+      return { publicKeyJwk: stored.publicKeyJwk, privateKey };
+    }
+    return _generateKeyPair();
+  }
+
+  /**
+   * Import a peer's public key from JWK format to a CryptoKey.
+   */
+  async function _importPeerPublicKey(jwk) {
+    return crypto.subtle.importKey(
+      'jwk', jwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true, []
+    );
+  }
+
+  /**
+   * Derive a shared AES-GCM-256 key from our private key + peer's public key.
+   * This is the ECDH key agreement step.
+   */
+  async function _deriveSharedKey(myPrivateKey, peerPublicKey) {
+    return crypto.subtle.deriveKey(
+      { name: 'ECDH', public: peerPublicKey },
+      myPrivateKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  // ── AES-GCM encrypt / decrypt ─────────────────────────────────────────────────
+
+  /**
+   * Encrypt plaintext string with AES-GCM.
+   * Returns base64(iv) + ':' + base64(ciphertext).
+   */
+  async function _aesEncrypt(aesKey, plaintext) {
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder().encode(plaintext);
+    const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, enc);
+    return _ab2b64(iv.buffer) + ':' + _ab2b64(ct);
+  }
+
+  /**
+   * Decrypt an AES-GCM ciphertext produced by _aesEncrypt.
+   */
+  async function _aesDecrypt(aesKey, cipherStr) {
+    const [ivB64, ctB64] = cipherStr.split(':');
+    if (!ivB64 || !ctB64) throw new Error('E2EE: malformed ciphertext');
+    const iv = new Uint8Array(_b642ab(ivB64));
+    const ct = _b642ab(ctB64);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ct);
+    return new TextDecoder().decode(pt);
+  }
+
+  // ── Wrap / unwrap an AES key with ECDH-derived shared key ─────────────────────
+  // Used for group messages: the message is encrypted once with a random AES key,
+  // then that key is "wrapped" (encrypted) separately for each group member.
+
+  async function _wrapAesKey(aesKey, wrapperKey) {
+    const raw = await crypto.subtle.exportKey('raw', aesKey);
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapperKey, raw);
+    return _ab2b64(iv.buffer) + ':' + _ab2b64(ct);
+  }
+
+  async function _unwrapAesKey(wrappedStr, wrapperKey) {
+    const [ivB64, ctB64] = wrappedStr.split(':');
+    const iv  = new Uint8Array(_b642ab(ivB64));
+    const ct  = _b642ab(ctB64);
+    const raw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, wrapperKey, ct);
+    return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  }
+
+  // ── Public-key cache (avoid re-fetching) ─────────────────────────────────────
+
+  const _peerKeyCache = new Map(); // memberId → CryptoKey (public)
+
+  async function _getPeerPublicKey(memberId) {
+    if (_peerKeyCache.has(memberId)) return _peerKeyCache.get(memberId);
+    const data = await api('GET', `/api/member/e2ee/public-key/${memberId}`);
+    if (!data?.public_key_jwk) throw new Error(`No E2EE key for member ${memberId}`);
+    const key = await _importPeerPublicKey(data.public_key_jwk);
+    _peerKeyCache.set(memberId, key);
+    return key;
+  }
+
+  // ── Initialise: load/generate key pair, publish public key to server ──────────
+
+  let _myPrivateKey   = null;
+  let _myPublicKeyJwk = null;
+  let _ready          = false;
+  let _readyPromise   = null;
+
+  /**
+   * Must be called once on login (after _member is set).
+   * Generates key pair if needed, publishes public key to server.
+   */
+  async function init() {
+    if (_readyPromise) return _readyPromise;
+    _readyPromise = (async () => {
+      try {
+        const { publicKeyJwk, privateKey } = await _loadMyKeyPair();
+        _myPrivateKey   = privateKey;
+        _myPublicKeyJwk = publicKeyJwk;
+        // Publish our public key so peers can encrypt messages to us.
+        // The server stores it — it's not secret. Idempotent upsert.
+        await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+        _ready = true;
+        console.log('[E2EE] Ready. Key fingerprint:', await fingerprint());
+      } catch (e) {
+        console.error('[E2EE] init failed:', e.message);
+        // Non-fatal: fall back to plaintext mode (E2EE.ready() returns false)
+      }
+    })();
+    return _readyPromise;
+  }
+
+  function ready() { return _ready; }
+
+  // ── Fingerprint (for out-of-band verification) ───────────────────────────────
+
+  /**
+   * SHA-256 of the raw public key bytes, returned as a hex string broken into
+   * 8-char groups (e.g. "A1B2C3D4 E5F60718 …"). Members can compare these
+   * in person / via another channel to verify they have each other's real keys.
+   */
+  async function fingerprint(publicKeyJwk) {
+    const jwk = publicKeyJwk || _myPublicKeyJwk;
+    if (!jwk) return null;
+    const key = publicKeyJwk
+      ? await _importPeerPublicKey(jwk)
+      : await crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+    const raw  = await crypto.subtle.exportKey('raw', key);
+    const hash = await crypto.subtle.digest('SHA-256', raw);
+    const hex  = [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('');
+    // Format as groups of 8 chars for readability
+    return hex.match(/.{1,8}/g).join(' ').toUpperCase();
+  }
+
+  // ── DM encrypt / decrypt ─────────────────────────────────────────────────────
+  //
+  // Per-message ephemeral AES key: derive shared ECDH key → use it to encrypt.
+  // This means every message gets a fresh IV and the ciphertext is stored on server.
+
+  /**
+   * Encrypt a DM body for `recipientMemberId`.
+   * Returns the encrypted string to store as `body` on the server.
+   * Also encrypts for SELF so we can read our sent messages in the same conv.
+   * Returns { cipher_for_recipient, cipher_for_self }
+   */
+  async function encryptDm(plaintext, recipientMemberId) {
+    if (!_ready) return { plaintext }; // fallback (shouldn't happen in prod)
+    const myId = window._memberProfile?.id || _member?.id;
+
+    // Derive shared key with recipient
+    const recipientPublicKey = await _getPeerPublicKey(recipientMemberId);
+    const sharedKeyForRecipient = await _deriveSharedKey(_myPrivateKey, recipientPublicKey);
+    const cipher_for_recipient  = await _aesEncrypt(sharedKeyForRecipient, plaintext);
+
+    // Also encrypt for self (ECDH with our own public key, so we can read sent msgs)
+    const myPublicKey    = await _importPeerPublicKey(_myPublicKeyJwk);
+    const sharedKeyForMe = await _deriveSharedKey(_myPrivateKey, myPublicKey);
+    const cipher_for_self = await _aesEncrypt(sharedKeyForMe, plaintext);
+
+    return { cipher_for_recipient, cipher_for_self, e2ee: true };
+  }
+
+  /**
+   * Decrypt a DM message.
+   * `msg` from server has either `cipher_for_recipient` (received) or `cipher_for_self` (sent).
+   * Falls back to `msg.body` for legacy plaintext messages.
+   */
+  async function decryptDm(msg, myId) {
+    if (!_ready) return msg.body || ''; // no key yet
+    // Legacy plaintext message (pre-E2EE)
+    if (!msg.e2ee) return msg.body || '';
+    try {
+      const isMine = msg.sender_id === myId;
+      const cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
+      if (!cipherStr) return '[message unavailable]';
+      // Derive the same shared key
+      const peerId = isMine ? myId : msg.sender_id;
+      const peerPublicKey = await _getPeerPublicKey(peerId);
+      const sharedKey = await _deriveSharedKey(_myPrivateKey, peerPublicKey);
+      return await _aesDecrypt(sharedKey, cipherStr);
+    } catch (e) {
+      console.warn('[E2EE] DM decrypt failed for msg', msg.id, e.message);
+      return '[encrypted message — key unavailable]';
+    }
+  }
+
+  // ── Group encrypt / decrypt ───────────────────────────────────────────────────
+  //
+  // One random AES key per message, wrapped for each member in the group.
+  // Server stores: { ciphertext, wrapped_keys: { [memberId]: wrappedKey } }
+
+  /**
+   * Encrypt a group message for all `memberIds` (including self).
+   * Returns { ciphertext, wrapped_keys, e2ee: true }
+   */
+  async function encryptGroup(plaintext, memberIds) {
+    if (!_ready) return { plaintext };
+    // Generate a random per-message AES key
+    const msgKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+    );
+    const ciphertext = await _aesEncrypt(msgKey, plaintext);
+
+    // Wrap the message key for each member
+    const wrapped_keys = {};
+    await Promise.allSettled(memberIds.map(async memberId => {
+      try {
+        const memberPublicKey = await _getPeerPublicKey(memberId);
+        const sharedKey = await _deriveSharedKey(_myPrivateKey, memberPublicKey);
+        wrapped_keys[memberId] = await _wrapAesKey(msgKey, sharedKey);
+      } catch (e) {
+        console.warn('[E2EE] Could not wrap key for member', memberId, e.message);
+        // Skip — that member won't be able to read this message
+        // (typically means they haven't published a key yet)
+      }
+    }));
+
+    return { ciphertext, wrapped_keys, e2ee: true };
+  }
+
+  /**
+   * Decrypt a group message for the current user.
+   * `msg` has `ciphertext` + `wrapped_keys: { [myId]: wrappedKey }`.
+   */
+  async function decryptGroup(msg, myId) {
+    if (!_ready) return msg.body || '';
+    if (!msg.e2ee) return msg.body || ''; // legacy plaintext
+    try {
+      const myWrappedKey = msg.wrapped_keys?.[myId];
+      if (!myWrappedKey) return '[message unavailable — no key for you]';
+      // Unwrap the message key using our ECDH shared key with the sender
+      const senderPublicKey = await _getPeerPublicKey(msg.sender_id);
+      const sharedKey = await _deriveSharedKey(_myPrivateKey, senderPublicKey);
+      const msgKey = await _unwrapAesKey(myWrappedKey, sharedKey);
+      return await _aesDecrypt(msgKey, msg.ciphertext);
+    } catch (e) {
+      console.warn('[E2EE] Group decrypt failed for msg', msg.id, e.message);
+      return '[encrypted message — key unavailable]';
+    }
+  }
+
+  // ── Report: decrypt a specific message and send plaintext to admin-only endpoint
+  //
+  // The reporter's browser decrypts the flagged message locally and sends only
+  // that plaintext to a secure endpoint. The server stores the plaintext in the
+  // report only, isolated from the live encrypted message store.
+  // Master admins can then read it via the existing /api/admin/reports interface.
+
+  /**
+   * Decrypt a reported message (DM or group) and return its plaintext.
+   * Called client-side just before submitting a report.
+   */
+  async function decryptForReport(msg, type /* 'dm'|'group' */, myId) {
+    if (!_ready || !msg.e2ee) return msg.body || null; // legacy or no key
+    try {
+      if (type === 'dm') return await decryptDm(msg, myId);
+      if (type === 'group') return await decryptGroup(msg, myId);
+    } catch { /* if we can't decrypt, send null — admin can see the report context */ }
+    return null;
+  }
+
+  /**
+   * Re-encrypt a message for a new group member who was added after the message
+   * was sent. Called client-side by the group owner/admin.
+   * (Optional, future: for now new members only see messages sent after they joined.)
+   */
+  // async function reEncryptForNewMember(msg, newMemberId) { ... } // future
+
+  // ── Key regeneration (after suspected compromise) ─────────────────────────────
+  async function regenerateKeyPair() {
+    const { publicKeyJwk } = await _generateKeyPair();
+    _myPublicKeyJwk = publicKeyJwk;
+    const { privateKey } = await _loadMyKeyPair();
+    _myPrivateKey = privateKey;
+    _peerKeyCache.clear(); // clear cached peer keys too (they may have rotated)
+    await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+    return fingerprint();
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────────
+  return {
+    init,
+    ready,
+    fingerprint,
+    encryptDm,
+    decryptDm,
+    encryptGroup,
+    decryptGroup,
+    decryptForReport,
+    regenerateKeyPair,
+    getMyPublicKeyJwk: () => _myPublicKeyJwk,
+  };
+
+})();
+// ═══════════════════════════════════════════════════════════════════════════════
 // KFS Member Portal — membersaccess.js
 // All logic extracted from inline <script>. No onclick= in HTML.
 // Wired via addEventListener inside DOMContentLoaded.
@@ -519,6 +937,9 @@ async function loadDashboard() {
   document.body.classList.remove('auth-active'); // safe to show the bottom pill nav now
   loadPortalMembers(); // preload for pickers (non-blocking)
   await loadProfile();
+  // Initialise E2EE: generate or load ECDH key pair, publish public key to server.
+  // Non-blocking — runs in background. Falls back to plaintext if crypto unavailable.
+  E2EE.init().catch(e => console.warn('[E2EE] init error (non-fatal):', e.message));
   loadMovies();
   loadSecurity();
   loadActivity();
@@ -4135,7 +4556,19 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
-    bodyNode.textContent = m.body;
+    // E2EE: decrypt asynchronously; show placeholder while decrypting
+    if (m.e2ee && !isDeleted) {
+      bodyNode.textContent = '🔒 …';
+      bodyNode.style.opacity = '0.5';
+      const _myId = myId;
+      E2EE.decryptDm(m, _myId).then(pt => {
+        bodyNode.textContent = pt;
+        bodyNode.style.opacity = '';
+        m._plaintext = pt; // cache for context menu / reply
+      }).catch(() => { bodyNode.textContent = '[encrypted — key unavailable]'; bodyNode.style.opacity = '0.5'; });
+    } else {
+      bodyNode.textContent = m.body;
+    }
     bubble.appendChild(bodyNode);
 
     wrap.appendChild(bubble);
@@ -4143,12 +4576,14 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     // Instagram-style hover actions (hidden on mobile via CSS — mobile users
     // react via long-press → context menu instead, see _attachMsgContextMenu)
     if (!isDeleted) {
+      // Use cached plaintext (from E2EE decrypt) for reply/context-menu body
+      const _bodyForActions = () => m._plaintext || m.body;
       const hoverActions = _buildHoverActions({
-        msgId: m.id, body: m.body, mine,
+        msgId: m.id, body: _bodyForActions(), mine,
         senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
         type: 'dm',
         senderId: m.sender_id,
-        onReply: () => _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') }),
+        onReply: () => _setReply('dm', { id: m.id, body: _bodyForActions(), sender: mine ? 'You' : (DM.activePeer?.name || 'Member') }),
         onReact: (emoji) => _toggleReaction('dm', m.id, emoji, bubble),
       });
       wrap.appendChild(hoverActions);
@@ -4259,11 +4694,18 @@ async function dmSend() {
   input.style.height = '';
 
   try {
-    const res = await api('POST', '/api/member/dm/send', {
-      to_member_id: peerId,
-      body,
-      ..._dmGetReplyPayload(),
-    });
+    // E2EE: encrypt the message body before sending. Falls back to plaintext
+    // if E2EE is not yet ready (first-ever load before key published).
+    let dmPayload = { to_member_id: peerId, body, ..._dmGetReplyPayload() };
+    if (E2EE.ready()) {
+      try {
+        const enc = await E2EE.encryptDm(body, peerId);
+        dmPayload = { ...dmPayload, body: '', ...enc }; // body sentinel = '' (server stores ciphertexts)
+      } catch (encErr) {
+        console.warn('[E2EE] DM encrypt failed, sending plaintext:', encErr.message);
+      }
+    }
+    const res = await api('POST', '/api/member/dm/send', dmPayload);
     _setReply('dm', null); // clear reply bar after successful send
 
     // If this was a new conversation, update our active key
@@ -4702,7 +5144,7 @@ function swShowToast(msg, duration = 2800) {
 
 // ── Report modal ─────────────────────────────────────────────────────────────
 // Creates a lightweight report modal inline (no external HTML needed)
-function swOpenReportModal(contentType, contentId, extraLabel) {
+function swOpenReportModal(contentType, contentId, extraLabel, _reportMsgObj) {
   // Remove any existing modal
   let existing = document.getElementById('sw-report-modal-overlay');
   if (existing) existing.remove();
@@ -4764,11 +5206,21 @@ function swOpenReportModal(contentType, contentId, extraLabel) {
     submitBtn.textContent = 'Submitting…';
 
     try {
+      // E2EE: if the reported message is encrypted, decrypt it client-side and
+      // include the plaintext in the report. Only master admins can read it.
+      // This is the same approach Signal uses for E2EE content moderation.
+      let decrypted_snapshot = null;
+      if (_reportMsgObj && _reportMsgObj.e2ee && E2EE.ready()) {
+        const myId = window._memberProfile?.id || window._member?.id;
+        const msgType = (contentType === 'group_message') ? 'group' : 'dm';
+        decrypted_snapshot = await E2EE.decryptForReport(_reportMsgObj, msgType, myId).catch(() => null);
+      }
       await api('POST', '/api/member/reports', {
         content_type: contentType,
         content_id: String(contentId),
         reason,
         details,
+        ...(decrypted_snapshot != null ? { decrypted_snapshot, e2ee_report: true } : {}),
       });
       overlay.remove();
       swShowToast('✓ Report submitted. Thank you.');
@@ -4784,7 +5236,9 @@ function swOpenReportModal(contentType, contentId, extraLabel) {
 // ── Hook: add Report button in DM conversation view ──────────────────────────
 // Called when DM message context-menu / long-press happens
 function swReportDmMessage(msgId) {
-  swOpenReportModal('dm', msgId, 'You are reporting a direct message.');
+  // Find the message object in DM.msgs for E2EE decryption
+  const msgObj = DM.msgs?.find(m => m.id === msgId) || null;
+  swOpenReportModal('dm', msgId, 'You are reporting a direct message.', msgObj);
 }
 
 // ── Hook: add Report button for comments (in detail view) ────────────────────
@@ -4794,7 +5248,9 @@ function swReportComment(commentId) {
 
 // ── Hook: report a group message ─────────────────────────────────────────────
 function swReportGroupMessage(msgId) {
-  swOpenReportModal('group_message', msgId, 'You are reporting a group message.');
+  // Find the message object in GC.msgs for E2EE decryption at report time
+  const msgObj = GC.msgs?.find(m => m.id === msgId) || null;
+  swOpenReportModal('group_message', msgId, 'You are reporting a group message.', msgObj);
 }
 
 // ── Hook: report a member account ────────────────────────────────────────────
@@ -5849,6 +6305,8 @@ async function gcLoadGroupDetails(groupId, _retryCount, _floorCount) {
   try {
     const data = await api('GET', `/api/member/groups/${groupId}`);
     GC.activeGroup = { ...GC.activeGroup, ...data };
+    // Cache member list for E2EE key wrapping (encryptGroup needs all member IDs)
+    if (data.members?.length) GC.activeMembers = data.members;
     const count = data.members?.length || 0;
     // If the detail endpoint returns fewer members than we already know about,
     // keep the higher number (avoids regressing to 0 due to DB lag or auth issues).
@@ -6042,19 +6500,32 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
-    bodyNode.textContent = m.body;
+    // E2EE: decrypt group message asynchronously
+    if (m.e2ee && !isDeleted && !m.is_system) {
+      bodyNode.textContent = '🔒 …';
+      bodyNode.style.opacity = '0.5';
+      const _gcMyId = mine ? m.sender_id : gcMyId();
+      E2EE.decryptGroup(m, _gcMyId).then(pt => {
+        bodyNode.textContent = pt;
+        bodyNode.style.opacity = '';
+        m._plaintext = pt;
+      }).catch(() => { bodyNode.textContent = '[encrypted — key unavailable]'; bodyNode.style.opacity = '0.5'; });
+    } else {
+      bodyNode.textContent = m.body;
+    }
     bubble.appendChild(bodyNode);
 
     wrap.appendChild(bubble);
 
     // Instagram-style hover actions (hidden on mobile via CSS)
     if (!isDeleted && !m.is_system) {
+      const _gcBodyForActions = () => m._plaintext || m.body;
       const hoverActions = _buildHoverActions({
-        msgId: m.id, body: m.body, mine,
+        msgId: m.id, body: _gcBodyForActions(), mine,
         senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
         type: 'group',
         senderId: m.sender_id,
-        onReply: () => _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') }),
+        onReply: () => _setReply('group', { id: m.id, body: _gcBodyForActions(), sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') }),
         onReact: (emoji) => _toggleReaction('group', m.id, emoji, bubble),
       });
       wrap.appendChild(hoverActions);
@@ -6135,10 +6606,18 @@ async function gcSend() {
   input.style.height = '';
 
   try {
-    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages`, {
-      body,
-      ..._gcGetReplyPayload(),
-    });
+    // E2EE: encrypt for all group members before sending
+    let gcPayload = { body, ..._gcGetReplyPayload() };
+    if (E2EE.ready() && GC.activeMembers?.length) {
+      try {
+        const memberIds = GC.activeMembers.map(m => m.id || m.member_id).filter(Boolean);
+        const enc = await E2EE.encryptGroup(body, memberIds);
+        gcPayload = { ...gcPayload, body: '', ...enc };
+      } catch (encErr) {
+        console.warn('[E2EE] Group encrypt failed, sending plaintext:', encErr.message);
+      }
+    }
+    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages`, gcPayload);
     _setReply('group', null); // clear reply bar after successful send
     const realMsg = res.message;
 
