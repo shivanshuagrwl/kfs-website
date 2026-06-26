@@ -14679,6 +14679,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
     if (groupsErr) { console.error("[groups GET] chats:", groupsErr.message); return res.json([]); }
 
     // Two-step member lookup (avoids relying on a specific FK constraint name)
+    // Note: group_role column is optional — if it doesn't exist yet, fallback to null
     const { data: allMemberRows, error: allMembErr } = await supabase
       .from("dm_group_members")
       .select("group_id, member_id, nickname, joined_at")
@@ -14713,10 +14714,14 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
     }));
 
     const membersByGroup = {};
+    // Build a map of myId's role per group from the membership rows
+    const myRoleByGroup = {};
     (allMemberRows || []).forEach(m => {
       if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
       const profile = memberProfileMap[m.member_id] || { id: m.member_id };
       membersByGroup[m.group_id].push({ ...profile, nickname: m.nickname });
+      // group_role may not exist as column yet; created_by check is the authoritative owner test
+      if (m.member_id === myId) myRoleByGroup[m.group_id] = 'member';
     });
     const memberNameMap = {};
     (allMemberRows || []).forEach(m => {
@@ -14728,6 +14733,8 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
       const lm = lastMsgMap[g.id] || null;
       const rawSnippet = lm ? (lm.body || '').slice(0, 80) : null;
       const isSysSnippet = rawSnippet?.startsWith('\x1fsys\x1f');
+      // Creator is always owner; others are members (extend to admin support when group_role column added)
+      const myRole = g.created_by === myId ? 'owner' : 'member';
       return {
         id:                g.id,
         name:              g.name,
@@ -14740,7 +14747,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
         last_sender_name:  lm ? (memberNameMap[lm.sender_id] || 'Member') : null,
         last_is_system:    isSysSnippet || false,
         unread_count:      0,
-        my_role:           g.created_by === myId ? 'owner' : 'member',
+        my_role:           myRole,
       };
     }).sort((a, b) => new Date(b.last_msg_at) - new Date(a.last_msg_at));
 

@@ -4738,6 +4738,29 @@
   0%,15% { background:rgba(59,130,246,.18); border-radius:14px; }
   100%    { background:transparent; }
 }
+
+/* ── E2EE notice — WhatsApp-style ── */
+.gc-e2ee-notice, .dm-e2ee-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,.32);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  padding: 8px 14px;
+  margin: 16px auto 12px;
+  max-width: 88%;
+  text-align: center;
+  line-height: 1.55;
+  user-select: none;
+}
+.gc-e2ee-notice svg, .dm-e2ee-notice svg {
+  color: rgba(255,255,255,.4);
+  flex-shrink: 0;
+}
 </style>
 
         </main>

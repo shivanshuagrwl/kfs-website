@@ -4480,6 +4480,11 @@ async function dmLoadMsgs(prepend) {
 
     if (!prepend) {
       list.innerHTML = '';
+      // WhatsApp-style E2EE notice
+      const e2eeNotice = document.createElement('div');
+      e2eeNotice.className = 'dm-e2ee-notice';
+      e2eeNotice.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.`;
+      list.appendChild(e2eeNotice);
       dmRenderMsgs(DM.msgs, list, myId);
       dmScrollBottom();
     } else {
@@ -6079,6 +6084,28 @@ function nicksOpenModal(convKey, targetId, targetName, isGroup) {
       renderParticipants(_editingId);
       // Refresh display names
       dmRefreshDisplayNames(convKey);
+      // If a group is active and this is a group nickname, also refresh the detail panel
+      if (typeof GC !== 'undefined' && GC.activeId === convKey && typeof window._dpShowGroup === 'function' && GC.activeGroup) {
+        // Re-fetch fresh group data and re-render the panel
+        try {
+          const fresh = await api('GET', `/api/member/groups/${convKey}`);
+          GC.activeGroup = { ...(GC.activeGroup || {}), ...fresh };
+          // Update nicknames in the rendered message list
+          const list = document.getElementById('gc-msg-list');
+          if (list) {
+            list.querySelectorAll('.gc-msg-sender-name').forEach(el => {
+              const membId = el.dataset.memberId;
+              if (membId) {
+                const memberObj = (GC.activeGroup.members || []).find(m => m.id === membId);
+                if (memberObj) {
+                  const display = nicksResolveDisplay(convKey, membId, memberObj.name || 'Member');
+                  el.textContent = display;
+                }
+              }
+            });
+          }
+        } catch { /* silent */ }
+      }
       // Close inline edit after short delay
       setTimeout(() => {
         const editBox = document.getElementById('nick-inline-edit');
@@ -6173,6 +6200,9 @@ function gcAvatar(name, photo, size) {
 }
 
 function gcGroupAvatar(group, size) {
+  if (group.photo_url) {
+    return `<img src="${swEsc(group.photo_url)}" alt="${swEsc(group.name || 'Group')}" style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.28)}px;object-fit:cover;flex-shrink:0">`;
+  }
   const text = group.avatar_text || (group.name?.[0] || '?').toUpperCase();
   return `<div class="gc-group-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px">${swEsc(text)}</div>`;
 }
@@ -6381,6 +6411,11 @@ async function gcLoadMsgs(prepend) {
 
     if (!prepend) {
       list.innerHTML = '';
+      // WhatsApp-style E2EE notice at top of conversation
+      const e2eeNotice = document.createElement('div');
+      e2eeNotice.className = 'gc-e2ee-notice';
+      e2eeNotice.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.`;
+      list.appendChild(e2eeNotice);
       gcRenderMsgs(GC.msgs, list, myId);
       gcScrollBottom();
     } else {
@@ -7653,17 +7688,22 @@ if (document.readyState === "loading") {
       try {
         const data = await api('GET', '/api/member/groups');
         const fresh = Array.isArray(data) ? data : [];
-        if (!fresh.length && (GC.groups || []).length) return; // guard stale-empty
-        // Only re-render if the group list actually changed (new group added,
-        // last_msg_at updated, member count changed, etc.)
-        const oldKey = JSON.stringify((GC.groups || []).map(g => g.id + g.last_msg_at + (g.members?.length || 0)));
-        const newKey = JSON.stringify(fresh.map(g => g.id + g.last_msg_at + (g.members?.length || 0)));
+        // Guard: if server returns empty and we had groups, could be transient — skip
+        if (!fresh.length && (GC.groups || []).length > 0) return;
+        // Re-render whenever group list changes — new group added, member count,
+        // last message time, or group count itself changed (user was added to a group)
+        const oldKey = JSON.stringify((GC.groups || []).map(g => `${g.id}|${g.last_msg_at}|${g.members?.length || 0}|${g.name}`));
+        const newKey = JSON.stringify(fresh.map(g => `${g.id}|${g.last_msg_at}|${g.members?.length || 0}|${g.name}`));
         if (oldKey !== newKey) {
           GC.groups = fresh;
           inboxRender();
+          // Update combined unread badge
+          const dmUnread = (DM.convs || []).reduce((s, c) => s + (c.unread_count || 0), 0);
+          const gcUnread = fresh.reduce((s, g) => s + (g.unread_count || 0), 0);
+          if (typeof dmSetBadge === 'function') dmSetBadge(dmUnread + gcUnread);
         }
       } catch { /* silent — transient network error, try again next tick */ }
-    }, 5000); // every 5s — keeps group list fresh for added members and new messages
+    }, 3000); // every 3s — faster detection when added to a new group
   }
   function _stopSidebarRefresh() {
     if (_sidebarRefreshTimer) { clearInterval(_sidebarRefreshTimer); _sidebarRefreshTimer = null; }
@@ -7862,8 +7902,12 @@ if (document.readyState === "loading") {
     // Hero
     const avEl = document.getElementById('dm-detail-avatar');
     if (avEl) {
-      const letter = (group.avatar_text || group.name?.[0] || '?').slice(0, 2).toUpperCase();
-      avEl.innerHTML = `<div class="gc-group-av" style="width:64px;height:64px;font-size:24px">${swEsc(letter)}</div>`;
+      if (group.photo_url) {
+        avEl.innerHTML = `<img src="${group.photo_url}" alt="${group.name || 'Group'}" style="width:64px;height:64px;border-radius:14px;object-fit:cover">`;
+      } else {
+        const letter = (group.avatar_text || group.name?.[0] || '?').slice(0, 2).toUpperCase();
+        avEl.innerHTML = `<div class="gc-group-av" style="width:64px;height:64px;font-size:24px">${swEsc(letter)}</div>`;
+      }
     }
     setText('dm-detail-name', group.name);
     const count = group.members?.length || 0;
@@ -7962,8 +8006,8 @@ if (document.readyState === "loading") {
 
   // ── Action: Nickname ───────────────────────────────────────────────────────
   function dpNickname() {
-    dpClose();
     if (DP.mode === 'dm' && DP.peer) {
+      dpClose();
       const convKey = DM.activeKey || '';
       if (typeof dmOpenNicknameModal === 'function') {
         dmOpenNicknameModal(DP.peer.id, DP.peer.name, convKey);
@@ -7971,7 +8015,57 @@ if (document.readyState === "loading") {
         nicksOpenModal(convKey, DP.peer.id, DP.peer.name);
       }
     } else if (DP.mode === 'group' && DP.group) {
-      if (typeof gcOpenInfo === 'function') gcOpenInfo();
+      // For groups: open the Instagram-style nickname picker that lists all members
+      const group   = DP.group;
+      const members = (group.members || []).filter(m => {
+        const myId = typeof gcMyId === 'function' ? gcMyId() : null;
+        return m.id !== myId && !m.is_me;
+      });
+      if (!members.length) return;
+      // If only one other member, open directly
+      if (members.length === 1) {
+        dpClose();
+        if (typeof nicksOpenModal === 'function') nicksOpenModal(group.id, members[0].id, members[0].name || 'Member', true);
+        return;
+      }
+      // Multiple members — show a picker sheet
+      dpClose();
+      let picker = document.getElementById('gc-nick-picker-overlay');
+      if (picker) picker.remove();
+      picker = document.createElement('div');
+      picker.id = 'gc-nick-picker-overlay';
+      picker.className = 'nick-modal-overlay';
+      picker.innerHTML = `
+        <div class="nick-modal nick-modal-insta" style="max-width:360px">
+          <div class="nick-modal-head">
+            <span>Set a Nickname</span>
+            <button class="dm-icon-btn" id="gc-nick-picker-close" aria-label="Close">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <p class="nick-modal-hint">Choose a member to nickname:</p>
+          <div class="nick-participants" id="gc-nick-picker-list"></div>
+        </div>`;
+      document.body.appendChild(picker);
+      picker.querySelector('#gc-nick-picker-close').onclick = () => picker.remove();
+      picker.addEventListener('click', e => { if (e.target === picker) picker.remove(); });
+      const list = picker.querySelector('#gc-nick-picker-list');
+      members.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'nick-participant-row';
+        row.style.cursor = 'pointer';
+        const initials = (m.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const av = m.photo
+          ? `<img src="${m.photo}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+          : `<div style="width:44px;height:44px;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#666;flex-shrink:0">${initials}</div>`;
+        const curNick = (typeof nicksResolveDisplay === 'function') ? nicksResolveDisplay(group.id, m.id, null) : null;
+        row.innerHTML = `${av}<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${m.name || 'Member'}</div>${curNick && curNick !== m.name ? `<div style="font-size:11px;color:var(--muted)">${curNick}</div>` : ''}</div>`;
+        row.addEventListener('click', () => {
+          picker.remove();
+          if (typeof nicksOpenModal === 'function') nicksOpenModal(group.id, m.id, m.name || 'Member', true);
+        });
+        list.appendChild(row);
+      });
     }
   }
 
