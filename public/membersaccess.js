@@ -5209,12 +5209,28 @@ async function _refreshVisibleReactions(type) {
     .map(m => m.id);
   if (!ids.length) return;
   const map = await api('GET', `/api/member/messages/reactions?chat_type=${type}&ids=${ids.map(encodeURIComponent).join(',')}`);
+  // Guard: if the server returned an empty object (network blip / allowedIds empty)
+  // don't wipe reactions that already exist on screen — only update if server
+  // actually returned a map with at least one key, OR none of the visible
+  // messages currently have reactions (so an empty map is genuinely correct).
+  if (!map || typeof map !== 'object') return;
+  const serverHasData = Object.keys(map).length > 0;
+  if (!serverHasData) {
+    const anyHasReactions = ids.some(id => {
+      const m = msgsArr.find(x => x.id === id);
+      return (m?.reactions?.length || 0) > 0;
+    });
+    if (anyHasReactions) return; // server returned nothing but we have reactions — skip
+  }
   ids.forEach(id => {
     // Skip any message whose reaction is currently being toggled — that
     // in-flight request will land its own, more current, result shortly.
     if (_reactionInFlight.has(`${type}:${id}`)) return;
     const msg = msgsArr.find(m => m.id === id);
     if (!msg) return;
+    // Only update if the server actually returned data for this specific message.
+    // If the server omits an id entirely, keep local state rather than wiping it.
+    if (serverHasData && !Object.prototype.hasOwnProperty.call(map, id)) return;
     const newList = map[id] || [];
     if (JSON.stringify(msg.reactions || []) === JSON.stringify(newList)) return;
     msg.reactions = newList;
@@ -6212,7 +6228,11 @@ async function gcDeleteMsg(msgId, bubble, btn) {
 
 async function _gcPollNewMessages() {
   const myId   = gcMyId();
-  const newest = GC.msgs.length ? GC.msgs[GC.msgs.length - 1].sent_at : null;
+  // Use the newest CONFIRMED (non-tmp) message as the since cursor.
+  // Optimistic tmp messages use client time which may not match the server's
+  // created_at, so using them as a cursor could cause messages to be skipped.
+  const confirmedMsgs = GC.msgs.filter(m => m.id && !String(m.id).startsWith('tmp-'));
+  const newest = confirmedMsgs.length ? confirmedMsgs[confirmedMsgs.length - 1].sent_at : null;
   const url    = `/api/member/groups/${encodeURIComponent(GC.activeId)}/messages?limit=20`
                + (newest ? `&since=${encodeURIComponent(newest)}` : '');
   const resp   = await api('GET', url);
@@ -6247,24 +6267,9 @@ async function _gcPollNewMessages() {
 
 async function gcPollTick() {
   if (!GC.activeId) {
-    // No group open, but we still want the group list to stay fresh in the
-    // background so members who were added to a group see it appear.
-    // This is a lightweight check — only re-render if the list changed.
-    if (_token) {
-      try {
-        const data = await api('GET', '/api/member/groups');
-        const fresh = Array.isArray(data) ? data : [];
-        if (fresh.length || !(GC.groups || []).length) {
-          const oldKey = JSON.stringify((GC.groups || []).map(g => g.id + g.last_msg_at + (g.unread_count || 0)));
-          const newKey = JSON.stringify(fresh.map(g => g.id + g.last_msg_at + (g.unread_count || 0)));
-          if (oldKey !== newKey) {
-            GC.groups = fresh;
-            if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
-            else gcRenderGroups(GC.groups);
-          }
-        }
-      } catch { /* silent */ }
-    }
+    // No group open. The _sidebarRefreshTimer (every 10s) already handles the
+    // background group-list refresh, so we don't need to duplicate the API call
+    // here. Just return — the sidebar timer will keep the list fresh.
     return;
   }
   try { await _gcPollNewMessages(); } catch { /* silent */ }
@@ -7179,7 +7184,7 @@ if (document.readyState === "loading") {
           inboxRender();
         }
       } catch { /* silent — transient network error, try again next tick */ }
-    }, 10000); // every 10 seconds — fast enough for newly added members to see new groups promptly
+    }, 5000); // every 5s — keeps group list fresh for added members and new messages
   }
   function _stopSidebarRefresh() {
     if (_sidebarRefreshTimer) { clearInterval(_sidebarRefreshTimer); _sidebarRefreshTimer = null; }

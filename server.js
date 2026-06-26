@@ -15084,12 +15084,16 @@ app.get("/api/member/messages/reactions", memberAuthMiddleware, reactionLimit, a
 
     let allowedIds = [];
     if (chatType === "dm") {
+      // DM messages are stored as member_notifications rows with link_type='dm'.
+      // The caller must be either the actor (sender) or the recipient (member_id).
       const { data } = await supabase
         .from("member_notifications")
         .select("id, actor_id, member_id")
         .eq("link_type", "dm")
         .in("id", ids);
-      allowedIds = (data || []).filter(r => r.actor_id === myId || r.member_id === myId).map(r => r.id);
+      allowedIds = (data || [])
+        .filter(r => r.actor_id === myId || r.member_id === myId)
+        .map(r => r.id);
     } else {
       const { data } = await supabase.from("dm_group_messages").select("id, group_id").in("id", ids);
       const groupIds = [...new Set((data || []).map(r => r.group_id))];
