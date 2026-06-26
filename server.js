@@ -14707,6 +14707,7 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
       .select("member_id, nickname, joined_at")
       .eq("group_id", gid);
     if (memJoinErr) console.error("[groups GET :id] members:", memJoinErr.message, memJoinErr.code);
+    if (!memberRows?.length) console.warn(`[groups GET :id] Zero members returned for group ${gid} — possible RLS or replication issue`);
 
     const memberIds = (memberRows || []).map(r => r.member_id);
     const profileMap = {};
