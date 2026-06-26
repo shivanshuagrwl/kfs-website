@@ -6003,6 +6003,10 @@ if (document.readyState === "loading") {
     $id('dm-active') && ($id('dm-active').style.display = 'none');
     $id('dm-window-empty') && ($id('dm-window-empty').style.display = '');
 
+    // Also reset gc-window inner state for next open
+    $id('gc-active') && ($id('gc-active').style.display = 'none');
+    $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
+
     // Mobile: slide sidebar back
     $id('dm-sidebar')?.classList.remove('dm-slide-out');
     $id('gc-window')?.classList.remove('dm-slide-in');
