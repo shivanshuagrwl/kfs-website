@@ -14502,10 +14502,20 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
     const myId = req.member.memberId;
     if (!myId) return res.json([]);
 
-    const { data: membership, error: memErr } = await supabase
-      .from("dm_group_members")
-      .select("group_id")
-      .eq("member_id", myId);
+    // NOTE: dm_group_members reads occasionally come back empty right after a
+    // write (group create/join) due to a brief replication/visibility lag —
+    // this is the same race already flagged below in the single-group
+    // endpoint. A single short retry is enough to ride it out instead of
+    // silently telling the client "you have no groups" and making the whole
+    // group disappear from the sidebar.
+    async function loadMembership() {
+      return supabase.from("dm_group_members").select("group_id").eq("member_id", myId);
+    }
+    let { data: membership, error: memErr } = await loadMembership();
+    if (!memErr && !membership?.length) {
+      await new Promise(r => setTimeout(r, 250));
+      ({ data: membership, error: memErr } = await loadMembership());
+    }
     if (memErr) { console.error("[groups GET] membership:", memErr.message); return res.json([]); }
     if (!membership?.length) return res.json([]);
 
@@ -14702,12 +14712,19 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
     if (!group) return res.status(404).json({ error: "Group not found" });
 
     // Two-step: get member rows first, then profiles (avoids FK name dependency)
-    const { data: memberRows, error: memJoinErr } = await supabase
-      .from("dm_group_members")
-      .select("member_id, nickname, joined_at")
-      .eq("group_id", gid);
+    async function loadMemberRows() {
+      return supabase.from("dm_group_members").select("member_id, nickname, joined_at").eq("group_id", gid);
+    }
+    let { data: memberRows, error: memJoinErr } = await loadMemberRows();
     if (memJoinErr) console.error("[groups GET :id] members:", memJoinErr.message, memJoinErr.code);
-    if (!memberRows?.length) console.warn(`[groups GET :id] Zero members returned for group ${gid} — possible RLS or replication issue`);
+    if (!memJoinErr && !memberRows?.length) {
+      // Retry once — this read has been observed to come back empty right after
+      // a write (replication/visibility lag) even though the rows exist.
+      await new Promise(r => setTimeout(r, 250));
+      ({ data: memberRows, error: memJoinErr } = await loadMemberRows());
+      if (memJoinErr) console.error("[groups GET :id] members retry:", memJoinErr.message, memJoinErr.code);
+    }
+    if (!memberRows?.length) console.warn(`[groups GET :id] Zero members returned for group ${gid} after retry — possible RLS or replication issue`);
 
     const memberIds = (memberRows || []).map(r => r.member_id);
     const profileMap = {};

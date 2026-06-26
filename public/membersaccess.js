@@ -4168,6 +4168,25 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     group.appendChild(wrap);
     group.appendChild(meta);
   });
+
+  _markLastBubbleInGroups(container);
+}
+
+/**
+ * Instagram-style consecutive bubbles: only the LAST bubble in a run from the
+ * same sender gets the small "tail" corner; the rest are evenly rounded.
+ * Each bubble lives inside its own .dm-bubble-wrap (alternating with a
+ * .dm-meta sibling), so a CSS-only :last-of-type selector can't tell them
+ * apart — this just re-tags the right one with a class after every render.
+ */
+function _markLastBubbleInGroups(container) {
+  container.querySelectorAll('.dm-msg-group').forEach(group => {
+    const wraps = group.querySelectorAll('.dm-bubble-wrap');
+    wraps.forEach((w, i) => {
+      const bubble = w.querySelector('.dm-bubble');
+      if (bubble) bubble.classList.toggle('dm-bubble-tail', i === wraps.length - 1);
+    });
+  });
 }
 
 function dmScrollBottom() {
@@ -5031,9 +5050,23 @@ function _renderReactionPills(bubble, reactions, onPick) {
   bubble.appendChild(pills);
 }
 
+// Tracks "type:msgId" keys that currently have a reaction toggle in flight.
+// The poll-driven refresh below reads this so it never clobbers a reaction
+// the user *just* set with a stale response that was already in transit —
+// without this, a friend's reaction poll (every 5s) landing right after your
+// own tap could overwrite your brand-new pill with the pre-tap state, making
+// it look like the reaction "didn't stick".
+const _reactionInFlight = new Set();
+
 /** Toggle my reaction on a message — optimistic update, reconciled against the server's response, rolled back on failure. */
 async function _toggleReaction(type, msgId, emoji, bubble) {
   if (!msgId || String(msgId).startsWith('tmp-')) return; // not confirmed by the server yet
+  const key = `${type}:${msgId}`;
+  // If a toggle for this exact message is already in flight, ignore the new
+  // tap rather than letting two requests race and resolve out of order.
+  if (_reactionInFlight.has(key)) return;
+  _reactionInFlight.add(key);
+
   const msgsArr = type === 'group' ? GC.msgs : DM.msgs;
   const msg = msgsArr.find(m => m.id === msgId);
   const rerender = (list) => bubble && _renderReactionPills(bubble, list, e => _toggleReaction(type, msgId, e, bubble));
@@ -5065,16 +5098,27 @@ async function _toggleReaction(type, msgId, emoji, bubble) {
   } catch (e) {
     if (msg) { msg.reactions = prev; rerender(prev); }
     if (typeof swShowToast === 'function') swShowToast('Could not react — try again.');
+  } finally {
+    _reactionInFlight.delete(key);
   }
 }
 
 /** Instagram-style double-tap: quick-react with ❤️ + a big heart burst animation. */
 function _attachQuickHeart(bubble, onReact) {
+  // Re-attaching (e.g. once a tmp bubble's id is replaced with the real,
+  // server-confirmed id after sending) must replace the previous listener,
+  // not stack a second one beside it — a stale listener still closed over
+  // the old tmp-id would otherwise sit there as dead weight, and on group
+  // chat in particular this could leave two competing handlers racing each
+  // other on every click.
+  if (bubble._quickHeartHandler) {
+    bubble.removeEventListener('click', bubble._quickHeartHandler);
+  }
   // A single 'click' listener with manual timing covers mouse AND touch —
   // using both 'dblclick' and 'touchend' here would double-fire on some
   // mobile browsers and cancel the toggle right back out.
   let lastTap = 0;
-  bubble.addEventListener('click', e => {
+  const handler = e => {
     if (e.target.closest('.dm-bubble-reactions')) return; // pill clicks have their own handler
     const now = Date.now();
     if (now - lastTap < 320) {
@@ -5088,7 +5132,9 @@ function _attachQuickHeart(bubble, onReact) {
     } else {
       lastTap = now;
     }
-  });
+  };
+  bubble._quickHeartHandler = handler;
+  bubble.addEventListener('click', handler);
 }
 
 /**
@@ -5107,6 +5153,9 @@ async function _refreshVisibleReactions(type) {
   if (!ids.length) return;
   const map = await api('GET', `/api/member/messages/reactions?chat_type=${type}&ids=${ids.map(encodeURIComponent).join(',')}`);
   ids.forEach(id => {
+    // Skip any message whose reaction is currently being toggled — that
+    // in-flight request will land its own, more current, result shortly.
+    if (_reactionInFlight.has(`${type}:${id}`)) return;
     const msg = msgsArr.find(m => m.id === id);
     if (!msg) return;
     const newList = map[id] || [];
@@ -5960,6 +6009,8 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     group.appendChild(wrap);
     group.appendChild(meta);
   });
+
+  _markLastBubbleInGroups(container);
 }
 
 function gcScrollBottom() {
@@ -6594,6 +6645,10 @@ if (document.readyState === "loading") {
   }
 
   // ── Unified render: merges DM.convs + GC.groups, sorts by last_msg_at ───────
+  // Hardened so that a single malformed conversation/group can never blank the
+  // entire sidebar: rows are built into a detached fragment first, bad items
+  // are skipped (and logged) individually, and the live list is only ever
+  // swapped once the new content is fully ready.
   function inboxRender() {
     const container = $id('dm-conv-list');
     if (!container) return;
@@ -6601,16 +6656,15 @@ if (document.readyState === "loading") {
     // Always hide loading state — render either content or empty state
     const loadingEl = $id('dm-conv-loading');
     if (loadingEl) loadingEl.style.display = 'none';
-    container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
 
     const dms    = DM.convs  || [];
     const groups = GC.groups || [];
 
     if (!dms.length && !groups.length) {
+      container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
       $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = '');
       return;
     }
-    $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = 'none');
 
     // Tag each item with type and normalised sort key
     const items = [
@@ -6623,59 +6677,77 @@ if (document.readyState === "loading") {
       })),
     ].sort((a, b) => (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
 
+    const fragment = document.createDocumentFragment();
+    let builtAny = false;
+
     items.forEach(item => {
-      const row = document.createElement('div');
+      try {
+        const row = document.createElement('div');
 
-      if (item.type === 'dm') {
-        const c = item.data;
-        row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
-        row.dataset.key  = c.conv_key;
-        row.dataset.type = 'dm';
-        const preview = c.last_snippet
-          ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
-          : 'No messages yet';
-        row.innerHTML = `
-          ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
-          <div class="dm-conv-info">
-            <div class="dm-conv-name">${swEsc(c.peer?.name || 'Member')}</div>
-            <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
-          </div>
-          <div class="dm-conv-right">
-            <span class="dm-conv-time">${dmTime(c.last_msg_at)}</span>
-            ${c.unread_count > 0 ? `<span class="dm-unread-pill">${c.unread_count > 9 ? '9+' : c.unread_count}</span>` : ''}
-          </div>`;
-        row.addEventListener('click', () => inboxOpenDm(c));
+        if (item.type === 'dm') {
+          const c = item.data;
+          row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
+          row.dataset.key  = c.conv_key;
+          row.dataset.type = 'dm';
+          const preview = c.last_snippet
+            ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
+            : 'No messages yet';
+          row.innerHTML = `
+            ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
+            <div class="dm-conv-info">
+              <div class="dm-conv-name">${swEsc(c.peer?.name || 'Member')}</div>
+              <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
+            </div>
+            <div class="dm-conv-right">
+              <span class="dm-conv-time">${dmTime(c.last_msg_at)}</span>
+              ${c.unread_count > 0 ? `<span class="dm-unread-pill">${c.unread_count > 9 ? '9+' : c.unread_count}</span>` : ''}
+            </div>`;
+          row.addEventListener('click', () => inboxOpenDm(c));
 
-      } else {
-        const g = item.data;
-        row.className = 'dm-conv-row inbox-group-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
-        row.dataset.key  = g.id;
-        row.dataset.type = 'group';
-        const gLastAt  = g.last_msg_at || g.last_msg?.created_at || g.created_at || null;
-        const gSnippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
-        let gPreview;
-        if (!gSnippet) {
-          gPreview = 'No messages yet';
-        } else if (g.last_is_system) {
-          gPreview = gSnippet;
         } else {
-          gPreview = (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + gSnippet;
+          const g = item.data;
+          row.className = 'dm-conv-row inbox-group-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
+          row.dataset.key  = g.id;
+          row.dataset.type = 'group';
+          const gLastAt  = g.last_msg_at || g.last_msg?.created_at || g.created_at || null;
+          const gSnippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
+          let gPreview;
+          if (!gSnippet) {
+            gPreview = 'No messages yet';
+          } else if (g.last_is_system) {
+            gPreview = gSnippet;
+          } else {
+            gPreview = (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + gSnippet;
+          }
+          row.innerHTML = `
+            ${inboxGroupAv(g, 42)}
+            <div class="dm-conv-info">
+              <div class="dm-conv-name">${swEsc(g.name || 'Group')}</div>
+              <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(gPreview)}</div>
+            </div>
+            <div class="dm-conv-right">
+              <span class="dm-conv-time">${dmTime(gLastAt)}</span>
+              ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
+            </div>`;
+          row.addEventListener('click', () => inboxOpenGroup(g));
         }
-        row.innerHTML = `
-          ${inboxGroupAv(g, 42)}
-          <div class="dm-conv-info">
-            <div class="dm-conv-name">${swEsc(g.name)}</div>
-            <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(gPreview)}</div>
-          </div>
-          <div class="dm-conv-right">
-            <span class="dm-conv-time">${dmTime(gLastAt)}</span>
-            ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
-          </div>`;
-        row.addEventListener('click', () => inboxOpenGroup(g));
-      }
 
-      container.appendChild(row);
+        fragment.appendChild(row);
+        builtAny = true;
+      } catch (e) {
+        // Skip just this one row — never let a single bad conversation/group
+        // take down the whole sidebar.
+        console.error('[inbox] failed to render row, skipping:', e.message, item);
+      }
     });
+
+    // Only touch the live DOM once the new rows are fully built — if nothing
+    // built successfully (e.g. every item somehow failed), leave whatever was
+    // already on screen alone instead of leaving the user with a blank panel.
+    if (!builtAny) return;
+    container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
+    $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = 'none');
+    container.appendChild(fragment);
   }
 
   // ── Open DM — hides gc-window, shows dm-window ────────────────────────────
@@ -6788,7 +6860,20 @@ if (document.readyState === "loading") {
       (async () => {
         try {
           const data = await api('GET', '/api/member/groups');
-          GC.groups = Array.isArray(data) ? data : [];
+          const fresh = Array.isArray(data) ? data : [];
+          // Defensive: if we previously had groups loaded and the server
+          // suddenly comes back with zero, treat it as a possible transient
+          // read race rather than trusting it outright — re-check once before
+          // accepting the empty result, so a group never silently vanishes
+          // from the sidebar because of a momentary blip.
+          if (!fresh.length && (GC.groups || []).length) {
+            await new Promise(r => setTimeout(r, 400));
+            const retryData = await api('GET', '/api/member/groups').catch(() => null);
+            const retryFresh = Array.isArray(retryData) ? retryData : null;
+            GC.groups = (retryFresh && retryFresh.length) ? retryFresh : GC.groups;
+          } else {
+            GC.groups = fresh;
+          }
         } catch (e) {
           console.error('[inbox] Groups load failed:', e.message);
           GC.groups = GC.groups || [];
