@@ -4426,53 +4426,64 @@
 .dm-ctx-item.dm-ctx-danger svg { opacity:1; }
 
 /* ── Instagram-style inline hover actions ── */
+/* ── Instagram-style message row: bubble sits inside a flex row alongside action btns ── */
 .dm-bubble-wrap {
-  position:relative; display:inline-flex;
-  flex-direction:column; max-width:66%;
+  /* The wrap is a flex ROW — bubble + action buttons are siblings in the same row.
+     The actions sit flush next to the bubble with zero gap to cross. */
+  display:flex; flex-direction:row; align-items:center;
+  gap:0; max-width:66%;
 }
-.dm-msg-group.mine .dm-bubble-wrap { align-items:flex-end; }
-.dm-msg-group.theirs .dm-bubble-wrap { align-items:flex-start; }
+/* Mine: bubble on right, actions to its left → reverse order */
+.dm-msg-group.mine .dm-bubble-wrap  { flex-direction:row-reverse; justify-content:flex-start; }
+/* Theirs: bubble on left, actions to its right */
+.dm-msg-group.theirs .dm-bubble-wrap { flex-direction:row; justify-content:flex-start; }
+
 .dm-hover-actions {
-  position:absolute; top:50%; transform:translateY(-50%);
-  display:flex; align-items:center; gap:4px;
+  display:flex; align-items:center; gap:2px;
   opacity:0; pointer-events:none;
-  transition:opacity .15s ease;
-  z-index:10;
-  white-space:nowrap;
+  transition:opacity .13s ease;
+  flex-shrink:0;
+  /* Tight padding so actions are flush to bubble, no dead space */
+  padding:0 4px;
 }
-.dm-msg-group.mine .dm-hover-actions {
-  right:calc(100% + 8px);
-  flex-direction:row-reverse;
-}
-.dm-msg-group.theirs .dm-hover-actions {
-  left:calc(100% + 8px);
-  flex-direction:row;
-}
-.dm-bubble-wrap:hover .dm-hover-actions,
-.dm-bubble-wrap:focus-within .dm-hover-actions {
-  opacity:1; pointer-events:all;
-}
+/* mine: actions are to the LEFT of the bubble — they read right-to-left: ⋮ ↩ 😊 */
+.dm-msg-group.mine    .dm-hover-actions { flex-direction:row; }
+/* theirs: actions to the RIGHT — left-to-right: 😊 ↩ ⋮ */
+.dm-msg-group.theirs  .dm-hover-actions { flex-direction:row; }
+
+.dm-bubble-wrap:hover .dm-hover-actions { opacity:1; pointer-events:all; }
+
 .dm-ha-btn {
-  background:rgba(30,30,30,.92); border:1px solid rgba(255,255,255,.1);
-  border-radius:8px; color:var(--text,#f5f5f5); cursor:pointer;
-  width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center;
-  transition:background .1s, transform .1s; flex-shrink:0;
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  background:none; border:none; color:#777; cursor:pointer;
+  width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%; flex-shrink:0;
+  transition:color .1s, background .1s;
+  font-size:17px; /* for emoji button */
 }
-.dm-ha-btn:hover { background:rgba(60,60,60,.95); transform:scale(1.08); }
-.dm-ha-btn.dm-ha-react { font-size:16px; }
-.dm-ha-emoji-bar {
-  display:flex; align-items:center; gap:3px;
-  background:rgba(22,22,22,.96); border:1px solid rgba(255,255,255,.1);
-  border-radius:24px; padding:4px 8px;
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+.dm-ha-btn:hover { color:#ccc; background:rgba(255,255,255,.07); }
+.dm-ha-btn svg { pointer-events:none; }
+
+/* Emoji picker popup — fixed overlay anchored to the react button */
+.dm-emoji-picker-popup {
+  position:fixed; z-index:99998;
+  display:flex; align-items:center; gap:2px;
+  background:rgba(18,18,18,.97); border:1px solid rgba(255,255,255,.12);
+  border-radius:999px; padding:6px 10px;
+  box-shadow:0 6px 28px rgba(0,0,0,.7);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  animation:emojiPopIn .12s cubic-bezier(.34,1.56,.64,1);
 }
-.dm-ha-emoji-btn {
+@keyframes emojiPopIn {
+  from { opacity:0; transform:scale(.8) translateY(4px); }
+  to   { opacity:1; transform:scale(1)  translateY(0);   }
+}
+.dm-emoji-picker-btn {
   background:none; border:none; cursor:pointer;
-  font-size:18px; line-height:1; padding:2px 3px; border-radius:6px;
-  transition:transform .12s ease;
+  font-size:22px; line-height:1; padding:2px 4px; border-radius:8px;
+  transition:transform .1s ease;
+  display:flex; align-items:center; justify-content:center;
 }
-.dm-ha-emoji-btn:hover { transform:scale(1.3); }
+.dm-emoji-picker-btn:hover { transform:scale(1.35); }
 
 /* Meta row (time + delete) */
 .dm-meta {
@@ -4582,7 +4593,7 @@
   .dm-window.dm-slide-in { z-index:3; }
   .dm-back { display:inline-flex!important; }
   .dm-bubble-wrap { max-width:78%; }
-  .dm-hover-actions { display:none; }
+  .dm-hover-actions { display:none !important; }
 }
 </style>
 

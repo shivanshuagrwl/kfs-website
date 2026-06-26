@@ -4128,55 +4128,13 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     // Instagram-style hover actions (hidden on mobile via CSS)
     if (!isDeleted) {
-      const hoverActions = document.createElement('div');
-      hoverActions.className = 'dm-hover-actions';
-
-      const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
-      const emojiBar = document.createElement('div');
-      emojiBar.className = 'dm-ha-emoji-bar';
-      QUICK_REACTIONS.forEach(emoji => {
-        const eb = document.createElement('button');
-        eb.className = 'dm-ha-emoji-btn';
-        eb.type = 'button';
-        eb.textContent = emoji;
-        eb.title = `React with ${emoji}`;
-        eb.addEventListener('click', e => {
-          e.stopPropagation();
-          // Future: wire to reaction API. For now fire a reply with the emoji.
-          _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') });
-        });
-        emojiBar.appendChild(eb);
+      const hoverActions = _buildHoverActions({
+        msgId: m.id, body: m.body, mine,
+        senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
+        type: 'dm',
+        senderId: m.sender_id,
+        onReply: () => _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') }),
       });
-      hoverActions.appendChild(emojiBar);
-
-      // Reply button
-      const replyBtn = document.createElement('button');
-      replyBtn.className = 'dm-ha-btn';
-      replyBtn.type = 'button';
-      replyBtn.title = 'Reply';
-      replyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
-      replyBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') });
-      });
-      hoverActions.appendChild(replyBtn);
-
-      // More (3-dot) button → opens context menu with forward/pin/report
-      const moreBtn = document.createElement('button');
-      moreBtn.className = 'dm-ha-btn';
-      moreBtn.type = 'button';
-      moreBtn.title = 'More';
-      moreBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
-      moreBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        _showMsgContextMenu(e, {
-          id: m.id, body: m.body, mine,
-          senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
-          type: 'dm',
-        });
-      });
-      hoverActions.appendChild(moreBtn);
-
       wrap.appendChild(hoverActions);
     }
 
@@ -4889,6 +4847,113 @@ function _openForwardPicker(body) {
   renderList('');
   $id('dm-fwd-search').oninput = e => renderList(e.target.value);
   $id('dm-fwd-search').focus();
+}
+
+// ── Shared emoji picker popup (anchored to the react button) ──────────────────
+let _emojiPickerPopup = null;
+const _QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+
+function _dismissEmojiPicker() {
+  if (_emojiPickerPopup) { _emojiPickerPopup.remove(); _emojiPickerPopup = null; }
+}
+
+function _showEmojiPicker(anchorBtn, onPick) {
+  _dismissEmojiPicker();
+  const popup = document.createElement('div');
+  popup.className = 'dm-emoji-picker-popup';
+  _emojiPickerPopup = popup;
+
+  _QUICK_REACTIONS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'dm-emoji-picker-btn';
+    btn.type = 'button';
+    btn.textContent = emoji;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      _dismissEmojiPicker();
+      onPick(emoji);
+    });
+    popup.appendChild(btn);
+  });
+
+  document.body.appendChild(popup);
+
+  // Anchor: position above the react button, centred on it
+  const rect = anchorBtn.getBoundingClientRect();
+  const pw = popup.offsetWidth || (_QUICK_REACTIONS.length * 38);
+  const ph = popup.offsetHeight || 52;
+  let left = rect.left + rect.width / 2 - pw / 2;
+  let top  = rect.top - ph - 8;
+  // Clamp to viewport
+  left = Math.max(8, Math.min(left, window.innerWidth  - pw - 8));
+  top  = top < 8 ? rect.bottom + 8 : top;
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+
+  // Dismiss on outside click or Escape
+  const dismiss = e => { if (!popup.contains(e.target)) _dismissEmojiPicker(); };
+  setTimeout(() => document.addEventListener('click', dismiss, { once: true }), 0);
+}
+
+// ── Build the three Instagram-style action buttons beside a bubble ────────────
+// order for MINE (shown to left of bubble):  ⋮  ↩  🙂   (right-to-left visually)
+// order for THEIRS (shown to right of bubble): 🙂  ↩  ⋮  (left-to-right)
+// CSS flex-direction:row handles both; for mine the wrap is row-reverse so
+// the bubble stays right and actions sit to the left.
+function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onReply }) {
+  const hoverActions = document.createElement('div');
+  hoverActions.className = 'dm-hover-actions';
+
+  // ── React button (smiley face) ──────────────────────────────────────
+  const reactBtn = document.createElement('button');
+  reactBtn.className = 'dm-ha-btn';
+  reactBtn.type = 'button';
+  reactBtn.title = 'React';
+  reactBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`;
+  reactBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _showEmojiPicker(reactBtn, emoji => {
+      // Wire to reaction API when ready; for now toast it
+      if (typeof swShowToast === 'function') swShowToast(emoji + ' reacted');
+    });
+  });
+
+  // ── Reply button ──────────────────────────────────────────────────
+  const replyBtn = document.createElement('button');
+  replyBtn.className = 'dm-ha-btn';
+  replyBtn.type = 'button';
+  replyBtn.title = 'Reply';
+  replyBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>`;
+  replyBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    onReply();
+  });
+
+  // ── More (⋮) button ───────────────────────────────────────────────
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'dm-ha-btn';
+  moreBtn.type = 'button';
+  moreBtn.title = 'More';
+  moreBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>`;
+  moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _showMsgContextMenu(e, { id: msgId, body, mine, senderName, type, senderId });
+  });
+
+  // Instagram order:
+  // mine   → shown LEFT of bubble in visual order: ⋮ ↩ 😊  (wrap is row-reverse, so first child ends up rightmost)
+  // theirs → shown RIGHT of bubble: 😊 ↩ ⋮
+  if (mine) {
+    hoverActions.appendChild(moreBtn);
+    hoverActions.appendChild(replyBtn);
+    hoverActions.appendChild(reactBtn);
+  } else {
+    hoverActions.appendChild(reactBtn);
+    hoverActions.appendChild(replyBtn);
+    hoverActions.appendChild(moreBtn);
+  }
+
+  return hoverActions;
 }
 
 // Context menu implementation
@@ -5665,55 +5730,13 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     // Instagram-style hover actions (hidden on mobile via CSS)
     if (!isDeleted && !m.is_system) {
-      const hoverActions = document.createElement('div');
-      hoverActions.className = 'dm-hover-actions';
-
-      const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
-      const emojiBar = document.createElement('div');
-      emojiBar.className = 'dm-ha-emoji-bar';
-      QUICK_REACTIONS.forEach(emoji => {
-        const eb = document.createElement('button');
-        eb.className = 'dm-ha-emoji-btn';
-        eb.type = 'button';
-        eb.textContent = emoji;
-        eb.title = `React with ${emoji}`;
-        eb.addEventListener('click', e => {
-          e.stopPropagation();
-          _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') });
-        });
-        emojiBar.appendChild(eb);
+      const hoverActions = _buildHoverActions({
+        msgId: m.id, body: m.body, mine,
+        senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
+        type: 'group',
+        senderId: m.sender_id,
+        onReply: () => _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') }),
       });
-      hoverActions.appendChild(emojiBar);
-
-      // Reply button
-      const replyBtn = document.createElement('button');
-      replyBtn.className = 'dm-ha-btn';
-      replyBtn.type = 'button';
-      replyBtn.title = 'Reply';
-      replyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
-      replyBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') });
-      });
-      hoverActions.appendChild(replyBtn);
-
-      // More (3-dot) button → context menu with forward / report
-      const moreBtn = document.createElement('button');
-      moreBtn.className = 'dm-ha-btn';
-      moreBtn.type = 'button';
-      moreBtn.title = 'More';
-      moreBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
-      moreBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        _showMsgContextMenu(e, {
-          id: m.id, body: m.body, mine,
-          senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
-          type: 'group',
-          senderId: m.sender_id,
-        });
-      });
-      hoverActions.appendChild(moreBtn);
-
       wrap.appendChild(hoverActions);
     }
 
