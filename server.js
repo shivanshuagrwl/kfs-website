@@ -14842,24 +14842,43 @@ app.post("/api/member/groups/:id/members", memberAuthMiddleware, gcWriteLimit, a
   }
 });
 
-// DELETE /api/member/groups/:id/members/:memberId  — leave / remove self
+// DELETE /api/member/groups/:id/members/:memberId  — leave (self) or remove (owner only)
 app.delete("/api/member/groups/:id/members/:memberId", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {
     const myId     = req.member.memberId;
     const gid      = req.params.id;
     const memberId = req.params.memberId;
-    // Can only remove yourself (leave) — creator can't forcibly remove others in v1
-    if (memberId !== myId) return res.status(403).json({ error: "You can only remove yourself" });
-    const { data: leaver } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
-    await supabase.from("dm_group_members").delete().eq("group_id", gid).eq("member_id", myId);
+
+    // Verify the caller is actually in this group
+    const { data: myMem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!myMem) return res.status(403).json({ error: "Not in this group" });
+
+    // Only the group owner can remove someone other than themselves
+    if (memberId !== myId) {
+      const { data: group } = await supabase.from("dm_group_chats").select("created_by").eq("id", gid).maybeSingle();
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      if (group.created_by !== myId) return res.status(403).json({ error: "Only the group owner can remove members" });
+      // Owner cannot remove themselves via this path (use leave instead)
+      if (memberId === myId) return res.status(400).json({ error: "Use leave to exit the group" });
+    }
+
+    const isLeaving = memberId === myId;
+    const { data: target } = await supabase.from("members").select("name").eq("id", memberId).maybeSingle();
+    const { data: actor  } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+
+    await supabase.from("dm_group_members").delete().eq("group_id", gid).eq("member_id", memberId);
+
+    const sysBody = isLeaving
+      ? `\x1fsys\x1f\uD83D\uDC4B ${target?.name || "Someone"} left the group`
+      : `\x1fsys\x1f\uD83D\uDEAB ${actor?.name || "Someone"} removed ${target?.name || "a member"}`;
     (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
       sender_id: myId,
-      body:      `\x1fsys\x1f\uD83D\uDC4B ${leaver?.name || "Someone"} left the group`,
-    }]); } catch(e) { console.error("[groups] leave sys msg:", e.message); } })();
+      body:      sysBody,
+    }]); } catch(e) { console.error("[groups] leave/remove sys msg:", e.message); } })();
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: "Failed to leave group" });
+    res.status(500).json({ error: "Failed to remove member" });
   }
 });
 

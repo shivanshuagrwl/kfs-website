@@ -1108,7 +1108,12 @@ function switchPanel(el) {
   if (panel === 'dms') { if (typeof window.dmPanelOpened === 'function') window.dmPanelOpened(); }
   else {
     if (typeof dmPausePolling === 'function') dmPausePolling();
-    if (typeof gcPausePolling === 'function') gcPausePolling();
+    // Do NOT pause GC polling when switching away from the DMs panel.
+    // gcPollTick needs to keep running so:
+    //   1. Reactions remain live and don't disappear after a few minutes.
+    //   2. The background group-list refresh continues for members who were
+    //      just added to a group (they see it in the sidebar without a reload).
+    // gcPollTick already no-ops silently when no group is open (GC.activeId is null).
   }
 }
 
@@ -4441,13 +4446,20 @@ async function _dmPollNewMessages() {
 }
 
 async function dmPollTick() {
-  if (!DM.activeKey) return;
-  try { await _dmPollNewMessages(); } catch { /* silent */ }
-  // Reactions don't ride along with the "since" cursor above (it only returns
-  // brand-new messages), so refresh reaction state on already-rendered
-  // messages separately, every tick — this is how a friend's reaction shows
-  // up live instead of needing a refresh.
-  try { await _refreshVisibleReactions('dm'); } catch { /* silent */ }
+  // Always refresh visible reactions — even when we've gone "back" to the
+  // sidebar, a reaction the other person added to a visible bubble should
+  // update without a reload. The reaction endpoint is a cheap read-only call.
+  if (DM.activeKey) {
+    try { await _dmPollNewMessages(); } catch { /* silent */ }
+    // Reactions don't ride along with the "since" cursor above (it only returns
+    // brand-new messages), so refresh reaction state on already-rendered
+    // messages separately, every tick — this is how a friend's reaction shows
+    // up live instead of needing a refresh.
+    try { await _refreshVisibleReactions('dm'); } catch { /* silent */ }
+  }
+  // When no DM is open, the poll keeps running (set by dmStartPolling) but
+  // just does nothing — this is intentional so reactions are always live
+  // the moment the user opens a conv without needing to restart the interval.
 }
 
 function dmStartPolling() {
@@ -4478,7 +4490,9 @@ function dmGoBack() {
   $id('dm-window-empty') && ($id('dm-window-empty').style.display = '');
   DM.activeKey  = null;
   DM.activePeer = null;
-  dmPausePolling(); // stop the poll interval when no conv is active
+  // Do NOT pause polling here — we keep the interval alive so that when the
+  // user re-opens a conv or returns to the inbox the poll resumes immediately.
+  // dmPollTick already no-ops when DM.activeKey is null.
   document.querySelectorAll('.dm-conv-row').forEach(el => el.classList.remove('dm-active-row'));
 }
 
@@ -6232,7 +6246,27 @@ async function _gcPollNewMessages() {
 }
 
 async function gcPollTick() {
-  if (!GC.activeId) return;
+  if (!GC.activeId) {
+    // No group open, but we still want the group list to stay fresh in the
+    // background so members who were added to a group see it appear.
+    // This is a lightweight check — only re-render if the list changed.
+    if (_token) {
+      try {
+        const data = await api('GET', '/api/member/groups');
+        const fresh = Array.isArray(data) ? data : [];
+        if (fresh.length || !(GC.groups || []).length) {
+          const oldKey = JSON.stringify((GC.groups || []).map(g => g.id + g.last_msg_at + (g.unread_count || 0)));
+          const newKey = JSON.stringify(fresh.map(g => g.id + g.last_msg_at + (g.unread_count || 0)));
+          if (oldKey !== newKey) {
+            GC.groups = fresh;
+            if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+            else gcRenderGroups(GC.groups);
+          }
+        }
+      } catch { /* silent */ }
+    }
+    return;
+  }
   try { await _gcPollNewMessages(); } catch { /* silent */ }
   // Same reasoning as DM: a groupmate's reaction on an existing message
   // doesn't come through the "since" cursor above, so refresh separately.
@@ -6259,7 +6293,9 @@ function gcGoBack() {
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
   GC.activeId    = null;
   GC.activeGroup = null;
-  gcPausePolling();
+  // Do NOT pause polling — gcPollTick already no-ops when GC.activeId is null.
+  // Keeping the interval alive means reactions stay fresh and the group list
+  // can be refreshed by the background sidebar timer without needing a restart.
   document.querySelectorAll('.gc-conv-row').forEach(el => el.classList.remove('dm-active-row'));
 }
 
@@ -6427,6 +6463,142 @@ function gcCloseCreateModal() {
   if (modal) modal.style.display = 'none';
 }
 
+// ─── Add Members to existing group modal ──────────────────────────────────────
+// Reuses the same search/chip UI as the create modal but POSTs to the
+// add-member endpoint for an already-existing group.
+function gcOpenAddMembersModal(groupId) {
+  const group = GC.groups.find(g => g.id === groupId) || GC.activeGroup;
+  if (!groupId) return;
+
+  let modal = $id('gc-addmem-overlay');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'gc-addmem-overlay';
+    modal.className = 'nick-modal-overlay';
+    modal.innerHTML = `
+      <div class="nick-modal gc-create-modal" id="gc-addmem-modal">
+        <div class="nick-modal-head">
+          <span>Add Members</span>
+          <button class="dm-icon-btn" id="gc-addmem-close" aria-label="Close">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="gc-create-search-wrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="gc-addmem-search" class="dm-search-input" style="padding-left:32px;width:100%;box-sizing:border-box" type="text" placeholder="Search members…" autocomplete="off">
+        </div>
+        <div id="gc-addmem-results" class="dm-picker-results" style="max-height:160px;margin-top:6px"></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);margin-bottom:4px">Selected</div>
+        <div id="gc-addmem-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px"></div>
+        <div class="nick-modal-actions" style="margin-top:14px">
+          <button class="nick-clear-btn" id="gc-addmem-cancel">Cancel</button>
+          <button class="nick-save-btn" id="gc-addmem-submit">Add</button>
+        </div>
+        <div id="gc-addmem-error" class="nick-error" style="display:none"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) gcCloseAddMembersModal(); });
+  }
+
+  $id('gc-addmem-close').onclick  = gcCloseAddMembersModal;
+  $id('gc-addmem-cancel').onclick = gcCloseAddMembersModal;
+
+  const selected = new Map();
+  // Build a set of member IDs already in the group so we don't show them as options
+  const existingIds = new Set((group?.members || []).map(m => m.id));
+
+  const renderChips = () => {
+    const chips = $id('gc-addmem-chips');
+    chips.innerHTML = '';
+    selected.forEach((m, id) => {
+      const chip = document.createElement('span');
+      chip.className = 'gc-chip';
+      chip.innerHTML = `${swEsc(m.name || 'Member')}<button data-id="${swEsc(id)}" class="gc-chip-remove">×</button>`;
+      chip.querySelector('.gc-chip-remove')?.addEventListener('click', () => { selected.delete(id); renderChips(); });
+      chips.appendChild(chip);
+    });
+  };
+
+  const renderResults = (q) => {
+    const results = $id('gc-addmem-results');
+    if (!results) return;
+    const query = (q || '').toLowerCase().trim();
+    const pool  = DM.members.length ? DM.members : (_portalMembers || []);
+    const hits  = (query
+      ? pool.filter(m => (m.name || '').toLowerCase().includes(query))
+      : pool.slice(0, 12)
+    ).filter(m => !existingIds.has(m.id) && !selected.has(m.id));
+    results.innerHTML = hits.map(m => `
+      <div class="dm-picker-row" data-id="${swEsc(m.id)}">
+        ${gcAvatar(m.name, m.photo, 30)}
+        <div>
+          <div class="dm-picker-name">${swEsc(m.name || 'Member')}</div>
+          <div class="dm-picker-meta">${swEsc([m.role, m.batch || m.domain].filter(Boolean).join(' · '))}</div>
+        </div>
+      </div>`).join('');
+    results.querySelectorAll('.dm-picker-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.dataset.id;
+        const m  = pool.find(x => x.id === id);
+        if (m) { selected.set(id, m); renderChips(); renderResults($id('gc-addmem-search')?.value); }
+      });
+    });
+  };
+
+  // Reset
+  $id('gc-addmem-search').value = '';
+  $id('gc-addmem-chips').innerHTML = '';
+  $id('gc-addmem-error').style.display = 'none';
+  dmEnsureMembers().then(() => renderResults(''));
+
+  let searchTimer;
+  const searchInp = $id('gc-addmem-search');
+  searchInp.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => renderResults(searchInp.value), 150); };
+
+  const submitBtn = $id('gc-addmem-submit');
+  submitBtn.onclick = async () => {
+    if (!selected.size) { $id('gc-addmem-error').textContent = 'Select at least one member.'; $id('gc-addmem-error').style.display = ''; return; }
+    submitBtn.disabled = true;
+    const errEl = $id('gc-addmem-error');
+    const ids = [...selected.keys()];
+    let failed = 0;
+    for (const memberId of ids) {
+      try {
+        await api('POST', `/api/member/groups/${groupId}/members`, { member_id: memberId });
+      } catch (e) {
+        failed++;
+        console.error('[gcAddMembers]', memberId, e.message);
+      }
+    }
+    if (failed === ids.length) {
+      errEl.textContent = 'Could not add any members. Please try again.';
+      errEl.style.display = '';
+      submitBtn.disabled = false;
+      return;
+    }
+    gcCloseAddMembersModal();
+    // Refresh group data and reopen info panel so member count updates immediately
+    try {
+      const data = await api('GET', `/api/member/groups/${groupId}`);
+      GC.activeGroup = { ...(GC.activeGroup || {}), ...data };
+      if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+      if (typeof window._dpShowGroup === 'function') window._dpShowGroup(GC.activeGroup);
+    } catch { /* silent — panel stays closed, user can tap ⓘ again */ }
+    if (failed > 0) {
+      if (typeof swShowToast === 'function') swShowToast(`Added ${ids.length - failed} member(s); ${failed} failed.`);
+    }
+    submitBtn.disabled = false;
+  };
+
+  modal.style.display = 'flex';
+  searchInp.focus();
+}
+
+function gcCloseAddMembersModal() {
+  const modal = $id('gc-addmem-overlay');
+  if (modal) modal.style.display = 'none';
+}
+
 // ─── Group info panel ─────────────────────────────────────────────────────────
 
 // Override gcOpenInfo to use the Instagram-style detail panel (dpShowGroup)
@@ -6527,7 +6699,10 @@ async function gcStartRename() {
     GC.activeGroup.name = newName.trim();
     setText('gc-topbar-name', newName.trim());
     await gcLoadGroups();
-    document.getElementById('gc-info-overlay').style.display = 'none';
+    // Close whichever info UI is open (old modal or new detail panel)
+    const _renameOverlay = document.getElementById('gc-info-overlay');
+    if (_renameOverlay) _renameOverlay.style.display = 'none';
+    if (typeof window._dpClose === 'function') window._dpClose();
   } catch (e) {
     alert(e.message || 'Could not rename group.');
   }
@@ -6537,7 +6712,9 @@ async function gcRemoveMember(memberId) {
   if (!confirm('Remove this member from the group?')) return;
   try {
     await api('DELETE', `/api/member/groups/${GC.activeId}/members/${memberId}`);
-    document.getElementById('gc-info-overlay').style.display = 'none';
+    const _removeOverlay = document.getElementById('gc-info-overlay');
+    if (_removeOverlay) _removeOverlay.style.display = 'none';
+    // Re-open info so member count and list updates immediately
     gcOpenInfo();
   } catch (e) {
     alert(e.message || 'Could not remove member.');
@@ -6546,12 +6723,18 @@ async function gcRemoveMember(memberId) {
 
 async function gcLeave() {
   if (!confirm('Leave this group?')) return;
-  const myId = gcMyId();
+  const myId    = gcMyId();
+  // Capture groupId NOW — gcGoBack() sets GC.activeId = null, so filtering
+  // AFTER gcGoBack() would be `filter(g => g.id !== null)` which removes nothing
+  // and leaves the group stuck in the sidebar even after you've left it.
+  const groupId = GC.activeId;
   try {
-    await api('DELETE', `/api/member/groups/${GC.activeId}/members/${myId}`);
-    document.getElementById('gc-info-overlay').style.display = 'none';
-    gcGoBack();
-    GC.groups = GC.groups.filter(g => g.id !== GC.activeId);
+    await api('DELETE', `/api/member/groups/${groupId}/members/${myId}`);
+    const overlay = document.getElementById('gc-info-overlay');
+    if (overlay) overlay.style.display = 'none';
+    GC.groups = GC.groups.filter(g => g.id !== groupId);
+    if (typeof window.gcGoBack === 'function') window.gcGoBack();
+    else gcGoBack();
     if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
     else gcRenderGroups(GC.groups);
   } catch (e) {
@@ -6826,7 +7009,8 @@ if (document.readyState === "loading") {
 
     GC.activeId    = null;
     GC.activeGroup = null;
-    gcPausePolling();
+    // Do NOT pause GC polling — gcPollTick already no-ops when GC.activeId is null.
+    // Keeping the interval alive means the background sidebar refresh also stays alive.
 
     // Highlight row
     document.querySelectorAll('.dm-conv-row').forEach(el => {
@@ -6885,7 +7069,9 @@ if (document.readyState === "loading") {
 
     GC.activeId    = null;
     GC.activeGroup = null;
-    gcPausePolling();
+    // Do NOT pause GC polling — gcPollTick already no-ops when GC.activeId is null.
+    // Keeping the interval alive means reactions stay live and the background
+    // sidebar timer keeps refreshing the group list for non-active-group members.
     document.querySelectorAll('.dm-conv-row').forEach(el => el.classList.remove('dm-active-row'));
   };
 
@@ -6965,7 +7151,39 @@ if (document.readyState === "loading") {
     await inboxLoad();
     dmStartPolling();
     gcStartPolling();
+    // Background sidebar refresh: re-fetches group list every 30s so that
+    // members added to a new group see it appear without a page reload.
+    // This is separate from gcStartPolling (which only polls messages when
+    // a group is open) — we need the group LIST to refresh for everyone.
+    _startSidebarRefresh();
   };
+
+  // ── Background sidebar refresh (group list for non-active-group members) ──
+  let _sidebarRefreshTimer = null;
+  function _startSidebarRefresh() {
+    _stopSidebarRefresh();
+    _sidebarRefreshTimer = setInterval(async () => {
+      // Only refresh groups in the background — DM conv list is already
+      // handled by dmPollTick. Skip if no token (not logged in).
+      if (!_token) return;
+      try {
+        const data = await api('GET', '/api/member/groups');
+        const fresh = Array.isArray(data) ? data : [];
+        if (!fresh.length && (GC.groups || []).length) return; // guard stale-empty
+        // Only re-render if the group list actually changed (new group added,
+        // last_msg_at updated, member count changed, etc.)
+        const oldKey = JSON.stringify((GC.groups || []).map(g => g.id + g.last_msg_at + (g.members?.length || 0)));
+        const newKey = JSON.stringify(fresh.map(g => g.id + g.last_msg_at + (g.members?.length || 0)));
+        if (oldKey !== newKey) {
+          GC.groups = fresh;
+          inboxRender();
+        }
+      } catch { /* silent — transient network error, try again next tick */ }
+    }, 10000); // every 10 seconds — fast enough for newly added members to see new groups promptly
+  }
+  function _stopSidebarRefresh() {
+    if (_sidebarRefreshTimer) { clearInterval(_sidebarRefreshTimer); _sidebarRefreshTimer = null; }
+  }
 
   // ── Override dmRenderConvs so DM polling updates also re-render unified ───
   window.dmRenderConvs = function(list) {
@@ -7174,18 +7392,85 @@ if (document.readyState === "loading") {
     document.getElementById('dm-detail-block-btn').style.display = 'none';
     setText('dm-detail-nickname-label', 'Nicknames');
 
-    // Render member list
+    const isAdminOrOwner = ['owner', 'admin'].includes(group.my_role);
+    const myId = gcMyId();
+    const convKey = group.id;
+
+    // Render member list with role badges + remove buttons
     const listEl = document.getElementById('dm-detail-members-list');
     if (listEl) {
       const members = group.members || [];
-      listEl.innerHTML = members.map(m => `
-        <div class="dm-detail-member-row">
+      listEl.innerHTML = '';
+      members.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'dm-detail-member-row';
+        const isMe = m.id === myId || m.is_me;
+        const displayName = nicksResolveDisplay(convKey, m.id, m.name || 'Member');
+        row.innerHTML = `
           ${dmAvatar(m.name, m.photo, 32)}
           <div style="flex:1;min-width:0">
-            <div class="dm-detail-member-name">${swEsc(m.name || 'Member')}</div>
-            ${m.role && m.role !== 'member' ? `<div class="dm-detail-member-role">${swEsc(m.role)}</div>` : ''}
+            <div class="dm-detail-member-name" style="display:flex;align-items:center;gap:6px">
+              ${swEsc(displayName)}
+              ${m.group_role === 'owner' ? `<span style="font-size:9px;background:rgba(255,255,255,.08);color:var(--muted);padding:1px 6px;border-radius:10px;font-weight:600;letter-spacing:.04em">OWNER</span>` : ''}
+              ${m.group_role === 'admin' ? `<span style="font-size:9px;background:rgba(255,255,255,.08);color:var(--muted);padding:1px 6px;border-radius:10px;font-weight:600;letter-spacing:.04em">ADMIN</span>` : ''}
+            </div>
+            ${(m.role || m.batch || m.domain) ? `<div class="dm-detail-member-role">${swEsc([m.role, m.batch || m.domain].filter(Boolean).join(' · '))}</div>` : ''}
           </div>
-        </div>`).join('');
+          ${!isMe && isAdminOrOwner && m.group_role !== 'owner' ? `<button class="dm-icon-btn dp-remove-member-btn" data-id="${swEsc(m.id)}" title="Remove from group" style="color:#ef4444;padding:4px;flex-shrink:0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>` : ''}`;
+        listEl.appendChild(row);
+      });
+
+      // Wire remove buttons
+      listEl.querySelectorAll('.dp-remove-member-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Remove this member from the group?')) return;
+          const memberId = btn.dataset.id;
+          try {
+            await api('DELETE', `/api/member/groups/${group.id}/members/${memberId}`);
+            // Refresh group data and re-render panel
+            const data = await api('GET', `/api/member/groups/${group.id}`);
+            GC.activeGroup = { ...(GC.activeGroup || {}), ...data };
+            DP.group = GC.activeGroup;
+            dpShowGroup(GC.activeGroup);
+            if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+          } catch (e) { alert(e.message || 'Could not remove member.'); }
+        });
+      });
+    }
+
+    // Show/hide the "Add Members" button based on role
+    const addBtn = document.getElementById('dm-detail-add-member-btn');
+    if (addBtn) addBtn.style.display = isAdminOrOwner ? '' : 'none';
+
+    // Rename button — only for owner/admin
+    let renameBtn = document.getElementById('dp-rename-group-btn');
+    if (isAdminOrOwner) {
+      if (!renameBtn) {
+        renameBtn = document.createElement('button');
+        renameBtn.id = 'dp-rename-group-btn';
+        renameBtn.className = 'dm-detail-action-btn';
+        renameBtn.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:8px;font-size:13px';
+        renameBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Group`;
+        const leaveBtn = document.getElementById('dm-detail-leave-btn');
+        if (leaveBtn && leaveBtn.parentNode) leaveBtn.parentNode.insertBefore(renameBtn, leaveBtn);
+      }
+      renameBtn.style.display = '';
+      renameBtn.onclick = async () => {
+        const current = group.name || '';
+        const newName = prompt('New group name:', current);
+        if (!newName?.trim() || newName.trim() === current) return;
+        try {
+          await api('PATCH', `/api/member/groups/${group.id}`, { name: newName.trim() });
+          if (GC.activeGroup) GC.activeGroup.name = newName.trim();
+          setText('gc-topbar-name', newName.trim());
+          setText('dm-detail-name', newName.trim());
+          await gcLoadGroups();
+        } catch (e) { alert(e.message || 'Could not rename group.'); }
+      };
+    } else if (renameBtn) {
+      renameBtn.style.display = 'none';
     }
 
     dpOpen();
@@ -7261,10 +7546,8 @@ if (document.readyState === "loading") {
   // ── Action: Add Members (Group) ────────────────────────────────────────────
   function dpAddMembers() {
     dpClose();
-    if (typeof gcOpenAddMembersModal === 'function' && DP.group) {
+    if (DP.group && typeof gcOpenAddMembersModal === 'function') {
       gcOpenAddMembersModal(DP.group.id);
-    } else if (typeof gcOpenInfo === 'function' && DP.group) {
-      gcOpenInfo();
     }
   }
 
