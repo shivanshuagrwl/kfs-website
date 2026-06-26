@@ -4103,6 +4103,11 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
 
     const isDeleted = m.body === '[deleted]';
+
+    // Wrap bubble + hover actions together
+    const wrap = document.createElement('div');
+    wrap.className = 'dm-bubble-wrap';
+
     const bubble = document.createElement('div');
     bubble.className = `dm-bubble${isDeleted ? ' dm-deleted' : ''}`;
     bubble.dataset.msgId = m.id;
@@ -4118,6 +4123,62 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     bodyNode.className = 'dm-bubble-text';
     bodyNode.textContent = m.body;
     bubble.appendChild(bodyNode);
+
+    wrap.appendChild(bubble);
+
+    // Instagram-style hover actions (hidden on mobile via CSS)
+    if (!isDeleted) {
+      const hoverActions = document.createElement('div');
+      hoverActions.className = 'dm-hover-actions';
+
+      const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+      const emojiBar = document.createElement('div');
+      emojiBar.className = 'dm-ha-emoji-bar';
+      QUICK_REACTIONS.forEach(emoji => {
+        const eb = document.createElement('button');
+        eb.className = 'dm-ha-emoji-btn';
+        eb.type = 'button';
+        eb.textContent = emoji;
+        eb.title = `React with ${emoji}`;
+        eb.addEventListener('click', e => {
+          e.stopPropagation();
+          // Future: wire to reaction API. For now fire a reply with the emoji.
+          _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') });
+        });
+        emojiBar.appendChild(eb);
+      });
+      hoverActions.appendChild(emojiBar);
+
+      // Reply button
+      const replyBtn = document.createElement('button');
+      replyBtn.className = 'dm-ha-btn';
+      replyBtn.type = 'button';
+      replyBtn.title = 'Reply';
+      replyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
+      replyBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') });
+      });
+      hoverActions.appendChild(replyBtn);
+
+      // More (3-dot) button → opens context menu with forward/pin/report
+      const moreBtn = document.createElement('button');
+      moreBtn.className = 'dm-ha-btn';
+      moreBtn.type = 'button';
+      moreBtn.title = 'More';
+      moreBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+      moreBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _showMsgContextMenu(e, {
+          id: m.id, body: m.body, mine,
+          senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
+          type: 'dm',
+        });
+      });
+      hoverActions.appendChild(moreBtn);
+
+      wrap.appendChild(hoverActions);
+    }
 
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
@@ -4138,7 +4199,7 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
       type: 'dm',
     });
 
-    group.appendChild(bubble);
+    group.appendChild(wrap);
     group.appendChild(meta);
   });
 }
@@ -4857,7 +4918,7 @@ function _showMsgContextMenu(e, info) {
 
   const actions = [];
 
-  // Reply
+  // Reply (keep in context menu too for right-click / long-press on mobile)
   actions.push({
     icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>',
     label: 'Reply',
@@ -4873,7 +4934,29 @@ function _showMsgContextMenu(e, info) {
     fn: () => _openForwardPicker(body),
   });
 
-  // Report message
+  // Pin (UI only — shows toast; wire to DB when ready)
+  actions.push({
+    icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>',
+    label: 'Pin',
+    fn: () => { if (typeof swShowToast === 'function') swShowToast('📌 Pinning coming soon.'); },
+  });
+
+  // Delete (own messages only)
+  if (mine) {
+    actions.push({
+      icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+      label: 'Delete',
+      danger: true,
+      fn: () => {
+        const bubble = document.querySelector(`[data-msg-id="${id}"]`);
+        const delBtn = bubble?.closest('.dm-msg-group')?.querySelector(`.dm-del-btn[data-id="${id}"]`);
+        if (type === 'group') gcDeleteMsg(id, bubble, delBtn);
+        else dmDeleteMsg(id, bubble, delBtn);
+      },
+    });
+  }
+
+  // Report message (others' messages only)
   if (!mine) {
     actions.push({
       icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
@@ -5550,6 +5633,11 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
 
     const isDeleted = m.body === '[deleted]' || m.is_deleted;
+
+    // Wrap bubble + hover actions together
+    const wrap = document.createElement('div');
+    wrap.className = 'dm-bubble-wrap';
+
     const bubble = document.createElement('div');
     bubble.className = `dm-bubble${isDeleted ? ' dm-deleted' : ''}`;
     bubble.dataset.msgId = m.id;
@@ -5573,6 +5661,62 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     bodyNode.textContent = m.body;
     bubble.appendChild(bodyNode);
 
+    wrap.appendChild(bubble);
+
+    // Instagram-style hover actions (hidden on mobile via CSS)
+    if (!isDeleted && !m.is_system) {
+      const hoverActions = document.createElement('div');
+      hoverActions.className = 'dm-hover-actions';
+
+      const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+      const emojiBar = document.createElement('div');
+      emojiBar.className = 'dm-ha-emoji-bar';
+      QUICK_REACTIONS.forEach(emoji => {
+        const eb = document.createElement('button');
+        eb.className = 'dm-ha-emoji-btn';
+        eb.type = 'button';
+        eb.textContent = emoji;
+        eb.title = `React with ${emoji}`;
+        eb.addEventListener('click', e => {
+          e.stopPropagation();
+          _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') });
+        });
+        emojiBar.appendChild(eb);
+      });
+      hoverActions.appendChild(emojiBar);
+
+      // Reply button
+      const replyBtn = document.createElement('button');
+      replyBtn.className = 'dm-ha-btn';
+      replyBtn.type = 'button';
+      replyBtn.title = 'Reply';
+      replyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
+      replyBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') });
+      });
+      hoverActions.appendChild(replyBtn);
+
+      // More (3-dot) button → context menu with forward / report
+      const moreBtn = document.createElement('button');
+      moreBtn.className = 'dm-ha-btn';
+      moreBtn.type = 'button';
+      moreBtn.title = 'More';
+      moreBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+      moreBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _showMsgContextMenu(e, {
+          id: m.id, body: m.body, mine,
+          senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
+          type: 'group',
+          senderId: m.sender_id,
+        });
+      });
+      hoverActions.appendChild(moreBtn);
+
+      wrap.appendChild(hoverActions);
+    }
+
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
     meta.innerHTML = `<span class="dm-msg-time">${gcFull(m.sent_at)}</span>${mine && !isDeleted && !m.id.startsWith('tmp-') ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
@@ -5595,7 +5739,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       });
     }
 
-    group.appendChild(bubble);
+    group.appendChild(wrap);
     group.appendChild(meta);
   });
 }
@@ -5897,22 +6041,28 @@ function gcOpenCreateModal() {
         // Reset stale message state so the newly-created group starts clean
         GC.msgs = [];
         GC.oldestSentAt = null;
-        // Force gc-window + gc-active visible NOW before gcOpenGroup fires
-        // so messages are never rendered into a hidden container (blank chat bug)
-        const _gcWin    = $id('gc-window');
-        const _dmWin    = $id('dm-window');
-        const _gcActive = $id('gc-active');
-        const _gcEmpty  = $id('gc-window-empty');
-        if (_dmWin)    _dmWin.style.display    = 'none';
-        if (_gcWin)    _gcWin.style.display    = 'flex';
-        if (_gcEmpty)  _gcEmpty.style.display  = 'none';
-        if (_gcActive) _gcActive.style.display = 'flex';
-        // Clear any stale message DOM
-        const _msgList = $id('gc-msg-list');
-        if (_msgList) _msgList.innerHTML = '';
-        // Always use window.gcOpenGroup so the IIFE-patched version is called
-        const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
-        await opener(toOpen);
+        // Always open via window._inboxOpenGroup (unified inbox) so dm-window
+        // is properly hidden and gc-window is shown. Falls back to the patched
+        // window.gcOpenGroup if the unified IIFE hasn't exposed _inboxOpenGroup yet.
+        if (typeof window._inboxOpenGroup === 'function') {
+          window._inboxOpenGroup(toOpen);
+        } else {
+          // Force gc-window + gc-active visible NOW before gcOpenGroup fires
+          // so messages are never rendered into a hidden container (blank chat bug)
+          const _gcWin    = $id('gc-window');
+          const _dmWin    = $id('dm-window');
+          const _gcActive = $id('gc-active');
+          const _gcEmpty  = $id('gc-window-empty');
+          if (_dmWin)    _dmWin.style.display    = 'none';
+          if (_gcWin)    _gcWin.style.display    = 'flex';
+          if (_gcEmpty)  _gcEmpty.style.display  = 'none';
+          if (_gcActive) _gcActive.style.display = 'flex';
+          // Clear any stale message DOM
+          const _msgList = $id('gc-msg-list');
+          if (_msgList) _msgList.innerHTML = '';
+          const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
+          await opener(toOpen);
+        }
       }
     } catch (e) {
       $id('gc-create-error').textContent = e.message || 'Could not create group.';
@@ -6410,8 +6560,9 @@ if (document.readyState === "loading") {
     dmSetBadge(dmUnread + gcUnread);
   }
 
-  // Expose inboxLoad globally so the group-create handler (outside this IIFE) can call it
+  // Expose inboxLoad + inboxOpenGroup globally so the group-create handler (outside this IIFE) can call them
   window._inboxLoad = inboxLoad;
+  window._inboxOpenGroup = inboxOpenGroup;
 
   // ── Override dmPanelOpened to use unified load ────────────────────────────
   window.dmPanelOpened = async function() {

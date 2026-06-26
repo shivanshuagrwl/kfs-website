@@ -4327,7 +4327,7 @@
 
 /* Bubbles */
 .dm-bubble {
-  max-width:66%; padding:10px 14px;
+  max-width:100%; padding:10px 14px;
   font-size:13.5px; line-height:1.5;
   word-break:break-word; white-space:pre-wrap;
   border-radius:20px;
@@ -4424,6 +4424,55 @@
 .dm-ctx-item svg { flex-shrink:0; opacity:.7; }
 .dm-ctx-item.dm-ctx-danger { color:#ef4444; }
 .dm-ctx-item.dm-ctx-danger svg { opacity:1; }
+
+/* ── Instagram-style inline hover actions ── */
+.dm-bubble-wrap {
+  position:relative; display:inline-flex;
+  flex-direction:column; max-width:66%;
+}
+.dm-msg-group.mine .dm-bubble-wrap { align-items:flex-end; }
+.dm-msg-group.theirs .dm-bubble-wrap { align-items:flex-start; }
+.dm-hover-actions {
+  position:absolute; top:50%; transform:translateY(-50%);
+  display:flex; align-items:center; gap:4px;
+  opacity:0; pointer-events:none;
+  transition:opacity .15s ease;
+  z-index:10;
+  white-space:nowrap;
+}
+.dm-msg-group.mine .dm-hover-actions {
+  right:calc(100% + 8px);
+  flex-direction:row-reverse;
+}
+.dm-msg-group.theirs .dm-hover-actions {
+  left:calc(100% + 8px);
+  flex-direction:row;
+}
+.dm-bubble-wrap:hover .dm-hover-actions,
+.dm-bubble-wrap:focus-within .dm-hover-actions {
+  opacity:1; pointer-events:all;
+}
+.dm-ha-btn {
+  background:rgba(30,30,30,.92); border:1px solid rgba(255,255,255,.1);
+  border-radius:8px; color:var(--text,#f5f5f5); cursor:pointer;
+  width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center;
+  transition:background .1s, transform .1s; flex-shrink:0;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+}
+.dm-ha-btn:hover { background:rgba(60,60,60,.95); transform:scale(1.08); }
+.dm-ha-btn.dm-ha-react { font-size:16px; }
+.dm-ha-emoji-bar {
+  display:flex; align-items:center; gap:3px;
+  background:rgba(22,22,22,.96); border:1px solid rgba(255,255,255,.1);
+  border-radius:24px; padding:4px 8px;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+}
+.dm-ha-emoji-btn {
+  background:none; border:none; cursor:pointer;
+  font-size:18px; line-height:1; padding:2px 3px; border-radius:6px;
+  transition:transform .12s ease;
+}
+.dm-ha-emoji-btn:hover { transform:scale(1.3); }
 
 /* Meta row (time + delete) */
 .dm-meta {
@@ -4532,7 +4581,8 @@
   .dm-window { width:100%; position:absolute; inset:0; z-index:1; }
   .dm-window.dm-slide-in { z-index:3; }
   .dm-back { display:inline-flex!important; }
-  .dm-bubble { max-width:78%; }
+  .dm-bubble-wrap { max-width:78%; }
+  .dm-hover-actions { display:none; }
 }
 </style>
 
