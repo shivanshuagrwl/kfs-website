@@ -8997,7 +8997,7 @@ const registrationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20, // raised from 5 — campus users share the same NAT IP
   message: { error: "Too many registration attempts. Please wait 15 minutes." },
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
 app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => {
@@ -13295,7 +13295,7 @@ const dmRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Slow down — too many messages." },
-  keyGenerator: (req) => req.member?.memberId || req.ip,
+  keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
 });
 
 /** Stable conversation key for any two member UUIDs */
@@ -13634,6 +13634,7 @@ app.delete("/api/member/dm/messages/:msgId", memberAuthMiddleware, async (req, r
 
 // ── POST /api/member/dm/messages/:msgId/react ─────────────────────────────────
 // Body: { emoji }. Toggle: same emoji again → remove, different → switch, none → add.
+const reactionLimit = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
 app.post("/api/member/dm/messages/:msgId/react", memberAuthMiddleware, reactionLimit, async (req, res) => {
   try {
     const myId  = req.member.memberId;
@@ -13717,7 +13718,7 @@ const reportWriteLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many reports. Please wait before reporting again." },
-  keyGenerator: (req) => req.member?.memberId || req.ip,
+  keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
 });
 
 // ── POST /api/member/reports  — submit a report (members only) ───────────────
@@ -14351,7 +14352,7 @@ const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: 
 const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
-const reactionLimit   = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
+// reactionLimit — defined earlier, near first use
 
 // ── Message reactions — shared helpers (DM + group) ───────────────────────────
 // One reaction per member per message (tap a new emoji to switch, tap your
