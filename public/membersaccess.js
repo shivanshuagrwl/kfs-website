@@ -4105,7 +4105,19 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     const isDeleted = m.body === '[deleted]';
     const bubble = document.createElement('div');
     bubble.className = `dm-bubble${isDeleted ? ' dm-deleted' : ''}`;
-    bubble.textContent = m.body;
+    bubble.dataset.msgId = m.id;
+
+    // Reply quote
+    if (m.replied_to_id && m.replied_to_body) {
+      const quote = document.createElement('div');
+      quote.className = 'dm-reply-quote';
+      quote.innerHTML = `<span class="dm-reply-sender">${swEsc(m.replied_to_sender || 'Member')}</span><span class="dm-reply-body">${swEsc((m.replied_to_body || '').slice(0, 120))}</span>`;
+      bubble.appendChild(quote);
+    }
+    const bodyNode = document.createElement('span');
+    bodyNode.className = 'dm-bubble-text';
+    bodyNode.textContent = m.body;
+    bubble.appendChild(bodyNode);
 
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
@@ -4118,6 +4130,13 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
         dmDeleteMsg(m.id, bubble, delBtn);
       });
     }
+
+    // Context menu: right-click (desktop) + long-press (mobile)
+    _attachMsgContextMenu(bubble, {
+      id: m.id, body: m.body, mine,
+      senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
+      type: 'dm',
+    });
 
     group.appendChild(bubble);
     group.appendChild(meta);
@@ -4178,7 +4197,12 @@ async function dmSend() {
   input.style.height = '';
 
   try {
-    const res = await api('POST', '/api/member/dm/send', { to_member_id: peerId, body });
+    const res = await api('POST', '/api/member/dm/send', {
+      to_member_id: peerId,
+      body,
+      ..._dmGetReplyPayload(),
+    });
+    _setReply('dm', null); // clear reply bar after successful send
 
     // If this was a new conversation, update our active key
     if (!DM.activeKey && res.conv_key) DM.activeKey = res.conv_key;
@@ -4585,7 +4609,7 @@ function swOpenReportModal(contentType, contentId, extraLabel) {
   let existing = document.getElementById('sw-report-modal-overlay');
   if (existing) existing.remove();
 
-  const typeLabel = { post: 'post', dm: 'DM message', comment: 'comment' }[contentType] || contentType;
+  const typeLabel = { post: 'post', dm: 'DM message', comment: 'comment', group_message: 'group message', member: 'account' }[contentType] || contentType;
   const reasons = [
     'Harassment or bullying',
     'Hate speech or discrimination',
@@ -4668,6 +4692,247 @@ function swReportDmMessage(msgId) {
 // ── Hook: add Report button for comments (in detail view) ────────────────────
 function swReportComment(commentId) {
   swOpenReportModal('comment', commentId, 'You are reporting a comment.');
+}
+
+// ── Hook: report a group message ─────────────────────────────────────────────
+function swReportGroupMessage(msgId) {
+  swOpenReportModal('group_message', msgId, 'You are reporting a group message.');
+}
+
+// ── Hook: report a member account ────────────────────────────────────────────
+function swReportMember(memberId, memberName) {
+  swOpenReportModal('member', memberId, `You are reporting ${memberName || 'this member'}'s account.`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MESSAGE CONTEXT MENU  (right-click desktop · long-press mobile)
+// Surfaces: DM bubbles + group chat bubbles
+// Actions: Reply (quoted) · Forward · Report message · Report account (group)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Active reply state — shown as a bar above the compose area
+const _replyState = { dm: null, group: null }; // { id, body, sender } | null
+
+function _setReply(type /* 'dm'|'group' */, state /* null | {id, body, sender} */) {
+  _replyState[type] = state;
+  const barId   = type === 'dm' ? 'dm-reply-bar' : 'gc-reply-bar';
+  const inputId = type === 'dm' ? 'dm-input'     : 'gc-input';
+  let bar = $id(barId);
+  if (!state) {
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+  if (!bar) {
+    // Create once; insert just above the compose textarea
+    bar = document.createElement('div');
+    bar.id = barId;
+    bar.className = 'dm-reply-bar';
+    const input = $id(inputId);
+    if (input) input.closest('.dm-compose')?.before(bar);
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <div class="dm-reply-bar-inner">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:.6"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+      <div class="dm-reply-bar-content">
+        <span class="dm-reply-bar-sender">${swEsc(state.sender)}</span>
+        <span class="dm-reply-bar-body">${swEsc((state.body || '').slice(0, 100))}</span>
+      </div>
+      <button class="dm-reply-bar-cancel" title="Cancel reply">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`;
+  bar.querySelector('.dm-reply-bar-cancel').onclick = () => _setReply(type, null);
+  $id(inputId)?.focus();
+}
+
+// Patch dmSend to inject replied_to fields when a reply is active
+const _origDmSend = typeof dmSend === 'function' ? dmSend : null;
+// We'll wrap at call-site by intercepting the api call in _dmSendReplyWrapper
+function _dmGetReplyPayload() {
+  const r = _replyState.dm;
+  if (!r) return {};
+  return { replied_to_id: r.id, replied_to_body: r.body, replied_to_sender: r.sender };
+}
+function _gcGetReplyPayload() {
+  const r = _replyState.group;
+  if (!r) return {};
+  return { replied_to_id: r.id, replied_to_body: r.body, replied_to_sender: r.sender };
+}
+
+// Forward picker — minimal inline modal
+function _openForwardPicker(body) {
+  let overlay = $id('dm-forward-overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'dm-forward-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99991;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const dms    = DM.convs  || [];
+  const groups = GC.groups || [];
+  const items  = [
+    ...dms.map(c    => ({ label: c.peer?.name || 'Member', key: c.conv_key, avatar: c.peer?.photo || '', type: 'dm',    data: c })),
+    ...groups.map(g => ({ label: g.name,                   key: g.id,       avatar: '',                type: 'group',  data: g })),
+  ].sort((a, b) => a.label.localeCompare(b.label));
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:24px 20px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7);max-height:80vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0;font-size:15px;font-weight:700">Forward message</h3>
+        <button id="dm-fwd-x" style="background:none;border:none;color:#666;cursor:pointer;font-size:18px">&#x2715;</button>
+      </div>
+      <p style="font-size:12px;color:#888;margin:0 0 14px;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px;border-left:3px solid var(--accent,#3b82f6);line-height:1.4">${swEsc(body.slice(0, 160))}</p>
+      <input id="dm-fwd-search" placeholder="Search…" style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:10px;border:1px solid var(--border,#333);background:rgba(0,0,0,.3);color:var(--text,#f5f5f5);font-size:13px;outline:none;margin-bottom:10px">
+      <div id="dm-fwd-list" style="overflow-y:auto;max-height:260px;display:flex;flex-direction:column;gap:2px"></div>
+      <div id="dm-fwd-msg" style="font-size:12px;color:#ef4444;margin-top:8px;display:none"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#dm-fwd-x').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  function renderList(q) {
+    const filt = q ? items.filter(i => i.label.toLowerCase().includes(q.toLowerCase())) : items;
+    const list = $id('dm-fwd-list');
+    list.innerHTML = '';
+    filt.forEach(item => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;transition:background .1s';
+      row.onmouseover = () => row.style.background = 'rgba(255,255,255,.05)';
+      row.onmouseout  = () => row.style.background = 'transparent';
+      const av = item.type === 'dm' && item.avatar
+        ? `<img src="${swEsc(item.avatar)}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+        : `<div style="width:34px;height:34px;border-radius:${item.type==='group'?'10px':'50%'};background:var(--accent,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${swEsc((item.label[0]||'?').toUpperCase())}</div>`;
+      row.innerHTML = `${av}<span style="font-size:13px;font-weight:500">${swEsc(item.label)}</span>`;
+      row.onclick = async () => {
+        try {
+          const msgEl = $id('dm-fwd-msg');
+          if (item.type === 'dm') {
+            await api('POST', '/api/member/dm/send', { to_member_id: item.data.peer?.id, body });
+          } else {
+            await api('POST', `/api/member/groups/${item.data.id}/messages`, { body });
+          }
+          overlay.remove();
+          swShowToast('✓ Message forwarded.');
+        } catch (e) {
+          const msgEl = $id('dm-fwd-msg');
+          if (msgEl) { msgEl.textContent = e.message || 'Could not forward.'; msgEl.style.display = ''; }
+        }
+      };
+      list.appendChild(row);
+    });
+    if (!filt.length) {
+      list.innerHTML = '<p style="color:#666;font-size:13px;text-align:center;padding:12px 0;margin:0">No conversations found</p>';
+    }
+  }
+  renderList('');
+  $id('dm-fwd-search').oninput = e => renderList(e.target.value);
+  $id('dm-fwd-search').focus();
+}
+
+// Context menu implementation
+let _ctxMenu = null;
+let _longPressTimer = null;
+
+function _dismissCtxMenu() {
+  if (_ctxMenu) { _ctxMenu.remove(); _ctxMenu = null; }
+}
+document.addEventListener('click', _dismissCtxMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _dismissCtxMenu(); });
+
+function _showMsgContextMenu(e, info) {
+  e.preventDefault();
+  e.stopPropagation();
+  _dismissCtxMenu();
+
+  const { id, body, mine, senderName, type /* 'dm'|'group' */, senderId } = info;
+
+  const menu = document.createElement('div');
+  menu.className = 'dm-ctx-menu';
+  _ctxMenu = menu;
+
+  // Position near pointer (clamp to viewport)
+  const x = e.clientX ?? (e.touches?.[0]?.clientX ?? window.innerWidth / 2);
+  const y = e.clientY ?? (e.touches?.[0]?.clientY ?? window.innerHeight / 2);
+
+  const actions = [];
+
+  // Reply
+  actions.push({
+    icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>',
+    label: 'Reply',
+    fn: () => {
+      _setReply(type === 'group' ? 'group' : 'dm', { id, body, sender: senderName });
+    },
+  });
+
+  // Forward
+  actions.push({
+    icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>',
+    label: 'Forward',
+    fn: () => _openForwardPicker(body),
+  });
+
+  // Report message
+  if (!mine) {
+    actions.push({
+      icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+      label: 'Report message',
+      danger: true,
+      fn: () => {
+        if (type === 'group') swReportGroupMessage(id);
+        else swReportDmMessage(id);
+      },
+    });
+  }
+
+  // Report account (group only, other person's message)
+  if (type === 'group' && !mine && senderId) {
+    actions.push({
+      icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      label: 'Report account',
+      danger: true,
+      fn: () => swReportMember(senderId, senderName),
+    });
+  }
+
+  menu.innerHTML = actions.map((a, i) => `
+    <button class="dm-ctx-item${a.danger ? ' dm-ctx-danger' : ''}" data-idx="${i}">
+      ${a.icon}<span>${a.label}</span>
+    </button>`).join('');
+
+  document.body.appendChild(menu);
+
+  // Position after append so we know dimensions
+  const mw = menu.offsetWidth  || 180;
+  const mh = menu.offsetHeight || actions.length * 40;
+  const left = Math.min(x, window.innerWidth  - mw - 8);
+  const top  = Math.min(y, window.innerHeight - mh - 8);
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top  = Math.max(8, top)  + 'px';
+
+  menu.querySelectorAll('.dm-ctx-item').forEach((btn, i) => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      _dismissCtxMenu();
+      actions[i].fn();
+    });
+  });
+}
+
+function _attachMsgContextMenu(bubble, info) {
+  // Desktop: right-click
+  bubble.addEventListener('contextmenu', e => _showMsgContextMenu(e, info));
+
+  // Mobile: long-press (500 ms)
+  bubble.addEventListener('touchstart', e => {
+    _longPressTimer = setTimeout(() => {
+      _longPressTimer = null;
+      _showMsgContextMenu(e, info);
+    }, 500);
+  }, { passive: true });
+  bubble.addEventListener('touchend',  () => { clearTimeout(_longPressTimer); _longPressTimer = null; });
+  bubble.addEventListener('touchmove', () => { clearTimeout(_longPressTimer); _longPressTimer = null; });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5215,7 +5480,13 @@ async function gcLoadMsgs(prepend) {
     if (moreWrap) moreWrap.style.display = msgs.length >= 40 ? '' : 'none';
 
     const g = GC.groups.find(g => g.id === GC.activeId);
-    if (g) { g.unread_count = 0; gcRenderGroups(GC.groups); }
+    if (g) {
+      g.unread_count = 0;
+      // Use window.gcRenderGroups (unified inbox) if available, so the conv list
+      // stays in sync without needing a separate gc-conv-list element.
+      if (typeof window.gcRenderGroups === "function") window.gcRenderGroups(GC.groups);
+      else gcRenderGroups(GC.groups);
+    }
   } catch (e) {
     console.error('[GC] loadMsgs:', e.message);
   } finally {
@@ -5281,7 +5552,26 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     const isDeleted = m.body === '[deleted]' || m.is_deleted;
     const bubble = document.createElement('div');
     bubble.className = `dm-bubble${isDeleted ? ' dm-deleted' : ''}`;
-    bubble.textContent = m.body;
+    bubble.dataset.msgId = m.id;
+
+    // Reply quote (WhatsApp-style)
+    if (m.replied_to_id && m.replied_to_body) {
+      const quote = document.createElement('div');
+      quote.className = 'dm-reply-quote';
+      const qSender = document.createElement('span');
+      qSender.className = 'dm-reply-sender';
+      qSender.textContent = m.replied_to_sender || 'Member';
+      const qBody = document.createElement('span');
+      qBody.className = 'dm-reply-body';
+      qBody.textContent = (m.replied_to_body || '').slice(0, 120);
+      quote.appendChild(qSender);
+      quote.appendChild(qBody);
+      bubble.appendChild(quote);
+    }
+    const bodyNode = document.createElement('span');
+    bodyNode.className = 'dm-bubble-text';
+    bodyNode.textContent = m.body;
+    bubble.appendChild(bodyNode);
 
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
@@ -5292,6 +5582,16 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       delBtn.addEventListener('click', e => {
         e.stopPropagation();
         gcDeleteMsg(m.id, bubble, delBtn);
+      });
+    }
+
+    // Context menu: right-click (desktop) + long-press (mobile)
+    if (!isDeleted && !m.is_system) {
+      _attachMsgContextMenu(bubble, {
+        id: m.id, body: m.body, mine,
+        senderName: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member'),
+        type: 'group',
+        senderId: m.sender_id,
       });
     }
 
@@ -5339,7 +5639,11 @@ async function gcSend() {
   input.style.height = '';
 
   try {
-    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages`, { body });
+    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages`, {
+      body,
+      ..._gcGetReplyPayload(),
+    });
+    _setReply('group', null); // clear reply bar after successful send
     const realMsg = res.message;
 
     GC.msgs = GC.msgs.filter(m => m.id !== tmpId);
@@ -5362,7 +5666,8 @@ async function gcSend() {
       existing.last_snippet      = body.slice(0, 80);
       existing.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
       existing.last_sender_is_me = true;
-      gcRenderGroups(GC.groups);
+      if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+      else gcRenderGroups(GC.groups);
     } else {
       await gcLoadGroups();
     }
@@ -5503,8 +5808,11 @@ function gcOpenCreateModal() {
     modal.addEventListener('click', e => { if (e.target === modal) gcCloseCreateModal(); });
   }
 
-  $id('gc-create-close')?.addEventListener('click', gcCloseCreateModal);
-  $id('gc-create-cancel')?.addEventListener('click', gcCloseCreateModal);
+  // Use onclick (not addEventListener) to avoid stacking duplicate handlers on modal reuse
+  const gcCloseEl  = $id('gc-create-close');
+  const gcCancelEl = $id('gc-create-cancel');
+  if (gcCloseEl)  gcCloseEl.onclick  = gcCloseCreateModal;
+  if (gcCancelEl) gcCancelEl.onclick = gcCloseCreateModal;
 
   const selected = new Map(); // id → member object
   modal._selected = selected;
@@ -5568,10 +5876,14 @@ function gcOpenCreateModal() {
     try {
       const res = await api('POST', '/api/member/groups', { name, member_ids: [...selected.keys()] });
       gcCloseCreateModal();
-      await gcLoadGroups();
+      // Use _inboxLoad (unified) so DM.convs + GC.groups are both refreshed.
+      if (typeof window._inboxLoad === 'function') {
+        await window._inboxLoad();
+      } else {
+        await gcLoadGroups();
+      }
       if (res.group) {
-        // Prefer the fully-enriched object from the freshly-loaded list (has members, last_msg_at etc.)
-        // Fall back to the POST response with safe defaults if not in list yet
+        // Prefer the fully-enriched object from the freshly-loaded list
         const toOpen = GC.groups.find(g => g.id === res.group.id) || {
           ...res.group,
           members:           res.group.members || [],
@@ -5582,6 +5894,22 @@ function gcOpenCreateModal() {
           unread_count:      0,
           my_role:           'owner',
         };
+        // Reset stale message state so the newly-created group starts clean
+        GC.msgs = [];
+        GC.oldestSentAt = null;
+        // Force gc-window + gc-active visible NOW before gcOpenGroup fires
+        // so messages are never rendered into a hidden container (blank chat bug)
+        const _gcWin    = $id('gc-window');
+        const _dmWin    = $id('dm-window');
+        const _gcActive = $id('gc-active');
+        const _gcEmpty  = $id('gc-window-empty');
+        if (_dmWin)    _dmWin.style.display    = 'none';
+        if (_gcWin)    _gcWin.style.display    = 'flex';
+        if (_gcEmpty)  _gcEmpty.style.display  = 'none';
+        if (_gcActive) _gcActive.style.display = 'flex';
+        // Clear any stale message DOM
+        const _msgList = $id('gc-msg-list');
+        if (_msgList) _msgList.innerHTML = '';
         // Always use window.gcOpenGroup so the IIFE-patched version is called
         const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
         await opener(toOpen);
@@ -5714,7 +6042,8 @@ async function gcLeave() {
     document.getElementById('gc-info-overlay').style.display = 'none';
     gcGoBack();
     GC.groups = GC.groups.filter(g => g.id !== GC.activeId);
-    gcRenderGroups(GC.groups);
+    if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+    else gcRenderGroups(GC.groups);
   } catch (e) {
     alert(e.message || 'Could not leave group.');
   }
@@ -6032,11 +6361,18 @@ if (document.readyState === "loading") {
   // ── Also patch gcOpenGroup to ensure display is set (unified inbox uses style, not class) ──
   const _origGcOpenGroup = typeof gcOpenGroup === 'function' ? gcOpenGroup : null;
   window.gcOpenGroup = async function(group) {
-    // Make gc-window visible (unified inbox sets display via style, not class)
-    const gcWin = $id('gc-window');
-    const dmWin = $id('dm-window');
-    if (dmWin) dmWin.style.display = 'none';
-    if (gcWin) gcWin.style.display = '';
+    // Make gc-window visible (unified inbox uses style, not class).
+    // Use explicit 'flex' (not '') so the inline display:none from the HTML
+    // is fully overridden even when no CSS cascade provides a fallback.
+    const gcWin    = $id('gc-window');
+    const dmWin    = $id('dm-window');
+    const gcEmpty  = $id('gc-window-empty');
+    const gcActive = $id('gc-active');
+    if (dmWin)    dmWin.style.display    = 'none';
+    if (gcWin)    gcWin.style.display    = 'flex';
+    if (gcEmpty)  gcEmpty.style.display  = 'none';
+    // Pre-show the active chat pane so messages are not rendered into a hidden element
+    if (gcActive) gcActive.style.display = 'flex';
     if (_origGcOpenGroup) await _origGcOpenGroup(group);
   };
 
@@ -6073,6 +6409,9 @@ if (document.readyState === "loading") {
     const gcUnread = (GC.groups || []).reduce((s, g) => s + (g.unread_count || 0), 0);
     dmSetBadge(dmUnread + gcUnread);
   }
+
+  // Expose inboxLoad globally so the group-create handler (outside this IIFE) can call it
+  window._inboxLoad = inboxLoad;
 
   // ── Override dmPanelOpened to use unified load ────────────────────────────
   window.dmPanelOpened = async function() {

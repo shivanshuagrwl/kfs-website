@@ -13451,7 +13451,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     // Fetch both sides: messages received by me + messages I sent in this conv
     let qRecv = supabase
       .from("member_notifications")
-      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at")
+      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender")
       .eq("member_id", myId)
       .eq("link_type", "dm")
       .eq("link_id", convKey)
@@ -13459,7 +13459,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       .limit(limit);
     let qSent = supabase
       .from("member_notifications")
-      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at")
+      .select("id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender")
       .eq("actor_id", myId)
       .eq("link_type", "dm")
       .eq("link_id", convKey)
@@ -13497,11 +13497,14 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     }
 
     res.json(msgs.map(m => ({
-      id:        m.id,
-      sender_id: m.actor_id,
-      body:      m.body,
-      sent_at:   m.created_at,
-      is_read:   m.is_read,
+      id:               m.id,
+      sender_id:        m.actor_id,
+      body:             m.body,
+      sent_at:          m.created_at,
+      is_read:          m.is_read,
+      replied_to_id:    m.replied_to_id    || null,
+      replied_to_body:  m.replied_to_body  || null,
+      replied_to_sender:m.replied_to_sender || null,
     })));
   } catch (e) {
     dmLogErr("[dm/messages GET]", e);
@@ -13514,7 +13517,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
 app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, res) => {
   try {
     const myId              = req.member.memberId;
-    const { to_member_id, body } = req.body || {};
+    const { to_member_id, body, replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
 
     if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
     if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
@@ -13558,16 +13561,19 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     const { data: msg, error: insertErr } = await supabase
       .from("member_notifications")
       .insert([{
-        member_id:   to_member_id,
-        type:        "dm",
-        title:       `Message from ${sender?.name || req.member.username}`,
-        body:        trimmed,
-        actor_id:    myId,
-        actor_name:  sender?.name   || req.member.username,
-        actor_photo: sender?.photo  || null,
-        link_type:   "dm",
-        link_id:     key,
-        is_read:     false,
+        member_id:        to_member_id,
+        type:             "dm",
+        title:            `Message from ${sender?.name || req.member.username}`,
+        body:             trimmed,
+        actor_id:         myId,
+        actor_name:       sender?.name   || req.member.username,
+        actor_photo:      sender?.photo  || null,
+        link_type:        "dm",
+        link_id:          key,
+        is_read:          false,
+        replied_to_id:    replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
+        replied_to_body:  replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
+        replied_to_sender:replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
       }])
       .select("id, actor_id, member_id, body, created_at, is_read")
       .single();
@@ -13578,11 +13584,14 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
       success:         true,
       conv_key:        key,
       message: {
-        id:        msg.id,
-        sender_id: myId,
-        body:      msg.body,
-        sent_at:   msg.created_at,
-        read_at:   null,
+        id:               msg.id,
+        sender_id:        myId,
+        body:             msg.body,
+        sent_at:          msg.created_at,
+        read_at:          null,
+        replied_to_id:    msg.replied_to_id    || null,
+        replied_to_body:  msg.replied_to_body  || null,
+        replied_to_sender:msg.replied_to_sender || null,
       },
     });
   } catch (e) {
@@ -13680,12 +13689,12 @@ const reportWriteLimit = rateLimit({
 });
 
 // ── POST /api/member/reports  — submit a report (members only) ───────────────
-// Body: { content_type: "post"|"dm"|"comment", content_id, reason, details? }
+// Body: { content_type: "post"|"dm"|"comment"|"group_message"|"member", content_id, reason, details? }
 app.post("/api/member/reports", memberAuthMiddleware, reportWriteLimit, async (req, res) => {
   try {
     const { content_type, content_id, reason, details } = req.body || {};
-    if (!["post", "dm", "comment"].includes(content_type))
-      return res.status(400).json({ error: "content_type must be post, dm, or comment" });
+    if (!["post", "dm", "comment", "group_message", "member"].includes(content_type))
+      return res.status(400).json({ error: "content_type must be post, dm, comment, group_message, or member" });
     if (!content_id) return res.status(400).json({ error: "content_id required" });
     if (!reason || String(reason).trim().length < 3)
       return res.status(400).json({ error: "reason required" });
@@ -13721,13 +13730,13 @@ app.post("/api/member/reports", memberAuthMiddleware, reportWriteLimit, async (r
   }
 });
 
-// ── GET /api/admin/reports  — list reports (admin only) ──────────────────────
-// Query: ?status=pending|reviewed|dismissed&type=post|dm|comment&page=0
-app.get("/api/admin/reports", authMiddleware, async (req, res) => {
+// ── GET /api/admin/reports  — list reports (masters only) ────────────────────
+// Query: ?status=pending|reviewed|dismissed&type=post|dm|comment|group_message|member&page=0
+app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
   try {
     const status = ["pending", "reviewed", "dismissed"].includes(req.query.status)
       ? req.query.status : "pending";
-    const type = ["post", "dm", "comment"].includes(req.query.type)
+    const type = ["post", "dm", "comment", "group_message", "member"].includes(req.query.type)
       ? req.query.type : null;
     const page  = Math.max(0, parseInt(req.query.page) || 0);
     const limit = 30;
@@ -13774,6 +13783,20 @@ app.get("/api/admin/reports", authMiddleware, async (req, res) => {
             .eq("id", r.content_id)
             .maybeSingle();
           snapshot = comment;
+        } else if (r.content_type === "group_message") {
+          const { data: gmsg } = await supabase
+            .from("dm_group_messages")
+            .select("id, body, sender_id, group_id, created_at, members!dm_group_messages_sender_id_fkey(id, name)")
+            .eq("id", r.content_id)
+            .maybeSingle();
+          snapshot = gmsg;
+        } else if (r.content_type === "member") {
+          const { data: mem } = await supabase
+            .from("members")
+            .select("id, name, photo, role, batch, domain")
+            .eq("id", r.content_id)
+            .maybeSingle();
+          snapshot = mem;
         }
       } catch {}
       return { ...r, snapshot };
@@ -13787,7 +13810,7 @@ app.get("/api/admin/reports", authMiddleware, async (req, res) => {
 });
 
 // ── GET /api/admin/reports/count  — pending report badge count ───────────────
-app.get("/api/admin/reports/count", authMiddleware, async (req, res) => {
+app.get("/api/admin/reports/count", masterMiddleware, async (req, res) => {
   try {
     const { count } = await supabase
       .from("content_reports")
@@ -13801,7 +13824,7 @@ app.get("/api/admin/reports/count", authMiddleware, async (req, res) => {
 
 // ── POST /api/admin/reports/:id/resolve  — review/dismiss a report ───────────
 // Body: { action: "reviewed"|"dismissed", admin_note?, delete_content?, hide_content? }
-app.post("/api/admin/reports/:id/resolve", authMiddleware, async (req, res) => {
+app.post("/api/admin/reports/:id/resolve", masterMiddleware, async (req, res) => {
   try {
     const { action, admin_note, delete_content, hide_content } = req.body || {};
     if (!["reviewed", "dismissed"].includes(action))
@@ -13841,6 +13864,12 @@ app.post("/api/admin/reports/:id/resolve", authMiddleware, async (req, res) => {
         .update({ body: "[removed by admin]", deleted_at: new Date().toISOString() })
         .eq("id", report.content_id);
       logActivity(req.admin.id, req.admin.name, "delete_reported_comment", "project_comment", report.content_id).catch(() => {});
+    }
+    if (action === "reviewed" && report.content_type === "group_message" && delete_content) {
+      await supabase.from("dm_group_messages")
+        .update({ body: "[removed by admin]", is_deleted: true })
+        .eq("id", report.content_id);
+      logActivity(req.admin.id, req.admin.name, "delete_reported_group_msg", "dm_group_messages", report.content_id).catch(() => {});
     }
 
     // Update the report itself
@@ -14253,8 +14282,16 @@ app.use((err, req, res, next) => {
 //     sender_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
 //     body        TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
 //     deleted_at  TIMESTAMPTZ,
+//     is_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
+//     replied_to_id     UUID REFERENCES dm_group_messages(id) ON DELETE SET NULL,
+//     replied_to_body   TEXT,
+//     replied_to_sender TEXT,
 //     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 //   );
+//   -- member_notifications (DMs) also needs replied_to columns:
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_id UUID;
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_body TEXT;
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_sender TEXT;
 //   CREATE INDEX IF NOT EXISTS idx_grp_msgs_group ON dm_group_messages(group_id, created_at);
 //   CREATE INDEX IF NOT EXISTS idx_grp_members_member ON dm_group_members(member_id);
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14677,7 +14714,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, members!dm_group_messages_sender_id_fkey(id, name, photo)")
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, members!dm_group_messages_sender_id_fkey(id, name, photo)")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -14695,14 +14732,17 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
         const isSystem = m.body?.startsWith('\x1fsys\x1f');
         const cleanBody = isSystem ? m.body.slice(6) : m.body;
         return {
-          id:           m.id,
-          group_id:     gid,
-          sender_id:    m.sender_id,
-          sender_name:  nickMap[m.sender_id] || m.members?.name || "Member",
-          sender_photo: m.members?.photo || null,
-          body:         cleanBody,
-          sent_at:      m.created_at,
-          is_system:    isSystem,
+          id:               m.id,
+          group_id:         gid,
+          sender_id:        m.sender_id,
+          sender_name:      nickMap[m.sender_id] || m.members?.name || "Member",
+          sender_photo:     m.members?.photo || null,
+          body:             cleanBody,
+          sent_at:          m.created_at,
+          is_system:        isSystem,
+          replied_to_id:    m.replied_to_id    || null,
+          replied_to_body:  m.replied_to_body  || null,
+          replied_to_sender:m.replied_to_sender || null,
         };
       });
 
@@ -14719,7 +14759,8 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
     const myId = req.member.memberId;
     if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid  = req.params.id;
-    const body = (req.body?.body || "").trim();
+    const { body: rawBody, replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
+    const body = (rawBody || "").trim();
     if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
 
     // NOTE: Group chats are a private, unmoderated space (like DMs) — no profanity gate here.
@@ -14733,21 +14774,31 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
 
     const { data: msg, error } = await supabase
       .from("dm_group_messages")
-      .insert([{ group_id: gid, sender_id: myId, body }])
-      .select("id, sender_id, body, created_at")
+      .insert([{
+        group_id:          gid,
+        sender_id:         myId,
+        body,
+        replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
+        replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
+        replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
+      }])
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender")
       .single();
     if (error) throw error;
 
     res.json({
       success: true,
       message: {
-        id:           msg.id,
-        group_id:     gid,
-        sender_id:    myId,
-        sender_name:  mem.nickname || sender?.name || "Member",
-        sender_photo: sender?.photo || null,
-        body:         msg.body,
-        sent_at:      msg.created_at,
+        id:               msg.id,
+        group_id:         gid,
+        sender_id:        myId,
+        sender_name:      mem.nickname || sender?.name || "Member",
+        sender_photo:     sender?.photo || null,
+        body:             msg.body,
+        sent_at:          msg.created_at,
+        replied_to_id:    msg.replied_to_id    || null,
+        replied_to_body:  msg.replied_to_body  || null,
+        replied_to_sender:msg.replied_to_sender || null,
       },
     });
   } catch (e) {
