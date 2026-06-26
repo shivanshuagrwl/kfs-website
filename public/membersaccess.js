@@ -7296,7 +7296,10 @@ if (document.readyState === "loading") {
       const isOpen = panel && panel.classList.contains('open');
       if (isOpen && DP.mode === 'group') { dpClose(); return; }
       // Load fresh member details first
-      if (GC.activeGroup.members?.length) {
+      // Only skip the fetch if members actually have names — stale stub arrays
+      // (members: [{id}] only, no name) must still trigger a fresh fetch so
+      // the Details panel never shows "?" / "Member" placeholders.
+      if (GC.activeGroup.members?.some(m => m.name)) {
         dpShowGroup(GC.activeGroup);
       } else {
         api('GET', `/api/member/groups/${GC.activeGroup.id}`)

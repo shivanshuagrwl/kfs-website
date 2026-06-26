@@ -14663,12 +14663,22 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
       }]);
     } catch(e) { console.error("[groups] system msg:", e.message); }
 
+    // Fetch full member profiles so the client Details panel shows real names immediately
+    // instead of falling back to "Member" / "?" placeholders.
+    const allMemberIds = [myId, ...memberIds];
+    const { data: memberProfiles } = await supabase
+      .from("members")
+      .select("id, name, photo, role")
+      .in("id", allMemberIds);
+    const profileLookup = {};
+    (memberProfiles || []).forEach(p => { profileLookup[p.id] = p; });
+
     // Return enriched group so client can open it immediately without a round-trip
     res.json({
       success: true,
       group: {
         ...group,
-        members:           [myId, ...memberIds].map(mid => ({ id: mid })),
+        members:           allMemberIds.map(mid => ({ ...(profileLookup[mid] || { id: mid }) })),
         last_msg_at:       group.created_at,
         last_snippet:      null,
         last_sender_is_me: false,
