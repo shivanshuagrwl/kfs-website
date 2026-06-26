@@ -4126,7 +4126,8 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     wrap.appendChild(bubble);
 
-    // Instagram-style hover actions (hidden on mobile via CSS)
+    // Instagram-style hover actions (hidden on mobile via CSS — mobile users
+    // react via long-press → context menu instead, see _attachMsgContextMenu)
     if (!isDeleted) {
       const hoverActions = _buildHoverActions({
         msgId: m.id, body: m.body, mine,
@@ -4134,8 +4135,15 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
         type: 'dm',
         senderId: m.sender_id,
         onReply: () => _setReply('dm', { id: m.id, body: m.body, sender: mine ? 'You' : (DM.activePeer?.name || 'Member') }),
+        onReact: (emoji) => _toggleReaction('dm', m.id, emoji, bubble),
       });
       wrap.appendChild(hoverActions);
+      _attachQuickHeart(bubble, (emoji) => _toggleReaction('dm', m.id, emoji, bubble));
+    }
+
+    // Existing reactions (from initial load or poll refresh)
+    if (m.reactions && m.reactions.length) {
+      _renderReactionPills(bubble, m.reactions, (emoji) => _toggleReaction('dm', m.id, emoji, bubble));
     }
 
     const meta = document.createElement('div');
@@ -4191,10 +4199,12 @@ async function dmSend() {
     if (btn) btn.disabled = false;
   }
 
-  // Optimistic bubble
-  const myId  = dmMyId();
-  const tmpId = 'tmp-' + Date.now();
-  const tmp   = { id: tmpId, sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null };
+  // Optimistic bubble — include reply fields so the quote box renders
+  // immediately instead of waiting for the next poll/refresh.
+  const myId      = dmMyId();
+  const tmpId     = 'tmp-' + Date.now();
+  const replyData = _dmGetReplyPayload();
+  const tmp   = { id: tmpId, sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null, reactions: [], ...replyData };
   DM.msgs.push(tmp);
   // Tell the poll not to re-append this message body while the request is in-flight
   DM.pendingBodies.add(body);
@@ -4236,10 +4246,30 @@ async function dmSend() {
     const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
     if (tmpBubble && realMsg) {
       delete tmpBubble.dataset.tmpId;
+      // CRITICAL: update data-msg-id so reactions, reply, and context menu work
+      // immediately on the confirmed message — no page reload needed.
+      tmpBubble.dataset.msgId = realMsg.id;
       // Update the delete button's data-id so deletion works after confirm
-      const group  = tmpBubble.closest('.dm-msg-group');
-      const delBtn = group?.querySelector('.dm-del-btn');
+      const dmGrp  = tmpBubble.closest('.dm-msg-group');
+      const delBtn = dmGrp?.querySelector('.dm-del-btn');
       if (delBtn) delBtn.dataset.id = realMsg.id;
+      // Re-attach quick-heart with real ID
+      _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('dm', realMsg.id, emoji, tmpBubble));
+      // Re-attach context menu with real ID
+      _attachMsgContextMenu(tmpBubble, { id: realMsg.id, body: realMsg.body, mine: true, senderName: 'You', type: 'dm' });
+      // Re-wire hover-action buttons with real ID
+      const _hwrap = tmpBubble.closest('.dm-bubble-wrap');
+      _hwrap?.querySelectorAll('.dm-ha-btn').forEach(btn => {
+        if (btn.title === 'React') {
+          const nb = btn.cloneNode(true);
+          nb.addEventListener('click', e => { e.stopPropagation(); _showEmojiPicker(nb, emoji => _toggleReaction('dm', realMsg.id, emoji, tmpBubble)); });
+          btn.replaceWith(nb);
+        } else if (btn.title === 'Reply') {
+          const nb = btn.cloneNode(true);
+          nb.addEventListener('click', e => { e.stopPropagation(); _setReply('dm', { id: realMsg.id, body: realMsg.body, sender: 'You' }); });
+          btn.replaceWith(nb);
+        }
+      });
     } else if (list) {
       // Fallback: full rerender (bubble wasn't tagged somehow)
       list.innerHTML = '';
@@ -4355,34 +4385,41 @@ async function dmDeleteMsg(msgId, bubble, btn) {
 
 // ─── Polling ──────────────────────────────────────────────────────────────────
 
+async function _dmPollNewMessages() {
+  const myId  = dmMyId();
+  // Use newest known message as cursor — server only returns rows after this timestamp,
+  // so the mark-read UPDATE only fires when there are genuinely new unread messages.
+  const newest = DM.msgs.length ? DM.msgs[DM.msgs.length - 1].sent_at : null;
+  const url    = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=20`
+               + (newest ? `&since=${encodeURIComponent(newest)}` : '');
+  const msgs   = await api('GET', url);
+  if (!msgs?.length) return;
+  // Dedup by id; also skip messages whose body is still in-flight as optimistic bubbles
+  // (race condition: server returns the message before dmSend's try-block finishes)
+  const known   = new Set(DM.msgs.map(m => m.id));
+  const newMsgs = msgs.filter(m => !known.has(m.id) && !DM.pendingBodies.has(m.body));
+  if (!newMsgs.length) return;
+  DM.msgs.push(...newMsgs);
+  const list = $id('dm-msg-list');
+  if (!list) return;
+  const area  = $id('dm-msgs');
+  const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
+  // Pass the last known sender so incremental append chains groups correctly
+  const lastSender = DM.msgs.length > newMsgs.length
+    ? DM.msgs[DM.msgs.length - newMsgs.length - 1].sender_id
+    : null;
+  dmRenderMsgs(newMsgs, list, myId, lastSender);
+  if (atEnd) dmScrollBottom();
+}
+
 async function dmPollTick() {
   if (!DM.activeKey) return;
-  try {
-    const myId  = dmMyId();
-    // Use newest known message as cursor — server only returns rows after this timestamp,
-    // so the mark-read UPDATE only fires when there are genuinely new unread messages.
-    const newest = DM.msgs.length ? DM.msgs[DM.msgs.length - 1].sent_at : null;
-    const url    = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=20`
-                 + (newest ? `&since=${encodeURIComponent(newest)}` : '');
-    const msgs   = await api('GET', url);
-    if (!msgs?.length) return;
-    // Dedup by id; also skip messages whose body is still in-flight as optimistic bubbles
-    // (race condition: server returns the message before dmSend's try-block finishes)
-    const known   = new Set(DM.msgs.map(m => m.id));
-    const newMsgs = msgs.filter(m => !known.has(m.id) && !DM.pendingBodies.has(m.body));
-    if (!newMsgs.length) return;
-    DM.msgs.push(...newMsgs);
-    const list = $id('dm-msg-list');
-    if (!list) return;
-    const area  = $id('dm-msgs');
-    const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
-    // Pass the last known sender so incremental append chains groups correctly
-    const lastSender = DM.msgs.length > newMsgs.length
-      ? DM.msgs[DM.msgs.length - newMsgs.length - 1].sender_id
-      : null;
-    dmRenderMsgs(newMsgs, list, myId, lastSender);
-    if (atEnd) dmScrollBottom();
-  } catch { /* silent */ }
+  try { await _dmPollNewMessages(); } catch { /* silent */ }
+  // Reactions don't ride along with the "since" cursor above (it only returns
+  // brand-new messages), so refresh reaction state on already-rendered
+  // messages separately, every tick — this is how a friend's reaction shows
+  // up live instead of needing a refresh.
+  try { await _refreshVisibleReactions('dm'); } catch { /* silent */ }
 }
 
 function dmStartPolling() {
@@ -4851,7 +4888,8 @@ function _openForwardPicker(body) {
 
 // ── Shared emoji picker popup (anchored to the react button) ──────────────────
 let _emojiPickerPopup = null;
-const _QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+// Instagram's exact quick-reaction set
+const _QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👏', '🔥', '😍'];
 
 function _dismissEmojiPicker() {
   if (_emojiPickerPopup) { _emojiPickerPopup.remove(); _emojiPickerPopup = null; }
@@ -4863,11 +4901,17 @@ function _showEmojiPicker(anchorBtn, onPick) {
   popup.className = 'dm-emoji-picker-popup';
   _emojiPickerPopup = popup;
 
-  _QUICK_REACTIONS.forEach(emoji => {
+  _QUICK_REACTIONS.forEach((emoji, i) => {
     const btn = document.createElement('button');
     btn.className = 'dm-emoji-picker-btn';
     btn.type = 'button';
     btn.textContent = emoji;
+    // Stagger the bounce-in animation per emoji
+    btn.style.animationDelay = `${i * 18}ms`;
+    btn.style.animationName = 'emojiItemIn';
+    btn.style.animationDuration = '.22s';
+    btn.style.animationFillMode = 'both';
+    btn.style.animationTimingFunction = 'cubic-bezier(.34,1.56,.64,1)';
     btn.addEventListener('click', e => {
       e.stopPropagation();
       _dismissEmojiPicker();
@@ -4878,21 +4922,25 @@ function _showEmojiPicker(anchorBtn, onPick) {
 
   document.body.appendChild(popup);
 
-  // Anchor: position above the react button, centred on it
+  // Position above the anchor (bubble or react button), centred
   const rect = anchorBtn.getBoundingClientRect();
-  const pw = popup.offsetWidth || (_QUICK_REACTIONS.length * 38);
+  // Use offsetWidth after append; fall back to estimated width
+  const pw = popup.offsetWidth || (_QUICK_REACTIONS.length * 42 + 16);
   const ph = popup.offsetHeight || 52;
+  // Try above first (Instagram behaviour), fall below if no room
   let left = rect.left + rect.width / 2 - pw / 2;
-  let top  = rect.top - ph - 8;
-  // Clamp to viewport
+  let top  = rect.top - ph - 10;
   left = Math.max(8, Math.min(left, window.innerWidth  - pw - 8));
-  top  = top < 8 ? rect.bottom + 8 : top;
+  top  = top < 8 ? rect.bottom + 10 : top;
   popup.style.left = left + 'px';
   popup.style.top  = top  + 'px';
 
   // Dismiss on outside click or Escape
   const dismiss = e => { if (!popup.contains(e.target)) _dismissEmojiPicker(); };
   setTimeout(() => document.addEventListener('click', dismiss, { once: true }), 0);
+  document.addEventListener('keydown', function escDismiss(e) {
+    if (e.key === 'Escape') { _dismissEmojiPicker(); document.removeEventListener('keydown', escDismiss); }
+  });
 }
 
 // ── Build the three Instagram-style action buttons beside a bubble ────────────
@@ -4900,7 +4948,7 @@ function _showEmojiPicker(anchorBtn, onPick) {
 // order for THEIRS (shown to right of bubble): 🙂  ↩  ⋮  (left-to-right)
 // CSS flex-direction:row handles both; for mine the wrap is row-reverse so
 // the bubble stays right and actions sit to the left.
-function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onReply }) {
+function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onReply, onReact }) {
   const hoverActions = document.createElement('div');
   hoverActions.className = 'dm-hover-actions';
 
@@ -4912,10 +4960,7 @@ function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onR
   reactBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`;
   reactBtn.addEventListener('click', e => {
     e.stopPropagation();
-    _showEmojiPicker(reactBtn, emoji => {
-      // Wire to reaction API when ready; for now toast it
-      if (typeof swShowToast === 'function') swShowToast(emoji + ' reacted');
-    });
+    _showEmojiPicker(reactBtn, emoji => onReact(emoji));
   });
 
   // ── Reply button ──────────────────────────────────────────────────
@@ -4956,6 +5001,122 @@ function _buildHoverActions({ msgId, body, mine, senderName, type, senderId, onR
   return hoverActions;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MESSAGE REACTIONS (Instagram-style) — shared by DM + group chat
+// One reaction per member per message: tap an emoji to add/switch, tap your
+// own again to remove. Pills overlap the bottom corner of the bubble, just
+// like Instagram DMs.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** (Re)draw the little overlapping reaction-pill row on a bubble. */
+function _renderReactionPills(bubble, reactions, onPick) {
+  bubble.querySelector('.dm-bubble-reactions')?.remove();
+  const wrap = bubble.closest('.dm-bubble-wrap');
+  if (!reactions || !reactions.length) {
+    wrap?.classList.remove('dm-has-reactions');
+    return;
+  }
+  wrap?.classList.add('dm-has-reactions');
+  const pills = document.createElement('div');
+  pills.className = 'dm-bubble-reactions';
+  reactions.forEach(r => {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = `dm-rxn-pill${r.mine ? ' dm-rxn-mine' : ''}`;
+    pill.title = r.mine ? 'Remove your reaction' : `React with ${r.emoji}`;
+    pill.innerHTML = `<span>${swEsc(r.emoji)}</span>${r.count > 1 ? `<span class="dm-rxn-count">${r.count}</span>` : ''}`;
+    pill.addEventListener('click', e => { e.stopPropagation(); onPick(r.emoji); });
+    pills.appendChild(pill);
+  });
+  bubble.appendChild(pills);
+}
+
+/** Toggle my reaction on a message — optimistic update, reconciled against the server's response, rolled back on failure. */
+async function _toggleReaction(type, msgId, emoji, bubble) {
+  if (!msgId || String(msgId).startsWith('tmp-')) return; // not confirmed by the server yet
+  const msgsArr = type === 'group' ? GC.msgs : DM.msgs;
+  const msg = msgsArr.find(m => m.id === msgId);
+  const rerender = (list) => bubble && _renderReactionPills(bubble, list, e => _toggleReaction(type, msgId, e, bubble));
+
+  const prev = msg?.reactions ? msg.reactions.map(r => ({ ...r })) : [];
+  if (msg) {
+    const list = prev.map(r => ({ ...r }));
+    const mineIdx = list.findIndex(r => r.mine);
+    const hadMineSameEmoji = mineIdx > -1 && list[mineIdx].emoji === emoji;
+    if (mineIdx > -1) {
+      list[mineIdx].count--;
+      if (list[mineIdx].count <= 0) list.splice(mineIdx, 1); else list[mineIdx].mine = false;
+    }
+    if (!hadMineSameEmoji) {
+      const existing = list.find(r => r.emoji === emoji);
+      if (existing) { existing.count++; existing.mine = true; }
+      else list.push({ emoji, count: 1, mine: true });
+    }
+    msg.reactions = list;
+    rerender(list);
+  }
+
+  try {
+    const url = type === 'group'
+      ? `/api/member/groups/${GC.activeId}/messages/${msgId}/react`
+      : `/api/member/dm/messages/${msgId}/react`;
+    const resp = await api('POST', url, { emoji });
+    if (msg) { msg.reactions = resp.reactions || []; rerender(msg.reactions); }
+  } catch (e) {
+    if (msg) { msg.reactions = prev; rerender(prev); }
+    if (typeof swShowToast === 'function') swShowToast('Could not react — try again.');
+  }
+}
+
+/** Instagram-style double-tap: quick-react with ❤️ + a big heart burst animation. */
+function _attachQuickHeart(bubble, onReact) {
+  // A single 'click' listener with manual timing covers mouse AND touch —
+  // using both 'dblclick' and 'touchend' here would double-fire on some
+  // mobile browsers and cancel the toggle right back out.
+  let lastTap = 0;
+  bubble.addEventListener('click', e => {
+    if (e.target.closest('.dm-bubble-reactions')) return; // pill clicks have their own handler
+    const now = Date.now();
+    if (now - lastTap < 320) {
+      lastTap = 0;
+      const heart = document.createElement('div');
+      heart.className = 'dm-heart-burst';
+      heart.textContent = '❤️';
+      bubble.appendChild(heart);
+      heart.addEventListener('animationend', () => heart.remove());
+      onReact('❤️');
+    } else {
+      lastTap = now;
+    }
+  });
+}
+
+/**
+ * Poll-driven reaction refresh: the message-list "since" cursor only ever
+ * returns brand-new messages, so a reaction a friend adds to a message
+ * that's already on screen would otherwise sit invisible until the next
+ * full reload. This patches just the reaction pills on already-rendered
+ * bubbles, cheaply, every poll tick.
+ */
+async function _refreshVisibleReactions(type) {
+  const msgsArr = type === 'group' ? GC.msgs : DM.msgs;
+  const ids = msgsArr
+    .filter(m => m.id && !String(m.id).startsWith('tmp-') && !m.is_system)
+    .slice(-40)
+    .map(m => m.id);
+  if (!ids.length) return;
+  const map = await api('GET', `/api/member/messages/reactions?chat_type=${type}&ids=${ids.map(encodeURIComponent).join(',')}`);
+  ids.forEach(id => {
+    const msg = msgsArr.find(m => m.id === id);
+    if (!msg) return;
+    const newList = map[id] || [];
+    if (JSON.stringify(msg.reactions || []) === JSON.stringify(newList)) return;
+    msg.reactions = newList;
+    const bubble = document.querySelector(`[data-msg-id="${id}"]`);
+    if (bubble) _renderReactionPills(bubble, newList, (emoji) => _toggleReaction(type, id, emoji, bubble));
+  });
+}
+
 // Context menu implementation
 let _ctxMenu = null;
 let _longPressTimer = null;
@@ -4989,6 +5150,18 @@ function _showMsgContextMenu(e, info) {
     label: 'Reply',
     fn: () => {
       _setReply(type === 'group' ? 'group' : 'dm', { id, body, sender: senderName });
+    },
+  });
+
+  // React (the only entry point on mobile, since hover actions are desktop-only)
+  actions.push({
+    icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
+    label: 'React',
+    fn: () => {
+      const bubble = document.querySelector(`[data-msg-id="${id}"]`);
+      // Anchor the picker to wherever the long-press/right-click happened
+      const anchor = { getBoundingClientRect: () => ({ left: x, right: x, top: y, bottom: y, width: 0, height: 0 }) };
+      _showEmojiPicker(anchor, emoji => _toggleReaction(type === 'group' ? 'group' : 'dm', id, emoji, bubble));
     },
   });
 
@@ -5524,8 +5697,14 @@ async function gcOpenGroup(group) {
   const ta = $id('gc-topbar-avatar');
   if (ta) ta.innerHTML = gcGroupAvatar(group, 34);
   setText('gc-topbar-name', group.name);
+  // Paint the member count immediately from what we already have (the list
+  // endpoint / create response both include a full members array) — don't
+  // leave it blank or stuck at 0 while the slower detail fetch is in flight.
+  // Always set a value; gcLoadGroupDetails will refine it when the fetch resolves.
+  const initialCount = Array.isArray(group.members) ? group.members.length : (group.member_count || 0);
+  setText('gc-topbar-sub', initialCount > 0 ? `${initialCount} member${initialCount !== 1 ? 's' : ''}` : 'Loading…');
 
-  // Load full member list for topbar sub
+  // Load full member list for topbar sub (refines/corrects the count above)
   gcLoadGroupDetails(group.id);
 
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = 'none');
@@ -5543,12 +5722,18 @@ async function gcOpenGroup(group) {
   $id('gc-input')?.focus();
 }
 
-async function gcLoadGroupDetails(groupId) {
+async function gcLoadGroupDetails(groupId, _retryCount) {
+  _retryCount = _retryCount || 0;
   try {
     const data = await api('GET', `/api/member/groups/${groupId}`);
     GC.activeGroup = { ...GC.activeGroup, ...data };
-    const myId  = gcMyId();
     const count = data.members?.length || 0;
+    // If server returns 0 members (can happen on freshly-created group due to
+    // replication lag), retry up to 3 times with short backoff before showing 0.
+    if (count === 0 && _retryCount < 3) {
+      setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1), 600);
+      return;
+    }
     setText('gc-topbar-sub', `${count} member${count !== 1 ? 's' : ''}`);
 
     // Topbar nickname button: show "Nicknames" button
@@ -5556,7 +5741,9 @@ async function gcLoadGroupDetails(groupId) {
 
     // Update my_role for input/delete controls
     gcUpdateInputState();
-  } catch { /* silent */ }
+  } catch (e) {
+    if (_retryCount < 2) setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1), 1200);
+  }
 }
 
 function gcRefreshTopbarNicknames(groupId, group) {
@@ -5736,8 +5923,15 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
         type: 'group',
         senderId: m.sender_id,
         onReply: () => _setReply('group', { id: m.id, body: m.body, sender: mine ? 'You' : (m.sender?.name || m.sender_name || 'Member') }),
+        onReact: (emoji) => _toggleReaction('group', m.id, emoji, bubble),
       });
       wrap.appendChild(hoverActions);
+      _attachQuickHeart(bubble, (emoji) => _toggleReaction('group', m.id, emoji, bubble));
+    }
+
+    // Existing reactions (from initial load or poll refresh)
+    if (!m.is_system && m.reactions && m.reactions.length) {
+      _renderReactionPills(bubble, m.reactions, (emoji) => _toggleReaction('group', m.id, emoji, bubble));
     }
 
     const meta = document.createElement('div');
@@ -5787,9 +5981,10 @@ async function gcSend() {
     if (btn) btn.disabled = false;
   }
 
-  const myId  = gcMyId();
-  const tmpId = 'tmp-' + Date.now();
-  const tmp   = { id: tmpId, sender_id: myId, sender: window._memberProfile || { id: myId, name: 'You', photo: null }, body, sent_at: new Date().toISOString(), is_deleted: false };
+  const myId      = gcMyId();
+  const tmpId     = 'tmp-' + Date.now();
+  const replyData = _gcGetReplyPayload();
+  const tmp   = { id: tmpId, sender_id: myId, sender: window._memberProfile || { id: myId, name: 'You', photo: null }, body, sent_at: new Date().toISOString(), is_deleted: false, reactions: [], ...replyData };
   GC.msgs.push(tmp);
   GC.pendingBodies.add(body);
 
@@ -5819,9 +6014,28 @@ async function gcSend() {
     const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
     if (tmpBubble && realMsg) {
       delete tmpBubble.dataset.tmpId;
+      // CRITICAL: update data-msg-id so reactions, reply, context menu all work immediately
+      tmpBubble.dataset.msgId = realMsg.id;
       const grp    = tmpBubble.closest('.dm-msg-group');
       const delBtn = grp?.querySelector('.dm-del-btn');
       if (delBtn) delBtn.dataset.id = realMsg.id;
+      // Re-attach quick-heart with real ID
+      _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('group', realMsg.id, emoji, tmpBubble));
+      // Re-attach context menu with real ID
+      _attachMsgContextMenu(tmpBubble, { id: realMsg.id, body: realMsg.body, mine: true, senderName: 'You', type: 'group', senderId: myId });
+      // Re-wire hover-action buttons with real ID
+      const _gcHwrap = tmpBubble.closest('.dm-bubble-wrap');
+      _gcHwrap?.querySelectorAll('.dm-ha-btn').forEach(btn => {
+        if (btn.title === 'React') {
+          const nb = btn.cloneNode(true);
+          nb.addEventListener('click', e => { e.stopPropagation(); _showEmojiPicker(nb, emoji => _toggleReaction('group', realMsg.id, emoji, tmpBubble)); });
+          btn.replaceWith(nb);
+        } else if (btn.title === 'Reply') {
+          const nb = btn.cloneNode(true);
+          nb.addEventListener('click', e => { e.stopPropagation(); _setReply('group', { id: realMsg.id, body: realMsg.body, sender: 'You' }); });
+          btn.replaceWith(nb);
+        }
+      });
     } else if (list) {
       list.innerHTML = '';
       gcRenderMsgs(GC.msgs, list, myId);
@@ -5878,42 +6092,47 @@ async function gcDeleteMsg(msgId, bubble, btn) {
 
 // ─── Polling ──────────────────────────────────────────────────────────────────
 
+async function _gcPollNewMessages() {
+  const myId   = gcMyId();
+  const newest = GC.msgs.length ? GC.msgs[GC.msgs.length - 1].sent_at : null;
+  const url    = `/api/member/groups/${encodeURIComponent(GC.activeId)}/messages?limit=20`
+               + (newest ? `&since=${encodeURIComponent(newest)}` : '');
+  const resp   = await api('GET', url);
+  const msgs   = Array.isArray(resp) ? resp : (resp.messages || []);
+  if (!msgs.length) return;
+
+  const known   = new Set(GC.msgs.map(m => m.id));
+  const newMsgs = msgs.filter(m =>
+    !known.has(m.id) && (m.is_system || !GC.pendingBodies.has(m.body))
+  );
+  if (!newMsgs.length) return;
+
+  // Merge new nicknames (only available when resp is an object, not array)
+  if (!Array.isArray(resp) && resp.nicknames?.length) {
+    const existing = NICKS[GC.activeId] || [];
+    const existMap = new Map(existing.map(n => `${n.giver_id}:${n.target_id}`));
+    resp.nicknames.forEach(n => { existMap.set(`${n.giver_id}:${n.target_id}`, n); });
+    NICKS[GC.activeId] = [...existMap.values()];
+  }
+
+  GC.msgs.push(...newMsgs);
+  const list  = $id('gc-msg-list');
+  if (!list) return;
+  const area  = $id('gc-msgs');
+  const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
+  const lastSender = GC.msgs.length > newMsgs.length
+    ? GC.msgs[GC.msgs.length - newMsgs.length - 1].sender_id
+    : null;
+  gcRenderMsgs(newMsgs, list, myId, lastSender === myId ? '__mine__' : lastSender);
+  if (atEnd) gcScrollBottom();
+}
+
 async function gcPollTick() {
   if (!GC.activeId) return;
-  try {
-    const myId   = gcMyId();
-    const newest = GC.msgs.length ? GC.msgs[GC.msgs.length - 1].sent_at : null;
-    const url    = `/api/member/groups/${encodeURIComponent(GC.activeId)}/messages?limit=20`
-                 + (newest ? `&since=${encodeURIComponent(newest)}` : '');
-    const resp   = await api('GET', url);
-    const msgs   = Array.isArray(resp) ? resp : (resp.messages || []);
-    if (!msgs.length) return;
-
-    const known   = new Set(GC.msgs.map(m => m.id));
-    const newMsgs = msgs.filter(m =>
-      !known.has(m.id) && (m.is_system || !GC.pendingBodies.has(m.body))
-    );
-    if (!newMsgs.length) return;
-
-    // Merge new nicknames (only available when resp is an object, not array)
-    if (!Array.isArray(resp) && resp.nicknames?.length) {
-      const existing = NICKS[GC.activeId] || [];
-      const existMap = new Map(existing.map(n => `${n.giver_id}:${n.target_id}`));
-      resp.nicknames.forEach(n => { existMap.set(`${n.giver_id}:${n.target_id}`, n); });
-      NICKS[GC.activeId] = [...existMap.values()];
-    }
-
-    GC.msgs.push(...newMsgs);
-    const list  = $id('gc-msg-list');
-    if (!list) return;
-    const area  = $id('gc-msgs');
-    const atEnd = area ? area.scrollHeight - area.scrollTop - area.clientHeight < 80 : true;
-    const lastSender = GC.msgs.length > newMsgs.length
-      ? GC.msgs[GC.msgs.length - newMsgs.length - 1].sender_id
-      : null;
-    gcRenderMsgs(newMsgs, list, myId, lastSender === myId ? '__mine__' : lastSender);
-    if (atEnd) gcScrollBottom();
-  } catch { /* silent */ }
+  try { await _gcPollNewMessages(); } catch { /* silent */ }
+  // Same reasoning as DM: a groupmate's reaction on an existing message
+  // doesn't come through the "since" cursor above, so refresh separately.
+  try { await _refreshVisibleReactions('group'); } catch { /* silent */ }
 }
 
 function gcStartPolling() { gcPausePolling(); GC.poll = setInterval(gcPollTick, GC_POLL); }

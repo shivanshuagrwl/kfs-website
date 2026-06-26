@@ -13496,6 +13496,8 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
         .catch(e => console.error("[dm/mark-read]", e.message));
     }
 
+    const reactionMap = await fetchReactionsFor(msgs.map(m => m.id), "dm", myId);
+
     res.json(msgs.map(m => ({
       id:               m.id,
       sender_id:        m.actor_id,
@@ -13505,6 +13507,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       replied_to_id:    m.replied_to_id    || null,
       replied_to_body:  m.replied_to_body  || null,
       replied_to_sender:m.replied_to_sender || null,
+      reactions:        reactionMap[m.id] || [],
     })));
   } catch (e) {
     dmLogErr("[dm/messages GET]", e);
@@ -13575,7 +13578,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         replied_to_body:  replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
         replied_to_sender:replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
       }])
-      .select("id, actor_id, member_id, body, created_at, is_read")
+      .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender")
       .single();
 
     if (insertErr) throw insertErr;
@@ -13592,6 +13595,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         replied_to_id:    msg.replied_to_id    || null,
         replied_to_body:  msg.replied_to_body  || null,
         replied_to_sender:msg.replied_to_sender || null,
+        reactions:        [],
       },
     });
   } catch (e) {
@@ -13625,6 +13629,34 @@ app.delete("/api/member/dm/messages/:msgId", memberAuthMiddleware, async (req, r
   } catch (e) {
     dmLogErr("[dm/delete]", e);
     res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+// ── POST /api/member/dm/messages/:msgId/react ─────────────────────────────────
+// Body: { emoji }. Toggle: same emoji again → remove, different → switch, none → add.
+app.post("/api/member/dm/messages/:msgId/react", memberAuthMiddleware, reactionLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const msgId = req.params.msgId;
+    const emoji = String(req.body?.emoji || "").trim().slice(0, 8);
+    if (!emoji) return res.status(400).json({ error: "emoji required" });
+
+    // Verify this message belongs to a DM I'm part of (sender or recipient)
+    const { data: msg } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, member_id, link_type")
+      .eq("id", msgId)
+      .maybeSingle();
+    if (!msg || msg.link_type !== "dm" || (msg.actor_id !== myId && msg.member_id !== myId)) {
+      return res.status(403).json({ error: "Not part of this conversation" });
+    }
+
+    await toggleMessageReaction(msgId, "dm", myId, emoji);
+    const reactionMap = await fetchReactionsFor([msgId], "dm", myId);
+    res.json({ success: true, reactions: reactionMap[msgId] || [] });
+  } catch (e) {
+    dmLogErr("[dm/react]", e);
+    res.status(500).json({ error: "Failed to react" });
   }
 });
 
@@ -14299,12 +14331,76 @@ app.use((err, req, res, next) => {
 //   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_sender TEXT;
 //   CREATE INDEX IF NOT EXISTS idx_grp_msgs_group ON dm_group_messages(group_id, created_at);
 //   CREATE INDEX IF NOT EXISTS idx_grp_members_member ON dm_group_members(member_id);
+//
+//   -- Message reactions (Instagram-style — one reaction per member per message,
+//   -- shared by both DMs and group chats via the chat_type discriminator)
+//   CREATE TABLE IF NOT EXISTS message_reactions (
+//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     chat_type   TEXT NOT NULL CHECK (chat_type IN ('dm','group')),
+//     message_id  UUID NOT NULL,
+//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     emoji       TEXT NOT NULL CHECK (char_length(emoji) BETWEEN 1 AND 8),
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     UNIQUE (chat_type, message_id, member_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_msg_reactions_msg ON message_reactions(chat_type, message_id);
+//   ALTER TABLE message_reactions DISABLE ROW LEVEL SECURITY; -- server uses service_role key
 // ─────────────────────────────────────────────────────────────────────────────
 
 const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+const reactionLimit   = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
+
+// ── Message reactions — shared helpers (DM + group) ───────────────────────────
+// One reaction per member per message (tap a new emoji to switch, tap your
+// current one again to remove — same toggle pattern as Studio Wall reactions).
+
+/**
+ * Fetch + aggregate reactions for a batch of message ids.
+ * Returns { [messageId]: [{ emoji, count, mine }, ...] }, sorted by count desc.
+ */
+async function fetchReactionsFor(messageIds, chatType, myId) {
+  if (!messageIds || !messageIds.length) return {};
+  const { data, error } = await supabase
+    .from("message_reactions")
+    .select("message_id, member_id, emoji")
+    .eq("chat_type", chatType)
+    .in("message_id", messageIds);
+  if (error) {
+    if (error.code !== "42P01") console.error("[reactions] fetch:", error.message);
+    return {};
+  }
+  const byMsg = {};
+  (data || []).forEach(r => {
+    const bucket = (byMsg[r.message_id] = byMsg[r.message_id] || {});
+    const slot   = (bucket[r.emoji] = bucket[r.emoji] || { emoji: r.emoji, count: 0, mine: false });
+    slot.count++;
+    if (r.member_id === myId) slot.mine = true;
+  });
+  const out = {};
+  Object.keys(byMsg).forEach(mid => {
+    out[mid] = Object.values(byMsg[mid]).sort((a, b) => b.count - a.count);
+  });
+  return out;
+}
+
+/** Toggle a member's reaction on a message: same emoji → remove, different → switch, none → add. */
+async function toggleMessageReaction(messageId, chatType, myId, emoji) {
+  const { data: existing } = await supabase
+    .from("message_reactions")
+    .select("id, emoji")
+    .eq("chat_type", chatType).eq("message_id", messageId).eq("member_id", myId)
+    .maybeSingle();
+  if (existing && existing.emoji === emoji) {
+    await supabase.from("message_reactions").delete().eq("id", existing.id);
+  } else if (existing) {
+    await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
+  } else {
+    await supabase.from("message_reactions").insert([{ chat_type: chatType, message_id: messageId, member_id: myId, emoji }]);
+  }
+}
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
@@ -14499,9 +14595,24 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
     const myId       = req.member.memberId;
     if (!myId) return res.status(400).json({ error: "Member profile not linked to this account" });
     const name       = (req.body?.name || "").trim().slice(0, 60);
-    const memberIds  = (req.body?.member_ids || []).filter(id => id !== myId).slice(0, 49); // cap at 50 total
-    if (!name)                return res.status(400).json({ error: "Group name required" });
-    if (!memberIds.length)    return res.status(400).json({ error: "Add at least one other member" });
+    // De-dupe + drop self before the existence check, so a duplicate pick or an
+    // accidental self-include can never cause the membership insert to fail.
+    const rawIds     = [...new Set((req.body?.member_ids || []).filter(id => id && id !== myId))].slice(0, 49);
+    if (!name)             return res.status(400).json({ error: "Group name required" });
+    if (!rawIds.length)    return res.status(400).json({ error: "Add at least one other member" });
+
+    // Verify every requested id is a real, non-deleted member — a single stale/
+    // bad id used to fail the WHOLE multi-row insert below (and the rollback
+    // left the creator stranded with a "Failed to create group" error). Now we
+    // just quietly drop ids that don't check out and proceed with the rest.
+    const { data: validRows, error: validErr } = await supabase
+      .from("members")
+      .select("id")
+      .in("id", rawIds)
+      .is("deleted_at", null);
+    if (validErr) { console.error("[groups POST] member validation:", validErr.message); throw validErr; }
+    const memberIds = (validRows || []).map(r => r.id);
+    if (!memberIds.length) return res.status(400).json({ error: "None of the selected members could be added. Please try again." });
 
     const { data: group, error: chatErr } = await supabase
       .from("dm_group_chats")
@@ -14527,14 +14638,19 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
 
     // Insert activity message as plain body with sentinel prefix \x1fsys\x1f
     // (no schema change needed — body column already stores text)
+    // Awaited (not fire-and-forget) so it's guaranteed to exist by the time the
+    // client opens the new group and asks for messages — otherwise the chat
+    // could open completely blank for a moment.
     const { data: creator } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
     const creatorName = creator?.name || "Someone";
     const totalCount  = memberIds.length + 1;
-    (async () => { try { await supabase.from("dm_group_messages").insert([{
-      group_id:  group.id,
-      sender_id: myId,
-      body:      `\x1fsys\x1f\uD83C\uDF89 ${creatorName} created "${group.name}" \u00B7 ${totalCount} member${totalCount !== 1 ? 's' : ''}`,
-    }]); } catch(e) { console.error("[groups] system msg:", e.message); } })();
+    try {
+      await supabase.from("dm_group_messages").insert([{
+        group_id:  group.id,
+        sender_id: myId,
+        body:      `\x1fsys\x1f\uD83C\uDF89 ${creatorName} created "${group.name}" \u00B7 ${totalCount} member${totalCount !== 1 ? 's' : ''}`,
+      }]);
+    } catch(e) { console.error("[groups] system msg:", e.message); }
 
     // Return enriched group so client can open it immediately without a round-trip
     res.json({
@@ -14767,6 +14883,8 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const { data: msgs, error } = await q;
     if (error) throw error;
 
+    const reactionMap = await fetchReactionsFor((msgs || []).map(m => m.id), "group", myId);
+
     // Two-step: fetch sender profiles for all unique sender_ids
     const senderIds = [...new Set((msgs || []).map(m => m.sender_id).filter(Boolean))];
     const senderMap = {};
@@ -14797,6 +14915,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           replied_to_id:    m.replied_to_id    || null,
           replied_to_body:  m.replied_to_body  || null,
           replied_to_sender:m.replied_to_sender || null,
+          reactions:        reactionMap[m.id] || [],
         };
       });
 
@@ -14853,6 +14972,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         replied_to_id:    msg.replied_to_id    || null,
         replied_to_body:  msg.replied_to_body  || null,
         replied_to_sender:msg.replied_to_sender || null,
+        reactions:        [],
       },
     });
   } catch (e) {
@@ -14877,6 +14997,69 @@ app.delete("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWri
   }
 });
 
+// POST /api/member/groups/:id/messages/:msgId/react  { emoji }
+// Toggle: same emoji again → remove, different → switch, none → add.
+app.post("/api/member/groups/:id/messages/:msgId/react", memberAuthMiddleware, reactionLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const msgId = req.params.msgId;
+    const emoji = String(req.body?.emoji || "").trim().slice(0, 8);
+    if (!emoji) return res.status(400).json({ error: "emoji required" });
+
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const { data: msg } = await supabase.from("dm_group_messages").select("id, group_id").eq("id", msgId).eq("group_id", gid).maybeSingle();
+    if (!msg) return res.status(404).json({ error: "Message not found" });
+
+    await toggleMessageReaction(msgId, "group", myId, emoji);
+    const reactionMap = await fetchReactionsFor([msgId], "group", myId);
+    res.json({ success: true, reactions: reactionMap[msgId] || [] });
+  } catch (e) {
+    console.error("[groups/react]", e.message);
+    res.status(500).json({ error: "Failed to react" });
+  }
+});
+
+// ── GET /api/member/messages/reactions?chat_type=dm|group&ids=a,b,c ──────────
+// Lightweight reaction-only refresh for messages already rendered on screen —
+// piggybacked on the existing DM/group poll tick so a reaction someone else
+// just added shows up within one poll cycle, without re-fetching/re-rendering
+// the whole message list.
+app.get("/api/member/messages/reactions", memberAuthMiddleware, reactionLimit, async (req, res) => {
+  try {
+    const myId     = req.member.memberId;
+    const chatType = req.query.chat_type;
+    const ids      = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 100);
+    if (!["dm", "group"].includes(chatType) || !ids.length) return res.json({});
+
+    let allowedIds = [];
+    if (chatType === "dm") {
+      const { data } = await supabase
+        .from("member_notifications")
+        .select("id, actor_id, member_id")
+        .eq("link_type", "dm")
+        .in("id", ids);
+      allowedIds = (data || []).filter(r => r.actor_id === myId || r.member_id === myId).map(r => r.id);
+    } else {
+      const { data } = await supabase.from("dm_group_messages").select("id, group_id").in("id", ids);
+      const groupIds = [...new Set((data || []).map(r => r.group_id))];
+      const { data: memRows } = groupIds.length
+        ? await supabase.from("dm_group_members").select("group_id").eq("member_id", myId).in("group_id", groupIds)
+        : { data: [] };
+      const myGroups = new Set((memRows || []).map(r => r.group_id));
+      allowedIds = (data || []).filter(r => myGroups.has(r.group_id)).map(r => r.id);
+    }
+
+    const map = await fetchReactionsFor(allowedIds, chatType, myId);
+    res.json(map);
+  } catch (e) {
+    console.error("[messages/reactions GET]", e.message);
+    res.json({});
+  }
+});
+
 // ── init check ────────────────────────────────────────────────────────────────
 async function initSocialDB() {
   const tables = [
@@ -14885,6 +15068,7 @@ async function initSocialDB() {
     "dm_group_chats",
     "dm_group_members",
     "dm_group_messages",
+    "message_reactions",
   ];
   let allOk = true;
   for (const t of tables) {
