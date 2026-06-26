@@ -14495,7 +14495,15 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
 
     const rows = [myId, ...memberIds].map(mid => ({ group_id: group.id, member_id: mid }));
     const { error: membersErr } = await supabase.from("dm_group_members").insert(rows);
-    if (membersErr) console.error("[groups POST] dm_group_members insert:", membersErr.message, membersErr.code);
+    if (membersErr) {
+      console.error("[groups POST] dm_group_members insert:", membersErr.message, membersErr.code);
+      // The membership insert is a single multi-row INSERT — if any row violates a
+      // constraint (stale/duplicate/invalid member id) the WHOLE insert fails,
+      // including the creator's own row. Don't leave an orphaned group chat with
+      // zero members behind — roll it back and report the failure to the client.
+      await supabase.from("dm_group_chats").delete().eq("id", group.id);
+      return res.status(500).json({ error: "Failed to add members to group. Please try again." });
+    }
 
     // Insert activity message as plain body with sentinel prefix \x1fsys\x1f
     // (no schema change needed — body column already stores text)
@@ -14556,10 +14564,11 @@ app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req,
       .from("dm_group_chats").select("id, name, created_by, created_at").eq("id", gid).maybeSingle();
     if (!group) return res.status(404).json({ error: "Group not found" });
 
-    const { data: members } = await supabase
+    const { data: members, error: memJoinErr } = await supabase
       .from("dm_group_members")
       .select("member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role, batch, domain)")
       .eq("group_id", gid);
+    if (memJoinErr) console.error("[groups GET :id] members join:", memJoinErr.message, memJoinErr.code);
 
     res.json({
       id:         group.id,
