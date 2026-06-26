@@ -14715,9 +14715,8 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
     const body = (req.body?.body || "").trim();
     if (!body || body.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
 
-    // Profanity gate — warning / mute / ban escalation
-    const vioResponse = await vioGate(req, res, myId, body);
-    if (vioResponse) return; // response already sent
+    // NOTE: Group chats are a private, unmoderated space (like DMs) — no profanity gate here.
+    // (Profanity checks still apply to posts and comments, which are public-facing.)
 
     // Verify membership
     const { data: mem } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid).eq("member_id", myId).maybeSingle();
