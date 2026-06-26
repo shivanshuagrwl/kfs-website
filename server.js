@@ -14361,40 +14361,51 @@ app.put("/api/member/nicknames/:targetId", memberAuthMiddleware, nicknameLimit, 
 app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
+    // Guard: memberId missing from token (old token or unlinked account)
+    if (!myId) return res.json([]);
+
     // Groups I belong to
-    const { data: membership } = await supabase
+    const { data: membership, error: memErr } = await supabase
       .from("dm_group_members")
       .select("group_id")
       .eq("member_id", myId);
+    if (memErr) { console.error("[groups GET] membership:", memErr.message); return res.json([]); }
     if (!membership?.length) return res.json([]);
 
     const groupIds = membership.map(r => r.group_id);
+
     // Chat metadata
-    const { data: groups } = await supabase
+    const { data: groups, error: groupsErr } = await supabase
       .from("dm_group_chats")
       .select("id, name, created_by, created_at")
       .in("id", groupIds);
+    if (groupsErr) { console.error("[groups GET] chats:", groupsErr.message); return res.json([]); }
 
-    // All members of all groups
-    const { data: allMembers } = await supabase
+    // All members of all groups (with their profile data)
+    const { data: allMembers, error: allMembErr } = await supabase
       .from("dm_group_members")
       .select("group_id, member_id, nickname, joined_at, members!dm_group_members_member_id_fkey(id, name, photo, role)")
       .in("group_id", groupIds);
+    if (allMembErr) console.error("[groups GET] allMembers join:", allMembErr.message);
 
     // Last message per group
     const lastMsgMap = {};
     await Promise.all(groupIds.map(async gid => {
-      const { data: msgs } = await supabase
-        .from("dm_group_messages")
-        .select("id, sender_id, body, created_at")
-        .eq("group_id", gid)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (msgs?.[0]) lastMsgMap[gid] = msgs[0];
+      try {
+        const { data: msgs, error: msgErr } = await supabase
+          .from("dm_group_messages")
+          .select("id, sender_id, body, created_at")
+          .eq("group_id", gid)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (msgErr) { console.error("[groups GET] lastMsg for", gid, ":", msgErr.message); return; }
+        if (msgs?.[0]) lastMsgMap[gid] = msgs[0];
+      } catch (e) {
+        console.error("[groups GET] lastMsg exception:", e.message);
+      }
     }));
 
-    // Unread count: messages after my last_read_at — simplified: count messages not from me since joined
     // (full read-receipts are out of scope for v1 — just return 0 and let client track)
 
     const membersByGroup = {};
@@ -14432,7 +14443,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
 
     res.json(result);
   } catch (e) {
-    console.error("[groups GET]", e.message);
+    console.error("[groups GET] unhandled:", e.message, e.stack);
     res.status(500).json({ error: "Failed to load groups" });
   }
 });
@@ -14441,6 +14452,7 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
 app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {
     const myId       = req.member.memberId;
+    if (!myId) return res.status(400).json({ error: "Member profile not linked to this account" });
     const name       = (req.body?.name || "").trim().slice(0, 60);
     const memberIds  = (req.body?.member_ids || []).filter(id => id !== myId).slice(0, 49); // cap at 50 total
     if (!name)                return res.status(400).json({ error: "Group name required" });
@@ -14483,7 +14495,7 @@ app.post("/api/member/groups", memberAuthMiddleware, gcWriteLimit, async (req, r
       },
     });
   } catch (e) {
-    console.error("[groups POST]", e.message);
+    console.error("[groups POST]", e.message, e.stack);
     res.status(500).json({ error: "Failed to create group" });
   }
 });
@@ -14504,6 +14516,7 @@ app.get("/api/member/groups/unread-count", memberAuthMiddleware, gcReadLimit, as
 app.get("/api/member/groups/:id", memberAuthMiddleware, gcReadLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
+    if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid  = req.params.id;
 
     const { data: mem } = await supabase
@@ -14656,6 +14669,7 @@ app.put("/api/member/groups/:id/members/:memberId/nickname", memberAuthMiddlewar
 app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, async (req, res) => {
   try {
     const myId  = req.member.memberId;
+    if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid   = req.params.id;
     const limit = Math.min(parseInt(req.query.limit) || 40, 80);
     const before = req.query.before;
