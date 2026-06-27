@@ -9029,16 +9029,30 @@ if (document.readyState === "loading") {
 // stable-key approach and restore on page load before any API call.
 
 (function patchGroupPersistence() {
-  // More aggressive localStorage seeding — run immediately at patch load time
+  // FIXED: the old version did
+  //   Object.keys(localStorage).find(k => k.startsWith('kfs-groups-'))
+  // which grabs the FIRST matching key it finds, regardless of which member
+  // it belongs to. On any device that ever had more than one kfs-groups-*
+  // key written (a second test account, a leftover key from before the
+  // earlier fix shipped, a shared machine, etc.) this silently loaded a
+  // DIFFERENT member's group list into GC.groups before the real fetch
+  // even ran — and because inboxLoad's retry fallback keeps the existing
+  // GC.groups when a fetch comes back transiently empty, the wrong data
+  // could stick around instead of ever being corrected.
+  //
+  // Fix: only ever read the key for the member who is ACTUALLY logged in
+  // right now. If we don't know who that is yet, do nothing — inboxLoad's
+  // own (correctly-scoped) seeding step will handle it once the ID resolves.
   try {
-    const storedMemberId = Object.keys(localStorage)
-      .find(k => k.startsWith('kfs-groups-'));
-    if (storedMemberId) {
-      const parsed = JSON.parse(localStorage.getItem(storedMemberId) || '[]');
-      if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
-        if (!GC.groups || !GC.groups.length) {
-          GC.groups = parsed;
-        }
+    const myId = (typeof dmMyId === 'function') ? dmMyId() : null;
+    if (!myId) return; // no verified session yet — never guess from a random key
+    const key = 'kfs-groups-' + myId;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
+      if (!GC.groups || !GC.groups.length) {
+        GC.groups = parsed;
       }
     }
   } catch { /* silent */ }
