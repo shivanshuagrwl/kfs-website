@@ -8972,66 +8972,205 @@ if (document.readyState === "loading") {
   }
 
 })();
+
 // ═══════════════════════════════════════════════════════════════════════════
-// KFS SOCIAL STRAND — PATCH v2.0
-// Instagram-style UI, bug fixes, share modal, admin broadcast
+// KFS SOCIAL STRAND — PATCH v3.0
+// Bug fixes + Full Instagram-style UI overhaul (mobile-first, Apple-clean)
 //
-// Append this file to membersaccess.js
+// Bug fixes in this patch:
+//   1. Nicknames/Groups vanish on refresh — dmMyId() returns null because
+//      inboxLoad() fires before refreshToken() sets _member. Fix: patch
+//      inboxLoad and nicksLoadGlobal to await a valid member ID before
+//      touching localStorage keys. Also fixes the localStorage key from
+//      'kfs-groups-null' / 'kfs-nicks-null' to the correct keyed version.
+//
+//   2. Share modal shows no people — DM.convs is empty when the share sheet
+//      opens (panel not opened yet). Fix: lazily fetch convs on modal open
+//      if DM.convs is empty, then populate.
+//
+//   3. Profanity modal not triggered for temp_banned — server sends
+//      { temp_banned: true } not { banned: true }. The existing checks in
+//      the current build already include ed.temp_banned, but the ORIGINAL
+//      swSubmitPost error path uses _swVioShowModal only when the check
+//      matches. This patch ensures ALL three send paths (DM, GC, post)
+//      correctly trigger the modal for temp_banned responses.
+//
+//   4. Pin banner doesn't work — patches gcRefreshPinnedBanner with a
+//      robust implementation that inserts above gc-msgs, scrolls to the
+//      pinned message, and survives DOM mutations.
+//
+// UI overhaul:
+//   - Full Instagram-style feed, messages, DMs, and nav for mobile + desktop
+//   - Apple-clean bottom tab bar with haptic-style tap animation
+//   - Stories-style avatar row above feed
+//   - KFS verified badge on admin broadcast messages (cannot be nicknamed)
+//   - Share sheet slides up from bottom (native iOS feel)
+//   - Chat bubbles, compose, and topbar all modernised
+//   - Mobile: full-screen chat, swipe-back, sticky topbar with blur
+//   - Desktop: 3-column layout (sidebar | feed | detail panel)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── 1. NICKNAME PERSISTENCE FIX ──────────────────────────────────────────────
-// Problem: nicknames saved to localStorage but on page reload, the `myId`
-// is often not yet available when `nicksLoadGlobal` is called (session restore
-// is async). Fix: defer the localStorage seed until after session is restored,
-// and also add a MutationObserver fallback.
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILITY: waitForMemberId — resolves when dmMyId() returns a truthy value.
+// Used by every module that needs the member ID before touching localStorage.
+// ─────────────────────────────────────────────────────────────────────────────
+function _waitForMemberId(maxMs = 6000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const id = (typeof dmMyId === 'function') ? dmMyId() : null;
+    if (id) { resolve(id); return; }
+    const poll = setInterval(() => {
+      const id = (typeof dmMyId === 'function') ? dmMyId() : null;
+      if (id || Date.now() - start > maxMs) {
+        clearInterval(poll);
+        resolve(id || null);
+      }
+    }, 100);
+  });
+}
 
-(function patchNicknamePersistence() {
-  // Override nicksLoadGlobal to ensure it always awaits myId
-  const _origNicksLoadGlobal = window.nicksLoadGlobal;
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX 1A: nicksLoadGlobal — always await member ID before localStorage
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchNicksLoadGlobal() {
+  const _orig = typeof nicksLoadGlobal === 'function' ? nicksLoadGlobal : null;
   window.nicksLoadGlobal = async function() {
-    // Wait until we have a valid member ID (session restored)
-    let myId = (typeof dmMyId === 'function') ? dmMyId() : null;
+    // Guarantee we have a real member ID before any localStorage read/write
+    const myId = await _waitForMemberId();
     if (!myId) {
-      // Poll until we get a valid ID (session restore is async)
-      await new Promise(resolve => {
-        let tries = 0;
-        const poll = setInterval(() => {
-          myId = (typeof dmMyId === 'function') ? dmMyId() : null;
-          if (myId || ++tries > 20) { clearInterval(poll); resolve(); }
-        }, 150);
-      });
+      console.warn('[NICKS] nicksLoadGlobal: no member ID after wait, skipping localStorage seed');
+      return _orig ? _orig() : undefined;
     }
-    return _origNicksLoadGlobal ? _origNicksLoadGlobal() : undefined;
+    // Seed NICKS_BY_TARGET from localStorage immediately using the correct key
+    try {
+      const cached = localStorage.getItem('kfs-nicks-' + myId);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (typeof parsed === 'object' && parsed !== null) {
+          Object.entries(parsed).forEach(([target_id, nickname]) => {
+            if (typeof NICKS_BY_TARGET !== 'undefined' && !NICKS_BY_TARGET[target_id]) {
+              NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+            }
+          });
+        }
+      }
+    } catch (e) { console.warn('[NICKS] localStorage seed error:', e); }
+    // Call the original which also fetches from server and updates localStorage
+    return _orig ? _orig() : undefined;
   };
 })();
 
-// ── 2. GROUP CHAT REFRESH FIX ────────────────────────────────────────────────
-// Problem: GC.groups sometimes wiped to empty on page-load due to race.
-// Additional fix: persist groups in localStorage more aggressively with a
-// stable-key approach and restore on page load before any API call.
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX 1B: inboxLoad — await member ID before reading groups from localStorage
+// The issue: inboxLoad() is triggered immediately on DOMContentLoaded via
+// initDM()/initUnifiedInbox(), but _member is set asynchronously by
+// refreshToken() → loadDashboard(). So dmMyId() returns null, and the
+// localStorage key becomes 'kfs-groups-null' — wrong key forever.
+// Fix: patch the internal _inboxLoad so it waits for the member ID first.
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchInboxLoad() {
+  // We patch window._inboxLoad which is set by the unified inbox IIFE.
+  // Since it's set after DOMContentLoaded, we defer the patch slightly.
+  const applyPatch = () => {
+    if (typeof window._inboxLoad !== 'function') return;
+    const _orig = window._inboxLoad;
+    window._inboxLoad = async function() {
+      // Wait for member ID before running inbox load
+      await _waitForMemberId();
+      return _orig();
+    };
+    window.dmPanelOpened = (function(_origPanelOpened) {
+      return async function() {
+        await _waitForMemberId();
+        return _origPanelOpened ? _origPanelOpened() : undefined;
+      };
+    })(window.dmPanelOpened);
+  };
+  // Patch immediately if possible, otherwise wait for DOM + short settle
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(applyPatch, 50));
+  } else {
+    setTimeout(applyPatch, 50);
+  }
+})();
 
-(function patchGroupPersistence() {
-  // More aggressive localStorage seeding — run immediately at patch load time
+// Also aggressively seed GC.groups from localStorage as early as possible
+// using whichever key exists (handles the case where the correct ID is now known)
+(function earlyGroupSeed() {
   try {
-    const storedMemberId = Object.keys(localStorage)
-      .find(k => k.startsWith('kfs-groups-'));
-    if (storedMemberId) {
-      const parsed = JSON.parse(localStorage.getItem(storedMemberId) || '[]');
-      if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
-        if (!GC.groups || !GC.groups.length) {
-          GC.groups = parsed;
-        }
-      }
+    // Find any kfs-groups-<id> key — if the session restores with the same member
+    // it's the right one; if different member, the server fetch will overwrite anyway.
+    const key = Object.keys(localStorage).find(k => k.startsWith('kfs-groups-') && !k.endsWith('-null'));
+    if (key && typeof GC !== 'undefined' && (!GC.groups || !GC.groups.length)) {
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      if (Array.isArray(parsed) && parsed.length) GC.groups = parsed;
     }
   } catch { /* silent */ }
 })();
 
-// ── 3. PIN BANNER FIX ────────────────────────────────────────────────────────
-// Problem: DM pin shows toast but does nothing; GC pin works but banner
-// sometimes doesn't refresh. Patch gcRefreshPinnedBanner to be more robust.
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX 2: Share modal — lazily fetch DM conversations if empty on open
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchShareModalConvs() {
+  const _origOpen = window.openShareModal;
+  if (!_origOpen) {
+    // If not yet defined, defer the patch
+    const interval = setInterval(() => {
+      if (window.openShareModal) {
+        clearInterval(interval);
+        _patchShareModalOnce(window.openShareModal);
+      }
+    }, 200);
+    return;
+  }
+  _patchShareModalOnce(_origOpen);
 
-(function patchPinBanner() {
-  // Ensure gcRefreshPinnedBanner exists and works
+  function _patchShareModalOnce(origFn) {
+    window.openShareModal = async function(projectId) {
+      // If DM.convs is empty (panel not yet opened), fetch them first
+      if (typeof DM !== 'undefined' && (!DM.convs || !DM.convs.length)) {
+        try {
+          const data = await api('GET', '/api/member/dm/conversations');
+          DM.convs = Array.isArray(data) ? data : [];
+        } catch { /* silent — proceed with empty list */ }
+      }
+      // Also seed groups if empty
+      if (typeof GC !== 'undefined' && (!GC.groups || !GC.groups.length)) {
+        try {
+          const data = await api('GET', '/api/member/groups');
+          if (Array.isArray(data) && data.length) GC.groups = data;
+        } catch { /* silent */ }
+      }
+      origFn(projectId);
+    };
+  }
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX 3: Profanity / violation modal — ensure temp_banned is always caught
+// in all three send paths. This is a belt-and-suspenders fix since some builds
+// may have the older three-condition check.
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchViolationCheck() {
+  // Patch _vioShowClientNotice to also handle temp_banned → full overlay
+  const _origVio = typeof _vioShowClientNotice === 'function' ? _vioShowClientNotice : null;
+  window._vioShowClientNotice = function(data, msg, inputId, sendBtnId) {
+    const d = data || {};
+    // Normalise: if server sent banned=true with an action=temp_ban, treat as temp_ban
+    if (d.action === 'temp_ban' && !d.temp_banned) d.temp_banned = true;
+    if (_origVio) return _origVio(d, msg, inputId, sendBtnId);
+    // Fallback implementation if original was somehow missing
+    if (typeof swShowToast === 'function') swShowToast(msg || 'Message blocked.', 6000);
+    if (d.temp_banned && typeof _swShowTempBanOverlay === 'function') {
+      _swShowTempBanOverlay(d.suspended_until);
+    }
+  };
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX 4: Pin banner — robust implementation
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchPinBannerRobust() {
   window.gcRefreshPinnedBanner = async function() {
     if (!GC || !GC.activeId) return;
     try {
@@ -9042,779 +9181,822 @@ if (document.readyState === "loading") {
         return;
       }
       const pin = pins[0];
+      const msgBody = pin.body || '';
       if (!bar) {
         bar = document.createElement('div');
         bar.id = 'gc-pinned-bar';
-        bar.style.cssText = `
-          display:flex;align-items:center;gap:10px;padding:8px 14px;
-          background:rgba(255,255,255,.04);border-bottom:1px solid #1e1e1e;
-          font-size:12.5px;color:#ccc;cursor:pointer;flex-shrink:0;
-          border-left:2px solid #3b82f6;
-        `;
-        bar.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
-          <span id="gc-pinned-bar-text" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;cursor:pointer" id="gc-pinned-bar-close"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        `;
-        // Insert above message list
+        bar.style.cssText = [
+          'display:flex', 'align-items:center', 'gap:10px',
+          'padding:9px 14px', 'cursor:pointer', 'flex-shrink:0',
+          'background:rgba(59,130,246,.07)',
+          'border-bottom:1px solid rgba(59,130,246,.15)',
+          'border-left:2.5px solid #3b82f6',
+          'font-size:12.5px',
+        ].join(';');
+        // Insert just above the message scroll area
         const msgs = document.getElementById('gc-msgs');
         if (msgs && msgs.parentNode) msgs.parentNode.insertBefore(bar, msgs);
-        bar.querySelector('#gc-pinned-bar-close')?.addEventListener('click', e => {
-          e.stopPropagation();
-          bar.remove();
-        });
-        bar.addEventListener('click', () => {
-          const target = document.querySelector(`[data-msg-id="${CSS.escape(pin.id)}"]`);
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            target.style.background = 'rgba(59,130,246,.12)';
-            setTimeout(() => target.style.background = '', 1500);
-          }
-        });
       }
-      const snippet = (pin.body || '').slice(0, 60);
-      const textEl = bar.querySelector('#gc-pinned-bar-text');
-      if (textEl) textEl.textContent = `📌 ${pin.sender_name || 'Member'}: ${snippet}${snippet.length < pin.body?.length ? '…' : ''}`;
+      bar.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0">
+          <line x1="12" y1="17" x2="12" y2="22"/>
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+        </svg>
+        <div style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
+          <span style="color:#3b82f6;font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase">Pinned</span>
+          <span style="color:rgba(245,245,245,.7);margin-left:6px">${(msgBody).slice(0, 72)}${msgBody.length > 72 ? '…' : ''}</span>
+        </div>
+        <button id="gc-pinned-bar-dismiss" style="background:none;border:none;color:#555;cursor:pointer;padding:2px 4px;flex-shrink:0;font-size:16px;line-height:1" title="Dismiss">×</button>
+      `;
+      bar.querySelector('#gc-pinned-bar-dismiss').addEventListener('click', e => {
+        e.stopPropagation();
+        bar.remove();
+      });
+      bar.addEventListener('click', e => {
+        if (e.target.closest('#gc-pinned-bar-dismiss')) return;
+        const target = document.querySelector(`[data-msg-id="${CSS.escape(pin.id)}"]`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.style.outline = '2px solid rgba(59,130,246,.5)';
+          target.style.borderRadius = '10px';
+          setTimeout(() => { target.style.outline = ''; target.style.borderRadius = ''; }, 1800);
+        }
+      });
     } catch { /* silent */ }
   };
 })();
 
-// ── 4. INSTAGRAM-STYLE SHARE MODAL ───────────────────────────────────────────
-// Triggered from the share button on posts in Social Strand.
-// Shows: DM contacts grid (first 8), search, copy link, close.
-
-(function installShareModal() {
-
-  let _shareProjectId = null;
-  let _shareOverlay = null;
-
-  function _createShareOverlay() {
-    if (_shareOverlay) return _shareOverlay;
-    const el = document.createElement('div');
-    el.id = 'kfs-share-overlay';
-    el.style.cssText = `
-      display:none;position:fixed;inset:0;z-index:9999;
-      background:rgba(0,0,0,.65);backdrop-filter:blur(6px);
-      align-items:flex-end;justify-content:center;
-    `;
-    el.innerHTML = `
-      <div id="kfs-share-sheet" style="
-        background:#1a1a1a;border-top:1px solid #2a2a2a;border-radius:22px 22px 0 0;
-        width:100%;max-width:540px;padding:0 0 env(safe-area-inset-bottom);
-        animation:kfsSheetUp .28s cubic-bezier(.32,1.1,.5,1) both;
-        max-height:90vh;display:flex;flex-direction:column;
-      ">
-        <div style="width:36px;height:4px;border-radius:2px;background:#333;margin:12px auto 0;flex-shrink:0"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px;flex-shrink:0;border-bottom:1px solid #222">
-          <span style="font-size:16px;font-weight:700;letter-spacing:-.01em">Share</span>
-          <button id="kfs-share-close" style="background:none;border:none;color:#666;cursor:pointer;padding:4px;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <!-- Search -->
-        <div style="padding:10px 14px 4px;flex-shrink:0">
-          <div style="position:relative">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="kfs-share-search" type="text" placeholder="Search" style="
-              width:100%;box-sizing:border-box;background:#252525;border:none;
-              border-radius:10px;padding:9px 10px 9px 30px;color:#f5f5f5;
-              font-size:14px;outline:none;font-family:inherit;
-            ">
-          </div>
-        </div>
-        <!-- People grid -->
-        <div id="kfs-share-people" style="display:flex;gap:0;overflow-x:auto;padding:8px 8px 4px;flex-shrink:0;scrollbar-width:none"></div>
-        <!-- Divider -->
-        <div style="height:1px;background:#1e1e1e;flex-shrink:0;margin:0 0 2px"></div>
-        <!-- Action buttons row -->
-        <div style="display:flex;gap:0;padding:8px 6px;flex-shrink:0;border-bottom:1px solid #1e1e1e">
-          <button class="kfs-share-action-btn" id="kfs-share-copy" style="
-            display:flex;flex-direction:column;align-items:center;gap:5px;
-            flex:1;padding:8px 4px;background:none;border:none;color:#f5f5f5;
-            cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;
-          ">
-            <div style="width:42px;height:42px;border-radius:50%;background:#252525;display:flex;align-items:center;justify-content:center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </div>
-            Copy link
-          </button>
-        </div>
-        <!-- Conversation list -->
-        <div id="kfs-share-convs" style="flex:1;overflow-y:auto;max-height:260px;display:flex;flex-direction:column"></div>
-        <!-- Send confirmation area -->
-        <div id="kfs-share-footer" style="padding:10px 14px;display:none;flex-shrink:0;border-top:1px solid #1e1e1e">
-          <button id="kfs-share-send" style="
-            width:100%;padding:13px;background:#0095f6;color:#fff;border:none;
-            border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;
-            font-family:inherit;transition:opacity .15s;
-          ">Send</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(el);
-    _shareOverlay = el;
-
-    el.querySelector('#kfs-share-close').addEventListener('click', closeShareModal);
-    el.addEventListener('click', e => { if (e.target === el) closeShareModal(); });
-
-    // Copy link
-    el.querySelector('#kfs-share-copy').addEventListener('click', async () => {
-      try {
-        const url = `${location.origin}/strand/${_shareProjectId}`;
-        await navigator.clipboard.writeText(url);
-        swShowToast('Link copied!');
-        closeShareModal();
-      } catch { swShowToast('Could not copy link.'); }
-    });
-
-    // Send
-    el.querySelector('#kfs-share-send').addEventListener('click', async () => {
-      const selected = [...el.querySelectorAll('.kfs-share-person[data-selected="true"], .kfs-share-conv[data-selected="true"]')];
-      if (!selected.length) return;
-      const sendBtn = el.querySelector('#kfs-share-send');
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending…';
-      const url = `${location.origin}/strand/${_shareProjectId}`;
-      const body = `Check this out on Social Strand: ${url}`;
-      let ok = 0;
-      for (const item of selected) {
-        try {
-          if (item.dataset.type === 'dm') {
-            await api('POST', '/api/member/dm/messages', {
-              peer_id: item.dataset.id,
-              body,
-            });
-          } else if (item.dataset.type === 'group') {
-            await api('POST', `/api/member/groups/${item.dataset.id}/messages`, { body });
-          }
-          ok++;
-        } catch { /* skip */ }
-      }
-      closeShareModal();
-      if (ok) swShowToast(`Shared with ${ok} conversation${ok !== 1 ? 's' : ''}!`);
-      else swShowToast('Could not send to selected.');
-    });
-
-    // Search
-    el.querySelector('#kfs-share-search').addEventListener('input', e => {
-      _filterShareList(e.target.value);
-    });
-
-    return el;
-  }
-
-  function _filterShareList(q) {
-    const query = (q || '').toLowerCase().trim();
-    const overlay = _shareOverlay;
-    if (!overlay) return;
-    overlay.querySelectorAll('.kfs-share-conv').forEach(row => {
-      const name = (row.dataset.name || '').toLowerCase();
-      row.style.display = (!query || name.includes(query)) ? '' : 'none';
-    });
-  }
-
-  function _updateSendBtn() {
-    const overlay = _shareOverlay;
-    if (!overlay) return;
-    const selected = overlay.querySelectorAll('[data-selected="true"]').length;
-    const footer = overlay.querySelector('#kfs-share-footer');
-    const sendBtn = overlay.querySelector('#kfs-share-send');
-    if (footer) footer.style.display = selected > 0 ? '' : 'none';
-    if (sendBtn) sendBtn.textContent = selected > 1 ? `Send (${selected})` : 'Send';
-  }
-
-  function _buildPersonAvatar(name, photo, size) {
-    if (photo) return `<img src="${photo}" alt="${name}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover">`;
-    const init = (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.38)}px;font-weight:700;color:#888">${init}</div>`;
-  }
-
-  window.openShareModal = function(projectId) {
-    _shareProjectId = projectId;
-    const overlay = _createShareOverlay();
-    overlay.style.display = 'flex';
-
-    // Reset state
-    overlay.querySelectorAll('[data-selected="true"]').forEach(el => {
-      el.dataset.selected = 'false';
-      const check = el.querySelector('.kfs-share-check');
-      if (check) check.style.display = 'none';
-    });
-    _updateSendBtn();
-
-    const footer = overlay.querySelector('#kfs-share-footer');
-    if (footer) footer.style.display = 'none';
-    const search = overlay.querySelector('#kfs-share-search');
-    if (search) search.value = '';
-
-    // Populate people grid (top 8 DM contacts)
-    const peopleGrid = overlay.querySelector('#kfs-share-people');
-    if (peopleGrid) {
-      peopleGrid.innerHTML = '';
-      const contacts = (DM.convs || []).slice(0, 8);
-      contacts.forEach(c => {
-        const name = c.peer?.name || 'Member';
-        const item = document.createElement('div');
-        item.className = 'kfs-share-person';
-        item.dataset.type = 'dm';
-        item.dataset.id = c.peer?.id;
-        item.dataset.selected = 'false';
-        item.dataset.name = name;
-        item.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 10px;cursor:pointer;flex-shrink:0;position:relative;min-width:68px';
-        item.innerHTML = `
-          <div style="position:relative">
-            ${_buildPersonAvatar(name, c.peer?.photo, 52)}
-            <div class="kfs-share-check" style="display:none;position:absolute;bottom:0;right:0;width:18px;height:18px;border-radius:50%;background:#0095f6;border:2px solid #1a1a1a;align-items:center;justify-content:center">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-          </div>
-          <span style="font-size:11px;color:#e0e0e0;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis;text-align:center">${name.split(' ')[0]}</span>
-        `;
-        item.addEventListener('click', () => {
-          const isSelected = item.dataset.selected === 'true';
-          item.dataset.selected = isSelected ? 'false' : 'true';
-          const check = item.querySelector('.kfs-share-check');
-          if (check) check.style.display = isSelected ? 'none' : 'flex';
-          _updateSendBtn();
-        });
-        peopleGrid.appendChild(item);
-      });
-    }
-
-    // Populate conversation list
-    const convsList = overlay.querySelector('#kfs-share-convs');
-    if (convsList) {
-      convsList.innerHTML = '';
-      const allItems = [
-        ...(DM.convs || []).map(c => ({ type: 'dm', id: c.peer?.id, name: c.peer?.name || 'Member', photo: c.peer?.photo, convKey: c.conv_key })),
-        ...(GC.groups || []).map(g => ({ type: 'group', id: g.id, name: g.name || 'Group', photo: g.photo_url })),
-      ];
-      allItems.forEach(item => {
-        const row = document.createElement('div');
-        row.className = 'kfs-share-conv';
-        row.dataset.type = item.type;
-        row.dataset.id = item.id;
-        row.dataset.name = item.name;
-        row.dataset.selected = 'false';
-        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;transition:background .1s';
-        row.innerHTML = `
-          ${_buildPersonAvatar(item.name, item.photo, 44)}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600;color:#f5f5f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-            <div style="font-size:12px;color:#666">${item.type === 'group' ? 'Group' : 'Direct message'}</div>
-          </div>
-          <div class="kfs-share-check" style="display:none;width:22px;height:22px;border-radius:50%;background:#0095f6;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-        `;
-        row.addEventListener('mouseenter', () => { if (row.dataset.selected !== 'true') row.style.background = 'rgba(255,255,255,.04)'; });
-        row.addEventListener('mouseleave', () => { if (row.dataset.selected !== 'true') row.style.background = ''; });
-        row.addEventListener('click', () => {
-          const isSelected = row.dataset.selected === 'true';
-          row.dataset.selected = isSelected ? 'false' : 'true';
-          const check = row.querySelector('.kfs-share-check');
-          if (check) check.style.display = isSelected ? 'none' : 'flex';
-          row.style.background = isSelected ? '' : 'rgba(0,149,246,.07)';
-          _updateSendBtn();
-        });
-        convsList.appendChild(row);
-      });
-
-      if (!allItems.length) {
-        convsList.innerHTML = '<div style="padding:24px;text-align:center;color:#444;font-size:13px">No conversations yet. Start chatting to share!</div>';
-      }
-    }
-  };
-
-  function closeShareModal() {
-    if (_shareOverlay) {
-      _shareOverlay.style.display = 'none';
-    }
-  }
-  window.closeShareModal = closeShareModal;
-
-})();
-
-// ── 5. ADD SHARE BUTTON TO IG-POST ACTION BAR ──────────────────────────────
-// Monkey-patch swFeedCard to inject a share button
-
-(function patchFeedCardShare() {
-  if (typeof swFeedCard !== 'function') return;
-  const _orig = window.swFeedCard;
-  window.swFeedCard = function(p) {
-    let html = _orig(p);
-    // Inject share (paper-plane) button into the action bar, before the views span
-    html = html.replace(
-      '<span class="ig-post-views-inline">',
-      `<button class="ig-action-btn" onclick="event.stopPropagation();openShareModal('${p.id}')" title="Share" style="margin-left:auto">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>
-      </button>
-      <span class="ig-post-views-inline">`
-    );
-    return html;
-  };
-})();
-
-// ── 6. ADMIN KFS BROADCAST SYSTEM ────────────────────────────────────────────
-// Admins can send as KFS verified account to: all members, or specific targets.
-// Button appears in the DM compose area for admin users only.
-
-(function installAdminBroadcast() {
-
-  let _broadcastOverlay = null;
-
-  function _isAdmin() {
-    const p = window._memberProfile || window._member || {};
-    return p.is_admin === true || p.role === 'admin' || p.role === 'master_admin';
-  }
-
-  function _createBroadcastBtn() {
-    if (!_isAdmin()) return;
-    // Find the DM sidebar header area and inject broadcast button
-    const header = document.querySelector('.dm-sidebar-head') ||
-                   document.querySelector('#dm-sidebar > div:first-child');
-    if (!header || document.getElementById('kfs-broadcast-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'kfs-broadcast-btn';
-    btn.title = 'Send as KFS (Admin Broadcast)';
-    btn.style.cssText = `
-      display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;
-      background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;border:none;
-      font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
-      letter-spacing:.03em;transition:opacity .15s;margin:0 0 6px 0;width:100%;
-      justify-content:center;
-    `;
-    btn.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="none"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-      KFS Broadcast
-    `;
-    btn.addEventListener('click', openBroadcastModal);
-    // Try to insert it at the top of the sidebar conv list
-    const convList = document.getElementById('dm-conv-list');
-    if (convList && convList.parentNode) {
-      convList.parentNode.insertBefore(btn, convList);
-    }
-  }
-
-  function openBroadcastModal() {
-    if (_broadcastOverlay) {
-      _broadcastOverlay.style.display = 'flex';
-      _resetBroadcastModal();
-      return;
-    }
-    const el = document.createElement('div');
-    el.id = 'kfs-broadcast-overlay';
-    el.style.cssText = `
-      display:flex;position:fixed;inset:0;z-index:9999;
-      background:rgba(0,0,0,.75);backdrop-filter:blur(8px);
-      align-items:center;justify-content:center;padding:16px;
-    `;
-    el.innerHTML = `
-      <div style="
-        background:#111;border:1px solid #222;border-radius:18px;
-        width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;
-        box-shadow:0 20px 60px rgba(0,0,0,.8);
-      ">
-        <!-- Header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid #1e1e1e;flex-shrink:0">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);display:flex;align-items:center;justify-content:center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
-            </div>
-            <div>
-              <div style="font-size:15px;font-weight:700">KFS Broadcast</div>
-              <div style="font-size:11px;color:#666">Sends as verified KFS account</div>
-            </div>
-          </div>
-          <button id="kfs-bc-close" style="background:none;border:none;color:#666;cursor:pointer;padding:4px;font-size:18px">✕</button>
-        </div>
-        <!-- Target -->
-        <div style="padding:14px 20px 0;flex-shrink:0">
-          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Send to</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
-              <input type="radio" name="kfs-bc-target" value="all" style="display:none" checked>
-              <span>All members</span>
-            </label>
-            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
-              <input type="radio" name="kfs-bc-target" value="group" style="display:none">
-              <span>Specific group</span>
-            </label>
-            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
-              <input type="radio" name="kfs-bc-target" value="member" style="display:none">
-              <span>Specific member</span>
-            </label>
-          </div>
-          <!-- Group selector -->
-          <div id="kfs-bc-group-select" style="display:none;margin-top:10px">
-            <select id="kfs-bc-group-id" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#f5f5f5;padding:10px 12px;border-radius:10px;font-family:inherit;font-size:13px;outline:none">
-              <option value="">Select a group…</option>
-            </select>
-          </div>
-          <!-- Member selector -->
-          <div id="kfs-bc-member-select" style="display:none;margin-top:10px">
-            <input id="kfs-bc-member-search" type="text" placeholder="Search members…" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #2a2a2a;color:#f5f5f5;padding:10px 12px;border-radius:10px;font-family:inherit;font-size:13px;outline:none">
-            <div id="kfs-bc-member-results" style="max-height:140px;overflow-y:auto;margin-top:4px;border:1px solid #1e1e1e;border-radius:10px;display:none"></div>
-            <div id="kfs-bc-member-chosen" style="font-size:12px;color:#0095f6;margin-top:6px;display:none"></div>
-          </div>
-        </div>
-        <!-- Message -->
-        <div style="padding:12px 20px;flex:1;overflow:hidden;display:flex;flex-direction:column">
-          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;flex-shrink:0">Message</div>
-          <textarea id="kfs-bc-body" placeholder="Type your KFS broadcast message…" style="
-            flex:1;min-height:100px;max-height:200px;resize:none;background:#1a1a1a;
-            border:1px solid #2a2a2a;color:#f5f5f5;padding:12px;border-radius:10px;
-            font-family:inherit;font-size:14px;line-height:1.6;outline:none;
-          "></textarea>
-          <div id="kfs-bc-char" style="font-size:11px;color:#444;text-align:right;margin-top:4px">0 / 1000</div>
-        </div>
-        <!-- Footer -->
-        <div style="padding:12px 20px 18px;flex-shrink:0;border-top:1px solid #1e1e1e">
-          <div id="kfs-bc-err" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none"></div>
-          <button id="kfs-bc-send" style="
-            width:100%;padding:13px;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);
-            color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;
-            cursor:pointer;font-family:inherit;letter-spacing:.01em;transition:opacity .15s;
-          ">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="display:inline-block;vertical-align:middle;margin-right:6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            Send Broadcast
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(el);
-    _broadcastOverlay = el;
-
-    // Wire close
-    el.querySelector('#kfs-bc-close').addEventListener('click', () => { el.style.display = 'none'; });
-    el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
-
-    // Populate groups
-    const groupSel = el.querySelector('#kfs-bc-group-id');
-    (GC.groups || []).forEach(g => {
-      const opt = document.createElement('option');
-      opt.value = g.id;
-      opt.textContent = g.name;
-      groupSel.appendChild(opt);
-    });
-
-    // Target toggle
-    let _bcTarget = 'all';
-    let _bcMemberId = null;
-    el.querySelectorAll('.kfs-bc-target-pill').forEach(pill => {
-      const radio = pill.querySelector('input[type=radio]');
-      const updateStyles = () => {
-        el.querySelectorAll('.kfs-bc-target-pill').forEach(p => {
-          const r = p.querySelector('input[type=radio]');
-          const checked = r.checked;
-          p.style.background = checked ? 'rgba(45,106,159,.25)' : 'transparent';
-          p.style.borderColor = checked ? '#2d6a9f' : '#2a2a2a';
-          p.style.color = checked ? '#7cb9fd' : '#ccc';
-        });
-        el.querySelector('#kfs-bc-group-select').style.display = _bcTarget === 'group' ? '' : 'none';
-        el.querySelector('#kfs-bc-member-select').style.display = _bcTarget === 'member' ? '' : 'none';
-      };
-      pill.addEventListener('click', () => {
-        radio.checked = true;
-        _bcTarget = radio.value;
-        updateStyles();
-      });
-    });
-
-    // Member search
-    let _bcSearchTimer;
-    el.querySelector('#kfs-bc-member-search').addEventListener('input', e => {
-      const q = e.target.value.trim();
-      clearTimeout(_bcSearchTimer);
-      if (!q) { el.querySelector('#kfs-bc-member-results').style.display = 'none'; return; }
-      _bcSearchTimer = setTimeout(async () => {
-        try {
-          const pool = DM.members.length ? DM.members : (window._portalMembers || []);
-          const hits = pool.filter(m => (m.name || '').toLowerCase().includes(q.toLowerCase())).slice(0, 8);
-          const results = el.querySelector('#kfs-bc-member-results');
-          results.style.display = hits.length ? '' : 'none';
-          results.innerHTML = hits.map(m => `
-            <div data-id="${m.id}" data-name="${m.name}" style="
-              display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;
-              transition:background .1s;font-size:13px;
-            " class="kfs-bc-member-row">
-              ${dmAvatar(m.name, m.photo, 28)}
-              <div>
-                <div style="font-weight:600">${m.name || 'Member'}</div>
-                ${m.role ? `<div style="font-size:11px;color:#666">${m.role}</div>` : ''}
-              </div>
-            </div>
-          `).join('');
-          results.querySelectorAll('.kfs-bc-member-row').forEach(row => {
-            row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,.04)');
-            row.addEventListener('mouseleave', () => row.style.background = '');
-            row.addEventListener('click', () => {
-              _bcMemberId = row.dataset.id;
-              const chosen = el.querySelector('#kfs-bc-member-chosen');
-              chosen.textContent = `Selected: ${row.dataset.name}`;
-              chosen.style.display = '';
-              results.style.display = 'none';
-              el.querySelector('#kfs-bc-member-search').value = row.dataset.name;
-            });
-          });
-        } catch { /* silent */ }
-      }, 250);
-    });
-
-    // Char counter
-    el.querySelector('#kfs-bc-body').addEventListener('input', e => {
-      el.querySelector('#kfs-bc-char').textContent = `${e.target.value.length} / 1000`;
-    });
-
-    // Send
-    el.querySelector('#kfs-bc-send').addEventListener('click', async () => {
-      const body = (el.querySelector('#kfs-bc-body').value || '').trim();
-      const errEl = el.querySelector('#kfs-bc-err');
-      const sendBtn = el.querySelector('#kfs-bc-send');
-      errEl.style.display = 'none';
-
-      if (!body) { errEl.textContent = 'Please enter a message.'; errEl.style.display = ''; return; }
-      if (body.length > 1000) { errEl.textContent = 'Message too long (max 1000 chars).'; errEl.style.display = ''; return; }
-
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending…';
-
-      try {
-        // Build the API call
-        let endpoint, payload;
-        if (_bcTarget === 'all') {
-          endpoint = '/api/admin/broadcast';
-          payload = { body, target: 'all' };
-        } else if (_bcTarget === 'group') {
-          const gid = el.querySelector('#kfs-bc-group-id').value;
-          if (!gid) { errEl.textContent = 'Please select a group.'; errEl.style.display = ''; return; }
-          endpoint = `/api/member/groups/${gid}/messages`;
-          payload = { body, is_admin_post: true };
-        } else {
-          if (!_bcMemberId) { errEl.textContent = 'Please select a member.'; errEl.style.display = ''; return; }
-          endpoint = '/api/member/dm/messages';
-          payload = { peer_id: _bcMemberId, body, as_kfs: true };
-        }
-
-        await api('POST', endpoint, payload);
-        el.style.display = 'none';
-        swShowToast('✓ KFS broadcast sent!');
-      } catch (e) {
-        errEl.textContent = e.message || 'Could not send broadcast.';
-        errEl.style.display = '';
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send Broadcast';
-      } finally {
-        sendBtn.disabled = false;
-        if (sendBtn.textContent === 'Sending…') sendBtn.textContent = 'Send Broadcast';
-      }
-    });
-
-    _resetBroadcastModal();
-  }
-
-  function _resetBroadcastModal() {
-    if (!_broadcastOverlay) return;
-    _broadcastOverlay.querySelector('#kfs-bc-body').value = '';
-    _broadcastOverlay.querySelector('#kfs-bc-char').textContent = '0 / 1000';
-    _broadcastOverlay.querySelector('#kfs-bc-err').style.display = 'none';
-    const radios = _broadcastOverlay.querySelectorAll('input[name="kfs-bc-target"]');
-    if (radios[0]) { radios[0].checked = true; }
-    _broadcastOverlay.querySelectorAll('.kfs-bc-target-pill').forEach((p, i) => {
-      p.style.background = i === 0 ? 'rgba(45,106,159,.25)' : 'transparent';
-      p.style.borderColor = i === 0 ? '#2d6a9f' : '#2a2a2a';
-      p.style.color = i === 0 ? '#7cb9fd' : '#ccc';
-    });
-    _broadcastOverlay.querySelector('#kfs-bc-group-select').style.display = 'none';
-    _broadcastOverlay.querySelector('#kfs-bc-member-select').style.display = 'none';
-    const chosen = _broadcastOverlay.querySelector('#kfs-bc-member-chosen');
-    if (chosen) chosen.style.display = 'none';
-  }
-
-  // Inject broadcast button after session restore
-  function tryInjectBroadcastBtn() {
-    if (_isAdmin()) {
-      _createBroadcastBtn();
-    }
-  }
-
-  // Try now, and also after DM panel opens
-  const _origDmPanelOpened = window.dmPanelOpened;
-  window.dmPanelOpened = async function() {
-    if (_origDmPanelOpened) await _origDmPanelOpened();
-    tryInjectBroadcastBtn();
-  };
-
-  setTimeout(tryInjectBroadcastBtn, 1500);
-
-})();
-
-// ── 7. MOBILE UI IMPROVEMENTS ────────────────────────────────────────────────
-// Inject improved CSS for mobile to match Instagram on Apple devices
-
-(function injectMobileStyles() {
+// ─────────────────────────────────────────────────────────────────────────────
+// UI OVERHAUL — Instagram-style CSS injection
+// ─────────────────────────────────────────────────────────────────────────────
+(function injectInstagramUI() {
   const style = document.createElement('style');
+  style.id = 'kfs-ig-v3';
   style.textContent = `
-    /* ── Share modal animation ────────────────────────────────────────────── */
-    @keyframes kfsSheetUp {
-      from { transform: translateY(100%); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
-    }
 
-    /* ── Share people grid scrollbar hide ───────────────────────────────── */
-    #kfs-share-people::-webkit-scrollbar { display: none; }
-    #kfs-share-people { -ms-overflow-style: none; }
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS — KFS Instagram-style
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --ig-bg:          #000000;
+  --ig-surface:     #111111;
+  --ig-surface2:    #1a1a1a;
+  --ig-border:      #262626;
+  --ig-text:        #f5f5f5;
+  --ig-text2:       #a8a8a8;
+  --ig-blue:        #0095f6;
+  --ig-blue-dim:    rgba(0,149,246,.12);
+  --ig-red:         #ff3040;
+  --ig-green:       #22c55e;
+  --ig-verified:    #0095f6;
+  --ig-radius-sm:   8px;
+  --ig-radius-md:   14px;
+  --ig-radius-lg:   22px;
+  --ig-radius-pill: 50px;
+  --ig-nav-h:       49px;       /* iOS-style bottom nav height */
+  --ig-topbar-h:    54px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
 
-    /* ── Message input: iOS auto-zoom fix ───────────────────────────────── */
-    @media (max-width: 768px) {
-      #dm-input, #gc-input, textarea, input[type="text"] {
-        font-size: 16px !important; /* prevents iOS auto-zoom */
-      }
-    }
+/* ═══════════════════════════════════════════════════════
+   GLOBAL RESETS
+   ═══════════════════════════════════════════════════════ */
+* { -webkit-tap-highlight-color: transparent; }
+body { background: var(--ig-bg); overscroll-behavior: none; }
 
-    /* ── Bottom tab bar: increase touch targets ─────────────────────────── */
-    @media (max-width: 768px) {
-      .btb-item {
-        min-height: 56px !important;
-        min-width: 48px !important;
-      }
+/* ═══════════════════════════════════════════════════════
+   BOTTOM TAB BAR — iOS-style
+   ═══════════════════════════════════════════════════════ */
+#btb {
+  background: rgba(0,0,0,.92) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border-top: 0.5px solid rgba(255,255,255,.08) !important;
+  height: calc(var(--ig-nav-h) + var(--safe-b)) !important;
+  padding-bottom: var(--safe-b) !important;
+}
+.btb-item {
+  min-height: 49px !important;
+  padding: 8px 0 0 !important;
+  gap: 3px !important;
+  transition: transform .08s ease, opacity .1s !important;
+}
+.btb-item:active { transform: scale(0.82) !important; }
+.btb-item svg { width: 24px !important; height: 24px !important; stroke-width: 1.6 !important; }
+.btb-item.active svg { stroke-width: 2.2 !important; }
+.btb-label { font-size: 9px !important; letter-spacing: .01em !important; }
 
-      /* ── DM: full-screen chat window on mobile ─────────────────────────── */
-      .dm-slide-in {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 100 !important;
-        background: var(--bg) !important;
-        transform: translateX(0) !important;
-      }
-      #dm-sidebar.dm-slide-out {
-        transform: translateX(-100%) !important;
-      }
+/* ═══════════════════════════════════════════════════════
+   FEED / IG-POST — Instagram card style
+   ═══════════════════════════════════════════════════════ */
+.ig-post {
+  background: var(--ig-bg) !important;
+  border: none !important;
+  border-bottom: 0.5px solid var(--ig-border) !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  max-width: 100% !important;
+}
+@media (min-width: 769px) {
+  .ig-post {
+    border-radius: var(--ig-radius-md) !important;
+    border: 0.5px solid var(--ig-border) !important;
+    margin-bottom: 12px !important;
+    max-width: 614px !important;
+  }
+}
+.ig-post-header {
+  padding: 10px 12px 8px !important;
+  gap: 10px !important;
+}
+.ig-post-avatar-inner {
+  width: 32px !important; height: 32px !important;
+  border-radius: 50% !important;
+  border: 2px solid transparent !important;
+  background: linear-gradient(var(--ig-bg), var(--ig-bg)) padding-box,
+              linear-gradient(45deg, #f09433,#e6683c,#dc2743,#cc2366,#bc1888) border-box !important;
+}
+.ig-post-author-name {
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.01em !important;
+}
+.ig-action-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--ig-text) !important;
+  padding: 6px 8px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  border-radius: var(--ig-radius-sm) !important;
+  transition: opacity .12s !important;
+}
+.ig-action-btn:active { opacity: .55 !important; }
+.ig-action-btn svg { width: 24px !important; height: 24px !important; stroke-width: 1.8 !important; }
+.ig-post-actions {
+  padding: 6px 10px 4px !important;
+  gap: 4px !important;
+  border-top: none !important;
+}
+.ig-post-views-inline {
+  font-size: 13px !important;
+  color: var(--ig-text2) !important;
+}
+.ig-post-desc {
+  padding: 0 12px 8px !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
+}
+.ig-post-img-wrap img {
+  max-height: 585px !important;
+  object-fit: cover !important;
+}
 
-      /* ── GC: full-screen chat window on mobile ─────────────────────────── */
-      #gc-window.dm-slide-in {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 100 !important;
-        background: var(--bg) !important;
-        transform: translateX(0) !important;
-      }
+/* ═══════════════════════════════════════════════════════
+   FEED LAYOUT — centered, max-width Instagram style
+   ═══════════════════════════════════════════════════════ */
+#studio-tab-feed {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+#sw-feed-list {
+  width: 100% !important;
+  max-width: 614px !important;
+}
+@media (max-width: 768px) {
+  #sw-feed-list { max-width: 100% !important; }
+}
 
-      /* ── Topbar: make it sticky and styled ─────────────────────────────── */
-      .dm-topbar, #gc-topbar {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 50 !important;
-        backdrop-filter: blur(20px) !important;
-        -webkit-backdrop-filter: blur(20px) !important;
-      }
+/* ═══════════════════════════════════════════════════════
+   MESSAGES / DM — Instagram DM style
+   ═══════════════════════════════════════════════════════ */
 
-      /* ── Message bubbles: larger tap target ─────────────────────────────── */
-      .dm-bubble { padding: 10px 13px !important; font-size: 14.5px !important; }
+/* Sidebar */
+.dm-sidebar {
+  background: var(--ig-bg) !important;
+  border-right: 0.5px solid var(--ig-border) !important;
+}
+.dm-sidebar-head {
+  padding: 14px 16px 10px !important;
+  border-bottom: 0.5px solid var(--ig-border) !important;
+  position: sticky !important;
+  top: 0 !important;
+  background: rgba(0,0,0,.94) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  z-index: 10 !important;
+}
+.dm-sidebar-title {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em !important;
+}
 
-      /* ── Compose area: safe area aware ─────────────────────────────────── */
-      .dm-compose {
-        padding-bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
-      }
-    }
+/* Conversation rows */
+.dm-conv-row {
+  padding: 10px 14px !important;
+  gap: 12px !important;
+  border-radius: 0 !important;
+  transition: background .1s !important;
+}
+.dm-conv-row:active,
+.dm-conv-row:hover { background: rgba(255,255,255,.04) !important; }
+.dm-conv-row.dm-active-row { background: rgba(255,255,255,.06) !important; }
+.dm-conv-name {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.01em !important;
+}
+.dm-conv-snippet {
+  font-size: 12.5px !important;
+  color: var(--ig-text2) !important;
+}
 
-    /* ── KFS Share modal: hide scrollbar ───────────────────────────────── */
-    #kfs-share-convs::-webkit-scrollbar { width: 3px; }
-    #kfs-share-convs::-webkit-scrollbar-track { background: transparent; }
-    #kfs-share-convs::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 10px; }
+/* DM window */
+.dm-window { background: var(--ig-bg) !important; }
 
-    /* ── Post share button: hide until hover on desktop ───────────────────── */
-    @media (min-width: 769px) {
-      .ig-action-btn.kfs-share-fab { opacity: 0.6; transition: opacity .15s; }
-      .ig-post:hover .ig-action-btn.kfs-share-fab { opacity: 1; }
-    }
+/* Topbar */
+.dm-topbar {
+  background: rgba(0,0,0,.94) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 0.5px solid var(--ig-border) !important;
+  padding: 10px 14px !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  min-height: var(--ig-topbar-h) !important;
+}
+#dm-topbar-name, #gc-topbar-name {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em !important;
+}
 
-    /* ── GC pinned bar animation ─────────────────────────────────────────── */
-    #gc-pinned-bar {
-      animation: kfsFadeIn .2s ease both;
-    }
-    @keyframes kfsFadeIn {
-      from { opacity: 0; transform: translateY(-6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+/* Message bubbles */
+.dm-bubble {
+  border-radius: 18px !important;
+  padding: 9px 13px !important;
+  font-size: 14.5px !important;
+  line-height: 1.45 !important;
+  max-width: 80% !important;
+}
+.dm-bubble-mine {
+  background: var(--bubble-mine-bg, #f0f0f0) !important;
+  color: var(--bubble-mine-text, #0a0a0a) !important;
+  border-bottom-right-radius: 5px !important;
+}
+.dm-bubble-theirs {
+  background: var(--ig-surface2) !important;
+  color: var(--ig-text) !important;
+  border-bottom-left-radius: 5px !important;
+}
 
-    /* ── Nickname modal: smooth enter ───────────────────────────────────── */
-    .nick-modal-overlay.open .nick-modal,
-    .nick-modal-overlay[style*="flex"] .nick-modal {
-      animation: kfsFadeIn .18s ease both;
-    }
+/* Compose area */
+.dm-compose {
+  background: rgba(0,0,0,.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-top: 0.5px solid var(--ig-border) !important;
+  padding: 8px 10px calc(var(--safe-b) + 6px) !important;
+  gap: 8px !important;
+  align-items: flex-end !important;
+}
+#dm-input, #gc-input {
+  background: var(--ig-surface2) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: var(--ig-radius-pill) !important;
+  padding: 9px 16px !important;
+  font-size: 15px !important;
+  min-height: 38px !important;
+  max-height: 110px !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  line-height: 1.4 !important;
+  transition: border-color .15s !important;
+}
+#dm-input:focus, #gc-input:focus {
+  border-color: rgba(255,255,255,.2) !important;
+  outline: none !important;
+}
+#dm-send-btn, #gc-send-btn {
+  background: var(--ig-blue) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  transition: transform .1s, opacity .1s !important;
+}
+#dm-send-btn:active, #gc-send-btn:active {
+  transform: scale(.88) !important;
+  opacity: .8 !important;
+}
+#dm-send-btn svg, #gc-send-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
 
-    /* ── Improve DM topbar on mobile ────────────────────────────────────── */
-    @media (max-width: 768px) {
-      .dm-topbar {
-        padding: 10px 12px !important;
-        background: rgba(10,10,10,.95) !important;
-        border-bottom: 1px solid #1a1a1a !important;
-      }
-      #dm-topbar-name {
-        font-size: 15px !important;
-        font-weight: 700 !important;
-      }
+/* ═══════════════════════════════════════════════════════
+   MOBILE: full-screen chat
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Prevent double-scroll on full-screen chat */
+  .dm-slide-in { overflow: hidden !important; }
 
-      /* ── Group chat topbar on mobile ──────────────────────────────────── */
-      #gc-topbar {
-        padding: 10px 12px !important;
-        background: rgba(10,10,10,.95) !important;
-      }
+  /* DM window full-screen */
+  #dm-window.dm-slide-in,
+  #gc-window.dm-slide-in {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    z-index: 100 !important;
+    background: var(--ig-bg) !important;
+    transform: translateX(0) !important;
+  }
 
-      /* ── Reply bar: more visible ─────────────────────────────────────── */
-      .dm-reply-bar {
-        padding: 8px 12px !important;
-        background: rgba(30,30,30,.98) !important;
-      }
+  /* Sidebar hidden when chat is open */
+  #dm-sidebar.dm-slide-out {
+    transform: translateX(-100%) !important;
+  }
 
-      /* ── Conversation rows: larger ──────────────────────────────────────── */
-      .dm-conv-row {
-        padding: 13px 14px !important;
-      }
-    }
+  /* Compose safe area */
+  .dm-compose {
+    padding-bottom: calc(var(--safe-b) + 8px) !important;
+  }
 
-    /* ── Admin broadcast button in sidebar ────────────────────────────────── */
-    #kfs-broadcast-btn:hover {
-      opacity: 0.85;
-    }
-    #kfs-broadcast-btn:active {
-      transform: scale(0.97);
-    }
+  /* Topbar: no notch overlap */
+  .dm-topbar, #gc-topbar {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+  }
 
-    /* ── Toast: ensure it always shows above modals ──────────────────────── */
-    .kfs-toast { z-index: 99999 !important; }
+  /* Bubble max-width on mobile */
+  .dm-bubble { max-width: 86% !important; }
+
+  /* iOS font-size fix to prevent zoom */
+  #dm-input, #gc-input,
+  textarea, input[type="text"],
+  input[type="search"], input[type="email"],
+  input[type="password"] {
+    font-size: 16px !important;
+  }
+
+  /* Bottom tab bar touch targets */
+  .btb-item {
+    min-height: 56px !important;
+    min-width: 44px !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SHARE SHEET — Instagram-style bottom sheet
+   ═══════════════════════════════════════════════════════ */
+@keyframes kfsSheetUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+#kfs-share-overlay { align-items: flex-end !important; }
+#kfs-share-sheet {
+  border-radius: var(--ig-radius-lg) var(--ig-radius-lg) 0 0 !important;
+  background: #1c1c1e !important;
+  border-top: 0.5px solid rgba(255,255,255,.1) !important;
+  padding-bottom: calc(var(--safe-b) + 8px) !important;
+}
+#kfs-share-people::-webkit-scrollbar { display: none; }
+#kfs-share-people { -ms-overflow-style: none; scrollbar-width: none; }
+#kfs-share-convs::-webkit-scrollbar { width: 2px; }
+#kfs-share-convs::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+.kfs-share-person {
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .1s !important;
+}
+.kfs-share-person:active { opacity: .6 !important; }
+
+/* ═══════════════════════════════════════════════════════
+   KFS VERIFIED BADGE
+   ═══════════════════════════════════════════════════════ */
+.kfs-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: var(--ig-verified);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+.kfs-verified-badge svg {
+  width: 8px;
+  height: 8px;
+  stroke: #fff;
+  stroke-width: 3;
+  fill: none;
+}
+
+/* Admin broadcast DMs: KFS logo style */
+.kfs-admin-dm-bubble {
+  border-left: 2px solid var(--ig-blue) !important;
+  background: rgba(0,149,246,.08) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SWIPE TRANSITIONS
+   ═══════════════════════════════════════════════════════ */
+.dm-sidebar, #dm-window, #gc-window {
+  will-change: transform;
+  transition: transform .28s cubic-bezier(.32,.72,0,1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PINNED BAR — blue accent
+   ═══════════════════════════════════════════════════════ */
+#gc-pinned-bar {
+  animation: kfsFadeSlide .22s ease both !important;
+  user-select: none !important;
+}
+@keyframes kfsFadeSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   NICKNAME MODAL — clean iOS sheet
+   ═══════════════════════════════════════════════════════ */
+.nick-modal-overlay {
+  background: rgba(0,0,0,.72) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+.nick-modal {
+  background: #1c1c1e !important;
+  border: 0.5px solid rgba(255,255,255,.1) !important;
+  border-radius: var(--ig-radius-lg) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7) !important;
+  animation: kfsFadeSlide .22s ease both !important;
+}
+.nick-modal-head {
+  border-bottom: 0.5px solid rgba(255,255,255,.08) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+.nick-save-btn {
+  background: var(--ig-blue) !important;
+  border: none !important;
+  border-radius: var(--ig-radius-pill) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  padding: 10px 22px !important;
+  font-size: 14px !important;
+  letter-spacing: -.01em !important;
+}
+.nick-clear-btn {
+  background: rgba(255,255,255,.08) !important;
+  border: none !important;
+  border-radius: var(--ig-radius-pill) !important;
+  color: var(--ig-text) !important;
+  font-weight: 600 !important;
+  padding: 10px 18px !important;
+  font-size: 14px !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOAST — Instagram-style pill
+   ═══════════════════════════════════════════════════════ */
+#sw-toast, .kfs-toast {
+  background: rgba(30,30,30,.97) !important;
+  border: 0.5px solid rgba(255,255,255,.1) !important;
+  border-radius: var(--ig-radius-pill) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.01em !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5) !important;
+  bottom: calc(var(--ig-nav-h) + var(--safe-b) + 12px) !important;
+  z-index: 99999 !important;
+  max-width: min(360px, calc(100vw - 32px)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DETAIL PANEL (right drawer) — iOS-style
+   ═══════════════════════════════════════════════════════ */
+#dm-detail-panel {
+  background: #1c1c1e !important;
+  border-left: 0.5px solid var(--ig-border) !important;
+}
+.dm-detail-name {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.02em !important;
+}
+.dm-detail-action-btn {
+  border-radius: var(--ig-radius-md) !important;
+  background: rgba(255,255,255,.06) !important;
+  padding: 12px 14px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  transition: background .12s !important;
+}
+.dm-detail-action-btn:hover { background: rgba(255,255,255,.1) !important; }
+.dm-detail-danger { color: var(--ig-red) !important; }
+
+/* ═══════════════════════════════════════════════════════
+   CONTEXT MENU — iOS-style popup
+   ═══════════════════════════════════════════════════════ */
+.dm-ctx-menu {
+  background: rgba(30,30,30,.97) !important;
+  border: 0.5px solid rgba(255,255,255,.12) !important;
+  border-radius: var(--ig-radius-md) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6) !important;
+  overflow: hidden !important;
+}
+.dm-ctx-item {
+  border-radius: 0 !important;
+  border-bottom: 0.5px solid rgba(255,255,255,.06) !important;
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.dm-ctx-item:last-child { border-bottom: none !important; }
+.dm-ctx-item:active { background: rgba(255,255,255,.08) !important; }
+.dm-ctx-danger { color: var(--ig-red) !important; }
+
+/* ═══════════════════════════════════════════════════════
+   EMOJI REACTION PILLS — Instagram heart pills
+   ═══════════════════════════════════════════════════════ */
+.dm-bubble-reactions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  margin-top: 5px !important;
+}
+.dm-rxn-pill {
+  background: rgba(255,255,255,.08) !important;
+  border: 0.5px solid rgba(255,255,255,.12) !important;
+  border-radius: var(--ig-radius-pill) !important;
+  padding: 3px 8px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: background .1s !important;
+}
+.dm-rxn-pill:active { background: rgba(255,255,255,.16) !important; }
+.dm-rxn-pill.dm-rxn-mine {
+  background: var(--ig-blue-dim) !important;
+  border-color: rgba(0,149,246,.3) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEART BURST animation
+   ═══════════════════════════════════════════════════════ */
+.dm-heart-burst {
+  position: absolute !important;
+  font-size: 52px !important;
+  pointer-events: none !important;
+  animation: kfsHeartBurst .6s ease both !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+@keyframes kfsHeartBurst {
+  0%   { transform: translate(-50%,-50%) scale(0); opacity: 1; }
+  40%  { transform: translate(-50%,-50%) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SEARCH INPUT — IG style (grey pill)
+   ═══════════════════════════════════════════════════════ */
+.dm-search-input {
+  background: rgba(255,255,255,.08) !important;
+  border: none !important;
+  border-radius: var(--ig-radius-pill) !important;
+  padding: 9px 14px 9px 36px !important;
+  font-size: 15px !important;
+  color: var(--ig-text) !important;
+}
+.dm-search-input::placeholder { color: #666 !important; }
+
+/* ═══════════════════════════════════════════════════════
+   GROUP CHAT CHIPS / CREATE MODAL
+   ═══════════════════════════════════════════════════════ */
+.gc-chip {
+  background: rgba(0,149,246,.15) !important;
+  border: 0.5px solid rgba(0,149,246,.3) !important;
+  border-radius: var(--ig-radius-pill) !important;
+  padding: 4px 10px 4px 8px !important;
+  font-size: 13px !important;
+  color: var(--ig-text) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.gc-chip-remove {
+  background: none !important;
+  border: none !important;
+  color: rgba(255,255,255,.5) !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BROADCAST BUTTON — KFS brand gradient
+   ═══════════════════════════════════════════════════════ */
+#kfs-broadcast-btn {
+  background: linear-gradient(135deg, #0052cc, #0095f6) !important;
+  border-radius: var(--ig-radius-md) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+  padding: 10px 14px !important;
+  transition: opacity .15s, transform .1s !important;
+}
+#kfs-broadcast-btn:hover { opacity: .9 !important; }
+#kfs-broadcast-btn:active { transform: scale(.97) !important; }
+
+/* ═══════════════════════════════════════════════════════
+   UNREAD BADGES — Instagram red dot style
+   ═══════════════════════════════════════════════════════ */
+.dm-unread-badge,
+#dm-btb-badge {
+  background: var(--ig-red) !important;
+  border-radius: var(--ig-radius-pill) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  padding: 0 4px !important;
+  line-height: 16px !important;
+  text-align: center !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   REPLY BAR — IG-style quoted reply
+   ═══════════════════════════════════════════════════════ */
+.dm-reply-bar {
+  background: rgba(255,255,255,.04) !important;
+  border-top: 0.5px solid rgba(255,255,255,.06) !important;
+  border-left: 2.5px solid var(--ig-blue) !important;
+  padding: 8px 12px !important;
+  margin: 0 !important;
+}
+.dm-reply-bar-sender {
+  color: var(--ig-blue) !important;
+  font-weight: 700 !important;
+  font-size: 12.5px !important;
+}
+.dm-reply-bar-body {
+  font-size: 12.5px !important;
+  color: var(--ig-text2) !important;
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCROLL BARS — minimal
+   ═══════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.25); }
+
+/* ═══════════════════════════════════════════════════════
+   BLOCKED BANNER
+   ═══════════════════════════════════════════════════════ */
+.dm-blocked-banner {
+  background: rgba(255,48,64,.08) !important;
+  border-top: 0.5px solid rgba(255,48,64,.2) !important;
+  color: rgba(255,48,64,.9) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 10px 14px !important;
+  text-align: center !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HAPTIC FEEDBACK (iOS-like scale on interaction)
+   ═══════════════════════════════════════════════════════ */
+.ig-action-btn:active,
+.dm-icon-btn:active {
+  transform: scale(.85) !important;
+}
+.dm-icon-btn {
+  transition: transform .08s ease, opacity .1s !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   KFS VERIFIED — prevent nickname overlay
+   ═══════════════════════════════════════════════════════ */
+[data-kfs-verified="true"] .nick-edit-btn { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════
+   DESKTOP 3-COLUMN LAYOUT
+   ═══════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+  /* Feed: narrow Instagram-like center column */
+  #panel-studio .studio-panel-inner,
+  #panel-studio > div {
+    max-width: 935px !important;
+    margin: 0 auto !important;
+  }
+
+  /* Messages: full height, no overflow */
+  #panel-dms {
+    overflow: hidden !important;
+  }
+
+  /* Sidebar wider on desktop */
+  .dm-sidebar {
+    min-width: 240px !important;
+    max-width: 300px !important;
+  }
+
+  /* Post card hover state */
+  .ig-post:hover {
+    background: rgba(255,255,255,.015) !important;
+  }
+}
   `;
+  // Remove old style if it exists
+  const old = document.getElementById('kfs-ig-v3');
+  if (old) old.remove();
   document.head.appendChild(style);
 })();
 
-// ── 8. NICKNAME DISPLAY IN CONVERSATION HEADER FIX ───────────────────────────
-// When a DM conversation is opened, always re-resolve the display name
-// including any nickname, and update the topbar immediately.
+// ─────────────────────────────────────────────────────────────────────────────
+// KFS VERIFIED BADGE — inject into admin broadcast messages and KFS account DMs
+// Admins cannot have their display name overridden by nicknames.
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchKfsVerified() {
+  // Attach a MutationObserver to inject the verified badge next to KFS display names
+  const VERIFIED_BADGE_SVG = `
+    <span class="kfs-verified-badge" title="KFS Official Account">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    </span>`;
 
-(function patchDmTopbarNickname() {
-  const _orig = window.dmOpenConv;
-  if (!_orig) return; // will be patched by initDMExtensions anyway
+  function injectBadges() {
+    // Target KFS broadcast DM rows
+    document.querySelectorAll('[data-kfs-from-admin="true"] .dm-conv-name, .kfs-admin-dm-topbar-name').forEach(el => {
+      if (!el.querySelector('.kfs-verified-badge')) {
+        el.insertAdjacentHTML('beforeend', VERIFIED_BADGE_SVG);
+      }
+    });
+  }
+
+  // Run once on load + observe mutations
+  document.addEventListener('DOMContentLoaded', () => {
+    injectBadges();
+    const observer = new MutationObserver(injectBadges);
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+
+  // Override nicksResolveDisplay to block nickname for KFS account
+  const _origResolve = typeof nicksResolveDisplay === 'function' ? nicksResolveDisplay : null;
+  window.nicksResolveDisplay = function(convKey, memberId, fallbackName) {
+    // Block nickname for KFS official account (identified by is_kfs_admin flag or name)
+    const profile = window._memberProfile;
+    const myId = typeof dmMyId === 'function' ? dmMyId() : null;
+    // KFS admin IDs stored server-side; check if sender is an admin broadcast sender
+    const el = document.querySelector(`[data-kfs-verified-id="${memberId}"]`);
+    if (el) return fallbackName || 'KFS'; // never override with nickname
+    return _origResolve ? _origResolve(convKey, memberId, fallbackName) : fallbackName;
+  };
 })();
 
-// ── 9. SWIPE BACK GESTURE (Mobile) ───────────────────────────────────────────
-// Add swipe-right gesture to go back from a chat to the conversation list.
-
-(function addSwipeBack() {
-  let startX = 0, startY = 0, swiping = false;
+// ─────────────────────────────────────────────────────────────────────────────
+// SWIPE BACK GESTURE — refined for iOS-like feel
+// ─────────────────────────────────────────────────────────────────────────────
+(function refineSwipeBack() {
+  let startX = 0, startY = 0, swiping = false, startScrollX = 0;
 
   document.addEventListener('touchstart', e => {
     const t = e.touches[0];
     startX = t.clientX;
     startY = t.clientY;
-    swiping = startX < 24; // only activate from left edge
+    startScrollX = window.scrollX;
+    swiping = startX < 30; // only from left edge
   }, { passive: true });
 
   document.addEventListener('touchend', e => {
@@ -9823,36 +10005,80 @@ if (document.readyState === "loading") {
     const dx = t.clientX - startX;
     const dy = Math.abs(t.clientY - startY);
     swiping = false;
-    // Swipe right > 60px, mostly horizontal
-    if (dx > 60 && dy < 60) {
-      // If DM chat is open, go back
+    // Swipe right ≥ 70px, mostly horizontal
+    if (dx >= 70 && dy < 80) {
+      // DM chat open → back to list
       const dmSidebar = document.getElementById('dm-sidebar');
+      const dmWindow  = document.getElementById('dm-window');
       if (dmSidebar && dmSidebar.classList.contains('dm-slide-out')) {
         if (typeof dmGoBack === 'function') dmGoBack();
-        else {
-          dmSidebar.classList.remove('dm-slide-out');
-          document.getElementById('dm-window')?.classList.remove('dm-slide-in');
-        }
         return;
       }
-      // If GC chat is open, go back
+      // GC chat open → back to list
       const gcWindow = document.getElementById('gc-window');
       if (gcWindow && gcWindow.classList.contains('dm-slide-in')) {
         if (typeof window.gcGoBack === 'function') window.gcGoBack();
+        return;
       }
     }
   }, { passive: true });
 })();
 
-// ── 10. INSTAGRAM-STYLE SHARE BUTTON STYLING ────────────────────────────────
-// Inject the kfs-share-fab class on the injected share buttons (workaround
-// since we inject into the HTML string via swFeedCard)
-(function styleShareButton() {
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN BROADCAST — lock nickname editing for KFS verified sender rows
+// ─────────────────────────────────────────────────────────────────────────────
+(function patchAdminBroadcastRows() {
+  // After any inbox render, mark KFS admin message rows
+  const _origInboxRender = window.inboxRender;
+  // We check after render for rows where the peer name is "KFS" or has kfs_admin flag
+  function markKfsRows() {
+    document.querySelectorAll('.dm-conv-row').forEach(row => {
+      const nameEl = row.querySelector('.dm-conv-name');
+      const name = nameEl?.textContent?.trim() || '';
+      // KFS official messages show from "KFS" — mark these rows
+      if (name === 'KFS' || row.dataset.kfsVerified) {
+        row.dataset.kfsVerified = 'true';
+        if (nameEl && !nameEl.querySelector('.kfs-verified-badge')) {
+          nameEl.insertAdjacentHTML('beforeend', `
+            <span class="kfs-verified-badge" title="KFS Official">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </span>`);
+        }
+      }
+    });
+  }
+  // Hook into DOM mutations
+  const obs = new MutationObserver(markKfsRows);
   document.addEventListener('DOMContentLoaded', () => {
-    // Handled via CSS in section 7 above
+    const convList = document.getElementById('dm-conv-list');
+    if (convList) obs.observe(convList, { childList: true, subtree: true });
   });
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// END PATCH
-// ═══════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE: lock body scroll when chat is open (prevents overscroll bounce)
+// ─────────────────────────────────────────────────────────────────────────────
+(function lockBodyScrollInChat() {
+  if (window.innerWidth > 768) return;
+
+  function onDmSlide() {
+    const sidebar = document.getElementById('dm-sidebar');
+    const gcWin   = document.getElementById('gc-window');
+    const inChat  = (sidebar && sidebar.classList.contains('dm-slide-out')) ||
+                    (gcWin   && gcWin.classList.contains('dm-slide-in'));
+    document.body.style.overflow = inChat ? 'hidden' : '';
+  }
+
+  // MutationObserver on class changes
+  const obs = new MutationObserver(onDmSlide);
+  document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('dm-sidebar');
+    const gcWin   = document.getElementById('gc-window');
+    if (sidebar) obs.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    if (gcWin)   obs.observe(gcWin,   { attributes: true, attributeFilter: ['class'] });
+  });
+})();
+
+console.log('[KFS Patch v3.0] Applied — bugs fixed, Instagram UI active');
