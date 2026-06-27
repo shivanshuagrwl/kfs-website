@@ -831,19 +831,59 @@ function on(id, evt, fn) {
 }
 
 // ── Emoji rendering (Twemoji) ──────────────────────────────────────────────
-// Reaction emoji (quick-react picker, message reaction pills, the double-tap
-// heart burst) are rendered through Twemoji so every member sees the same
-// clean, flat vector style regardless of OS — Windows' native emoji font in
-// particular looks rough/inconsistent compared to iOS. Twemoji just walks the
-// element's text nodes and swaps any emoji characters for <img> tags, so it's
-// safe to call on small, already-built bits of DOM.
+// Reaction emoji are rendered as Apple Color Emoji images so every member
+// sees the clean iOS-style glyphs regardless of OS. We convert emoji chars
+// to their Unicode codepoint path and load the image from the Apple emoji
+// dataset on jsDelivr. Falls back gracefully if the CDN is unavailable.
+const _APPLE_EMOJI_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/';
+
+function _emojiToCodepoint(emoji) {
+  // Convert an emoji string to the lowercase hex codepoint path Apple uses.
+  // Multi-codepoint sequences (e.g. 👨‍👩‍👧) are joined with dashes, and VS-16
+  // (U+FE0F) is stripped because Apple's filenames exclude it.
+  const codepoints = [];
+  for (const char of emoji) {
+    const cp = char.codePointAt(0);
+    if (cp === 0xFE0F) continue; // variation selector — skip
+    codepoints.push(cp.toString(16).toLowerCase());
+  }
+  return codepoints.join('-');
+}
+
 function _emojify(el) {
-  if (!el || typeof window.twemoji === 'undefined') return;
+  if (!el) return;
   try {
-    window.twemoji.parse(el, {
-      base: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/',
-      folder: 'svg',
-      ext: '.svg',
+    // Walk every text node and replace bare emoji chars with <img> tags
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+
+    // Regex that matches a single emoji (including ZWJ sequences and flags)
+    const emojiRx = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
+
+    nodes.forEach(textNode => {
+      const text = textNode.nodeValue;
+      if (!emojiRx.test(text)) return;
+      emojiRx.lastIndex = 0;
+
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      let m;
+      while ((m = emojiRx.exec(text)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const cp  = _emojiToCodepoint(m[0]);
+        const img = document.createElement('img');
+        img.src        = `${_APPLE_EMOJI_BASE}${cp}.png`;
+        img.alt        = m[0];
+        img.draggable  = false;
+        img.className  = 'kfs-apple-emoji';
+        img.onerror    = function() { this.replaceWith(document.createTextNode(this.alt)); };
+        frag.appendChild(img);
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      textNode.parentNode.replaceChild(frag, textNode);
     });
   } catch { /* never let emoji rendering break the UI */ }
 }
@@ -1544,6 +1584,7 @@ function switchPanel(el) {
   if (panel === 'works')    loadMyWorks();
   if (panel === 'grievance') loadMyGrievances();
   if (panel === 'network') loadNetworkPanel();
+  if (panel === 'customization') loadCustomization();
   if (panel === 'dms') { if (typeof window.dmPanelOpened === 'function') window.dmPanelOpened(); }
   else {
     if (typeof dmPausePolling === 'function') dmPausePolling();
@@ -5974,8 +6015,10 @@ async function nicksLoadGlobal() {
   try {
     const data = await api('GET', '/api/member/nicknames');
     const myId = dmMyId();
-    Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
+    // Only wipe the cache AFTER a successful fetch — clearing before the
+    // round-trip means a slow/failing request leaves the sidebar nameless.
     if (data && typeof data === 'object' && !Array.isArray(data)) {
+      Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
       Object.entries(data).forEach(([target_id, nickname]) => {
         NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
       });
@@ -6343,7 +6386,13 @@ async function gcRefreshBadge() {
 async function gcLoadGroups() {
   try {
     const data = await api('GET', '/api/member/groups');
-    GC.groups = data || [];
+    const fresh = Array.isArray(data) ? data : [];
+    // Guard: if the server returns empty but we had groups in memory,
+    // treat it as a possible transient read and skip the wipe — the
+    // background sidebar refresh timer will reconcile on the next tick.
+    if (fresh.length || !(GC.groups || []).length) {
+      GC.groups = fresh;
+    }
     // Use window.gcRenderGroups so the unified-inbox IIFE override (inboxRender) is picked up
     if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
     else gcRenderGroups(GC.groups);
@@ -7783,6 +7832,10 @@ if (document.readyState === "loading") {
     const loadingEl = $id('dm-conv-loading');
     if (loadingEl) loadingEl.style.display = 'none';
 
+    // Fire nicksLoadGlobal separately so we can await it again below for a
+    // guaranteed nick-aware re-render after all data is settled.
+    const nicksPromise = nicksLoadGlobal();
+
     await Promise.all([
       (async () => {
         try {
@@ -7797,20 +7850,22 @@ if (document.readyState === "loading") {
         try {
           const data = await api('GET', '/api/member/groups');
           const fresh = Array.isArray(data) ? data : [];
-          // Defensive: if we previously had groups loaded and the server
-          // suddenly comes back with zero, treat it as a possible transient
-          // read race rather than trusting it outright — re-check once before
-          // accepting the empty result, so a group never silently vanishes
-          // from the sidebar because of a momentary blip. This also covers a
-          // COLD load (page refresh): GC.groups starts out empty either way,
-          // so the retry must not be gated on "did we already have groups in
-          // memory" — a brand-new group can hit the exact same replication
-          // lag on the very first request after a refresh.
+          // Supabase sometimes returns empty right after a group create/join
+          // due to replication lag. On a cold page-load GC.groups is always
+          // empty too, so we can't use "had groups before" as a guard.
+          // Do up to two retries with increasing back-off before giving up.
           if (!fresh.length) {
-            await new Promise(r => setTimeout(r, 400));
-            const retryData = await api('GET', '/api/member/groups').catch(() => null);
-            const retryFresh = Array.isArray(retryData) ? retryData : null;
-            GC.groups = (retryFresh && retryFresh.length) ? retryFresh : (retryFresh || fresh);
+            await new Promise(r => setTimeout(r, 500));
+            const r1 = await api('GET', '/api/member/groups').catch(() => null);
+            const f1 = Array.isArray(r1) ? r1 : [];
+            if (f1.length) {
+              GC.groups = f1;
+            } else {
+              await new Promise(r => setTimeout(r, 800));
+              const r2 = await api('GET', '/api/member/groups').catch(() => null);
+              const f2 = Array.isArray(r2) ? r2 : [];
+              GC.groups = f2.length ? f2 : ((GC.groups || []).length ? GC.groups : []);
+            }
           } else {
             GC.groups = fresh;
           }
@@ -7819,12 +7874,13 @@ if (document.readyState === "loading") {
           GC.groups = GC.groups || [];
         }
       })(),
-      // Nicknames apply globally (by target_id), not per-conversation — load
-      // them once here so the sidebar list can resolve them on first paint
-      // instead of only after a specific conv is opened.
-      nicksLoadGlobal(),
+      nicksPromise,
     ]);
+    // Primary render — all three fetches (DMs, groups, nicknames) done.
     inboxRender();
+    // Belt-and-suspenders: re-render once nicksPromise settles in case it
+    // was the last to finish and inboxRender already ran from a poll tick.
+    nicksPromise.catch(() => {}).then(() => inboxRender());
 
     // Combined badge on the Messages nav/btb
     const dmUnread = (DM.convs || []).reduce((s, c) => s + (c.unread_count || 0), 0);
