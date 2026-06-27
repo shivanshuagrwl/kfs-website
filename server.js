@@ -797,6 +797,18 @@ const strictWriteLimit = rateLimit({
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Every /api/* response is dynamic, per-request, often per-user data — it
+// must never be cached by the browser or by any proxy/CDN sitting in front
+// of this server. Disabling Express's own ETag generation (see app.set
+// above) only stops THIS app from answering with a 304; it doesn't stop an
+// upstream layer from caching the response body on its own heuristics if
+// there's no explicit instruction not to. Cache-Control: no-store is the
+// one directive every HTTP cache in the chain is required to respect.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // ── Response cache helper ──────────────────────────────────────────────────────
 // maxAge in seconds. Sends Cache-Control: public, max-age=N, stale-while-revalidate=60
 function cacheFor(res, seconds = 60) {
