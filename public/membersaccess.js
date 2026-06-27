@@ -1563,6 +1563,12 @@ async function logoutMember() {
   localStorage.removeItem('kfs-member-token');
   localStorage.removeItem('kfs-member-data');
   localStorage.removeItem('kfs-member-profile');
+  // Clear nickname + group cache — another member logging in on same device shouldn't see stale data
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('kfs-nicks-') || k.startsWith('kfs-groups-'))
+      .forEach(k => localStorage.removeItem(k));
+  } catch { /* ignore */ }
   window._member = null;
   window._memberProfile = null;
   showLoginScreen();
@@ -1584,7 +1590,7 @@ function switchPanel(el) {
   if (panel === 'works')    loadMyWorks();
   if (panel === 'grievance') loadMyGrievances();
   if (panel === 'network') loadNetworkPanel();
-  if (panel === 'customization') loadCustomization();
+  if (panel === 'customization') { if (typeof loadCustomization === 'function') loadCustomization(); }
   if (panel === 'dms') { if (typeof window.dmPanelOpened === 'function') window.dmPanelOpened(); }
   else {
     if (typeof dmPausePolling === 'function') dmPausePolling();
@@ -6012,6 +6018,22 @@ let NICKS_GLOBAL_LOADED = false;
 const NICKS_BY_TARGET = {};
 
 async function nicksLoadGlobal() {
+  // Seed from localStorage immediately so the sidebar has nicknames on first
+  // paint, before the API round-trip completes. This is what makes nicknames
+  // "survive" a page refresh without a visible flash of real names.
+  try {
+    const myId = dmMyId();
+    const cached = localStorage.getItem('kfs-nicks-' + myId);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      Object.entries(parsed).forEach(([target_id, nickname]) => {
+        if (!NICKS_BY_TARGET[target_id]) {
+          NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+        }
+      });
+    }
+  } catch { /* ignore localStorage errors */ }
+
   try {
     const data = await api('GET', '/api/member/nicknames');
     const myId = dmMyId();
@@ -6022,6 +6044,8 @@ async function nicksLoadGlobal() {
       Object.entries(data).forEach(([target_id, nickname]) => {
         NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
       });
+      // Persist to localStorage so next refresh has instant nicknames
+      try { localStorage.setItem('kfs-nicks-' + myId, JSON.stringify(data)); } catch { /* ignore */ }
     }
     NICKS_GLOBAL_LOADED = true;
   } catch { /* keep whatever was cached before; a transient failure shouldn't blank nicknames out */ }
@@ -6232,6 +6256,13 @@ function nicksOpenModal(convKey, targetId, targetName, isGroup) {
       if (!isGroupConv) {
         if (nick) NICKS_BY_TARGET[_editingId] = { giver_id: myId, target_id: _editingId, nickname: nick };
         else delete NICKS_BY_TARGET[_editingId];
+        // Keep localStorage in sync so nickname survives page refresh instantly
+        try {
+          const key = 'kfs-nicks-' + myId;
+          const stored = JSON.parse(localStorage.getItem(key) || '{}');
+          if (nick) stored[_editingId] = nick; else delete stored[_editingId];
+          localStorage.setItem(key, JSON.stringify(stored));
+        } catch { /* ignore */ }
       }
       // Refresh participant list
       renderParticipants(_editingId);
@@ -7832,6 +7863,22 @@ if (document.readyState === "loading") {
     const loadingEl = $id('dm-conv-loading');
     if (loadingEl) loadingEl.style.display = 'none';
 
+    // Seed groups from localStorage immediately so the sidebar isn't blank on
+    // first paint — the API fetch will reconcile below and re-render.
+    if (!(GC.groups || []).length) {
+      try {
+        const myId = dmMyId();
+        const cachedGroups = localStorage.getItem('kfs-groups-' + myId);
+        if (cachedGroups) {
+          const parsed = JSON.parse(cachedGroups);
+          if (Array.isArray(parsed) && parsed.length) {
+            GC.groups = parsed;
+            inboxRender(); // render immediately from cache
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     // Fire nicksLoadGlobal separately so we can await it again below for a
     // guaranteed nick-aware re-render after all data is settled.
     const nicksPromise = nicksLoadGlobal();
@@ -7860,14 +7907,19 @@ if (document.readyState === "loading") {
             const f1 = Array.isArray(r1) ? r1 : [];
             if (f1.length) {
               GC.groups = f1;
+              try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(f1)); } catch { /* ignore */ }
             } else {
               await new Promise(r => setTimeout(r, 800));
               const r2 = await api('GET', '/api/member/groups').catch(() => null);
               const f2 = Array.isArray(r2) ? r2 : [];
               GC.groups = f2.length ? f2 : ((GC.groups || []).length ? GC.groups : []);
+              if (f2.length) {
+                try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(f2)); } catch { /* ignore */ }
+              }
             }
           } else {
             GC.groups = fresh;
+            try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(fresh)); } catch { /* ignore */ }
           }
         } catch (e) {
           console.error('[inbox] Groups load failed:', e.message);
@@ -7925,6 +7977,7 @@ if (document.readyState === "loading") {
         const newKey = JSON.stringify(fresh.map(g => `${g.id}|${g.last_msg_at}|${g.members?.length || 0}|${g.name}`));
         if (oldKey !== newKey) {
           GC.groups = fresh;
+          try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(fresh)); } catch { /* ignore */ }
           inboxRender();
           // Update combined unread badge
           const dmUnread = (DM.convs || []).reduce((s, c) => s + (c.unread_count || 0), 0);

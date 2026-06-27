@@ -697,6 +697,7 @@ app.use(helmet({
         "https://img.youtube.com",       // YouTube thumbnails
         "https://i.ytimg.com",           // YouTube thumbnails (alternate CDN)
         "https://*.razorpay.com",        // Razorpay checkout images
+        "https://cdn.jsdelivr.net",      // Apple emoji images (emoji-datasource-apple)
       ],
       connectSrc: [
         "'self'",
