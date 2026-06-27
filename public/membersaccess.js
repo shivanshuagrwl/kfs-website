@@ -459,6 +459,10 @@ async function api(method, path, body, isForm = false) {
   const opts = { method, headers, credentials: 'include' };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
   const r = await fetch(API + path, opts);
+  // A 304 means "nothing changed" — it is not a failure, but r.ok is false for
+  // it (only 200–299 counts), and a 304 has no body, so r.json() would throw.
+  // Treat it as an empty-but-successful response rather than an error.
+  if (r.status === 304) return {};
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = new Error(d.error || 'Request failed');
@@ -835,7 +839,14 @@ function on(id, evt, fn) {
 // sees the clean iOS-style glyphs regardless of OS. We convert emoji chars
 // to their Unicode codepoint path and load the image from the Apple emoji
 // dataset on jsDelivr. Falls back gracefully if the CDN is unavailable.
-const _APPLE_EMOJI_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/';
+//
+// NOTE: this used to point at jsDelivr's npm CDN (emoji-datasource-apple).
+// jsDelivr enforces an aggregate package-size cap (100MB for npm), and that
+// package is large enough to trip it — it silently 403s on individual emoji
+// PNGs, which fires every image's onerror fallback and reverts to the
+// device's native emoji glyph instead of Apple's. raw.githubusercontent.com
+// serves the same underlying dataset's files directly with no such cap.
+const _APPLE_EMOJI_BASE = 'https://raw.githubusercontent.com/iamcal/emoji-data/master/img-apple-64/';
 
 function _emojiToCodepoint(emoji) {
   // Convert an emoji string to the lowercase hex codepoint path Apple uses.

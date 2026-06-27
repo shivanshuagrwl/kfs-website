@@ -20,6 +20,13 @@ const cookieParser = require("cookie-parser");
 const app = express();
 app.set('trust proxy', 1); // Render reverse-proxy ke peeche
 app.set('case sensitive routing', true); // /Social-Strand (member portal) ≠ /social-strand (public feed)
+// Disable auto-ETag/conditional-GET for dynamic JSON responses (res.json/res.send).
+// Without this, identical responses to /api/member/groups, /api/member/nicknames,
+// etc. get served as a bodiless 304 once the browser caches the ETag — which looks
+// exactly like "groups/nicknames disappear on refresh" client-side, since a 304
+// isn't a 2xx and gets treated as a failed request. express.static() below uses
+// its own independent ETag logic for actual static files, so this is unaffected.
+app.set('etag', false);
 const PORT = process.env.PORT || 3000;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -697,7 +704,7 @@ app.use(helmet({
         "https://img.youtube.com",       // YouTube thumbnails
         "https://i.ytimg.com",           // YouTube thumbnails (alternate CDN)
         "https://*.razorpay.com",        // Razorpay checkout images
-        "https://cdn.jsdelivr.net",      // Apple emoji images (emoji-datasource-apple)
+        "https://raw.githubusercontent.com", // Apple emoji images (iamcal/emoji-data) — jsDelivr's npm CDN was 403'ing these due to its package-size cap
       ],
       connectSrc: [
         "'self'",
