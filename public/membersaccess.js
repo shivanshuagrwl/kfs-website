@@ -459,10 +459,16 @@ async function api(method, path, body, isForm = false) {
   const opts = { method, headers, credentials: 'include' };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
   const r = await fetch(API + path, opts);
+  if (path.includes('/groups') || path.includes('/nicknames')) {
+    console.log(`%c[API DEBUG] ${method} ${path} -> status ${r.status}`, 'color:#0af');
+  }
   // A 304 means "nothing changed" — it is not a failure, but r.ok is false for
   // it (only 200–299 counts), and a 304 has no body, so r.json() would throw.
   // Treat it as an empty-but-successful response rather than an error.
-  if (r.status === 304) return {};
+  if (r.status === 304) {
+    console.log('%c[API DEBUG] got a 304 for', 'color:#f00', path, '— this should not happen anymore if the etag fix is deployed');
+    return {};
+  }
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = new Error(d.error || 'Request failed');
@@ -6029,12 +6035,16 @@ let NICKS_GLOBAL_LOADED = false;
 const NICKS_BY_TARGET = {};
 
 async function nicksLoadGlobal() {
+  // ── TEMP DEBUG ── remove once the refresh bug is confirmed fixed
+  console.log('%c[NICKS DEBUG] nicksLoadGlobal() starting', 'color:#0af');
   // Seed from localStorage immediately so the sidebar has nicknames on first
   // paint, before the API round-trip completes. This is what makes nicknames
   // "survive" a page refresh without a visible flash of real names.
   try {
     const myId = dmMyId();
+    console.log('[NICKS DEBUG] dmMyId() =', myId);
     const cached = localStorage.getItem('kfs-nicks-' + myId);
+    console.log('[NICKS DEBUG] localStorage kfs-nicks-' + myId + ' =', cached);
     if (cached) {
       const parsed = JSON.parse(cached);
       Object.entries(parsed).forEach(([target_id, nickname]) => {
@@ -6043,10 +6053,12 @@ async function nicksLoadGlobal() {
         }
       });
     }
-  } catch { /* ignore localStorage errors */ }
+  } catch (e) { console.log('[NICKS DEBUG] localStorage seed threw:', e); }
+  console.log('[NICKS DEBUG] NICKS_BY_TARGET after seed =', JSON.parse(JSON.stringify(NICKS_BY_TARGET)));
 
   try {
     const data = await api('GET', '/api/member/nicknames');
+    console.log('[NICKS DEBUG] /api/member/nicknames returned =', data);
     const myId = dmMyId();
     // Only wipe the cache AFTER a successful fetch — clearing before the
     // round-trip means a slow/failing request leaves the sidebar nameless.
@@ -6057,9 +6069,12 @@ async function nicksLoadGlobal() {
       });
       // Persist to localStorage so next refresh has instant nicknames
       try { localStorage.setItem('kfs-nicks-' + myId, JSON.stringify(data)); } catch { /* ignore */ }
+    } else {
+      console.log('%c[NICKS DEBUG] response was not a plain object — cache NOT updated, kept whatever was seeded', 'color:#f80');
     }
     NICKS_GLOBAL_LOADED = true;
-  } catch { /* keep whatever was cached before; a transient failure shouldn't blank nicknames out */ }
+  } catch (e) { console.log('%c[NICKS DEBUG] /api/member/nicknames fetch THREW:', 'color:#f00', e); }
+  console.log('[NICKS DEBUG] NICKS_BY_TARGET FINAL =', JSON.parse(JSON.stringify(NICKS_BY_TARGET)));
 }
 
 async function nicksLoad(convKey) {
@@ -7876,10 +7891,13 @@ if (document.readyState === "loading") {
 
     // Seed groups from localStorage immediately so the sidebar isn't blank on
     // first paint — the API fetch will reconcile below and re-render.
+    console.log('%c[GROUPS DEBUG] inboxLoad() starting', 'color:#0af');
     if (!(GC.groups || []).length) {
       try {
         const myId = dmMyId();
+        console.log('[GROUPS DEBUG] dmMyId() =', myId);
         const cachedGroups = localStorage.getItem('kfs-groups-' + myId);
+        console.log('[GROUPS DEBUG] localStorage kfs-groups-' + myId + ' =', cachedGroups);
         if (cachedGroups) {
           const parsed = JSON.parse(cachedGroups);
           if (Array.isArray(parsed) && parsed.length) {
@@ -7887,7 +7905,9 @@ if (document.readyState === "loading") {
             inboxRender(); // render immediately from cache
           }
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.log('[GROUPS DEBUG] localStorage seed threw:', e); }
+    } else {
+      console.log('[GROUPS DEBUG] GC.groups already had', GC.groups.length, '— skipping seed');
     }
 
     // Fire nicksLoadGlobal separately so we can await it again below for a
@@ -7907,21 +7927,26 @@ if (document.readyState === "loading") {
       (async () => {
         try {
           const data = await api('GET', '/api/member/groups');
+          console.log('[GROUPS DEBUG] first /api/member/groups call returned =', data);
           const fresh = Array.isArray(data) ? data : [];
           // Supabase sometimes returns empty right after a group create/join
           // due to replication lag. On a cold page-load GC.groups is always
           // empty too, so we can't use "had groups before" as a guard.
           // Do up to two retries with increasing back-off before giving up.
           if (!fresh.length) {
+            console.log('%c[GROUPS DEBUG] first call was empty, retrying in 500ms...', 'color:#f80');
             await new Promise(r => setTimeout(r, 500));
-            const r1 = await api('GET', '/api/member/groups').catch(() => null);
+            const r1 = await api('GET', '/api/member/groups').catch((e) => { console.log('[GROUPS DEBUG] retry 1 threw:', e); return null; });
+            console.log('[GROUPS DEBUG] retry 1 returned =', r1);
             const f1 = Array.isArray(r1) ? r1 : [];
             if (f1.length) {
               GC.groups = f1;
               try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(f1)); } catch { /* ignore */ }
             } else {
+              console.log('%c[GROUPS DEBUG] retry 1 also empty, retrying in 800ms...', 'color:#f80');
               await new Promise(r => setTimeout(r, 800));
-              const r2 = await api('GET', '/api/member/groups').catch(() => null);
+              const r2 = await api('GET', '/api/member/groups').catch((e) => { console.log('[GROUPS DEBUG] retry 2 threw:', e); return null; });
+              console.log('[GROUPS DEBUG] retry 2 returned =', r2);
               const f2 = Array.isArray(r2) ? r2 : [];
               GC.groups = f2.length ? f2 : ((GC.groups || []).length ? GC.groups : []);
               if (f2.length) {
@@ -7932,7 +7957,9 @@ if (document.readyState === "loading") {
             GC.groups = fresh;
             try { localStorage.setItem('kfs-groups-' + dmMyId(), JSON.stringify(fresh)); } catch { /* ignore */ }
           }
+          console.log('%c[GROUPS DEBUG] GC.groups FINAL =', 'color:#0f0', GC.groups);
         } catch (e) {
+          console.log('%c[GROUPS DEBUG] outer try threw:', 'color:#f00', e);
           console.error('[inbox] Groups load failed:', e.message);
           GC.groups = GC.groups || [];
         }
