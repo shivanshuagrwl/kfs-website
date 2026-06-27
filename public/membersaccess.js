@@ -458,7 +458,17 @@ async function api(method, path, body, isForm = false) {
   }
   const opts = { method, headers, credentials: 'include' };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
-  const r = await fetch(API + path, opts);
+  // Cache-bust GET requests to groups/nicknames specifically: these kept
+  // coming back with stale/empty bodies even at a 200 status after a 304/etag
+  // fix was already deployed, which points to a URL-keyed cache somewhere
+  // upstream of this app (browser or platform-level) rather than anything
+  // this app's own headers can control. A unique query string per request
+  // guarantees a cache miss every time, regardless of cause.
+  let fetchPath = path;
+  if (method.toUpperCase() === 'GET' && (path.includes('/groups') || path.includes('/nicknames'))) {
+    fetchPath += (path.includes('?') ? '&' : '?') + '_cb=' + Date.now() + Math.random().toString(36).slice(2);
+  }
+  const r = await fetch(API + fetchPath, opts);
   if (path.includes('/groups') || path.includes('/nicknames')) {
     console.log(`%c[API DEBUG] ${method} ${path} -> status ${r.status}`, 'color:#0af');
   }
@@ -469,7 +479,14 @@ async function api(method, path, body, isForm = false) {
     console.log('%c[API DEBUG] got a 304 for', 'color:#f00', path, '— this should not happen anymore if the etag fix is deployed');
     return {};
   }
-  const d = await r.json().catch(() => ({}));
+  const d = await (async () => {
+    if (path.includes('/groups') || path.includes('/nicknames')) {
+      const text = await r.text();
+      console.log(`%c[API DEBUG] raw body for ${path} =`, 'color:#0af', JSON.stringify(text));
+      try { return JSON.parse(text); } catch (e) { console.log('%c[API DEBUG] JSON.parse failed:', 'color:#f00', e.message); return {}; }
+    }
+    return r.json().catch(() => ({}));
+  })();
   if (!r.ok) {
     const err = new Error(d.error || 'Request failed');
     err._data = d; // attach full response so callers can read warned/muted/banned
