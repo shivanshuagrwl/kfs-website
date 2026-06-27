@@ -15613,7 +15613,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
+      .select("id, sender_id, body, created_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -15653,6 +15653,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           sender_photo:     sender.photo || null,
           body:             cleanBody,
           sent_at:          m.created_at,
+          is_pinned:        m.is_pinned || false,
           is_system:        isSystem,
           replied_to_id:    m.replied_to_id    || null,
           replied_to_body:  m.replied_to_body  || null,
@@ -15870,6 +15871,80 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
   process.exit(1);
+});
+
+
+// ── POST /api/member/kfs-broadcast ───────────────────────────────────────────
+// Admin-only: DM from the KFS sentinel account to all or specific members.
+// Body: { body: string, target?: "all"|"member_ids", member_ids?: string[] }
+app.post("/api/member/kfs-broadcast", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { data: member } = await supabase
+      .from("members").select("id, name, role, is_admin").eq("id", myId).maybeSingle();
+    if (!member) return res.status(403).json({ error: "Not authenticated" });
+
+    const allowedRoles = ["admin", "master_admin", "kfs_admin"];
+    const isAdmin = member.is_admin === true ||
+      allowedRoles.includes(String(member.role || "").toLowerCase());
+    if (!isAdmin) return res.status(403).json({ error: "Admin only" });
+
+    const { body, target = "all", member_ids } = req.body || {};
+    if (!body || !String(body).trim())
+      return res.status(400).json({ error: "Message body is required" });
+
+    // Resolve KFS sentinel member ID
+    const { data: kfsSetting } = await supabase
+      .from("settings").select("value").eq("key", "kfs_admin_member_id").maybeSingle();
+    let kfsMemberId = kfsSetting?.value || null;
+    if (!kfsMemberId) {
+      const { data: kfsMember } = await supabase
+        .from("members").select("id").ilike("name", "KFS%").limit(1).maybeSingle();
+      kfsMemberId = kfsMember?.id || null;
+    }
+    if (!kfsMemberId)
+      return res.status(400).json({
+        error: "No KFS sentinel member found. Create a member named 'KFS' or set kfs_admin_member_id in settings.",
+      });
+
+    // Collect recipients
+    let recipientIds = [];
+    if (target === "member_ids" && Array.isArray(member_ids) && member_ids.length) {
+      recipientIds = member_ids.filter(id => typeof id === "string" && id.length > 0);
+    } else {
+      const { data: allMembers } = await supabase
+        .from("members").select("id").eq("is_active", true);
+      recipientIds = (allMembers || []).map(m => m.id).filter(id => id !== kfsMemberId);
+    }
+
+    if (!recipientIds.length)
+      return res.status(400).json({ error: "No recipients found" });
+
+    const msgBody = String(body).trim().slice(0, 2000);
+    const now     = new Date().toISOString();
+    let   sent    = 0;
+    const BATCH   = 50;
+
+    for (let i = 0; i < recipientIds.length; i += BATCH) {
+      const batch = recipientIds.slice(i, i + BATCH);
+      const rows  = batch.map(recipientId => ({
+        sender_id:    kfsMemberId,
+        recipient_id: recipientId,
+        body:         msgBody,
+        created_at:   now,
+      }));
+      const { error: insErr } = await supabase.from("dm_messages").insert(rows);
+      if (!insErr) sent += batch.length;
+      else console.error("[kfs-broadcast] batch insert error:", insErr.message);
+    }
+
+    logActivity(myId, member.name || "Admin", "kfs_broadcast", "dm_messages",
+      `Sent to ${sent} member(s)`).catch(() => {});
+    res.json({ success: true, sent });
+  } catch (e) {
+    console.error("[kfs-broadcast]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // ── START ─────────────────────────────────────────────────────────────────────
