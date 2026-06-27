@@ -14657,15 +14657,19 @@ app.get("/api/member/groups", memberAuthMiddleware, gcReadLimit, async (req, res
     // NOTE: dm_group_members reads occasionally come back empty right after a
     // write (group create/join) due to a brief replication/visibility lag —
     // this is the same race already flagged below in the single-group
-    // endpoint. A single short retry is enough to ride it out instead of
-    // silently telling the client "you have no groups" and making the whole
-    // group disappear from the sidebar.
+    // endpoint. Two short retries with backoff are enough to ride it out
+    // instead of silently telling the client "you have no groups" and making
+    // the whole group disappear from the sidebar.
     async function loadMembership() {
       return supabase.from("dm_group_members").select("group_id").eq("member_id", myId);
     }
     let { data: membership, error: memErr } = await loadMembership();
     if (!memErr && !membership?.length) {
       await new Promise(r => setTimeout(r, 250));
+      ({ data: membership, error: memErr } = await loadMembership());
+    }
+    if (!memErr && !membership?.length) {
+      await new Promise(r => setTimeout(r, 600));
       ({ data: membership, error: memErr } = await loadMembership());
     }
     if (memErr) { console.error("[groups GET] membership:", memErr.message); return res.json([]); }

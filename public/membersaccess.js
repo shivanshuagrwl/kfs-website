@@ -8148,10 +8148,17 @@ if (document.readyState === "loading") {
     DP.mode = 'dm';
     DP.peer = peer;
 
-    // Hero
+    // Hero — show the nickname (if set) instead of always showing the real
+    // name, same as the sidebar row and topbar already do. Previously this
+    // always rendered peer.name, so the detail panel looked like the
+    // nickname had "reverted" even though it was just never wired up here.
+    const convKey  = DM.activeKey || '';
+    const heroName = (typeof nicksResolveDisplay === 'function')
+      ? nicksResolveDisplay(convKey, peer.id, peer.name || 'Member')
+      : (peer.name || 'Member');
     const avEl = document.getElementById('dm-detail-avatar');
     if (avEl) avEl.innerHTML = dmAvatar(peer.name, peer.photo, 64);
-    setText('dm-detail-name', peer.name || 'Member');
+    setText('dm-detail-name', heroName);
     setText('dm-detail-sub', [peer.role, peer.batch || peer.domain].filter(Boolean).join(' · '));
 
     // Hide group members section, show DM-only buttons
@@ -8167,9 +8174,8 @@ if (document.readyState === "loading") {
     if (blockBtn) blockBtn.classList.toggle('dm-detail-danger', isBlocked);
 
     // Nickname button label — show current nickname if set
-    const convKey = DM.activeKey || '';
-    const nick = (typeof NICKS !== 'undefined' && NICKS[convKey])
-      ? NICKS[convKey].find(n => n.target_id === peer.id)?.nickname
+    const nick = (typeof nicksResolveDisplay === 'function')
+      ? nicksResolveDisplay(convKey, peer.id, null)
       : null;
     setText('dm-detail-nickname-label', nick ? `Nickname: ${nick}` : 'Nickname');
 
