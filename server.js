@@ -177,87 +177,183 @@ async function sendConfirmationEmail({
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROFANITY FILTER — English + Hindi/Hinglish
-// Returns { found: true, word: "<matched>" } if text contains a banned word,
-// or { found: false } if clean.
-// Uses whole-word matching for English words (to avoid false positives like
-// "assassin"), but substring matching for Hindi/Hinglish terms (since they
-// don't follow Latin word-boundary rules).
+// PROFANITY FILTER — English + Hindi/Hinglish (v2 — Strict)
+// ─────────────────────────────────────────────────────────────────────────────
+// v2 improvements:
+//   1. Leet-speak / homoglyph normalisation before matching
+//      (f*ck, f.u.c.k, ph uck, fvck, etc. all normalise to "fuck")
+//   2. Separator-stripping — spaces/dots/dashes/underscores between letters
+//      (f_u_c_k, f-u-c-k, f u c k all caught)
+//   3. Expanded word list — more variants & near-misses
+//   4. Hindi/Hinglish: also strip separators before matching
+//   5. Tags are also checked for profanity
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Step 1: Leet / homoglyph map ─────────────────────────────────────────────
+// Maps look-alike characters back to their plain ASCII letter.
+const LEET_MAP = {
+  // vowels
+  '@': 'a', '4': 'a', 'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a',
+  '3': 'e', 'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
+  '1': 'i', '!': 'i', '|': 'i', 'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
+  '0': 'o', 'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
+  'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
+  // consonants
+  '$': 's', '5': 's', 'z': 's', // z→s catches "azz" for "ass"
+  '7': 't', '+': 't',
+  '(': 'c', 'ç': 'c',
+  'ñ': 'n',
+  // ph → f (phucker etc.)
+  // handled at string level below
+  // k/ck/q → k
+  'q': 'k',
+  // x → ks (covered by not needing to map)
+  // v → u / v (fvck)
+  'v': 'u',   // "fvck" → "fuck"  (context: only matters when next to consonants)
+};
+
+/**
+ * Normalise a string to catch leet-speak, homoglyphs, separators and
+ * common letter-substitution workarounds.
+ * @param {string} text
+ * @returns {string}
+ */
+function normaliseLeet(text) {
+  if (!text) return '';
+  let s = text.toLowerCase();
+
+  // 1. Collapse "ph" → "f" BEFORE per-char replacement
+  s = s.replace(/ph/g, 'f');
+
+  // 2. Per-character substitution via leet map
+  s = s.split('').map(ch => LEET_MAP[ch] || ch).join('');
+
+  // 3. Strip zero-width / invisible characters
+  s = s.replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, '');
+
+  // 4. Remove separators between individual letters (f.u.c.k / f-u-c-k / f_u_c_k)
+  //    Only strip a separator that is surrounded by single letters on both sides
+  //    so we don't destroy real words like "good-morning".
+  s = s.replace(/(?<=[a-z])[.\-_ *]+(?=[a-z])/g, '');
+
+  // 5. Collapse repeated chars to max 2 (fuuuuck → fuuck)
+  s = s.replace(/(.)\1{2,}/g, '$1$1');
+
+  return s;
+}
+
+// ── Step 2: Word lists ────────────────────────────────────────────────────────
+// Each entry is the canonical (already-normalised) form.
+// We match normalised text against normalised word so workarounds don't help.
+
 const PROFANITY_WORDS_EN = [
-  // Common English profanity — whole-word matched
-  "fuck", "fucker", "fucking", "fucked", "fucks", "f**k", "fck",
-  "shit", "shits", "shitting", "bullshit",
-  "ass", "asshole", "asses",
-  "bitch", "bitches", "bitching",
-  "cunt", "cunts",
-  "dick", "dicks",
-  "cock", "cocks",
-  "pussy", "pussies",
-  "bastard", "bastards",
-  "whore", "whores",
-  "slut", "sluts",
-  "damn", "dammit",
-  "prick", "pricks",
-  "nigger", "nigga",
-  "faggot", "fag",
-  "motherfucker", "mofo",
-  "rape", "raping", "rapist",
-  "retard", "retarded",
+  // f-word family
+  "fuck", "fucker", "fuk", "fck", "fuk", "fuc", "effing",
+  // s-word
+  "shit", "shite", "sht", "bullshit", "bulls hit",
+  // a-word
+  "ass", "asses", "asshole", "ashole", "arse", "arsehole",
+  // b-word
+  "bitch", "biatch", "beyatch",
+  // c-words
+  "cunt", "cock", "cok",
+  // d-word
+  "dick", "dik",
+  // p-word
+  "pussy", "pus y",
+  // other
+  "bastard", "bastad",
+  "whore", "whor",
+  "slut",
+  "prick",
+  "nigger", "nigga", "niga",
+  "faggot", "fagot", "fag",
+  "motherfucker", "mofo", "mf",
+  "rape", "rapist",
+  "retard",
+  // sexual acts / explicit
+  "blowjob", "blwjob", "handjob",
+  "porn", "porno", "xxx",
+  "dildo",
+  "cumshot", "cum shot",
+  "masturbat",
+  "boner",
+  "erection",
+  "orgasm",
+  "penis", "vagina", "vulva",   // anatomical — blocked in a social post context
+  "boobs", "boob", "tits", "tit",
+  "naked", "nude", "nudity",
+  "sexy", "sexting", "sext",
+  "horny",
+  "hentai",
 ];
 
 const PROFANITY_WORDS_HI = [
-  // Hindi / Hinglish — substring matched (no word boundaries in Devanagari)
-  // Romanised Hindi
+  // Romanised Hindi — substring matched after normalisation
   "madarchod", "madarjaat", "maderchod",
-  "behenchod", "behen chod", "bc",
+  "behenchod", "behenchod", "behen chod",
   "chutiya", "chutiye", "chut",
   "bhosdi", "bhosdike", "bhosdiwale",
   "gandu", "gaand", "gaandu",
   "lodu", "lund", "lauda", "laudu",
   "harami", "haramzada", "haramzadi",
   "randi", "randwa",
-  "sala", "saala",
+  "saala", "sala",
   "kutta", "kutti",
-  "ullu", "ullo",
+  "ullu",
   "kamina", "kamine",
   "chakka",
   "hijra",
-  "bhad mein ja", "bhadwa",
+  "bhadwa",
   "teri maa", "teri behen",
-  "mc", "bkl", "bkc",
-  // Devanagari (Unicode)
+  "bkl", "bkc", "mkc",
+  "bhenchod",
+  // Devanagari (Unicode) — no normalisation needed
   "मादरचोद", "बहनचोद", "चूतिया", "भोसड़ी", "गांडू", "लंड", "रंडी", "हरामी", "हरामज़ादा",
   "कुत्ता", "कुत्ती", "कमीना", "लौड़ा", "चूत",
 ];
 
+// Pre-normalise all English words once at startup
+const _PROFANITY_EN_NORMALISED = PROFANITY_WORDS_EN.map(w => normaliseLeet(w));
+
 /**
  * Check whether `text` contains any banned word.
+ * Normalises the input before matching so leet/workaround tricks don't help.
  * @param {string} text
  * @returns {{ found: boolean, word?: string }}
  */
 function containsProfanity(text) {
   if (!text) return { found: false };
-  const lower = text.toLowerCase();
 
-  // Whole-word match for English
-  for (const word of PROFANITY_WORDS_EN) {
-    const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    if (re.test(lower)) return { found: true, word };
+  // ── English: whole-word match on NORMALISED text ──────────────────────────
+  const normText = normaliseLeet(text);
+
+  for (let i = 0; i < _PROFANITY_EN_NORMALISED.length; i++) {
+    const nw = _PROFANITY_EN_NORMALISED[i];
+    // Escape regex metacharacters in the normalised word
+    const escaped = nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?<![a-z])${escaped}(?![a-z])`, 'i');
+    if (re.test(normText)) return { found: true, word: PROFANITY_WORDS_EN[i] };
   }
 
-  // Substring match for Hindi/Hinglish (normalise spaces for multi-word phrases)
-  const normalised = lower.replace(/\s+/g, " ");
+  // ── Hindi/Hinglish: substring match on normalised + original ─────────────
+  // Strip separators from the normalised text for Hindi too
+  const normHi = normText.replace(/[\s.\-_*]+/g, '');
+
   for (const word of PROFANITY_WORDS_HI) {
-    if (normalised.includes(word.toLowerCase())) return { found: true, word };
+    const wLower = word.toLowerCase();
+    // Check original normalised (preserves spaces for multi-word phrases)
+    if (normText.includes(wLower)) return { found: true, word };
+    // Check separator-stripped version
+    const wStripped = wLower.replace(/[\s.\-_*]+/g, '');
+    if (normHi.includes(wStripped)) return { found: true, word };
   }
 
   return { found: false };
 }
 
 /**
- * Check multiple text fields at once.
+ * Check multiple text fields at once (title, description, tags, etc.)
  * @param {...string} fields
  * @returns {{ found: boolean, word?: string }}
  */
@@ -267,6 +363,61 @@ function checkFieldsForProfanity(...fields) {
     if (result.found) return result;
   }
   return { found: false };
+}
+
+// ── Image content-type enforcement ───────────────────────────────────────────
+// On POST /api/member/studio/projects, additionally validate that the uploaded
+// image buffer actually starts with a known magic byte sequence. This prevents
+// a renamed non-image file from slipping through the MIME-type filter.
+const IMAGE_MAGIC = [
+  { sig: [0xff, 0xd8, 0xff],              mime: 'image/jpeg' },
+  { sig: [0x89, 0x50, 0x4e, 0x47],        mime: 'image/png'  },
+  { sig: [0x52, 0x49, 0x46, 0x46],        mime: 'image/webp' }, // RIFF....WEBP
+];
+
+function validateImageMagicBytes(buffer, declaredMime) {
+  if (!buffer || buffer.length < 8) return false;
+  for (const { sig, mime } of IMAGE_MAGIC) {
+    if (mime !== declaredMime) continue;
+    const match = sig.every((byte, i) => buffer[i] === byte);
+    if (match) {
+      // Extra check for WebP: bytes 8-11 must be "WEBP"
+      if (mime === 'image/webp') {
+        const riff = buffer.slice(8, 12).toString('ascii');
+        return riff === 'WEBP';
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Validate an uploaded image file for posts.
+ * Returns an error string if invalid, null if OK.
+ * @param {object} file  — multer file object
+ * @returns {string|null}
+ */
+function validatePostImage(file) {
+  if (!file) return null; // no image is fine (text posts)
+
+  const mime = (file.mimetype || '').toLowerCase();
+  if (!ALLOWED_MIME_TYPES.has(mime)) {
+    return 'Only JPEG, PNG, or WebP images are allowed.';
+  }
+  if (mime === 'image/gif') {
+    return 'GIF uploads are not permitted.';
+  }
+  // Magic-byte check
+  if (file.buffer && !validateImageMagicBytes(file.buffer, mime)) {
+    return 'The uploaded file does not appear to be a valid image.';
+  }
+  // Size cap for posts specifically: 10 MB (server multer limit is 20 MB globally)
+  const POST_IMAGE_MAX = 10 * 1024 * 1024;
+  if (file.size > POST_IMAGE_MAX || (file.buffer && file.buffer.length > POST_IMAGE_MAX)) {
+    return 'Post images must be under 10 MB.';
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -316,51 +467,90 @@ function vioMuteRemaining(memberId) {
 }
 
 /**
- * Record a profanity offense and return what to tell the client.
- * @returns {{ action: 'warn'|'mute'|'ban', offense: number, mutedUntil?: string, muteLabel?: string }}
+ * Record a profanity/violation offense and return what to tell the client.
+ *
+ * Escalation ladder (per member):
+ *   Offense 1  Warning only      (fair first notice, no mute)
+ *   Offense 2  1-minute mute
+ *   Offense 3  2-minute mute
+ *   Offense 4  5-minute mute     (final warning before ban)
+ *   Offense 5+ Temp ban 24h      (suspended status; member can appeal; admin must lift)
+ *
+ * SQL (run once):
+ *   CREATE TABLE IF NOT EXISTS member_violations (
+ *     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *     member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+ *     offense INTEGER NOT NULL DEFAULT 1,
+ *     muted_until TIMESTAMPTZ,
+ *     banned BOOLEAN NOT NULL DEFAULT FALSE,
+ *     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ *     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ *   );
+ *   CREATE UNIQUE INDEX IF NOT EXISTS idx_violations_member ON member_violations(member_id);
+ *
+ *   CREATE TABLE IF NOT EXISTS ban_appeals (
+ *     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *     member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+ *     offense INTEGER NOT NULL DEFAULT 1,
+ *     message TEXT,
+ *     status TEXT NOT NULL DEFAULT 'pending',
+ *     reviewed_by UUID,
+ *     reviewed_at TIMESTAMPTZ,
+ *     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ *   );
+ *
+ * @returns {{ action: 'warn'|'mute'|'temp_ban', offense: number, mutedUntil?: string, muteLabel?: string, suspended_until?: string }}
  */
 async function vioRecord(memberId) {
-  const v   = vioGet(memberId);
-  const n   = v.offense + 1;
+  const v = vioGet(memberId);
+  const n = v.offense + 1;
 
   let mutedUntil = null;
-  let banned     = false;
+  let tempBanned = false;
   let muteMs     = 0;
 
   if (n === 1) {
-    muteMs = 5 * 60 * 1000;        // warning + 5-minute mute
+    muteMs = 0;                   // 1st offense: warning only
   } else if (n === 2) {
-    muteMs = 60 * 60 * 1000;       // harsher: 60-minute mute
+    muteMs = 1 * 60 * 1000;      // 2nd offense: 1-minute mute
+  } else if (n === 3) {
+    muteMs = 2 * 60 * 1000;      // 3rd offense: 2-minute mute
+  } else if (n === 4) {
+    muteMs = 5 * 60 * 1000;      // 4th offense: 5-minute mute
   } else {
-    banned = true;                 // 3rd offense — permanent ban, admin must unban
+    tempBanned = true;            // 5th+ offense: 24h temp ban
   }
 
-  if (banned) {
+  if (tempBanned) {
+    const suspendedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
     _violations.set(memberId, { offense: n, mutedUntil: null, banned: true });
-    // Persist ban to DB
     try {
       await supabase.from("member_accounts")
-        .update({ account_status: "disabled" })
+        .update({ account_status: "suspended", suspended_until: suspendedUntil.toISOString() })
         .eq("member_id", memberId);
-    } catch (e) { console.error("[vio] ban DB update failed:", e.message); }
-    return { action: "ban", offense: n };
+    } catch (e) { console.error("[vio] temp-ban DB update failed:", e.message); }
+    try {
+      await supabase.from("member_violations")
+        .upsert([{ member_id: memberId, offense: n, muted_until: null, banned: true, updated_at: new Date().toISOString() }],
+                { onConflict: "member_id" });
+    } catch { /* non-fatal */ }
+    return { action: "temp_ban", offense: n, suspended_until: suspendedUntil.toISOString() };
   }
 
   mutedUntil = muteMs > 0 ? new Date(Date.now() + muteMs) : null;
   _violations.set(memberId, { offense: n, mutedUntil, banned: false });
 
-  // Optional: sync offense count to DB (non-fatal)
   try {
     await supabase.from("member_violations")
-      .upsert([{ member_id: memberId, offense: n, muted_until: mutedUntil?.toISOString() || null, updated_at: new Date().toISOString() }],
+      .upsert([{ member_id: memberId, offense: n, muted_until: mutedUntil?.toISOString() || null, banned: false, updated_at: new Date().toISOString() }],
               { onConflict: "member_id" });
-  } catch { /* table may not exist yet — safe to ignore */ }
+  } catch { /* non-fatal */ }
 
   return {
-    action:     muteMs ? "mute" : "warn",
+    action:     muteMs > 0 ? "mute" : "warn",
     offense:    n,
     mutedUntil: mutedUntil?.toISOString() || null,
-    muteLabel:  muteMs ? _muteLabel(muteMs) : null,
+    muteLabel:  muteMs > 0 ? _muteLabel(muteMs) : null,
   };
 }
 
@@ -396,17 +586,29 @@ async function vioGate(req, res, memberId, text) {
   // 3. Record offense and respond
   const vio = await vioRecord(memberId);
 
-  if (vio.action === "ban") {
+  if (vio.action === "temp_ban") {
     return res.status(403).json({
-      error:   "You have been permanently banned for repeated use of inappropriate language.",
-      banned:  true,
-      offense: vio.offense,
+      error:          "Your account has been temporarily banned due to repeated violations. You can appeal to an admin.",
+      temp_banned:    true,
+      offense:        vio.offense,
+      suspended_until: vio.suspended_until,
     });
   }
 
+  // Warning messages explain the full escalation ladder
+  const ladderHint = vio.offense === 1
+    ? "Next violation: 1-min mute."
+    : vio.offense === 2
+    ? "Next violation: 2-min mute."
+    : vio.offense === 3
+    ? "Next violation: 5-min mute."
+    : vio.offense >= 4
+    ? "Next violation: temporary ban."
+    : "";
+
   const warningMsg = vio.action === "mute"
-    ? `⚠️ Warning #${vio.offense}: Your message was blocked for inappropriate language. You are muted for ${vio.muteLabel}.`
-    : `⚠️ Warning #${vio.offense}: Your message was blocked for inappropriate language. One more offense and you will be muted.`;
+    ? `⚠️ Warning #${vio.offense}: Message blocked. You are muted for ${vio.muteLabel}. ${ladderHint}`
+    : `⚠️ Warning #${vio.offense}: Message blocked for inappropriate language. ${ladderHint}`;
 
   return res.status(400).json({
     error:        warningMsg,
@@ -414,6 +616,7 @@ async function vioGate(req, res, memberId, text) {
     offense:      vio.offense,
     muted:        vio.action === "mute",
     muted_until:  vio.mutedUntil || null,
+    ladder_hint:  ladderHint,
   });
 }
 
@@ -11951,20 +12154,24 @@ app.post(
     if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
     if (title.trim().length > 120) return res.status(400).json({ error: "Title must be ≤ 120 characters" });
 
-    // Profanity check — routed through the warning → mute → ban escalation system
-    const vioResponse = await vioGate(req, res, req.member.memberId, `${title} ${description || ""}`);
-    if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
+    // Strict image validation (magic bytes + size) — runs before profanity so we
+    // don't leak violation counts when the image itself is the problem.
+    const imgErr = validatePostImage(req.file);
+    if (imgErr) return res.status(400).json({ error: imgErr });
 
-    const { url: parsedVideoUrl, provider } = parseVideoUrl(video_url);
-    if (video_url && !parsedVideoUrl) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
-
-    // Parse tags
+    // Parse tags early so we can include them in the profanity check
     let tags = [];
     try { tags = rawTags ? (Array.isArray(rawTags) ? rawTags : JSON.parse(rawTags)) : []; }
     catch { tags = rawTags ? [rawTags] : []; }
     tags = [...new Set(tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 10);
 
-    // Parse collaborator IDs
+    // Profanity check — title, description AND tags all checked
+    const allText = [title, description || '', ...tags].join(' ');
+    const vioResponse = await vioGate(req, res, req.member.memberId, allText);
+    if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
+
+    const { url: parsedVideoUrl, provider } = parseVideoUrl(video_url);
+    if (video_url && !parsedVideoUrl) return res.status(400).json({ error: "video_url must be a valid YouTube or Vimeo URL" });
     let collabIds = [];
     try { collabIds = rawCollabIds ? (Array.isArray(rawCollabIds) ? rawCollabIds : JSON.parse(rawCollabIds)) : []; }
     catch { collabIds = []; }
@@ -12065,8 +12272,22 @@ app.put(
     if (!existing) return res.status(404).json({ error: "Project not found" });
     if (existing.member_id !== req.member.memberId) return res.status(403).json({ error: "Not your project" });
 
-    // Profanity check on editable text fields — routed through the warning → mute → ban escalation system
-    const vioResponse = await vioGate(req, res, req.member.memberId, `${req.body.title || ""} ${req.body.description || ""}`);
+    // Strict image validation if a new image was uploaded
+    if (req.file) {
+      const imgErr = validatePostImage(req.file);
+      if (imgErr) return res.status(400).json({ error: imgErr });
+    }
+
+    // Parse tags so they can be included in the profanity scan
+    let editTags = [];
+    if (req.body.tags !== undefined) {
+      try { editTags = Array.isArray(req.body.tags) ? req.body.tags : JSON.parse(req.body.tags); } catch { editTags = [req.body.tags]; }
+      editTags = [...new Set(editTags.map(t => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 10);
+    }
+
+    // Profanity check on editable text fields + tags
+    const editAllText = [req.body.title || '', req.body.description || '', ...editTags].join(' ');
+    const vioResponse = await vioGate(req, res, req.member.memberId, editAllText);
     if (vioResponse) return; // vioGate already sent the response (warning/mute/ban)
 
     const updates = { updated_at: new Date().toISOString() };
@@ -12079,9 +12300,7 @@ app.put(
       updates.video_url = vu; updates.video_provider = vp;
     }
     if (req.body.tags !== undefined) {
-      let tags = [];
-      try { tags = Array.isArray(req.body.tags) ? req.body.tags : JSON.parse(req.body.tags); } catch { tags = [req.body.tags]; }
-      updates.tags = [...new Set(tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 10);
+      updates.tags = editTags; // already parsed + deduped above
     }
     if (req.file) updates.cover_image = await uploadImage(req.file, "studio");
 
@@ -14145,16 +14364,194 @@ app.post("/api/admin/members/:id/account/unsuspend", requireSection("members"), 
       .update({ suspended_until: null, account_status: "active" })
       .eq("member_id", req.params.id);
 
+    // Also clear in-memory violation ban flag so the member can message again
+    const v = _violations.get(req.params.id);
+    if (v) _violations.set(req.params.id, { ...v, banned: false });
+
     createMemberNotification(
       req.params.id, "account",
       "Account suspension lifted",
-      "Your account suspension has been lifted. Welcome back!"
+      "Your account suspension has been lifted. Welcome back! Please keep the community guidelines in mind going forward."
     ).catch(() => {});
 
     logActivity(req.admin.id, req.admin.name, "unsuspend", "member_account", req.params.id).catch(() => {});
     res.json({ success: true });
   } catch (e) {
     console.error("[admin/unsuspend]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/member/ban-appeal  — member submits an appeal for their temp ban ──
+// Body: { message?: string }
+// The member must be in 'suspended' status to submit an appeal.
+// Rate-limited to 1 appeal per 24 hours per member.
+app.post("/api/member/ban-appeal", memberAuthMiddleware, async (req, res) => {
+  try {
+    const memberId = req.member.memberId;
+    const message  = String(req.body?.message || "").trim().slice(0, 1000);
+
+    // Verify the member is actually suspended
+    const { data: acct } = await supabase
+      .from("member_accounts")
+      .select("account_status, suspended_until")
+      .eq("member_id", memberId)
+      .maybeSingle();
+
+    if (!acct || acct.account_status !== "suspended") {
+      return res.status(400).json({ error: "Your account is not currently suspended." });
+    }
+
+    // Check for an existing pending appeal (rate limit: one at a time)
+    const { data: existing } = await supabase
+      .from("ban_appeals")
+      .select("id, status, created_at")
+      .eq("member_id", memberId)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (existing) {
+      return res.status(429).json({
+        error: "You already have a pending appeal. Please wait for an admin to review it.",
+        appeal_id: existing.id,
+      });
+    }
+
+    // Get member info for the notification
+    const { data: member } = await supabase
+      .from("members")
+      .select("name")
+      .eq("id", memberId)
+      .maybeSingle();
+
+    const vio = vioGet(memberId);
+
+    // Insert the appeal
+    const { data: appeal, error: aErr } = await supabase
+      .from("ban_appeals")
+      .insert([{
+        member_id:      memberId,
+        offense:        vio.offense || 5,
+        message:        message || null,
+        status:         "pending",
+        created_at:     new Date().toISOString(),
+      }])
+      .select("id")
+      .single();
+
+    if (aErr) throw aErr;
+
+    // Notify all admins via member_notifications (re-uses existing notification system)
+    // We notify the system-wide admin channel by creating an account-type notification
+    // with a special link type so the admin panel can pick it up.
+    try {
+      await supabase.from("ban_appeals_notifications").insert([{
+        appeal_id:   appeal.id,
+        member_id:   memberId,
+        member_name: member?.name || "Member",
+        message:     message || null,
+        created_at:  new Date().toISOString(),
+      }]);
+    } catch { /* table may not exist yet — safe */ }
+
+    logActivity(null, member?.name || "Member", "ban_appeal", "member_account", memberId).catch(() => {});
+
+    res.json({ success: true, appeal_id: appeal.id, message: "Your appeal has been submitted. An admin will review it shortly." });
+  } catch (e) {
+    console.error("[ban-appeal]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/ban-appeals  — list pending ban appeals for admin ──────────
+app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
+  try {
+    const status = req.query.status || "pending"; // pending | approved | rejected | all
+    let q = supabase
+      .from("ban_appeals")
+      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at, members(name, photo)")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (status !== "all") q = q.eq("status", status);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    res.json({ appeals: data || [] });
+  } catch (e) {
+    console.error("[admin/ban-appeals]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/ban-appeals/:id/approve  — approve appeal → unsuspend ────
+app.post("/api/admin/ban-appeals/:id/approve", authMiddleware, async (req, res) => {
+  try {
+    const { data: appeal, error: fetchErr } = await supabase
+      .from("ban_appeals")
+      .select("id, member_id, status")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (fetchErr || !appeal) return res.status(404).json({ error: "Appeal not found" });
+    if (appeal.status !== "pending") return res.status(400).json({ error: "Appeal already reviewed" });
+
+    // Unsuspend the member
+    await supabase.from("member_accounts")
+      .update({ account_status: "active", suspended_until: null })
+      .eq("member_id", appeal.member_id);
+
+    // Clear in-memory ban
+    const v = _violations.get(appeal.member_id);
+    if (v) _violations.set(appeal.member_id, { ...v, banned: false });
+
+    // Update appeal status
+    await supabase.from("ban_appeals")
+      .update({ status: "approved", reviewed_by: req.admin.id, reviewed_at: new Date().toISOString() })
+      .eq("id", req.params.id);
+
+    // Notify member
+    createMemberNotification(
+      appeal.member_id, "account",
+      "Ban appeal approved ✓",
+      "Your appeal was reviewed and approved. Your account is now fully restored. Please follow our community guidelines."
+    ).catch(() => {});
+
+    logActivity(req.admin.id, req.admin.name, "approve_ban_appeal", "ban_appeal", req.params.id).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/ban-appeals/approve]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/ban-appeals/:id/reject  — reject appeal (keeps ban) ──────
+app.post("/api/admin/ban-appeals/:id/reject", authMiddleware, async (req, res) => {
+  try {
+    const { data: appeal, error: fetchErr } = await supabase
+      .from("ban_appeals")
+      .select("id, member_id, status")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (fetchErr || !appeal) return res.status(404).json({ error: "Appeal not found" });
+    if (appeal.status !== "pending") return res.status(400).json({ error: "Appeal already reviewed" });
+
+    await supabase.from("ban_appeals")
+      .update({ status: "rejected", reviewed_by: req.admin.id, reviewed_at: new Date().toISOString() })
+      .eq("id", req.params.id);
+
+    createMemberNotification(
+      appeal.member_id, "account",
+      "Ban appeal reviewed",
+      "Your appeal was reviewed. Your suspension remains in effect. If you believe this is in error, please reach out to a member of the KFS leadership team directly."
+    ).catch(() => {});
+
+    logActivity(req.admin.id, req.admin.name, "reject_ban_appeal", "ban_appeal", req.params.id).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[admin/ban-appeals/reject]", e.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });

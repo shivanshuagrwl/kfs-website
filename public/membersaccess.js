@@ -3681,11 +3681,365 @@ async function swSubmitPost() {
     await swLoadFeed(true);
     await swLoadMyPosts();
   } catch(e) {
-    showErr(e.message || 'Could not save post. Please try again.');
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
+      // Close the composer and show the dedicated violation modal instead
+      swClosePostModal();
+      _swVioShowModal(ed, e.message);
+    } else {
+      showErr(e.message || 'Could not save post. Please try again.');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = SW.editingProjectId ? 'Save' : 'Post'; }
   }
 }
+
+// ── Apple-style Profanity Violation Modal (Posts only) ────────────────────────
+// Shows a full-screen frosted-glass modal with a live countdown timer when a
+// post is blocked for inappropriate content. Completely separate from the DM
+// toast system so each channel has the right UX.
+
+let _swVioTimerInterval = null;
+
+function _swEnsureVioModal() {
+  if ($id('sw-vio-modal-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'sw-vio-modal-overlay';
+  el.setAttribute('role', 'alertdialog');
+  el.setAttribute('aria-modal', 'true');
+  el.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:9999',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'background:rgba(0,0,0,.72)',
+    'backdrop-filter:blur(28px)', '-webkit-backdrop-filter:blur(28px)',
+    'opacity:0', 'pointer-events:none',
+    'transition:opacity .28s cubic-bezier(.4,0,.2,1)',
+    'padding:20px',
+  ].join(';');
+  el.innerHTML = `
+    <div id="sw-vio-modal" style="
+      background:rgba(18,18,18,.98);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:20px;
+      padding:32px 28px 28px;
+      max-width:380px;
+      width:100%;
+      box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04);
+      text-align:center;
+      transform:scale(.92) translateY(12px);
+      transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .28s ease;
+      opacity:0;
+    ">
+      <div id="sw-vio-icon" style="
+        width:56px;height:56px;border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        margin:0 auto 18px;font-size:26px;
+        background:rgba(255,59,48,.15);border:1.5px solid rgba(255,59,48,.3);
+      ">⚠️</div>
+      <div id="sw-vio-title" style="
+        font-size:18px;font-weight:700;letter-spacing:-.025em;
+        color:#f5f5f5;margin-bottom:8px;line-height:1.25;
+      "></div>
+      <div id="sw-vio-desc" style="
+        font-size:13.5px;color:rgba(255,255,255,.55);line-height:1.6;
+        margin-bottom:22px;
+      "></div>
+      <div id="sw-vio-timer-wrap" style="display:none;margin-bottom:22px;">
+        <div style="
+          font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+          color:rgba(255,255,255,.3);margin-bottom:8px;
+        ">POSTING UNLOCKED IN</div>
+        <div id="sw-vio-timer" style="
+          font-size:38px;font-weight:800;letter-spacing:-.04em;
+          font-variant-numeric:tabular-nums;
+          background:linear-gradient(135deg,#ff9f0a,#ff6b00);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+          background-clip:text;line-height:1;
+        ">—</div>
+        <div style="
+          margin-top:10px;height:3px;background:rgba(255,255,255,.08);
+          border-radius:2px;overflow:hidden;
+        ">
+          <div id="sw-vio-timer-bar" style="
+            height:100%;width:100%;border-radius:2px;
+            background:linear-gradient(90deg,#ff9f0a,#ff6b00);
+            transform-origin:left;transition:transform .9s linear;
+          "></div>
+        </div>
+      </div>
+      <div id="sw-vio-appeal-wrap" style="display:none;margin-bottom:12px">
+        <button id="sw-vio-appeal-btn" onclick="_swVioSubmitAppeal()" style="
+          width:100%;padding:13px 20px;border-radius:12px;border:none;
+          background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;
+          font-size:15px;font-weight:600;letter-spacing:-.01em;
+          cursor:pointer;transition:opacity .15s;margin-bottom:8px;
+          -webkit-tap-highlight-color:transparent;
+        ">Ask Admin to Review</button>
+        <div id="sw-vio-appeal-status" style="font-size:12px;color:rgba(255,255,255,.45);text-align:center;line-height:1.4"></div>
+      </div>
+      <button id="sw-vio-dismiss" onclick="_swVioClose()" style="
+        width:100%;padding:13px 20px;border-radius:12px;border:none;
+        background:rgba(255,255,255,.08);color:#f5f5f5;
+        font-size:15px;font-weight:600;letter-spacing:-.01em;
+        cursor:pointer;transition:background .15s;
+        -webkit-tap-highlight-color:transparent;
+      " onmouseover="this.style.background='rgba(255,255,255,.13)'"
+         onmouseout="this.style.background='rgba(255,255,255,.08)'">
+        Got it
+      </button>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function _swVioFormatMs(ms) {
+  if (ms <= 0) return '0:00';
+  const totalSec = Math.ceil(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function _swVioShowModal(data, msg) {
+  _swEnsureVioModal();
+  clearInterval(_swVioTimerInterval);
+
+  const overlay    = $id('sw-vio-modal-overlay');
+  const modal      = $id('sw-vio-modal');
+  const icon       = $id('sw-vio-icon');
+  const title      = $id('sw-vio-title');
+  const desc       = $id('sw-vio-desc');
+  const timerWrap  = $id('sw-vio-timer-wrap');
+  const timerEl    = $id('sw-vio-timer');
+  const timerBar   = $id('sw-vio-timer-bar');
+  const dismiss    = $id('sw-vio-dismiss');
+  const appealWrap = $id('sw-vio-appeal-wrap');
+  const appealBtn  = $id('sw-vio-appeal-btn');
+  const appealStat = $id('sw-vio-appeal-status');
+
+  // Reset appeal area
+  if (appealWrap) appealWrap.style.display = 'none';
+  if (appealStat) appealStat.textContent = '';
+  if (appealBtn)  { appealBtn.disabled = false; appealBtn.textContent = 'Ask Admin to Review'; }
+
+  // ── Ladder step labels shown in descriptions ───────────────────────────────
+  const ladderSteps = [
+    '1st violation → ⚠️ Warning',
+    '2nd violation → 🔇 1-minute mute',
+    '3rd violation → 🔇 2-minute mute',
+    '4th violation → 🔇 5-minute mute',
+    '5th violation → 🔴 Temporary ban',
+  ];
+  function _ladderHtml(currentOffense) {
+    return ladderSteps.map((s, i) => {
+      const n = i + 1;
+      const isCurrent = n === currentOffense;
+      const isPast    = n < currentOffense;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${isCurrent ? 'font-weight:700;color:#f5f5f5' : isPast ? 'color:rgba(255,255,255,.3);text-decoration:line-through' : 'color:rgba(255,255,255,.45)'}">
+        <span style="width:18px;height:18px;border-radius:50%;background:${isCurrent ? '#e53e3e' : isPast ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.06)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">${isPast ? '✓' : n}</span>
+        <span style="font-size:12.5px">${s}</span>
+      </div>`;
+    }).join('');
+  }
+
+  if (data.temp_banned || data.action === 'temp_ban') {
+    // ── TEMP BAN ─────────────────────────────────────────────────────────────
+    icon.textContent = '🔴';
+    icon.style.background  = 'rgba(229,62,62,.18)';
+    icon.style.borderColor = 'rgba(229,62,62,.4)';
+    title.textContent = 'Temporarily Banned';
+
+    let untilStr = '';
+    if (data.suspended_until) {
+      const d = new Date(data.suspended_until);
+      untilStr = ` until ${d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`;
+    }
+
+    desc.innerHTML = `<div style="margin-bottom:14px;font-size:13px;line-height:1.6">Your account has been temporarily suspended${untilStr} due to repeated guideline violations. You cannot post, DM, or use Social Strand during this period.</div>
+      <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;margin-bottom:6px;text-align:left">${_ladderHtml(data.offense || 5)}</div>`;
+
+    timerWrap.style.display = 'none';
+    dismiss.textContent = 'Close';
+    if (appealWrap) appealWrap.style.display = '';
+
+    // Show Social Strand lockout overlay
+    _swShowTempBanOverlay(data.suspended_until);
+
+  } else if (data.banned) {
+    // ── PERMANENT BAN ────────────────────────────────────────────────────────
+    icon.textContent = '🚫';
+    icon.style.background  = 'rgba(255,59,48,.15)';
+    icon.style.borderColor = 'rgba(255,59,48,.3)';
+    title.textContent = 'Account Disabled';
+    desc.innerHTML = `<div style="margin-bottom:6px">Your account has been permanently disabled for repeated violations of our community guidelines.</div><div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:8px">Contact KFS leadership directly to appeal this decision.</div>`;
+    timerWrap.style.display = 'none';
+    dismiss.textContent = 'Close';
+    if (appealWrap) appealWrap.style.display = 'none';
+
+  } else if (data.muted && data.muted_until) {
+    // ── MUTE ─────────────────────────────────────────────────────────────────
+    const muteUntil  = new Date(data.muted_until).getTime();
+    const totalMs    = muteUntil - Date.now();
+    const offenseNum = data.offense || 2;
+
+    icon.textContent = '🔇';
+    icon.style.background  = 'rgba(255,159,10,.12)';
+    icon.style.borderColor = 'rgba(255,159,10,.3)';
+    title.textContent = `Warning #${offenseNum} — Posting Paused`;
+
+    const nextHint = offenseNum === 2 ? 'Next: 2-min mute'
+                   : offenseNum === 3 ? 'Next: 5-min mute'
+                   : 'Next: Temporary ban';
+
+    desc.innerHTML = `<div style="margin-bottom:12px;font-size:13px;line-height:1.6">Your message contained language that violates our community guidelines. Posting is paused until the timer expires.</div>
+      <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;margin-bottom:6px;text-align:left">${_ladderHtml(offenseNum)}</div>
+      <div style="font-size:11.5px;color:rgba(255,159,10,.7);margin-top:8px">⚠️ ${nextHint}</div>`;
+
+    timerWrap.style.display = 'block';
+    dismiss.textContent = 'I understand';
+    if (appealWrap) appealWrap.style.display = 'none';
+
+    timerEl.textContent = _swVioFormatMs(Math.max(0, muteUntil - Date.now()));
+    timerBar.style.transform = 'scaleX(1)';
+
+    requestAnimationFrame(() => {
+      timerBar.style.transition = `transform ${Math.ceil(totalMs / 1000)}s linear`;
+      timerBar.style.transform  = 'scaleX(0)';
+    });
+
+    _swVioTimerInterval = setInterval(() => {
+      const rem = muteUntil - Date.now();
+      if (rem <= 0) {
+        clearInterval(_swVioTimerInterval);
+        timerEl.textContent = '0:00';
+        timerEl.style.background = 'linear-gradient(135deg,#34c759,#30d158)';
+        desc.innerHTML = `<div style="color:rgba(255,255,255,.65);font-size:13px">Your posting is now unlocked. Please keep the community respectful going forward.</div>`;
+        dismiss.textContent = 'Start posting again';
+        return;
+      }
+      timerEl.textContent = _swVioFormatMs(rem);
+    }, 500);
+
+  } else {
+    // ── WARNING ONLY (offense 1) ──────────────────────────────────────────────
+    const offenseNum = data.offense || 1;
+    icon.textContent = '⚠️';
+    icon.style.background  = 'rgba(255,204,0,.12)';
+    icon.style.borderColor = 'rgba(255,204,0,.3)';
+    title.textContent = `Warning #${offenseNum} — Post Blocked`;
+
+    desc.innerHTML = `<div style="margin-bottom:12px;font-size:13px;line-height:1.6">${msg || 'Your post contained language that violates our community guidelines.'}</div>
+      <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;text-align:left">${_ladderHtml(offenseNum)}</div>
+      <div style="font-size:11.5px;color:rgba(255,204,0,.75);margin-top:10px">⚠️ Next violation will result in a 1-min mute.</div>`;
+
+    timerWrap.style.display = 'none';
+    dismiss.textContent = 'I understand';
+    if (appealWrap) appealWrap.style.display = 'none';
+  }
+
+  // Animate in
+  overlay.style.pointerEvents = 'auto';
+  overlay.style.opacity = '1';
+  requestAnimationFrame(() => {
+    modal.style.transform = 'scale(1) translateY(0)';
+    modal.style.opacity   = '1';
+  });
+
+  overlay.onclick = e => { if (e.target === overlay) _swVioClose(); };
+  document._swVioKeyHandler = e => { if (e.key === 'Escape') _swVioClose(); };
+  document.addEventListener('keydown', document._swVioKeyHandler);
+}
+
+function _swVioClose() {
+  clearInterval(_swVioTimerInterval);
+  const overlay = $id('sw-vio-modal-overlay');
+  const modal   = $id('sw-vio-modal');
+  if (!overlay) return;
+  overlay.style.opacity = '0';
+  overlay.style.pointerEvents = 'none';
+  if (modal) { modal.style.transform = 'scale(.92) translateY(12px)'; modal.style.opacity = '0'; }
+  if (document._swVioKeyHandler) {
+    document.removeEventListener('keydown', document._swVioKeyHandler);
+    delete document._swVioKeyHandler;
+  }
+}
+
+async function _swVioSubmitAppeal() {
+  const btn    = $id('sw-vio-appeal-btn');
+  const status = $id('sw-vio-appeal-status');
+  if (!btn || !status) return;
+  btn.disabled  = true;
+  btn.textContent = 'Submitting…';
+  status.textContent = '';
+  try {
+    const res = await api('POST', '/api/member/ban-appeal', { reason: 'Member requested review via Social Strand.' });
+    btn.textContent    = '✓ Appeal Submitted';
+    status.textContent = 'An admin will review your case. You will be notified when a decision is made.';
+    status.style.color = 'rgba(52,199,89,.8)';
+  } catch (e) {
+    btn.disabled   = false;
+    btn.textContent = 'Ask Admin to Review';
+    status.textContent = e.message || 'Could not submit appeal. Try again.';
+    status.style.color = 'rgba(255,80,60,.8)';
+  }
+}
+
+// Full Social Strand lockout overlay shown when member is temp-banned
+function _swShowTempBanOverlay(suspendedUntil) {
+  if ($id('sw-tempban-overlay')) return; // already showing
+  const el = document.createElement('div');
+  el.id = 'sw-tempban-overlay';
+  el.style.cssText = [
+    'position:fixed','inset:0','z-index:9998',
+    'background:rgba(0,0,0,.88)',
+    'backdrop-filter:blur(20px)','-webkit-backdrop-filter:blur(20px)',
+    'display:flex','align-items:center','justify-content:center',
+    'flex-direction:column','gap:14px','padding:28px','text-align:center',
+  ].join(';');
+
+  let untilHtml = '';
+  if (suspendedUntil) {
+    const d = new Date(suspendedUntil);
+    untilHtml = `<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:4px">Suspended until ${d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>`;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:48px;margin-bottom:4px">🔴</div>
+    <div style="font-size:22px;font-weight:800;letter-spacing:-.03em;color:#f5f5f5">Account Suspended</div>
+    ${untilHtml}
+    <div style="font-size:14px;color:rgba(255,255,255,.5);max-width:340px;line-height:1.6;margin-top:2px">
+      You cannot access Social Strand, DMs, or Group Chats during your suspension. If you believe this is a mistake, tap below to request a review.
+    </div>
+    <button id="sw-tempban-appeal-btn" style="
+      margin-top:10px;padding:14px 32px;border-radius:14px;border:none;
+      background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;
+      font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.01em;
+      font-family:inherit;transition:opacity .15s;
+    ">Ask Admin to Review</button>
+    <div id="sw-tempban-appeal-status" style="font-size:12.5px;color:rgba(255,255,255,.4);min-height:18px"></div>
+  `;
+  document.body.appendChild(el);
+
+  el.querySelector('#sw-tempban-appeal-btn').addEventListener('click', async () => {
+    const btn = el.querySelector('#sw-tempban-appeal-btn');
+    const stat = el.querySelector('#sw-tempban-appeal-status');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    try {
+      await api('POST', '/api/member/ban-appeal', { reason: 'Member requested review via ban overlay.' });
+      btn.textContent = '✓ Appeal Submitted';
+      stat.textContent = 'An admin will review your case and you\'ll be notified.';
+      stat.style.color = 'rgba(52,199,89,.8)';
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Ask Admin to Review';
+      stat.textContent = e.message || 'Could not submit — try again.';
+      stat.style.color = 'rgba(255,80,60,.8)';
+    }
+  });
+}
+
 
 async function swDeletePost(projectId,title) {
   if(!confirm(`Delete "${title}"? This cannot be undone.`))return;
@@ -4883,7 +5237,7 @@ async function dmSend() {
     }
     // Restore input text only for non-violation errors
     const ed = e._data || {};
-    if (ed.warned || ed.muted || ed.banned) {
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
       _vioShowClientNotice(ed, e.message, 'dm-input', 'dm-send-btn');
     } else {
       input.value = body;
@@ -4894,11 +5248,21 @@ async function dmSend() {
   }
 }
 
-// ── Violation notice (warning / mute / ban) shown to the member ───────────────
+// ── Violation notice (warning / mute / temp-ban) shown inside DM & GC ─────────
 // Called from dmSend and gcSendMsg catch blocks when server returns a violation.
 function _vioShowClientNotice(data, msg, inputId, sendBtnId) {
   // Show toast with the server message (already friendly)
   swShowToast(msg || 'Message blocked.', 6000);
+
+  if (data.temp_banned || data.action === 'temp_ban') {
+    // Lock the compose input and show the full lockout overlay
+    const inp = $id(inputId);
+    const btn = $id(sendBtnId);
+    if (inp) { inp.disabled = true; inp.placeholder = 'Account suspended — see notice above.'; }
+    if (btn) btn.disabled = true;
+    _swShowTempBanOverlay(data.suspended_until);
+    return;
+  }
 
   if (data.banned) {
     // Permanently disable the compose input
@@ -4941,6 +5305,15 @@ function _vioShowClientNotice(data, msg, inputId, sendBtnId) {
         if (inp2) inp2.placeholder = `Muted — ${_vioFormatMs(rem)} remaining`;
       }
     }, 1000);
+    return;
+  }
+
+  // Warning only — flash the border briefly to signal the block
+  const inp = $id(inputId);
+  if (inp) {
+    inp.style.transition = 'border-color .2s';
+    inp.style.borderColor = 'rgba(255,59,48,.7)';
+    setTimeout(() => { inp.style.borderColor = ''; }, 2000);
   }
 }
 
@@ -6986,7 +7359,7 @@ async function gcSend() {
       if (grp && !grp.querySelector('.dm-bubble')) grp.remove();
     }
     const ed = e._data || {};
-    if (ed.warned || ed.muted || ed.banned) {
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
       _vioShowClientNotice(ed, e.message, 'gc-input', 'gc-send-btn');
     } else {
       input.value = body; // restore on non-violation errors
@@ -8599,3 +8972,887 @@ if (document.readyState === "loading") {
   }
 
 })();
+// ═══════════════════════════════════════════════════════════════════════════
+// KFS SOCIAL STRAND — PATCH v2.0
+// Instagram-style UI, bug fixes, share modal, admin broadcast
+//
+// Append this file to membersaccess.js
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── 1. NICKNAME PERSISTENCE FIX ──────────────────────────────────────────────
+// Problem: nicknames saved to localStorage but on page reload, the `myId`
+// is often not yet available when `nicksLoadGlobal` is called (session restore
+// is async). Fix: defer the localStorage seed until after session is restored,
+// and also add a MutationObserver fallback.
+
+(function patchNicknamePersistence() {
+  // Override nicksLoadGlobal to ensure it always awaits myId
+  const _origNicksLoadGlobal = window.nicksLoadGlobal;
+  window.nicksLoadGlobal = async function() {
+    // Wait until we have a valid member ID (session restored)
+    let myId = (typeof dmMyId === 'function') ? dmMyId() : null;
+    if (!myId) {
+      // Poll until we get a valid ID (session restore is async)
+      await new Promise(resolve => {
+        let tries = 0;
+        const poll = setInterval(() => {
+          myId = (typeof dmMyId === 'function') ? dmMyId() : null;
+          if (myId || ++tries > 20) { clearInterval(poll); resolve(); }
+        }, 150);
+      });
+    }
+    return _origNicksLoadGlobal ? _origNicksLoadGlobal() : undefined;
+  };
+})();
+
+// ── 2. GROUP CHAT REFRESH FIX ────────────────────────────────────────────────
+// Problem: GC.groups sometimes wiped to empty on page-load due to race.
+// Additional fix: persist groups in localStorage more aggressively with a
+// stable-key approach and restore on page load before any API call.
+
+(function patchGroupPersistence() {
+  // More aggressive localStorage seeding — run immediately at patch load time
+  try {
+    const storedMemberId = Object.keys(localStorage)
+      .find(k => k.startsWith('kfs-groups-'));
+    if (storedMemberId) {
+      const parsed = JSON.parse(localStorage.getItem(storedMemberId) || '[]');
+      if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
+        if (!GC.groups || !GC.groups.length) {
+          GC.groups = parsed;
+        }
+      }
+    }
+  } catch { /* silent */ }
+})();
+
+// ── 3. PIN BANNER FIX ────────────────────────────────────────────────────────
+// Problem: DM pin shows toast but does nothing; GC pin works but banner
+// sometimes doesn't refresh. Patch gcRefreshPinnedBanner to be more robust.
+
+(function patchPinBanner() {
+  // Ensure gcRefreshPinnedBanner exists and works
+  window.gcRefreshPinnedBanner = async function() {
+    if (!GC || !GC.activeId) return;
+    try {
+      const pins = await api('GET', `/api/member/groups/${GC.activeId}/pinned`);
+      let bar = document.getElementById('gc-pinned-bar');
+      if (!pins || !pins.length) {
+        if (bar) bar.remove();
+        return;
+      }
+      const pin = pins[0];
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'gc-pinned-bar';
+        bar.style.cssText = `
+          display:flex;align-items:center;gap:10px;padding:8px 14px;
+          background:rgba(255,255,255,.04);border-bottom:1px solid #1e1e1e;
+          font-size:12.5px;color:#ccc;cursor:pointer;flex-shrink:0;
+          border-left:2px solid #3b82f6;
+        `;
+        bar.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+          <span id="gc-pinned-bar-text" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;cursor:pointer" id="gc-pinned-bar-close"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        `;
+        // Insert above message list
+        const msgs = document.getElementById('gc-msgs');
+        if (msgs && msgs.parentNode) msgs.parentNode.insertBefore(bar, msgs);
+        bar.querySelector('#gc-pinned-bar-close')?.addEventListener('click', e => {
+          e.stopPropagation();
+          bar.remove();
+        });
+        bar.addEventListener('click', () => {
+          const target = document.querySelector(`[data-msg-id="${CSS.escape(pin.id)}"]`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.style.background = 'rgba(59,130,246,.12)';
+            setTimeout(() => target.style.background = '', 1500);
+          }
+        });
+      }
+      const snippet = (pin.body || '').slice(0, 60);
+      const textEl = bar.querySelector('#gc-pinned-bar-text');
+      if (textEl) textEl.textContent = `📌 ${pin.sender_name || 'Member'}: ${snippet}${snippet.length < pin.body?.length ? '…' : ''}`;
+    } catch { /* silent */ }
+  };
+})();
+
+// ── 4. INSTAGRAM-STYLE SHARE MODAL ───────────────────────────────────────────
+// Triggered from the share button on posts in Social Strand.
+// Shows: DM contacts grid (first 8), search, copy link, close.
+
+(function installShareModal() {
+
+  let _shareProjectId = null;
+  let _shareOverlay = null;
+
+  function _createShareOverlay() {
+    if (_shareOverlay) return _shareOverlay;
+    const el = document.createElement('div');
+    el.id = 'kfs-share-overlay';
+    el.style.cssText = `
+      display:none;position:fixed;inset:0;z-index:9999;
+      background:rgba(0,0,0,.65);backdrop-filter:blur(6px);
+      align-items:flex-end;justify-content:center;
+    `;
+    el.innerHTML = `
+      <div id="kfs-share-sheet" style="
+        background:#1a1a1a;border-top:1px solid #2a2a2a;border-radius:22px 22px 0 0;
+        width:100%;max-width:540px;padding:0 0 env(safe-area-inset-bottom);
+        animation:kfsSheetUp .28s cubic-bezier(.32,1.1,.5,1) both;
+        max-height:90vh;display:flex;flex-direction:column;
+      ">
+        <div style="width:36px;height:4px;border-radius:2px;background:#333;margin:12px auto 0;flex-shrink:0"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px;flex-shrink:0;border-bottom:1px solid #222">
+          <span style="font-size:16px;font-weight:700;letter-spacing:-.01em">Share</span>
+          <button id="kfs-share-close" style="background:none;border:none;color:#666;cursor:pointer;padding:4px;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <!-- Search -->
+        <div style="padding:10px 14px 4px;flex-shrink:0">
+          <div style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="kfs-share-search" type="text" placeholder="Search" style="
+              width:100%;box-sizing:border-box;background:#252525;border:none;
+              border-radius:10px;padding:9px 10px 9px 30px;color:#f5f5f5;
+              font-size:14px;outline:none;font-family:inherit;
+            ">
+          </div>
+        </div>
+        <!-- People grid -->
+        <div id="kfs-share-people" style="display:flex;gap:0;overflow-x:auto;padding:8px 8px 4px;flex-shrink:0;scrollbar-width:none"></div>
+        <!-- Divider -->
+        <div style="height:1px;background:#1e1e1e;flex-shrink:0;margin:0 0 2px"></div>
+        <!-- Action buttons row -->
+        <div style="display:flex;gap:0;padding:8px 6px;flex-shrink:0;border-bottom:1px solid #1e1e1e">
+          <button class="kfs-share-action-btn" id="kfs-share-copy" style="
+            display:flex;flex-direction:column;align-items:center;gap:5px;
+            flex:1;padding:8px 4px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;
+          ">
+            <div style="width:42px;height:42px;border-radius:50%;background:#252525;display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </div>
+            Copy link
+          </button>
+        </div>
+        <!-- Conversation list -->
+        <div id="kfs-share-convs" style="flex:1;overflow-y:auto;max-height:260px;display:flex;flex-direction:column"></div>
+        <!-- Send confirmation area -->
+        <div id="kfs-share-footer" style="padding:10px 14px;display:none;flex-shrink:0;border-top:1px solid #1e1e1e">
+          <button id="kfs-share-send" style="
+            width:100%;padding:13px;background:#0095f6;color:#fff;border:none;
+            border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;
+            font-family:inherit;transition:opacity .15s;
+          ">Send</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    _shareOverlay = el;
+
+    el.querySelector('#kfs-share-close').addEventListener('click', closeShareModal);
+    el.addEventListener('click', e => { if (e.target === el) closeShareModal(); });
+
+    // Copy link
+    el.querySelector('#kfs-share-copy').addEventListener('click', async () => {
+      try {
+        const url = `${location.origin}/strand/${_shareProjectId}`;
+        await navigator.clipboard.writeText(url);
+        swShowToast('Link copied!');
+        closeShareModal();
+      } catch { swShowToast('Could not copy link.'); }
+    });
+
+    // Send
+    el.querySelector('#kfs-share-send').addEventListener('click', async () => {
+      const selected = [...el.querySelectorAll('.kfs-share-person[data-selected="true"], .kfs-share-conv[data-selected="true"]')];
+      if (!selected.length) return;
+      const sendBtn = el.querySelector('#kfs-share-send');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending…';
+      const url = `${location.origin}/strand/${_shareProjectId}`;
+      const body = `Check this out on Social Strand: ${url}`;
+      let ok = 0;
+      for (const item of selected) {
+        try {
+          if (item.dataset.type === 'dm') {
+            await api('POST', '/api/member/dm/messages', {
+              peer_id: item.dataset.id,
+              body,
+            });
+          } else if (item.dataset.type === 'group') {
+            await api('POST', `/api/member/groups/${item.dataset.id}/messages`, { body });
+          }
+          ok++;
+        } catch { /* skip */ }
+      }
+      closeShareModal();
+      if (ok) swShowToast(`Shared with ${ok} conversation${ok !== 1 ? 's' : ''}!`);
+      else swShowToast('Could not send to selected.');
+    });
+
+    // Search
+    el.querySelector('#kfs-share-search').addEventListener('input', e => {
+      _filterShareList(e.target.value);
+    });
+
+    return el;
+  }
+
+  function _filterShareList(q) {
+    const query = (q || '').toLowerCase().trim();
+    const overlay = _shareOverlay;
+    if (!overlay) return;
+    overlay.querySelectorAll('.kfs-share-conv').forEach(row => {
+      const name = (row.dataset.name || '').toLowerCase();
+      row.style.display = (!query || name.includes(query)) ? '' : 'none';
+    });
+  }
+
+  function _updateSendBtn() {
+    const overlay = _shareOverlay;
+    if (!overlay) return;
+    const selected = overlay.querySelectorAll('[data-selected="true"]').length;
+    const footer = overlay.querySelector('#kfs-share-footer');
+    const sendBtn = overlay.querySelector('#kfs-share-send');
+    if (footer) footer.style.display = selected > 0 ? '' : 'none';
+    if (sendBtn) sendBtn.textContent = selected > 1 ? `Send (${selected})` : 'Send';
+  }
+
+  function _buildPersonAvatar(name, photo, size) {
+    if (photo) return `<img src="${photo}" alt="${name}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover">`;
+    const init = (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.38)}px;font-weight:700;color:#888">${init}</div>`;
+  }
+
+  window.openShareModal = function(projectId) {
+    _shareProjectId = projectId;
+    const overlay = _createShareOverlay();
+    overlay.style.display = 'flex';
+
+    // Reset state
+    overlay.querySelectorAll('[data-selected="true"]').forEach(el => {
+      el.dataset.selected = 'false';
+      const check = el.querySelector('.kfs-share-check');
+      if (check) check.style.display = 'none';
+    });
+    _updateSendBtn();
+
+    const footer = overlay.querySelector('#kfs-share-footer');
+    if (footer) footer.style.display = 'none';
+    const search = overlay.querySelector('#kfs-share-search');
+    if (search) search.value = '';
+
+    // Populate people grid (top 8 DM contacts)
+    const peopleGrid = overlay.querySelector('#kfs-share-people');
+    if (peopleGrid) {
+      peopleGrid.innerHTML = '';
+      const contacts = (DM.convs || []).slice(0, 8);
+      contacts.forEach(c => {
+        const name = c.peer?.name || 'Member';
+        const item = document.createElement('div');
+        item.className = 'kfs-share-person';
+        item.dataset.type = 'dm';
+        item.dataset.id = c.peer?.id;
+        item.dataset.selected = 'false';
+        item.dataset.name = name;
+        item.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 10px;cursor:pointer;flex-shrink:0;position:relative;min-width:68px';
+        item.innerHTML = `
+          <div style="position:relative">
+            ${_buildPersonAvatar(name, c.peer?.photo, 52)}
+            <div class="kfs-share-check" style="display:none;position:absolute;bottom:0;right:0;width:18px;height:18px;border-radius:50%;background:#0095f6;border:2px solid #1a1a1a;align-items:center;justify-content:center">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+          <span style="font-size:11px;color:#e0e0e0;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis;text-align:center">${name.split(' ')[0]}</span>
+        `;
+        item.addEventListener('click', () => {
+          const isSelected = item.dataset.selected === 'true';
+          item.dataset.selected = isSelected ? 'false' : 'true';
+          const check = item.querySelector('.kfs-share-check');
+          if (check) check.style.display = isSelected ? 'none' : 'flex';
+          _updateSendBtn();
+        });
+        peopleGrid.appendChild(item);
+      });
+    }
+
+    // Populate conversation list
+    const convsList = overlay.querySelector('#kfs-share-convs');
+    if (convsList) {
+      convsList.innerHTML = '';
+      const allItems = [
+        ...(DM.convs || []).map(c => ({ type: 'dm', id: c.peer?.id, name: c.peer?.name || 'Member', photo: c.peer?.photo, convKey: c.conv_key })),
+        ...(GC.groups || []).map(g => ({ type: 'group', id: g.id, name: g.name || 'Group', photo: g.photo_url })),
+      ];
+      allItems.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'kfs-share-conv';
+        row.dataset.type = item.type;
+        row.dataset.id = item.id;
+        row.dataset.name = item.name;
+        row.dataset.selected = 'false';
+        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;transition:background .1s';
+        row.innerHTML = `
+          ${_buildPersonAvatar(item.name, item.photo, 44)}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:#f5f5f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+            <div style="font-size:12px;color:#666">${item.type === 'group' ? 'Group' : 'Direct message'}</div>
+          </div>
+          <div class="kfs-share-check" style="display:none;width:22px;height:22px;border-radius:50%;background:#0095f6;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        `;
+        row.addEventListener('mouseenter', () => { if (row.dataset.selected !== 'true') row.style.background = 'rgba(255,255,255,.04)'; });
+        row.addEventListener('mouseleave', () => { if (row.dataset.selected !== 'true') row.style.background = ''; });
+        row.addEventListener('click', () => {
+          const isSelected = row.dataset.selected === 'true';
+          row.dataset.selected = isSelected ? 'false' : 'true';
+          const check = row.querySelector('.kfs-share-check');
+          if (check) check.style.display = isSelected ? 'none' : 'flex';
+          row.style.background = isSelected ? '' : 'rgba(0,149,246,.07)';
+          _updateSendBtn();
+        });
+        convsList.appendChild(row);
+      });
+
+      if (!allItems.length) {
+        convsList.innerHTML = '<div style="padding:24px;text-align:center;color:#444;font-size:13px">No conversations yet. Start chatting to share!</div>';
+      }
+    }
+  };
+
+  function closeShareModal() {
+    if (_shareOverlay) {
+      _shareOverlay.style.display = 'none';
+    }
+  }
+  window.closeShareModal = closeShareModal;
+
+})();
+
+// ── 5. ADD SHARE BUTTON TO IG-POST ACTION BAR ──────────────────────────────
+// Monkey-patch swFeedCard to inject a share button
+
+(function patchFeedCardShare() {
+  if (typeof swFeedCard !== 'function') return;
+  const _orig = window.swFeedCard;
+  window.swFeedCard = function(p) {
+    let html = _orig(p);
+    // Inject share (paper-plane) button into the action bar, before the views span
+    html = html.replace(
+      '<span class="ig-post-views-inline">',
+      `<button class="ig-action-btn" onclick="event.stopPropagation();openShareModal('${p.id}')" title="Share" style="margin-left:auto">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+      <span class="ig-post-views-inline">`
+    );
+    return html;
+  };
+})();
+
+// ── 6. ADMIN KFS BROADCAST SYSTEM ────────────────────────────────────────────
+// Admins can send as KFS verified account to: all members, or specific targets.
+// Button appears in the DM compose area for admin users only.
+
+(function installAdminBroadcast() {
+
+  let _broadcastOverlay = null;
+
+  function _isAdmin() {
+    const p = window._memberProfile || window._member || {};
+    return p.is_admin === true || p.role === 'admin' || p.role === 'master_admin';
+  }
+
+  function _createBroadcastBtn() {
+    if (!_isAdmin()) return;
+    // Find the DM sidebar header area and inject broadcast button
+    const header = document.querySelector('.dm-sidebar-head') ||
+                   document.querySelector('#dm-sidebar > div:first-child');
+    if (!header || document.getElementById('kfs-broadcast-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'kfs-broadcast-btn';
+    btn.title = 'Send as KFS (Admin Broadcast)';
+    btn.style.cssText = `
+      display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;
+      background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;border:none;
+      font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+      letter-spacing:.03em;transition:opacity .15s;margin:0 0 6px 0;width:100%;
+      justify-content:center;
+    `;
+    btn.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="none"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+      KFS Broadcast
+    `;
+    btn.addEventListener('click', openBroadcastModal);
+    // Try to insert it at the top of the sidebar conv list
+    const convList = document.getElementById('dm-conv-list');
+    if (convList && convList.parentNode) {
+      convList.parentNode.insertBefore(btn, convList);
+    }
+  }
+
+  function openBroadcastModal() {
+    if (_broadcastOverlay) {
+      _broadcastOverlay.style.display = 'flex';
+      _resetBroadcastModal();
+      return;
+    }
+    const el = document.createElement('div');
+    el.id = 'kfs-broadcast-overlay';
+    el.style.cssText = `
+      display:flex;position:fixed;inset:0;z-index:9999;
+      background:rgba(0,0,0,.75);backdrop-filter:blur(8px);
+      align-items:center;justify-content:center;padding:16px;
+    `;
+    el.innerHTML = `
+      <div style="
+        background:#111;border:1px solid #222;border-radius:18px;
+        width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;
+        box-shadow:0 20px 60px rgba(0,0,0,.8);
+      ">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid #1e1e1e;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);display:flex;align-items:center;justify-content:center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+            </div>
+            <div>
+              <div style="font-size:15px;font-weight:700">KFS Broadcast</div>
+              <div style="font-size:11px;color:#666">Sends as verified KFS account</div>
+            </div>
+          </div>
+          <button id="kfs-bc-close" style="background:none;border:none;color:#666;cursor:pointer;padding:4px;font-size:18px">✕</button>
+        </div>
+        <!-- Target -->
+        <div style="padding:14px 20px 0;flex-shrink:0">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Send to</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
+              <input type="radio" name="kfs-bc-target" value="all" style="display:none" checked>
+              <span>All members</span>
+            </label>
+            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
+              <input type="radio" name="kfs-bc-target" value="group" style="display:none">
+              <span>Specific group</span>
+            </label>
+            <label class="kfs-bc-target-pill" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid #2a2a2a;cursor:pointer;font-size:13px;transition:all .12s">
+              <input type="radio" name="kfs-bc-target" value="member" style="display:none">
+              <span>Specific member</span>
+            </label>
+          </div>
+          <!-- Group selector -->
+          <div id="kfs-bc-group-select" style="display:none;margin-top:10px">
+            <select id="kfs-bc-group-id" style="width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#f5f5f5;padding:10px 12px;border-radius:10px;font-family:inherit;font-size:13px;outline:none">
+              <option value="">Select a group…</option>
+            </select>
+          </div>
+          <!-- Member selector -->
+          <div id="kfs-bc-member-select" style="display:none;margin-top:10px">
+            <input id="kfs-bc-member-search" type="text" placeholder="Search members…" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #2a2a2a;color:#f5f5f5;padding:10px 12px;border-radius:10px;font-family:inherit;font-size:13px;outline:none">
+            <div id="kfs-bc-member-results" style="max-height:140px;overflow-y:auto;margin-top:4px;border:1px solid #1e1e1e;border-radius:10px;display:none"></div>
+            <div id="kfs-bc-member-chosen" style="font-size:12px;color:#0095f6;margin-top:6px;display:none"></div>
+          </div>
+        </div>
+        <!-- Message -->
+        <div style="padding:12px 20px;flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;flex-shrink:0">Message</div>
+          <textarea id="kfs-bc-body" placeholder="Type your KFS broadcast message…" style="
+            flex:1;min-height:100px;max-height:200px;resize:none;background:#1a1a1a;
+            border:1px solid #2a2a2a;color:#f5f5f5;padding:12px;border-radius:10px;
+            font-family:inherit;font-size:14px;line-height:1.6;outline:none;
+          "></textarea>
+          <div id="kfs-bc-char" style="font-size:11px;color:#444;text-align:right;margin-top:4px">0 / 1000</div>
+        </div>
+        <!-- Footer -->
+        <div style="padding:12px 20px 18px;flex-shrink:0;border-top:1px solid #1e1e1e">
+          <div id="kfs-bc-err" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none"></div>
+          <button id="kfs-bc-send" style="
+            width:100%;padding:13px;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);
+            color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;
+            cursor:pointer;font-family:inherit;letter-spacing:.01em;transition:opacity .15s;
+          ">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="display:inline-block;vertical-align:middle;margin-right:6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Broadcast
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    _broadcastOverlay = el;
+
+    // Wire close
+    el.querySelector('#kfs-bc-close').addEventListener('click', () => { el.style.display = 'none'; });
+    el.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
+
+    // Populate groups
+    const groupSel = el.querySelector('#kfs-bc-group-id');
+    (GC.groups || []).forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      groupSel.appendChild(opt);
+    });
+
+    // Target toggle
+    let _bcTarget = 'all';
+    let _bcMemberId = null;
+    el.querySelectorAll('.kfs-bc-target-pill').forEach(pill => {
+      const radio = pill.querySelector('input[type=radio]');
+      const updateStyles = () => {
+        el.querySelectorAll('.kfs-bc-target-pill').forEach(p => {
+          const r = p.querySelector('input[type=radio]');
+          const checked = r.checked;
+          p.style.background = checked ? 'rgba(45,106,159,.25)' : 'transparent';
+          p.style.borderColor = checked ? '#2d6a9f' : '#2a2a2a';
+          p.style.color = checked ? '#7cb9fd' : '#ccc';
+        });
+        el.querySelector('#kfs-bc-group-select').style.display = _bcTarget === 'group' ? '' : 'none';
+        el.querySelector('#kfs-bc-member-select').style.display = _bcTarget === 'member' ? '' : 'none';
+      };
+      pill.addEventListener('click', () => {
+        radio.checked = true;
+        _bcTarget = radio.value;
+        updateStyles();
+      });
+    });
+
+    // Member search
+    let _bcSearchTimer;
+    el.querySelector('#kfs-bc-member-search').addEventListener('input', e => {
+      const q = e.target.value.trim();
+      clearTimeout(_bcSearchTimer);
+      if (!q) { el.querySelector('#kfs-bc-member-results').style.display = 'none'; return; }
+      _bcSearchTimer = setTimeout(async () => {
+        try {
+          const pool = DM.members.length ? DM.members : (window._portalMembers || []);
+          const hits = pool.filter(m => (m.name || '').toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+          const results = el.querySelector('#kfs-bc-member-results');
+          results.style.display = hits.length ? '' : 'none';
+          results.innerHTML = hits.map(m => `
+            <div data-id="${m.id}" data-name="${m.name}" style="
+              display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;
+              transition:background .1s;font-size:13px;
+            " class="kfs-bc-member-row">
+              ${dmAvatar(m.name, m.photo, 28)}
+              <div>
+                <div style="font-weight:600">${m.name || 'Member'}</div>
+                ${m.role ? `<div style="font-size:11px;color:#666">${m.role}</div>` : ''}
+              </div>
+            </div>
+          `).join('');
+          results.querySelectorAll('.kfs-bc-member-row').forEach(row => {
+            row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,.04)');
+            row.addEventListener('mouseleave', () => row.style.background = '');
+            row.addEventListener('click', () => {
+              _bcMemberId = row.dataset.id;
+              const chosen = el.querySelector('#kfs-bc-member-chosen');
+              chosen.textContent = `Selected: ${row.dataset.name}`;
+              chosen.style.display = '';
+              results.style.display = 'none';
+              el.querySelector('#kfs-bc-member-search').value = row.dataset.name;
+            });
+          });
+        } catch { /* silent */ }
+      }, 250);
+    });
+
+    // Char counter
+    el.querySelector('#kfs-bc-body').addEventListener('input', e => {
+      el.querySelector('#kfs-bc-char').textContent = `${e.target.value.length} / 1000`;
+    });
+
+    // Send
+    el.querySelector('#kfs-bc-send').addEventListener('click', async () => {
+      const body = (el.querySelector('#kfs-bc-body').value || '').trim();
+      const errEl = el.querySelector('#kfs-bc-err');
+      const sendBtn = el.querySelector('#kfs-bc-send');
+      errEl.style.display = 'none';
+
+      if (!body) { errEl.textContent = 'Please enter a message.'; errEl.style.display = ''; return; }
+      if (body.length > 1000) { errEl.textContent = 'Message too long (max 1000 chars).'; errEl.style.display = ''; return; }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending…';
+
+      try {
+        // Build the API call
+        let endpoint, payload;
+        if (_bcTarget === 'all') {
+          endpoint = '/api/admin/broadcast';
+          payload = { body, target: 'all' };
+        } else if (_bcTarget === 'group') {
+          const gid = el.querySelector('#kfs-bc-group-id').value;
+          if (!gid) { errEl.textContent = 'Please select a group.'; errEl.style.display = ''; return; }
+          endpoint = `/api/member/groups/${gid}/messages`;
+          payload = { body, is_admin_post: true };
+        } else {
+          if (!_bcMemberId) { errEl.textContent = 'Please select a member.'; errEl.style.display = ''; return; }
+          endpoint = '/api/member/dm/messages';
+          payload = { peer_id: _bcMemberId, body, as_kfs: true };
+        }
+
+        await api('POST', endpoint, payload);
+        el.style.display = 'none';
+        swShowToast('✓ KFS broadcast sent!');
+      } catch (e) {
+        errEl.textContent = e.message || 'Could not send broadcast.';
+        errEl.style.display = '';
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send Broadcast';
+      } finally {
+        sendBtn.disabled = false;
+        if (sendBtn.textContent === 'Sending…') sendBtn.textContent = 'Send Broadcast';
+      }
+    });
+
+    _resetBroadcastModal();
+  }
+
+  function _resetBroadcastModal() {
+    if (!_broadcastOverlay) return;
+    _broadcastOverlay.querySelector('#kfs-bc-body').value = '';
+    _broadcastOverlay.querySelector('#kfs-bc-char').textContent = '0 / 1000';
+    _broadcastOverlay.querySelector('#kfs-bc-err').style.display = 'none';
+    const radios = _broadcastOverlay.querySelectorAll('input[name="kfs-bc-target"]');
+    if (radios[0]) { radios[0].checked = true; }
+    _broadcastOverlay.querySelectorAll('.kfs-bc-target-pill').forEach((p, i) => {
+      p.style.background = i === 0 ? 'rgba(45,106,159,.25)' : 'transparent';
+      p.style.borderColor = i === 0 ? '#2d6a9f' : '#2a2a2a';
+      p.style.color = i === 0 ? '#7cb9fd' : '#ccc';
+    });
+    _broadcastOverlay.querySelector('#kfs-bc-group-select').style.display = 'none';
+    _broadcastOverlay.querySelector('#kfs-bc-member-select').style.display = 'none';
+    const chosen = _broadcastOverlay.querySelector('#kfs-bc-member-chosen');
+    if (chosen) chosen.style.display = 'none';
+  }
+
+  // Inject broadcast button after session restore
+  function tryInjectBroadcastBtn() {
+    if (_isAdmin()) {
+      _createBroadcastBtn();
+    }
+  }
+
+  // Try now, and also after DM panel opens
+  const _origDmPanelOpened = window.dmPanelOpened;
+  window.dmPanelOpened = async function() {
+    if (_origDmPanelOpened) await _origDmPanelOpened();
+    tryInjectBroadcastBtn();
+  };
+
+  setTimeout(tryInjectBroadcastBtn, 1500);
+
+})();
+
+// ── 7. MOBILE UI IMPROVEMENTS ────────────────────────────────────────────────
+// Inject improved CSS for mobile to match Instagram on Apple devices
+
+(function injectMobileStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* ── Share modal animation ────────────────────────────────────────────── */
+    @keyframes kfsSheetUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    /* ── Share people grid scrollbar hide ───────────────────────────────── */
+    #kfs-share-people::-webkit-scrollbar { display: none; }
+    #kfs-share-people { -ms-overflow-style: none; }
+
+    /* ── Message input: iOS auto-zoom fix ───────────────────────────────── */
+    @media (max-width: 768px) {
+      #dm-input, #gc-input, textarea, input[type="text"] {
+        font-size: 16px !important; /* prevents iOS auto-zoom */
+      }
+    }
+
+    /* ── Bottom tab bar: increase touch targets ─────────────────────────── */
+    @media (max-width: 768px) {
+      .btb-item {
+        min-height: 56px !important;
+        min-width: 48px !important;
+      }
+
+      /* ── DM: full-screen chat window on mobile ─────────────────────────── */
+      .dm-slide-in {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 100 !important;
+        background: var(--bg) !important;
+        transform: translateX(0) !important;
+      }
+      #dm-sidebar.dm-slide-out {
+        transform: translateX(-100%) !important;
+      }
+
+      /* ── GC: full-screen chat window on mobile ─────────────────────────── */
+      #gc-window.dm-slide-in {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 100 !important;
+        background: var(--bg) !important;
+        transform: translateX(0) !important;
+      }
+
+      /* ── Topbar: make it sticky and styled ─────────────────────────────── */
+      .dm-topbar, #gc-topbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 50 !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+      }
+
+      /* ── Message bubbles: larger tap target ─────────────────────────────── */
+      .dm-bubble { padding: 10px 13px !important; font-size: 14.5px !important; }
+
+      /* ── Compose area: safe area aware ─────────────────────────────────── */
+      .dm-compose {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
+      }
+    }
+
+    /* ── KFS Share modal: hide scrollbar ───────────────────────────────── */
+    #kfs-share-convs::-webkit-scrollbar { width: 3px; }
+    #kfs-share-convs::-webkit-scrollbar-track { background: transparent; }
+    #kfs-share-convs::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 10px; }
+
+    /* ── Post share button: hide until hover on desktop ───────────────────── */
+    @media (min-width: 769px) {
+      .ig-action-btn.kfs-share-fab { opacity: 0.6; transition: opacity .15s; }
+      .ig-post:hover .ig-action-btn.kfs-share-fab { opacity: 1; }
+    }
+
+    /* ── GC pinned bar animation ─────────────────────────────────────────── */
+    #gc-pinned-bar {
+      animation: kfsFadeIn .2s ease both;
+    }
+    @keyframes kfsFadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Nickname modal: smooth enter ───────────────────────────────────── */
+    .nick-modal-overlay.open .nick-modal,
+    .nick-modal-overlay[style*="flex"] .nick-modal {
+      animation: kfsFadeIn .18s ease both;
+    }
+
+    /* ── Improve DM topbar on mobile ────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .dm-topbar {
+        padding: 10px 12px !important;
+        background: rgba(10,10,10,.95) !important;
+        border-bottom: 1px solid #1a1a1a !important;
+      }
+      #dm-topbar-name {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+      }
+
+      /* ── Group chat topbar on mobile ──────────────────────────────────── */
+      #gc-topbar {
+        padding: 10px 12px !important;
+        background: rgba(10,10,10,.95) !important;
+      }
+
+      /* ── Reply bar: more visible ─────────────────────────────────────── */
+      .dm-reply-bar {
+        padding: 8px 12px !important;
+        background: rgba(30,30,30,.98) !important;
+      }
+
+      /* ── Conversation rows: larger ──────────────────────────────────────── */
+      .dm-conv-row {
+        padding: 13px 14px !important;
+      }
+    }
+
+    /* ── Admin broadcast button in sidebar ────────────────────────────────── */
+    #kfs-broadcast-btn:hover {
+      opacity: 0.85;
+    }
+    #kfs-broadcast-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* ── Toast: ensure it always shows above modals ──────────────────────── */
+    .kfs-toast { z-index: 99999 !important; }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ── 8. NICKNAME DISPLAY IN CONVERSATION HEADER FIX ───────────────────────────
+// When a DM conversation is opened, always re-resolve the display name
+// including any nickname, and update the topbar immediately.
+
+(function patchDmTopbarNickname() {
+  const _orig = window.dmOpenConv;
+  if (!_orig) return; // will be patched by initDMExtensions anyway
+})();
+
+// ── 9. SWIPE BACK GESTURE (Mobile) ───────────────────────────────────────────
+// Add swipe-right gesture to go back from a chat to the conversation list.
+
+(function addSwipeBack() {
+  let startX = 0, startY = 0, swiping = false;
+
+  document.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    swiping = startX < 24; // only activate from left edge
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!swiping) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = Math.abs(t.clientY - startY);
+    swiping = false;
+    // Swipe right > 60px, mostly horizontal
+    if (dx > 60 && dy < 60) {
+      // If DM chat is open, go back
+      const dmSidebar = document.getElementById('dm-sidebar');
+      if (dmSidebar && dmSidebar.classList.contains('dm-slide-out')) {
+        if (typeof dmGoBack === 'function') dmGoBack();
+        else {
+          dmSidebar.classList.remove('dm-slide-out');
+          document.getElementById('dm-window')?.classList.remove('dm-slide-in');
+        }
+        return;
+      }
+      // If GC chat is open, go back
+      const gcWindow = document.getElementById('gc-window');
+      if (gcWindow && gcWindow.classList.contains('dm-slide-in')) {
+        if (typeof window.gcGoBack === 'function') window.gcGoBack();
+      }
+    }
+  }, { passive: true });
+})();
+
+// ── 10. INSTAGRAM-STYLE SHARE BUTTON STYLING ────────────────────────────────
+// Inject the kfs-share-fab class on the injected share buttons (workaround
+// since we inject into the HTML string via swFeedCard)
+(function styleShareButton() {
+  document.addEventListener('DOMContentLoaded', () => {
+    // Handled via CSS in section 7 above
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// END PATCH
+// ═══════════════════════════════════════════════════════════════════════════

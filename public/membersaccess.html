@@ -5930,5 +5930,59 @@ img.kfs-apple-emoji {
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Twemoji removed: Apple emoji images loaded via _emojify() in membersaccess.js -->
     <script src="/membersaccess.js" defer></script>
+
+    <!-- ── KFS Patch v2.0 — Instagram-style improvements ──────────────────── -->
+    <style>
+      /* ── Apple scroll physics ─────────────────────────────────────────── */
+      .dm-msgs, #gc-msgs, #dm-conv-list, #kfs-share-convs {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+
+      /* ── Improved mobile keyboard avoidance ─────────────────────────── */
+      @supports (height: env(keyboard-inset-height)) {
+        .dm-compose, .gc-compose {
+          padding-bottom: max(env(keyboard-inset-height), env(safe-area-inset-bottom), 12px);
+        }
+      }
+
+      /* ── iPhone notch / Dynamic Island safe area ─────────────────────── */
+      @media (max-width: 768px) {
+        .dm-topbar, #gc-topbar {
+          padding-top: max(12px, env(safe-area-inset-top)) !important;
+        }
+        /* Pill nav already handles safe-area-inset-bottom via JS CSS variable */
+      }
+
+      /* ── Instagram-like message bubble tap highlight ──────────────────── */
+      .dm-bubble-wrap:active .dm-bubble {
+        opacity: 0.75;
+        transition: opacity 0.08s;
+      }
+
+      /* ── Conversation row tap highlight ─────────────────────────────── */
+      .dm-conv-row:active {
+        background: rgba(255,255,255,.05) !important;
+        transition: background 0.08s;
+      }
+
+      /* ── Smooth scroll on iPhone ─────────────────────────────────────── */
+      * { -webkit-tap-highlight-color: transparent; }
+
+      /* ── KFS Broadcast overlay ───────────────────────────────────────── */
+      #kfs-bc-body:focus {
+        border-color: #2d6a9f !important;
+        box-shadow: 0 0 0 2px rgba(45,106,159,.2);
+      }
+
+      /* ── Share modal people grid avatar hover ─────────────────────────── */
+      .kfs-share-person:hover > div:first-child {
+        transform: scale(1.04);
+        transition: transform .15s;
+      }
+
+      /* ── Pinned bar ──────────────────────────────────────────────────── */
+      #gc-pinned-bar:hover { background: rgba(255,255,255,.06) !important; }
+    </style>
   </body>
 </html>

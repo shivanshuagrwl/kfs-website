@@ -13506,7 +13506,7 @@ async function loadModerationBadge() {
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 function modTab(tab) {
-  const panels = ['reports', 'admin-posts'];
+  const panels = ['reports', 'admin-posts', 'ban-appeals'];
   panels.forEach(t => {
     const el = document.getElementById('mod-' + t + '-panel');
     const btn = document.getElementById('mod-tab-' + t);
@@ -13523,6 +13523,7 @@ function modTab(tab) {
   });
   if (tab === 'reports') loadModReports();
   if (tab === 'admin-posts') loadAdminPosts();
+  if (tab === 'ban-appeals') loadBanAppeals();
 }
 
 // ── Load reports ─────────────────────────────────────────────────────────────
@@ -13757,6 +13758,118 @@ async function deleteAdminPost(id) {
     loadAdminPosts();
   } catch { alert('Network error'); }
 }
+
+// ── Ban Appeals ───────────────────────────────────────────────────────────────
+
+async function loadBanAppeals() {
+  const tbody = document.getElementById('mod-appeals-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--grey)">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/admin/ban-appeals', {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    const d = await r.json();
+    const appeals = d.appeals || [];
+
+    // Update badge
+    const pending = appeals.filter(a => a.status === 'pending').length;
+    const badge = document.getElementById('mod-appeals-badge');
+    if (badge) {
+      badge.textContent = pending;
+      badge.style.display = pending > 0 ? 'inline' : 'none';
+    }
+
+    if (!appeals.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--grey)">No appeals yet. Members who are temp-banned can request a review.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = appeals.map(a => {
+      const date = new Date(a.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      const statusColor = a.status === 'pending' ? '#dd6b20' : a.status === 'approved' ? '#38a169' : '#e53e3e';
+      const statusLabel = a.status === 'pending' ? '⏳ Pending' : a.status === 'approved' ? '✓ Approved' : '✗ Rejected';
+      const memberName = escHtml(a.member_name || a.member_id || 'Unknown');
+      const reason = escHtml((a.reason || 'No reason provided').slice(0, 100));
+      const actions = a.status === 'pending'
+        ? `<button onclick="approveBanAppeal('${a.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:#38a169;color:#fff;border:none;border-radius:6px;margin-right:4px">✓ Approve</button>
+           <button onclick="rejectBanAppeal('${a.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:6px">✗ Reject</button>`
+        : `<span style="font-size:11px;color:var(--grey)">Reviewed by ${escHtml(a.reviewed_by_name || 'admin')}</span>`;
+      return `<tr>
+        <td style="font-weight:600">${memberName}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--grey)">${date}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--grey)">${reason}</td>
+        <td><span style="font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</span></td>
+        <td style="white-space:nowrap">${actions}</td>
+      </tr>`;
+    }).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:#e53e3e">Failed to load appeals.</td></tr>';
+  }
+}
+
+async function approveBanAppeal(id) {
+  if (!confirm('Approve this appeal? The member\'s account will be fully restored.')) return;
+  try {
+    const r = await fetch(`/api/admin/ban-appeals/${id}/approve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Could not approve'); return; }
+    loadBanAppeals();
+    loadModerationBadge();
+  } catch { alert('Network error'); }
+}
+
+async function rejectBanAppeal(id) {
+  if (!confirm('Reject this appeal? The member\'s suspension will remain in effect.')) return;
+  try {
+    const r = await fetch(`/api/admin/ban-appeals/${id}/reject`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Could not reject'); return; }
+    loadBanAppeals();
+  } catch { alert('Network error'); }
+}
+
+// ── Poll appeals badge periodically so admin sees new requests ──────────────
+(function startAppealsBadgePoll() {
+  async function pollAppeals() {
+    try {
+      const r = await fetch('/api/admin/ban-appeals', {
+        credentials: 'include',
+        headers: { 'Authorization': 'Bearer ' + (window.adminToken || '') }
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      const pending = (d.appeals || []).filter(a => a.status === 'pending').length;
+      const badge = document.getElementById('mod-appeals-badge');
+      if (badge) {
+        badge.textContent = pending;
+        badge.style.display = pending > 0 ? 'inline' : 'none';
+      }
+      // Also bump the sidebar moderation badge to include appeals
+      const sideBadge = document.getElementById('moderation-badge');
+      if (sideBadge && pending > 0) {
+        const current = parseInt(sideBadge.textContent, 10) || 0;
+        // Only update if no reports are loaded yet (avoid double-counting)
+        if (sideBadge.style.display === 'none') {
+          sideBadge.textContent = pending;
+          sideBadge.style.display = 'inline';
+        }
+      }
+    } catch {}
+  }
+  // Run after page load
+  setTimeout(pollAppeals, 3000);
+  setInterval(pollAppeals, 60000); // check every 60s
+})();
 
 // ── Temp Suspend (called from Members section) ───────────────────────────────
 function openSuspendModal(memberId) {
