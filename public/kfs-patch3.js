@@ -407,9 +407,16 @@
 }
 
 /* ── CHAT WINDOW ── */
+/* FIXED: display was previously "flex !important", which permanently
+   overrode the inline style="display:none" / JS toggle that switches
+   between the DM window and the group window — both ended up stuck open
+   at once. Dropping !important here lets gcGoBack()/inboxOpenDm()'s
+   inline style.display changes win again, like they did before this
+   stylesheet was wired in. background/flex-direction are unaffected and
+   stay forced. */
 .dm-window, #gc-window {
   background: var(--ig-bg) !important;
-  display: flex !important;
+  display: flex;
   flex-direction: column !important;
 }
 
