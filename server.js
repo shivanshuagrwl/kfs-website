@@ -12963,6 +12963,120 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-27d — Social Strand: premium redesign endpoints
+// The redesigned public frontend (Social Strand) calls /api/strand/* instead
+// of /api/studio/*. These routes reuse the exact same queries/cache helpers
+// as the MA-27c routes above — same backend, same data source, just shaped
+// for the new client: /api/strand/post/:id returns project + comments in a
+// single response instead of two separate round-trips. The original
+// /api/studio/* routes above are left in place untouched for backward
+// compatibility with any other caller.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/strand/feed?page=1&tag=
+app.get("/api/strand/feed", publicStudioLimit, async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const tag   = (req.query.tag || "").trim().toLowerCase().slice(0, 50);
+  const limit = 20;
+  const from  = (page - 1) * limit;
+  const cKey  = `strand:public:feed:p${page}:t${tag}`;
+
+  cacheFor(res, 60);
+  try {
+    const data = await memCache(cKey, 90, async () => {
+      let q = supabasePublic
+        .from("member_projects")
+        .select(`
+          id, title, description, cover_image, video_url, video_provider,
+          domain, tags, views_count, reactions_count, comments_count, created_at,
+          member_id,
+          members!member_projects_member_id_fkey(id, name, photo, role, domain)
+        `)
+        .is("deleted_at", null)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .range(from, from + limit - 1);
+
+      if (tag) q = q.contains("tags", [tag]);
+      const { data: rows, error } = await q;
+      if (error) throw error;
+      return rows || [];
+    });
+
+    res.json({ feed: data, page, has_more: data.length === limit });
+  } catch (e) {
+    console.error("[strand:public:feed]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/strand/post/:id — combined project detail + comments
+app.get("/api/strand/post/:id", publicStudioLimit, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const { data: project, error } = await supabasePublic
+      .from("member_projects")
+      .select(`
+        id, title, description, cover_image, video_url, video_provider,
+        domain, tags, views_count, reactions_count, comments_count, status, created_at,
+        member_id,
+        members!member_projects_member_id_fkey(id, name, photo, role, domain),
+        project_collaborators(
+          member_id,
+          members!project_collaborators_member_id_fkey(id, name, photo, role)
+        )
+      `)
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error || !project) return res.status(404).json({ error: "Project not found" });
+
+    const { data: top, error: cErr } = await supabasePublic
+      .from("project_comments")
+      .select(`
+        id, body, created_at, is_pinned,
+        member_id,
+        members!project_comments_member_id_fkey(id, name, photo, role)
+      `)
+      .eq("project_id", id)
+      .is("parent_id", null)
+      .is("deleted_at", null)
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    if (cErr) throw cErr;
+
+    const topIds = (top || []).map(c => c.id);
+    let replies = [];
+    if (topIds.length) {
+      const { data: r } = await supabasePublic
+        .from("project_comments")
+        .select(`
+          id, body, created_at, parent_id,
+          member_id,
+          members!project_comments_member_id_fkey(id, name, photo, role)
+        `)
+        .in("parent_id", topIds)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      replies = r || [];
+    }
+
+    const comments = (top || []).map(c => ({
+      ...c,
+      replies: replies.filter(r => r.parent_id === c.id),
+    }));
+
+    res.json({ post: { ...project, my_reaction: null, is_saved: false }, comments });
+  } catch (e) {
+    console.error("[strand:public:post]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION MA-28 — Network: Follow system
 // Phase 2 — "The Network". Lets members follow each other, see who follows
 // them, and view a lightweight public profile card for anyone tagged/authored
