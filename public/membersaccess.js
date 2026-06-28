@@ -304,7 +304,7 @@ const E2EE = (() => {
       return await _aesDecrypt(sharedKey, cipherStr);
     } catch (e) {
       console.warn('[E2EE] DM decrypt failed for msg', msg.id, e.message);
-      return '[encrypted message — key unavailable]';
+      return '🔒 Message encrypted before your keys were set up';
     }
   }
 
@@ -351,7 +351,7 @@ const E2EE = (() => {
     if (!msg.e2ee) return msg.body || ''; // legacy plaintext
     try {
       const myWrappedKey = msg.wrapped_keys?.[myId];
-      if (!myWrappedKey) return '[message unavailable — no key for you]';
+      if (!myWrappedKey) return '🔒 Message encrypted before your keys were set up';
       // Unwrap the message key using our ECDH shared key with the sender
       const senderPublicKey = await _getPeerPublicKey(msg.sender_id);
       const sharedKey = await _deriveSharedKey(_myPrivateKey, senderPublicKey);
@@ -359,7 +359,7 @@ const E2EE = (() => {
       return await _aesDecrypt(msgKey, msg.ciphertext);
     } catch (e) {
       console.warn('[E2EE] Group decrypt failed for msg', msg.id, e.message);
-      return '[encrypted message — key unavailable]';
+      return '🔒 Message encrypted before your keys were set up';
     }
   }
 
@@ -5053,7 +5053,7 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
         bodyNode.textContent = pt;
         bodyNode.style.opacity = '';
         m._plaintext = pt; // cache for context menu / reply
-      }).catch(() => { bodyNode.textContent = '[encrypted — key unavailable]'; bodyNode.style.opacity = '0.5'; });
+      }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
       bodyNode.textContent = m.body;
     }
@@ -7282,7 +7282,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
         bodyNode.textContent = pt;
         bodyNode.style.opacity = '';
         m._plaintext = pt;
-      }).catch(() => { bodyNode.textContent = '[encrypted — key unavailable]'; bodyNode.style.opacity = '0.5'; });
+      }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
       bodyNode.textContent = m.body;
     }
@@ -9163,34 +9163,53 @@ if (document.readyState === "loading") {
 
     // DM topbar ⓘ button — stopPropagation so the document click-outside
     // handler (below) doesn't fire on the same event and immediately close the panel.
-    document.getElementById('dm-info-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!DM.activePeer) return;
-      const panel = document.getElementById('dm-detail-panel');
-      const isOpen = panel && panel.classList.contains('open');
-      if (isOpen && DP.mode === 'dm') { dpClose(); return; }
-      dpShowDm(DM.activePeer);
-    });
+    const _dmInfoBtn = document.getElementById('dm-info-btn');
+    if (_dmInfoBtn) {
+      const _dmInfoHandler = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!DM.activePeer) return;
+        const panel = document.getElementById('dm-detail-panel');
+        const isOpen = panel && panel.classList.contains('open');
+        if (isOpen && DP.mode === 'dm') { dpClose(); return; }
+        dpShowDm(DM.activePeer);
+      };
+      _dmInfoBtn.addEventListener('click', _dmInfoHandler);
+      // Android fallback: touchend fires reliably even when click is delayed
+      _dmInfoBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        _dmInfoHandler(e);
+      }, { passive: false });
+    }
 
     // GC topbar ⓘ button (re-wire to use dpShowGroup)
-    document.getElementById('gc-info-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!GC.activeGroup) return;
-      const panel = document.getElementById('dm-detail-panel');
-      const isOpen = panel && panel.classList.contains('open');
-      if (isOpen && DP.mode === 'group') { dpClose(); return; }
-      // Load fresh member details first
-      // Only skip the fetch if members actually have names — stale stub arrays
-      // (members: [{id}] only, no name) must still trigger a fresh fetch so
-      // the Details panel never shows "?" / "Member" placeholders.
-      if (GC.activeGroup.members?.some(m => m.name)) {
-        dpShowGroup(GC.activeGroup);
-      } else {
-        api('GET', `/api/member/groups/${GC.activeGroup.id}`)
-          .then(data => { GC.activeGroup = { ...GC.activeGroup, ...data }; dpShowGroup(GC.activeGroup); })
-          .catch(() => dpShowGroup(GC.activeGroup));
-      }
-    });
+    const _gcInfoBtn = document.getElementById('gc-info-btn');
+    if (_gcInfoBtn) {
+      const _gcInfoHandler = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        // Prefer activeGroup; fall back to fetching by activeId if group object isn't cached yet
+        const group = GC.activeGroup || null;
+        const groupId = group?.id || GC.activeId;
+        if (!groupId) return;
+        const panel = document.getElementById('dm-detail-panel');
+        const isOpen = panel && panel.classList.contains('open');
+        if (isOpen && DP.mode === 'group') { dpClose(); return; }
+        if (group && group.members?.some(m => m.name)) {
+          dpShowGroup(group);
+        } else {
+          api('GET', `/api/member/groups/${groupId}`)
+            .then(data => { GC.activeGroup = { ...(GC.activeGroup || {}), ...data }; dpShowGroup(GC.activeGroup); })
+            .catch(() => { if (group) dpShowGroup(group); });
+        }
+      };
+      _gcInfoBtn.addEventListener('click', _gcInfoHandler);
+      // Android fallback: touchend fires reliably even when click is delayed
+      _gcInfoBtn.addEventListener('touchend', (e) => {
+        e.preventDefault(); // prevents the subsequent click from double-firing
+        _gcInfoHandler(e);
+      }, { passive: false });
+    }
 
     // Close panel only when clicking the left nav sidebar (switching panels)
     // — NOT when clicking chat messages or the compose area (Instagram keeps it open).
