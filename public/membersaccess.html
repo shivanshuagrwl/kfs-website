@@ -9599,6 +9599,25 @@
         -webkit-tap-highlight-color: transparent;
       }
 
+      /* ── Mobile: info button tap-target + topbar-actions fix ─────────── */
+      @media (max-width: 768px) {
+        /* Hide Nickname/Block shortcut buttons from DM topbar on mobile —
+           the detail panel (opened by ⓘ) already exposes both actions.
+           Without this they crowd the topbar and can overlap/block ⓘ. */
+        #dm-topbar-actions {
+          display: none !important;
+        }
+
+        /* Ensure ⓘ buttons meet the 44 × 44 px minimum touch target on mobile */
+        #dm-info-btn,
+        #gc-info-btn {
+          min-width: 44px;
+          min-height: 44px;
+          padding: 10px;
+          margin-left: auto;
+        }
+      }
+
       /* ── KFS Broadcast overlay ───────────────────────────────────────── */
       #kfs-bc-body:focus {
         border-color: #2d6a9f !important;
@@ -9614,6 +9633,21 @@
       /* ── Pinned bar ──────────────────────────────────────────────────── */
       #gc-pinned-bar:hover {
         background: rgba(255, 255, 255, 0.06) !important;
+      }
+
+      /* ── Bottom tab bar: desktop kill-switch + hide-in-chat on mobile ── */
+      /* 1. Never show on desktop regardless of pointer type or zoom level  */
+      @media (min-width: 769px) {
+        .bottom-tab-bar {
+          display: none !important;
+        }
+      }
+      /* 2. On mobile: hide when user has slid into a DM or GC chat window  */
+      @media (max-width: 768px) {
+        body:has(#dm-window.dm-slide-in) .bottom-tab-bar,
+        body:has(#gc-window.dm-slide-in) .bottom-tab-bar {
+          display: none !important;
+        }
       }
     </style>
   </body>

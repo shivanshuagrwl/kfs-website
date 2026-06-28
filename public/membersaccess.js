@@ -8144,7 +8144,15 @@ function dmInjectTopbarActions() {
   const actions = document.createElement('div');
   actions.id = 'dm-topbar-actions';
   actions.style.cssText = 'display:flex;align-items:center;gap:4px;margin-left:auto';
-  topbar.appendChild(actions);
+  // Insert BEFORE dm-info-btn so ⓘ stays as the rightmost element in the topbar
+  const infoBtn = $id('dm-info-btn');
+  if (infoBtn) {
+    topbar.insertBefore(actions, infoBtn);
+    // Remove margin-left:auto from actions since ⓘ now provides the right-push
+    actions.style.marginLeft = '0';
+  } else {
+    topbar.appendChild(actions);
+  }
 }
 
 function dmRenderTopbarExtras(convKey, peerId, peer) {
