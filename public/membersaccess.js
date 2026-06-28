@@ -6260,6 +6260,11 @@ function _showMsgContextMenu(e, info) {
         if (typeof swShowToast === 'function') swShowToast('📌 Message pinned to this conversation.');
         return;
       }
+      // Block pin on optimistic (tmp-) messages — server doesn't have them yet
+      if (!id || String(id).startsWith('tmp-')) {
+        if (typeof swShowToast === 'function') swShowToast('Message is still sending — please wait before pinning.');
+        return;
+      }
       try {
         const r = await api('POST', `/api/member/groups/${GC.activeId}/messages/${id}/pin`, {});
         if (typeof swShowToast === 'function') {
@@ -8534,12 +8539,23 @@ if (document.readyState === "loading") {
         const newKey = JSON.stringify(fresh.map(g => `${g.id}|${g.last_msg_at}|${g.members?.length || 0}|${g.name}`));
         if (oldKey !== newKey) {
           GC.groups = fresh;
-          try { localStorage.setItem('kfs-groups-' + (_inboxMyId || dmMyId()), JSON.stringify(fresh)); } catch { /* ignore */ }
+          try {
+            const saveId = _inboxMyId || dmMyId();
+            if (saveId) localStorage.setItem('kfs-groups-' + saveId, JSON.stringify(fresh));
+          } catch { /* ignore */ }
           inboxRender();
           // Update combined unread badge
           const dmUnread = (DM.convs || []).reduce((s, c) => s + (c.unread_count || 0), 0);
           const gcUnread = fresh.reduce((s, g) => s + (g.unread_count || 0), 0);
           if (typeof dmSetBadge === 'function') dmSetBadge(dmUnread + gcUnread);
+        } else {
+          // Even when list unchanged, ensure localStorage is seeded for next refresh
+          try {
+            const saveId = _inboxMyId || dmMyId();
+            if (saveId && fresh.length && !localStorage.getItem('kfs-groups-' + saveId)) {
+              localStorage.setItem('kfs-groups-' + saveId, JSON.stringify(fresh));
+            }
+          } catch { /* ignore */ }
         }
       } catch { /* silent — transient network error, try again next tick */ }
     }, 3000); // every 3s — faster detection when added to a new group
