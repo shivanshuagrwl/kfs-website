@@ -10216,5 +10216,249 @@ if (document.readyState === "loading") {
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 11. SETTINGS → CUSTOMIZATION — chat wallpaper (solid/gradient/photo) +
+//     message bubble color. Device-local only (localStorage), matches the
+//     "Saved only on this device" copy already in the panel. Wires up the
+//     #cust-root placeholder that markup/CSS already had in place.
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  const WALL_KEY   = 'kfs-cust-wallpaper';
+  const BUBBLE_KEY = 'kfs-cust-bubble';
+
+  const WALLPAPER_SOLIDS = [
+    '#0a0a0a', '#14141c', '#1a1a2e', '#16213e', '#1b262c',
+    '#2d2d2d', '#222831', '#264653', '#2a3d45', '#3a2e39',
+  ];
+  const WALLPAPER_GRADIENTS = [
+    'linear-gradient(135deg, #1a1a2e, #16213e)',
+    'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+    'linear-gradient(135deg, #232526, #414345)',
+    'linear-gradient(135deg, #1d2671, #c33764)',
+    'linear-gradient(135deg, #134e5e, #71b280)',
+    'linear-gradient(135deg, #4b134f, #c94b4b)',
+  ];
+  const BUBBLE_PRESETS = [
+    { bg: '#f0f0f0', text: '#0a0a0a' },
+    { bg: '#0a84ff', text: '#ffffff' },
+    { bg: '#34c759', text: '#ffffff' },
+    { bg: '#ff375f', text: '#ffffff' },
+    { bg: '#bf5af2', text: '#ffffff' },
+    { bg: '#ff9f0a', text: '#0a0a0a' },
+  ];
+
+  function _custLoad(key) {
+    try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+  }
+  function _custSave(key, val) {
+    try {
+      if (val === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(val));
+    } catch { /* storage full/blocked — fail silently, not worth surfacing */ }
+  }
+  function _custIsDark(hex) {
+    const c = (hex || '').replace('#', '');
+    if (c.length !== 6) return true;
+    const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+  }
+
+  function applyCustomization() {
+    const root = document.documentElement.style;
+    const wall = _custLoad(WALL_KEY);
+    if (!wall || wall.type === 'default') root.setProperty('--chat-wallpaper-bg', 'transparent');
+    else if (wall.type === 'solid')       root.setProperty('--chat-wallpaper-bg', wall.value);
+    else if (wall.type === 'gradient')    root.setProperty('--chat-wallpaper-bg', wall.value);
+    else if (wall.type === 'photo')       root.setProperty('--chat-wallpaper-bg', `url("${wall.value}")`);
+
+    const bub = _custLoad(BUBBLE_KEY);
+    root.setProperty('--bubble-mine-bg',   bub?.bg   || '#f0f0f0');
+    root.setProperty('--bubble-mine-text', bub?.text || '#0a0a0a');
+  }
+  window.applyCustomization = applyCustomization;
+  try { applyCustomization(); } catch { /* localStorage may be blocked — defaults already match */ }
+
+  let _custActiveSeg = 'solid';
+
+  function _custPreviewBg() {
+    const wall = _custLoad(WALL_KEY) || { type: 'default' };
+    if (wall.type === 'solid' || wall.type === 'gradient') return wall.value;
+    if (wall.type === 'photo') return `url("${wall.value}") center/cover no-repeat`;
+    return 'var(--bg)';
+  }
+
+  function _custUpdatePreview() {
+    const prev = $id('cust-preview-chat');
+    if (prev) prev.style.background = _custPreviewBg();
+    const mine = $id('cust-preview-mine-bubble');
+    if (mine) {
+      const bub = _custLoad(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
+      mine.style.background = bub.bg;
+      mine.style.color = bub.text;
+    }
+  }
+
+  function _custWallpaperSectionHtml(type) {
+    const wall = _custLoad(WALL_KEY) || { type: 'default' };
+    if (type === 'solid') {
+      const customActive = wall.type === 'solid' && !WALLPAPER_SOLIDS.includes(wall.value);
+      return `
+        <div class="cust-swatch-row">
+          ${WALLPAPER_SOLIDS.map(c => `<div class="cust-swatch${wall.type === 'solid' && wall.value === c ? ' active' : ''}" style="background:${c}" data-wall-solid="${c}" title="${c}"></div>`).join('')}
+          <div class="cust-swatch-custom${customActive ? ' active' : ''}" title="Custom color">
+            ${customActive ? `<span style="width:100%;height:100%;border-radius:50%;display:block;background:${swEsc(wall.value)}"></span>` : '+'}
+            <input type="color" id="cust-wall-color-input" value="${customActive ? wall.value : '#222222'}">
+          </div>
+        </div>
+        <div class="cust-hint">Tap a color, or pick a custom one with the dashed swatch.</div>`;
+    }
+    if (type === 'gradient') {
+      return `
+        <div class="cust-swatch-row">
+          ${WALLPAPER_GRADIENTS.map(g => `<div class="cust-gradient-swatch${wall.type === 'gradient' && wall.value === g ? ' active' : ''}" style="background:${g}" data-wall-gradient="${swEsc(g)}"></div>`).join('')}
+        </div>
+        <div class="cust-hint">Soft gradients that stay easy on the eyes in dark mode.</div>`;
+    }
+    const hasPhoto = wall.type === 'photo' && wall.value;
+    return `
+      <div class="cust-photo-row">
+        <div class="cust-photo-thumb">${hasPhoto ? `<img src="${wall.value}">` : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="cust-upload-btn" id="cust-photo-upload-btn">Upload Photo</button>
+          ${hasPhoto ? `<button class="cust-photo-remove" id="cust-photo-remove-btn">Remove photo</button>` : ''}
+        </div>
+        <input type="file" id="cust-photo-input" accept="image/*" style="display:none">
+      </div>
+      <div class="cust-hint">Best with a photo at least 800px wide. Stored only on this device.</div>`;
+  }
+
+  function _custRenderWallpaperSection() {
+    const section = $id('cust-wall-content');
+    if (!section) return;
+    section.innerHTML = _custWallpaperSectionHtml(_custActiveSeg);
+
+    section.querySelectorAll('[data-wall-solid]').forEach(el => {
+      el.addEventListener('click', () => {
+        _custSave(WALL_KEY, { type: 'solid', value: el.dataset.wallSolid });
+        applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+      });
+    });
+    section.querySelectorAll('[data-wall-gradient]').forEach(el => {
+      el.addEventListener('click', () => {
+        _custSave(WALL_KEY, { type: 'gradient', value: el.dataset.wallGradient });
+        applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+      });
+    });
+    const colorInput = $id('cust-wall-color-input');
+    if (colorInput) {
+      colorInput.addEventListener('input', () => {
+        _custSave(WALL_KEY, { type: 'solid', value: colorInput.value });
+        applyCustomization(); _custUpdatePreview();
+      });
+      colorInput.addEventListener('change', () => _custRenderWallpaperSection());
+    }
+    const uploadBtn = $id('cust-photo-upload-btn');
+    const fileInput = $id('cust-photo-input');
+    if (uploadBtn && fileInput) {
+      uploadBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { try { swShowToast('Please choose an image under 5MB.'); } catch {} return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          _custSave(WALL_KEY, { type: 'photo', value: reader.result });
+          applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    section.querySelector('#cust-photo-remove-btn')?.addEventListener('click', () => {
+      _custSave(WALL_KEY, { type: 'default' });
+      applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+    });
+  }
+
+  function _custRenderBubbleSection() {
+    const section = $id('cust-bubble-content');
+    if (!section) return;
+    const bub = _custLoad(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
+    const customActive = !BUBBLE_PRESETS.some(p => p.bg === bub.bg);
+    section.innerHTML = `
+      <div class="cust-swatch-row">
+        ${BUBBLE_PRESETS.map(p => `<div class="cust-swatch${bub.bg === p.bg ? ' active' : ''}" style="background:${p.bg}" data-bubble-bg="${p.bg}" data-bubble-text="${p.text}" title="${p.bg}"></div>`).join('')}
+        <div class="cust-swatch-custom${customActive ? ' active' : ''}" title="Custom color">
+          ${customActive ? `<span style="width:100%;height:100%;border-radius:50%;display:block;background:${swEsc(bub.bg)}"></span>` : '+'}
+          <input type="color" id="cust-bubble-color-input" value="${customActive ? bub.bg : '#f0f0f0'}">
+        </div>
+      </div>
+      <div class="cust-hint">The color of your own message bubbles — visible to whoever you're chatting with.</div>`;
+
+    section.querySelectorAll('[data-bubble-bg]').forEach(el => {
+      el.addEventListener('click', () => {
+        _custSave(BUBBLE_KEY, { bg: el.dataset.bubbleBg, text: el.dataset.bubbleText });
+        applyCustomization(); _custRenderBubbleSection(); _custUpdatePreview();
+      });
+    });
+    const colorInput = $id('cust-bubble-color-input');
+    if (colorInput) {
+      colorInput.addEventListener('input', () => {
+        const text = _custIsDark(colorInput.value) ? '#ffffff' : '#0a0a0a';
+        _custSave(BUBBLE_KEY, { bg: colorInput.value, text });
+        applyCustomization(); _custUpdatePreview();
+      });
+      colorInput.addEventListener('change', () => _custRenderBubbleSection());
+    }
+  }
+
+  function _custSetSeg(seg) {
+    _custActiveSeg = seg;
+    document.querySelectorAll('.cust-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
+    _custRenderWallpaperSection();
+  }
+
+  window.loadCustomization = function loadCustomization() {
+    const root = $id('cust-root');
+    if (!root) return;
+    root.innerHTML = `
+      <div class="cust-preview">
+        <div class="cust-preview-chat" id="cust-preview-chat">
+          <div class="cust-preview-bubble theirs">hey, you around tonight?</div>
+          <div class="cust-preview-bubble mine" id="cust-preview-mine-bubble">yeah I'm down 👍</div>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:10px">Chat Wallpaper</div>
+      <div class="cust-seg">
+        <div class="cust-seg-btn active" data-seg="solid">Solid</div>
+        <div class="cust-seg-btn" data-seg="gradient">Gradient</div>
+        <div class="cust-seg-btn" data-seg="photo">Photo</div>
+      </div>
+      <div id="cust-wall-content"></div>
+      <button class="cust-upload-btn" id="cust-wall-reset-btn" style="margin-top:4px;margin-bottom:24px">Reset wallpaper to default</button>
+
+      <div class="card-title" style="margin-bottom:10px">Message Color</div>
+      <div id="cust-bubble-content"></div>
+      <button class="cust-upload-btn" id="cust-bubble-reset-btn" style="margin-top:12px">Reset message color to default</button>
+    `;
+
+    document.querySelectorAll('.cust-seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => _custSetSeg(btn.dataset.seg));
+    });
+    $id('cust-wall-reset-btn')?.addEventListener('click', () => {
+      _custSave(WALL_KEY, { type: 'default' });
+      applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+    });
+    $id('cust-bubble-reset-btn')?.addEventListener('click', () => {
+      _custSave(BUBBLE_KEY, null);
+      applyCustomization(); _custRenderBubbleSection(); _custUpdatePreview();
+    });
+
+    _custSetSeg('solid');
+    _custRenderBubbleSection();
+    _custUpdatePreview();
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
 // END PATCH
 // ═══════════════════════════════════════════════════════════════════════════
