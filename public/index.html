@@ -2669,936 +2669,154 @@ body.light-mode .admin-comment-action.pinned{border-color:#111;color:#111}
 .credit-role-check:has(input:checked){border-color:rgba(245,245,245,.25);background:rgba(245,245,245,.08);color:var(--white)}
 .credit-role-check input{display:none}
 
+/* ── Public Social Strand — Instagram-style feed ──────────────────────── */
+/* Feed container: centered single-column */
+.psw-grid{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:0}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   PUBLIC SOCIAL STRAND — Premium Feed (Public / Guest View)
-═══════════════════════════════════════════════════════════════════════ */
+/* Instagram post card */
+.psw-ig-post{width:100%;max-width:614px;border-bottom:1px solid var(--border);background:var(--black)}
+body.light-mode .psw-ig-post{background:#fff;border-color:#efefef}
+@media(min-width:601px){.psw-ig-post{border:1px solid var(--border);border-radius:3px;margin-bottom:24px}}
+body.light-mode @media(min-width:601px){.psw-ig-post{border-color:#dbdbdb}}
 
-/* ── Layout ─────────────────────────────────────────────────────────── */
-.psw-feed-root {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 0 0 80px;
-}
+/* Post header */
+.psw-ig-header{display:flex;align-items:center;gap:10px;padding:12px 14px 10px}
+.psw-ig-avatar-ring{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.psw-ig-avatar-inner{width:38px;height:38px;border-radius:50%;background:var(--black);display:flex;align-items:center;justify-content:center;overflow:hidden}
+body.light-mode .psw-ig-avatar-inner{background:#fff}
+.psw-ig-author-block{flex:1;min-width:0}
+.psw-ig-author-name{font-size:13px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
+body.light-mode .psw-ig-author-name{color:#111}
+.psw-ig-post-time{font-size:11px;color:var(--grey);margin-top:1px}
+.psw-ig-options{width:32px;height:32px;border-radius:50%;background:none;border:none;display:flex;align-items:center;justify-content:center;color:var(--grey);cursor:pointer;transition:background .12s;flex-shrink:0}
+.psw-ig-options:hover{background:rgba(255,255,255,.08);color:var(--white)}
+body.light-mode .psw-ig-options:hover{background:rgba(0,0,0,.06);color:#111}
 
-/* Skeleton loader */
-@keyframes pswSkeleton {
-  0%   { opacity: .45; }
-  50%  { opacity: .9; }
-  100% { opacity: .45; }
-}
-.psw-skeleton {
-  animation: pswSkeleton 1.4s ease-in-out infinite;
-  background: var(--card);
-  border-radius: 8px;
-}
+/* Media */
+.psw-ig-img-wrap{width:100%;position:relative;background:#111;overflow:hidden}
+body.light-mode .psw-ig-img-wrap{background:#f0f0f0}
+.psw-ig-img{width:100%;display:block;max-height:600px;object-fit:cover}
+.psw-ig-text-bg{width:100%;min-height:240px;display:flex;align-items:center;justify-content:center;padding:40px 28px;background:#111}
+body.light-mode .psw-ig-text-bg{background:#fafafa}
+.psw-ig-text-content{font-size:20px;font-weight:500;color:var(--white);line-height:1.55;text-align:center;max-width:420px}
+body.light-mode .psw-ig-text-content{color:#111}
 
-/* ── Feed sticky header bar ─────────────────────────────────────────── */
-.psw-topbar {
-  position: sticky;
-  top: 60px;
-  z-index: 80;
-  background: var(--black);
-  border-bottom: 1px solid var(--border);
-  padding: 0;
-}
-.psw-topbar-inner {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.psw-topbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--white);
-}
-.psw-topbar-brand svg { color: var(--white); flex-shrink: 0; }
-.psw-topbar-actions { display: flex; align-items: center; gap: 8px; }
+/* Action bar */
+.psw-ig-actions{display:flex;align-items:center;padding:6px 14px 2px;gap:4px}
+.psw-ig-btn{width:36px;height:36px;border-radius:50%;background:none;border:none;display:flex;align-items:center;justify-content:center;color:var(--white);cursor:pointer;transition:opacity .12s}
+.psw-ig-btn:hover{opacity:.6}
+body.light-mode .psw-ig-btn{color:#111}
+.psw-ig-btn-right{margin-left:auto}
+.psw-ig-views{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--grey);padding:0 2px}
 
-/* Search pill */
-.psw-search-pill {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 7px 12px;
-  transition: border-color .15s, background .15s;
-}
-.psw-search-pill:focus-within {
-  border-color: rgba(255,255,255,.25);
-  background: rgba(255,255,255,.08);
-}
-body.light-mode .psw-search-pill {
-  background: rgba(0,0,0,.04);
-  border-color: #ddd;
-}
-body.light-mode .psw-search-pill:focus-within {
-  border-color: #aaa;
-}
-.psw-search-input {
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--white);
-  font: inherit;
-  font-size: 13px;
-  width: 120px;
-}
-.psw-search-input::placeholder { color: var(--grey); }
-body.light-mode .psw-search-input { color: #111; }
-
-/* Sign in button in topbar */
-.psw-signin-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--white);
-  color: var(--black);
-  border: none;
-  border-radius: 10px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  text-decoration: none;
-  cursor: pointer;
-  transition: opacity .15s, transform .15s;
-  white-space: nowrap;
-}
-.psw-signin-btn:hover { opacity: .82; transform: scale(.98); }
-
-/* ── Guest info banner ──────────────────────────────────────────────── */
-.psw-guest-bar {
-  max-width: 680px;
-  margin: 16px auto 0;
-  padding: 0 16px;
-}
-.psw-guest-bar-inner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(255,255,255,.04);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px;
-  padding: 13px 16px;
-  font-size: 13px;
-  color: var(--grey);
-  line-height: 1.5;
-}
-.psw-guest-bar-inner a {
-  color: var(--white);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-color: rgba(255,255,255,.3);
-  transition: text-decoration-color .2s;
-}
-.psw-guest-bar-inner a:hover { text-decoration-color: var(--white); }
-body.light-mode .psw-guest-bar-inner {
-  background: rgba(0,0,0,.04);
-  border-color: rgba(0,0,0,.1);
-  color: #666;
-}
-body.light-mode .psw-guest-bar-inner a { color: #111; }
-
-/* ── Feed grid ──────────────────────────────────────────────────────── */
-.psw-grid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: 20px 0 0;
-}
-
-/* ── Post card ──────────────────────────────────────────────────────── */
-.psw-post {
-  width: 100%;
-  max-width: 680px;
-  background: var(--black);
-  border-bottom: 1px solid var(--border);
-  cursor: default;
-  transition: background .2s;
-}
-body.light-mode .psw-post { background: #fff; border-color: #f0f0f0; }
-@media (min-width: 601px) {
-  .psw-post {
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    margin-bottom: 20px;
-    overflow: hidden;
-    background: var(--card);
-    box-shadow: 0 1px 12px rgba(0,0,0,.18);
-  }
-  body.light-mode .psw-post {
-    background: #fff;
-    border-color: #e8e8e8;
-    box-shadow: 0 1px 12px rgba(0,0,0,.06);
-  }
-}
-
-/* Post skeleton */
-.psw-post-skeleton {
-  max-width: 680px;
-  width: 100%;
-  border-radius: 18px;
-  overflow: hidden;
-  margin-bottom: 20px;
-  border: 1px solid var(--border);
-  background: var(--card);
-}
-.psw-post-skeleton-header {
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-}
-.psw-post-skeleton-avatar {
-  width: 40px; height: 40px; border-radius: 50%;
-  flex-shrink: 0;
-}
-.psw-post-skeleton-media { width: 100%; aspect-ratio: 4/3; }
-.psw-post-skeleton-body { padding: 14px 16px; }
-.psw-post-skeleton-line {
-  height: 12px; margin-bottom: 8px; border-radius: 6px;
-}
-.psw-post-skeleton-line:last-child { width: 60%; margin-bottom: 0; }
-
-/* ── Post header ────────────────────────────────────────────────────── */
-.psw-post-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px 10px;
-}
-.psw-avatar-ring {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  position: relative;
-}
-/* Active story ring when member has new content */
-.psw-avatar-ring.has-ring::before {
-  content: '';
-  position: absolute;
-  inset: -2.5px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.6);
-  pointer-events: none;
-}
-.psw-avatar-inner {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  background: #1e1e1e;
-  border: 1px solid rgba(255,255,255,.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-body.light-mode .psw-avatar-inner { background: #e8e8e8; border-color: rgba(0,0,0,.06); }
-.psw-post-meta { flex: 1; min-width: 0; }
-.psw-post-author {
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -.015em;
-  color: var(--white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-body.light-mode .psw-post-author { color: #111; }
-.psw-post-time {
-  font-size: 11px;
-  color: var(--grey);
-  margin-top: 1px;
-  letter-spacing: .01em;
-}
-/* Domain pill */
-.psw-domain-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 20px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.09);
-  font-size: 10px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--grey);
-  font-weight: 600;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-body.light-mode .psw-domain-chip { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.09); }
-.psw-post-options {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: none;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--grey);
-  cursor: pointer;
-  transition: background .12s, color .12s;
-  flex-shrink: 0;
-}
-.psw-post-options:hover { background: rgba(255,255,255,.08); color: var(--white); }
-body.light-mode .psw-post-options:hover { background: rgba(0,0,0,.06); color: #111; }
-
-/* ── Media ──────────────────────────────────────────────────────────── */
-.psw-media-wrap {
-  width: 100%;
-  position: relative;
-  background: #0d0d0d;
-  overflow: hidden;
-}
-body.light-mode .psw-media-wrap { background: #f2f2f2; }
-.psw-media-img {
-  width: 100%;
-  display: block;
-  max-height: 680px;
-  object-fit: cover;
-  /* Smooth load — opacity fade from skeleton */
-  transition: opacity .3s ease;
-}
-.psw-media-img.loading { opacity: 0; }
-.psw-media-img.loaded  { opacity: 1; }
-
-/* Text-only post */
-.psw-text-body {
-  width: 100%;
-  padding: 20px 18px 16px;
-  background: transparent;
-}
-.psw-text-content {
-  font-size: 18px;
-  font-weight: 440;
-  line-height: 1.6;
-  letter-spacing: -.01em;
-  color: var(--white);
-  max-width: 100%;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-body.light-mode .psw-text-content { color: #111; }
-
-/* Video placeholder */
-.psw-video-wrap {
-  position: relative;
-  padding-bottom: 56.25%;
-  background: #000;
-  overflow: hidden;
-}
-.psw-video-wrap iframe {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  border: none;
-}
-
-/* ── Action bar ─────────────────────────────────────────────────────── */
-.psw-actions {
-  display: flex;
-  align-items: center;
-  padding: 8px 14px 4px;
-  gap: 2px;
-}
-.psw-action-btn {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  background: none;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--white);
-  cursor: pointer;
-  transition: transform .15s cubic-bezier(.34,1.56,.64,1), opacity .12s, background .12s;
-  position: relative;
-}
-.psw-action-btn:hover { opacity: .6; }
-.psw-action-btn:active { transform: scale(.88); }
-body.light-mode .psw-action-btn { color: #111; }
-
-/* Save button pushed right */
-.psw-action-btn.psw-save { margin-left: auto; }
-
-/* Reaction count / views inline */
-.psw-views-pill {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11.5px;
-  color: var(--grey);
-  margin-left: 4px;
-  letter-spacing: .01em;
-}
-
-/* ── Post body ──────────────────────────────────────────────────────── */
-.psw-post-body { padding: 0 16px; }
-
-/* Likes count */
-.psw-likes {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--white);
-  padding: 2px 0 5px;
-  letter-spacing: -.01em;
-}
-body.light-mode .psw-likes { color: #111; }
+/* Likes */
+.psw-ig-likes{padding:0 14px 4px;font-size:13px;font-weight:700;color:var(--white)}
+body.light-mode .psw-ig-likes{color:#111}
 
 /* Caption */
-.psw-caption {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--white);
-  padding-bottom: 5px;
-  word-break: break-word;
-}
-body.light-mode .psw-caption { color: #111; }
-.psw-caption-author {
-  font-weight: 700;
-  cursor: default;
-  letter-spacing: -.01em;
-}
-.psw-caption-text { color: rgba(245,245,245,.85); }
-body.light-mode .psw-caption-text { color: #333; }
-
-/* Post title (large posts without caption) */
-.psw-post-title {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -.025em;
-  line-height: 1.35;
-  color: var(--white);
-  padding: 6px 0 4px;
-}
-body.light-mode .psw-post-title { color: #111; }
+.psw-ig-caption{padding:0 14px 6px;font-size:14px;color:var(--white);line-height:1.55}
+body.light-mode .psw-ig-caption{color:#111}
+.psw-ig-caption-author{font-weight:700;cursor:default}
+.psw-ig-caption-text{color:#e0e0e0}
+body.light-mode .psw-ig-caption-text{color:#333}
 
 /* Tags */
-.psw-tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 4px 0 5px;
-}
-.psw-tag-chip {
-  font-size: 12px;
-  color: #5aadec;
-  cursor: pointer;
-  transition: color .12s;
-}
-.psw-tag-chip:hover { color: #89c5f1; }
-body.light-mode .psw-tag-chip { color: #1d72ba; }
+.psw-ig-tags{padding:0 14px 4px;display:flex;flex-wrap:wrap;gap:4px}
+.psw-ig-tag{font-size:12px;color:#4ba3d4;cursor:default}
+body.light-mode .psw-ig-tag{color:#2563eb}
 
-/* View comments link */
-.psw-comments-link {
-  display: block;
-  font-size: 13px;
-  color: var(--grey);
-  cursor: pointer;
-  padding: 2px 0 5px;
-  transition: color .12s;
-}
-.psw-comments-link:hover { color: var(--white); }
-body.light-mode .psw-comments-link:hover { color: #111; }
-
-/* Sign in prompt */
-.psw-signin-nudge {
-  font-size: 13px;
-  color: var(--grey);
-  padding: 2px 0 8px;
-}
-.psw-signin-nudge a {
-  color: var(--white);
-  font-weight: 600;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(255,255,255,.25);
-  transition: border-color .15s;
-}
-.psw-signin-nudge a:hover { border-color: var(--white); }
-body.light-mode .psw-signin-nudge a { color: #111; border-color: rgba(0,0,0,.25); }
+/* View comments / sign-in gate */
+.psw-ig-view-comments{padding:0 14px 6px;font-size:13px;color:var(--grey);cursor:pointer}
+.psw-ig-view-comments:hover{color:var(--white)}
+body.light-mode .psw-ig-view-comments:hover{color:#111}
+.psw-ig-sign-in{padding:0 14px 8px;font-size:13px;color:var(--grey)}
+.psw-ig-sign-in a{color:var(--white);font-weight:600;text-decoration:none}
+body.light-mode .psw-ig-sign-in a{color:#111}
+.psw-ig-sign-in a:hover{text-decoration:underline}
 
 /* Timestamp */
-.psw-timestamp {
-  font-size: 10px;
-  color: var(--grey);
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  padding: 4px 0 14px;
-}
+.psw-ig-timestamp{padding:0 14px 12px;font-size:10px;color:var(--grey);text-transform:uppercase;letter-spacing:.04em}
 
-/* ── Skeleton cards (initial load) ─────────────────────────────────── */
-@media (max-width: 600px) {
-  .psw-post { border-radius: 0; margin-bottom: 0; }
-}
+/* Keep psw-tag for detail modal tags */
+.psw-tag{font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#777;letter-spacing:.04em}
+body.light-mode .psw-tag{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1);color:#888}
+.psw-stat{display:inline-flex;align-items:center;gap:4px}
 
-/* ── Load more ──────────────────────────────────────────────────────── */
-.psw-load-more-wrap { text-align: center; padding: 28px 0 48px; }
-.psw-load-more-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 28px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--grey);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color .15s, color .15s, background .15s;
-}
-.psw-load-more-btn:hover {
-  border-color: rgba(255,255,255,.3);
-  color: var(--white);
-  background: rgba(255,255,255,.03);
-}
-body.light-mode .psw-load-more-btn { border-color: #ddd; color: #666; }
-body.light-mode .psw-load-more-btn:hover { border-color: #999; color: #111; }
+/* Guest banner */
+.psw-guest-banner{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 16px;font-size:13px;color:#aaa;margin-top:24px;line-height:1.5}
+.psw-guest-banner a{color:var(--white);text-decoration:underline;text-underline-offset:2px}
+body.light-mode .psw-guest-banner{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:#777}
+body.light-mode .psw-guest-banner a{color:#111}
 
-/* ── Empty / Error states ───────────────────────────────────────────── */
-.psw-empty {
-  text-align: center;
-  padding: 96px 24px;
-  color: var(--grey);
-}
-.psw-empty-icon { margin-bottom: 20px; opacity: .25; }
-.psw-empty-title { font-size: 16px; font-weight: 700; color: var(--white); margin-bottom: 8px; letter-spacing: -.01em; }
-body.light-mode .psw-empty-title { color: #111; }
-.psw-empty-sub { font-size: 13.5px; line-height: 1.6; color: var(--grey); }
-.psw-loading { text-align: center; padding: 72px 24px; color: var(--grey); font-size: 13px; }
+/* Tag filter input */
+.psw-tag-input-wrap{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:7px 12px}
+body.light-mode .psw-tag-input-wrap{background:rgba(0,0,0,.04);border-color:#ddd}
+.psw-tag-input{background:none;border:none;outline:none;color:var(--white);font-size:13px;width:160px}
+body.light-mode .psw-tag-input{color:#111}
+.psw-tag-input::placeholder{color:var(--grey)}
 
-/* ── Tag / utility ──────────────────────────────────────────────────── */
-.psw-tag {
-  font-size: 10px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.08);
-  color: var(--grey);
-  letter-spacing: .04em;
-}
-body.light-mode .psw-tag { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.1); color: #888; }
-.psw-stat { display: inline-flex; align-items: center; gap: 4px; }
+/* Loading / empty states */
+.psw-loading{color:var(--grey);font-size:13px;text-align:center;padding:60px 0}
+.psw-empty{text-align:center;padding:80px 20px;color:var(--grey)}
+.psw-empty-icon{margin-bottom:16px;opacity:.3}
+.psw-empty-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.psw-empty-sub{font-size:13px}
 
-/* ════════════════════════════════════════════════════════════════════
-   DETAIL MODAL — Premium redesign
-════════════════════════════════════════════════════════════════════ */
+/* Detail modal */
+.psw-detail-box{background:#0f0f0f;border:1px solid #252525;border-radius:18px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;scrollbar-width:none;position:relative}
+.psw-detail-box::-webkit-scrollbar{display:none}
+body.light-mode .psw-detail-box{background:#fff;border-color:#e0e0e0}
+.psw-detail-close{position:absolute;top:14px;right:14px;z-index:10;background:rgba(255,255,255,.08);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#aaa;transition:background .15s,color .15s}
+.psw-detail-close:hover{background:rgba(255,255,255,.14);color:#fff}
+body.light-mode .psw-detail-close{background:rgba(0,0,0,.06);color:#666}
+body.light-mode .psw-detail-close:hover{background:rgba(0,0,0,.12);color:#111}
 
-/* Backdrop */
-#psw-detail-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.78);
-  z-index: 9100;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 24px 16px;
-  overflow-y: auto;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
-#psw-detail-overlay.open { display: flex; animation: pswModalIn .26s cubic-bezier(.32,1,.5,1) both; }
-@keyframes pswModalIn {
-  from { opacity: 0; transform: scale(.97) translateY(8px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
+.psw-detail-cover{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:18px 18px 0 0;display:block}
+.psw-detail-video-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:18px 18px 0 0;overflow:hidden}
+.psw-detail-video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.psw-detail-content{padding:24px 28px 32px}
+@media(max-width:480px){.psw-detail-content{padding:18px 18px 28px}}
+.psw-detail-author-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.psw-detail-author-name{font-size:13px;font-weight:600}
+.psw-detail-author-role{font-size:11px;color:var(--grey);margin-top:1px}
+.psw-detail-domain-pill{font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#999;font-weight:500}
+body.light-mode .psw-detail-domain-pill{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#888}
+.psw-detail-title{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1.25;margin-bottom:12px}
+@media(max-width:480px){.psw-detail-title{font-size:18px}}
+.psw-detail-desc{font-size:14px;color:#bbb;line-height:1.7;margin-bottom:16px}
+body.light-mode .psw-detail-desc{color:#555}
+.psw-detail-meta{display:flex;gap:14px;font-size:12px;color:var(--grey);margin-bottom:14px}
+.psw-detail-stat{display:inline-flex;align-items:center;gap:5px}
+.psw-detail-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px}
 
-/* Panel */
-.psw-detail-panel {
-  background: var(--card);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 22px;
-  width: 100%;
-  max-width: 720px;
-  position: relative;
-  overflow: hidden;
-  margin: auto;
-  box-shadow: 0 32px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04) inset;
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.psw-detail-panel::-webkit-scrollbar { display: none; }
-body.light-mode .psw-detail-panel { background: #fff; border-color: #e0e0e0; box-shadow: 0 32px 80px rgba(0,0,0,.15); }
+/* Auth nudge reaction buttons */
+.psw-rxn-gate{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0;padding:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;align-items:center}
+body.light-mode .psw-rxn-gate{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.08)}
+.psw-rxn-gate-label{font-size:12px;color:var(--grey);flex-basis:100%;margin-bottom:4px}
+.psw-rxn-ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px;color:#666;cursor:pointer;transition:border-color .15s,background .15s}
+.psw-rxn-ghost:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#aaa}
+body.light-mode .psw-rxn-ghost{border-color:rgba(0,0,0,.1);background:rgba(0,0,0,.04);color:#aaa}
+body.light-mode .psw-rxn-ghost:hover{border-color:rgba(0,0,0,.18);color:#777}
 
-/* Close button */
-.psw-detail-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 20;
-  background: rgba(0,0,0,.55);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 50%;
-  width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  color: rgba(255,255,255,.8);
-  transition: background .15s, color .15s;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-.psw-detail-close:hover { background: rgba(0,0,0,.75); color: #fff; }
-body.light-mode .psw-detail-close { background: rgba(255,255,255,.85); color: #333; border-color: rgba(0,0,0,.12); }
-
-/* Cover media */
-.psw-detail-cover {
-  width: 100%;
-  aspect-ratio: 16/9;
-  object-fit: cover;
-  display: block;
-}
-.psw-detail-video-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16/9;
-  background: #000;
-  overflow: hidden;
-}
-.psw-detail-video-wrap iframe {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  border: none;
-}
-
-/* Content area */
-.psw-detail-content { padding: 24px 28px 36px; }
-@media (max-width: 520px) { .psw-detail-content { padding: 18px 18px 32px; } }
-
-/* Author row */
-.psw-detail-author-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin-bottom: 18px;
-}
-.psw-detail-author-info { flex: 1; min-width: 0; }
-.psw-detail-author-name { font-size: 13.5px; font-weight: 700; letter-spacing: -.015em; }
-.psw-detail-author-role { font-size: 11px; color: var(--grey); margin-top: 1px; }
-
-/* Domain pill */
-.psw-detail-domain {
-  font-size: 10px;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 20px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: var(--grey);
-  font-weight: 600;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-body.light-mode .psw-detail-domain { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1); }
-
-/* Title */
-.psw-detail-title {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -.04em;
-  line-height: 1.2;
-  margin-bottom: 12px;
-  color: var(--white);
-}
-@media (max-width: 520px) { .psw-detail-title { font-size: 19px; } }
-body.light-mode .psw-detail-title { color: #111; }
-
-/* Description */
-.psw-detail-desc {
-  font-size: 14.5px;
-  color: rgba(245,245,245,.75);
-  line-height: 1.72;
-  margin-bottom: 18px;
-}
-body.light-mode .psw-detail-desc { color: #555; }
-
-/* Meta stats */
-.psw-detail-meta {
-  display: flex;
-  gap: 16px;
-  font-size: 12px;
-  color: var(--grey);
-  margin-bottom: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.psw-detail-stat { display: inline-flex; align-items: center; gap: 5px; }
-
-/* Share button */
-.psw-share-btn {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: var(--grey);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: border-color .15s, color .15s, background .15s;
-  font-family: inherit;
-}
-.psw-share-btn:hover { border-color: rgba(255,255,255,.25); color: var(--white); background: rgba(255,255,255,.09); }
-body.light-mode .psw-share-btn { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.12); color: #666; }
-body.light-mode .psw-share-btn:hover { border-color: #999; color: #111; }
-
-/* Tags */
-.psw-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 22px; }
-
-/* Collaborators row */
-.psw-detail-collabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-.psw-detail-collab-label {
-  font-size: 11px;
-  color: var(--grey);
-  text-transform: uppercase;
-  letter-spacing: .07em;
-}
-.psw-detail-collab-chip {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; color: var(--grey);
-}
-
-/* ── Reaction section (authenticated gate for guests) ── */
-.psw-rxn-section {
-  margin: 20px 0;
-  padding: 18px;
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07);
-  border-radius: 16px;
-}
-body.light-mode .psw-rxn-section { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
-.psw-rxn-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--grey);
-  margin-bottom: 12px;
-}
-.psw-rxn-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.psw-rxn-ghost {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.1);
-  background: rgba(255,255,255,.04);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--grey);
-  cursor: pointer;
-  transition: border-color .15s, background .15s, color .15s, transform .12s;
-  font-family: inherit;
-}
-.psw-rxn-ghost:hover {
-  border-color: rgba(255,255,255,.22);
-  background: rgba(255,255,255,.08);
-  color: var(--white);
-  transform: translateY(-1px);
-}
-body.light-mode .psw-rxn-ghost {
-  border-color: rgba(0,0,0,.1);
-  background: rgba(0,0,0,.04);
-  color: #888;
-}
-body.light-mode .psw-rxn-ghost:hover { border-color: rgba(0,0,0,.2); color: #333; }
-
-/* ── Comments in detail ─────────────────────────────────────────────── */
-.psw-comments-section {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255,255,255,.06);
-}
-body.light-mode .psw-comments-section { border-color: #f0f0f0; }
-.psw-comments-header {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--grey);
-  margin-bottom: 18px;
-}
-.psw-comment { display: flex; flex-direction: column; gap: 5px; margin-bottom: 18px; }
-.psw-comment-nested {
-  margin-left: 34px;
-  padding-left: 14px;
-  border-left: 2px solid rgba(255,255,255,.07);
-}
-body.light-mode .psw-comment-nested { border-color: #e8e8e8; }
-.psw-comment-header { display: flex; align-items: center; gap: 8px; }
-.psw-comment-author {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--white);
-  letter-spacing: -.01em;
-}
-body.light-mode .psw-comment-author { color: #111; }
-.psw-comment-time { font-size: 11px; color: var(--grey); }
-.psw-comment-body {
-  font-size: 13.5px;
-  color: rgba(245,245,245,.8);
-  line-height: 1.6;
-  padding-left: 32px;
-  word-break: break-word;
-}
-body.light-mode .psw-comment-body { color: #444; }
-.psw-comment-gate {
-  padding: 14px 16px;
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07);
-  border-radius: 12px;
-  font-size: 13px;
-  color: var(--grey);
-  margin-top: 8px;
-}
-body.light-mode .psw-comment-gate { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
-.psw-comment-gate a {
-  color: var(--white);
-  font-weight: 700;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(255,255,255,.3);
-  transition: border-color .15s;
-}
-.psw-comment-gate a:hover { border-color: var(--white); }
-body.light-mode .psw-comment-gate a { color: #111; border-color: rgba(0,0,0,.3); }
-.psw-pin-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 9.5px;
-  color: var(--grey);
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 4px;
-  padding: 1px 6px;
-  margin-left: 5px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   AUTH MODAL — Beautiful authentication gate
-════════════════════════════════════════════════════════════════════ */
-
-#psw-auth-nudge {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.72);
-  z-index: 9200;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-}
-#psw-auth-nudge.open { display: flex; animation: pswModalIn .24s cubic-bezier(.32,1,.5,1) both; }
-
-.psw-auth-panel {
-  background: var(--card);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 24px;
-  padding: 40px 36px;
-  max-width: 400px;
-  width: 100%;
-  text-align: center;
-  box-shadow: 0 24px 64px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05) inset;
-  position: relative;
-}
-body.light-mode .psw-auth-panel {
-  background: #fff;
-  border-color: #e0e0e0;
-  box-shadow: 0 24px 64px rgba(0,0,0,.1);
-}
-
-/* Icon */
-.psw-auth-icon {
-  width: 56px; height: 56px;
-  border-radius: 16px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 22px;
-}
-body.light-mode .psw-auth-icon { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1); }
-
-.psw-auth-title {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -.03em;
-  margin-bottom: 10px;
-  color: var(--white);
-}
-body.light-mode .psw-auth-title { color: #111; }
-
-.psw-auth-sub {
-  font-size: 13.5px;
-  color: var(--grey);
-  line-height: 1.65;
-  margin-bottom: 28px;
-}
-
-.psw-auth-join-btn {
-  display: block;
-  padding: 14px 24px;
-  background: var(--white);
-  color: var(--black);
-  border: none;
-  border-radius: 14px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity .15s, transform .15s;
-  margin-bottom: 12px;
-  width: 100%;
-}
-.psw-auth-join-btn:hover { opacity: .86; transform: scale(.98); }
-
-.psw-auth-dismiss {
-  background: none;
-  border: none;
-  color: var(--grey);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: color .15s, background .15s;
-}
-.psw-auth-dismiss:hover { color: var(--white); background: rgba(255,255,255,.06); }
-body.light-mode .psw-auth-dismiss:hover { color: #111; background: rgba(0,0,0,.06); }
+/* Comments (read-only) */
+.psw-comments-section{margin-top:24px;border-top:1px solid #1e1e1e;padding-top:20px}
+body.light-mode .psw-comments-section{border-color:#eee}
+.psw-comments-title{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#555;margin-bottom:16px;font-weight:600}
+.psw-comment{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.psw-comment-nested{margin-left:32px;padding-left:12px;border-left:2px solid #1e1e1e}
+body.light-mode .psw-comment-nested{border-color:#eee}
+.psw-comment-header{display:flex;align-items:center;gap:8px}
+.psw-comment-author{font-size:12px;font-weight:600;color:#ddd}
+body.light-mode .psw-comment-author{color:#333}
+.psw-comment-time{font-size:11px;color:var(--grey)}
+.psw-comment-body{font-size:13px;color:#bbb;line-height:1.6;padding-left:30px}
+body.light-mode .psw-comment-body{color:#555}
+.psw-comment-gate{margin-top:12px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;font-size:13px;color:var(--grey)}
+body.light-mode .psw-comment-gate{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.08)}
+.psw-comment-gate a{color:var(--white);font-weight:600;text-decoration:none}
+body.light-mode .psw-comment-gate a{color:#111}
+.psw-comment-gate a:hover{text-decoration:underline}
+.psw-pin-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#666;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:1px 6px;margin-left:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -4137,124 +3355,62 @@ body.light-mode .psw-auth-dismiss:hover { color: #111; background: rgba(0,0,0,.0
 </div>
 
 <!-- ── STUDIO WALL PAGE ── -->
-<!--
-  ╔════════════════════════════════════════════════════════════════╗
-  ║  SOCIAL STRAND — Premium Page HTML                           ║
-  ║  Replaces <div class="page" id="page-strand"> ... </div>     ║
-  ║  Also replaces #psw-detail-overlay and #psw-auth-nudge below ║
-  ╚════════════════════════════════════════════════════════════════╝
--->
-
-<!-- ── SOCIAL STRAND PAGE ──────────────────────────────────────── -->
 <div class="page" id="page-strand">
-
-  <!-- Sticky top bar -->
-  <div class="psw-topbar">
-    <div class="psw-topbar-inner">
-      <div class="psw-topbar-brand">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-        </svg>
-        Social Strand
+  <!-- Instagram-style header bar -->
+  <div style="position:sticky;top:60px;z-index:80;background:var(--black);border-bottom:1px solid var(--border);padding:12px 0">
+    <div style="max-width:614px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--white)"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span style="font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--white)">Social Strand</span>
       </div>
-      <div class="psw-topbar-actions">
-        <!-- Tag search -->
-        <div class="psw-search-pill">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-search-input" autocomplete="off">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="psw-tag-input-wrap" style="padding:6px 10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--grey);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="psw-tag-filter" type="text" placeholder="Filter by tag…" class="psw-tag-input" autocomplete="off" style="width:120px">
         </div>
-        <!-- Sign in CTA -->
-        <a href="/Social-Strand" class="psw-signin-btn" id="psw-topbar-signin">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-          Sign in
-        </a>
+        <a href="/Social-Strand" style="font-size:13px;font-weight:700;color:#0095f6;text-decoration:none;white-space:nowrap">Sign in</a>
       </div>
     </div>
   </div>
 
-  <!-- Guest info bar (hidden for logged-in members) -->
-  <div class="psw-guest-bar" id="psw-guest-banner">
-    <div class="psw-guest-bar-inner">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--grey)"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-      <span>Browsing as guest. <a href="/Social-Strand">Join Social Strand</a> to like, react, and comment on member work.</span>
-    </div>
+  <!-- Guest banner -->
+  <div class="psw-guest-banner" id="psw-guest-banner" style="max-width:614px;margin:16px auto 0;border-radius:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <span>Browsing as guest. <a href="/Social-Strand">Join Social Strand</a> to like and comment.</span>
   </div>
 
-  <!-- Feed (skeleton shown on first load, replaced by pswFeedCard output) -->
-  <div class="psw-feed-root">
-    <!-- Skeleton placeholders — removed when real cards load -->
-    <div id="psw-skeletons" class="psw-grid" aria-hidden="true">
-      <div class="psw-post-skeleton">
-        <div class="psw-post-skeleton-header">
-          <div class="psw-skeleton psw-post-skeleton-avatar"></div>
-          <div style="flex:1">
-            <div class="psw-skeleton psw-post-skeleton-line" style="width:40%;margin-bottom:6px"></div>
-            <div class="psw-skeleton psw-post-skeleton-line" style="width:20%;height:10px"></div>
-          </div>
-        </div>
-        <div class="psw-skeleton psw-post-skeleton-media"></div>
-        <div class="psw-post-skeleton-body">
-          <div class="psw-skeleton psw-post-skeleton-line" style="width:55%;height:10px"></div>
-          <div class="psw-skeleton psw-post-skeleton-line" style="width:80%;height:10px"></div>
-          <div class="psw-skeleton psw-post-skeleton-line" style="width:60%;height:10px"></div>
-        </div>
-      </div>
-      <div class="psw-post-skeleton" style="opacity:.7">
-        <div class="psw-post-skeleton-header">
-          <div class="psw-skeleton psw-post-skeleton-avatar"></div>
-          <div style="flex:1">
-            <div class="psw-skeleton psw-post-skeleton-line" style="width:35%;margin-bottom:6px"></div>
-            <div class="psw-skeleton psw-post-skeleton-line" style="width:18%;height:10px"></div>
-          </div>
-        </div>
-        <div class="psw-skeleton psw-post-skeleton-media" style="aspect-ratio:4/5"></div>
-        <div class="psw-post-skeleton-body">
-          <div class="psw-skeleton psw-post-skeleton-line" style="width:70%;height:10px"></div>
-          <div class="psw-skeleton psw-post-skeleton-line" style="width:45%;height:10px"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Real feed -->
-    <div id="psw-feed" class="psw-grid" style="display:none"></div>
-
-    <!-- Load more -->
-    <div class="psw-load-more-wrap">
-      <button id="psw-load-more-btn" class="psw-load-more-btn" style="display:none">
-        Load more
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
+  <!-- Instagram-style single-column feed -->
+  <div style="max-width:614px;margin:16px auto 0;padding:0">
+    <div id="psw-feed" class="psw-grid"></div>
+    <div style="text-align:center;padding:24px 0">
+      <button id="psw-load-more-btn" class="btn btn-secondary" style="display:none;border-radius:10px;font-size:13px;padding:9px 22px">Load more</button>
     </div>
   </div>
 </div>
 
-
-<!-- ── POST DETAIL MODAL ─────────────────────────────────────────── -->
-<div id="psw-detail-overlay" onclick="if(event.target===this)pswCloseDetail()" aria-modal="true" role="dialog">
-  <div class="psw-detail-panel" id="psw-detail-panel">
+<!-- ── STUDIO WALL — Detail Modal (public, read-only) ── -->
+<div id="psw-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9100;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px)" onclick="if(event.target===this)pswCloseDetail()">
+  <div class="psw-detail-box">
     <button class="psw-detail-close" onclick="pswCloseDetail()" aria-label="Close">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div id="psw-detail-body"></div>
   </div>
 </div>
 
-
-<!-- ── AUTH GATE MODAL ───────────────────────────────────────────── -->
-<div id="psw-auth-nudge" onclick="if(event.target===this)pswHideAuthNudge()" aria-modal="true" role="dialog">
-  <div class="psw-auth-panel">
-    <div class="psw-auth-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(245,245,245,.6)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+<!-- ── STUDIO WALL — Auth Nudge Modal ── -->
+<div id="psw-auth-nudge" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9200;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)" onclick="if(event.target===this)document.getElementById('psw-auth-nudge').style.display='none'">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:16px;padding:36px 32px;max-width:380px;width:100%;text-align:center">
+    <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1a;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
     </div>
-    <div class="psw-auth-title">Members only</div>
-    <p class="psw-auth-sub">Reactions, comments, and saves are for KFS members. Sign in to join the conversation.</p>
-    <a href="/Social-Strand" class="psw-auth-join-btn">Join Social Strand</a>
-    <button onclick="pswHideAuthNudge()" class="psw-auth-dismiss">Maybe later</button>
+    <div style="font-size:16px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px">Members only</div>
+    <p style="font-size:13px;color:var(--grey);line-height:1.6;margin-bottom:24px">Reactions and comments are for KFS members. Sign in to join the conversation.</p>
+    <a href="/Social-Strand" class="btn btn-primary" style="display:block;border-radius:10px;text-decoration:none;margin-bottom:10px">Join Social Strand</a>
+    <button onclick="document.getElementById('psw-auth-nudge').style.display='none'" style="background:none;border:none;color:var(--grey);font-size:13px;cursor:pointer;padding:4px 8px">Maybe later</button>
   </div>
 </div>
+
 <!-- ── DONATIONS PAGE ── -->
 <div class="page" id="page-donations">
   <div class="donations-hero">

@@ -6987,6 +6987,7 @@ function gcRenderGroups(list) {
         ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
       </div>`;
     row.addEventListener('click', () => {
+      if (!g?.id) return; // guard: skip null-id entries from corrupted cache
       const opener = typeof window.gcOpenGroup === 'function' ? window.gcOpenGroup : gcOpenGroup;
       opener(g);
     });
@@ -7051,14 +7052,19 @@ async function gcLoadGroupDetails(groupId, _retryCount, _floorCount) {
     }
     // If still 0 and haven't retried enough, try again with backoff
     if (count === 0 && _retryCount < 3) {
-      setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount), 800);
+      setTimeout(() => {
+        // Only retry if we're still looking at the same group
+        if (GC.activeId === groupId) gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount);
+      }, 800);
     }
 
     // Topbar nickname button / role update (always run even if count is uncertain)
     gcRefreshTopbarNicknames(groupId, data);
     gcUpdateInputState();
   } catch (e) {
-    if (_retryCount < 2) setTimeout(() => gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount), 1200);
+    if (_retryCount < 2) setTimeout(() => {
+      if (GC.activeId === groupId) gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount);
+    }, 1200);
   }
 }
 
@@ -8941,6 +8947,57 @@ if (document.readyState === "loading") {
       renameBtn.style.display = 'none';
     }
 
+    // ── Delete Group button (owner only) ─────────────────────────────────────
+    // The old gcShowInfoModal had this but dpShowGroup never did — wiring it in.
+    let deleteGrpBtn = document.getElementById('dp-delete-group-btn');
+    if (group.my_role === 'owner') {
+      if (!deleteGrpBtn) {
+        deleteGrpBtn = document.createElement('button');
+        deleteGrpBtn.id = 'dp-delete-group-btn';
+        deleteGrpBtn.className = 'dm-detail-action-btn dm-detail-danger';
+        deleteGrpBtn.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:8px;font-size:13px';
+        deleteGrpBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Delete group for everyone`;
+        const leaveBtn = document.getElementById('dm-detail-leave-btn');
+        if (leaveBtn && leaveBtn.parentNode) leaveBtn.parentNode.appendChild(deleteGrpBtn);
+      }
+      deleteGrpBtn.style.display = '';
+      deleteGrpBtn.onclick = async () => {
+        if (!confirm(`Delete "${group.name}" for everyone? This cannot be undone.`)) return;
+        try {
+          await api('DELETE', `/api/member/groups/${group.id}`);
+          // Remove from local state
+          if (typeof GC !== 'undefined') {
+            GC.groups = (GC.groups || []).filter(g => g.id !== group.id);
+            if (GC.activeId === group.id) {
+              GC.activeId    = null;
+              GC.activeGroup = null;
+              GC.msgs        = [];
+            }
+          }
+          if (typeof dpClose === 'function') dpClose();
+          if (typeof window.gcGoBack === 'function') window.gcGoBack();
+          if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups || []);
+          if (typeof swShowToast === 'function') swShowToast('Group deleted.');
+          // Purge from localStorage cache
+          try {
+            const myId = typeof gcMyId === 'function' ? gcMyId() : null;
+            if (myId) {
+              const cacheKey = 'kfs-groups-' + myId;
+              const raw = localStorage.getItem(cacheKey);
+              if (raw) {
+                const arr = JSON.parse(raw).filter(g => g?.id && g.id !== group.id);
+                localStorage.setItem(cacheKey, JSON.stringify(arr));
+              }
+            }
+          } catch { /* silent */ }
+        } catch (e) {
+          alert(e.message || 'Could not delete group. Please try again.');
+        }
+      };
+    } else if (deleteGrpBtn) {
+      deleteGrpBtn.style.display = 'none';
+    }
+
     dpOpen();
   }
 
@@ -9180,9 +9237,16 @@ if (document.readyState === "loading") {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
       if (!GC.groups || !GC.groups.length) {
-        GC.groups = parsed;
+        // Strip any entries with null/undefined id — these were written during
+        // the kfs-groups-null bug and cause /api/member/groups/null 401 errors
+        GC.groups = parsed.filter(g => g?.id);
       }
     }
+    // Also sanitize the stored key itself so nulls don't persist across refreshes
+    try {
+      const clean = parsed.filter(g => g?.id);
+      if (clean.length !== parsed.length) localStorage.setItem(key, JSON.stringify(clean));
+    } catch { /* silent */ }
   } catch { /* silent */ }
 })();
 
