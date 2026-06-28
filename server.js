@@ -14850,181 +14850,6 @@ app.get("/api/admin/moderation/dm/:convKey", authMiddleware, async (req, res) =>
   }
 });
 
-// ── CATCH-ALL ─────────────────────────────────────────────────────────────────
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
-// Ping every 29 minutes to prevent the connection from going idle.
-// Supabase times out idle connections at 30 min — this stays safely inside that window.
-setInterval(
-  async () => {
-    try {
-      await supabasePublic.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
-      // Silent success — log only on failure
-    } catch (e) {
-      console.error("Supabase keepalive failed:", e.message);
-    }
-  },
-  1000 * 60 * 29,
-);
-
-// Trim old page_view rows older than 90 days — run once per day
-setInterval(
-  async () => {
-    try {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 90);
-      await supabasePublic
-        .from("page_views")
-        .delete()
-        .lt("date", cutoff.toISOString().slice(0, 10));
-    } catch (e) {
-      console.error("[page_views trim]", e.message);
-    }
-  },
-  1000 * 60 * 60 * 24,
-); // every 24h
-
-// ── GLOBAL ERROR HANDLER ──────────────────────────────────────────────────────
-// Catches any error passed via next(err) or thrown inside async route handlers
-// that weren't caught locally. Logs the real error server-side, sends a safe
-// generic message to the client — never leaks stack traces or internals.
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  console.error(`[unhandled] ${req.method} ${req.path}`, err);
-  if (res.headersSent) return next(err);
-  const status = typeof err.status === 'number' ? err.status : 500;
-  res.status(status).json({ error: status < 500 ? (err.message || 'Bad request') : 'Internal server error' });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION MA-35 — Social: Block/Unblock · Nicknames · Group Chats
-//
-// SQL migration (run once in Supabase):
-//
-//   -- Block list
-//   CREATE TABLE IF NOT EXISTS member_blocks (
-//     blocker_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     blocked_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-//     PRIMARY KEY (blocker_id, blocked_id)
-//   );
-//   CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON member_blocks(blocker_id);
-//   CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON member_blocks(blocked_id);
-//
-//   -- Nicknames (one per direction — giver → target)
-//   CREATE TABLE IF NOT EXISTS member_nicknames (
-//     giver_id    UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     target_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     nickname    TEXT NOT NULL CHECK (char_length(nickname) BETWEEN 1 AND 40),
-//     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-//     PRIMARY KEY (giver_id, target_id)
-//   );
-//
-//   -- Group chats
-//   CREATE TABLE IF NOT EXISTS dm_group_chats (
-//     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-//     name         TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
-//     created_by   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-//   );
-//   CREATE TABLE IF NOT EXISTS dm_group_members (
-//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
-//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     nickname    TEXT,                -- group-scoped nickname for this member (visible to all)
-//     joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-//     PRIMARY KEY (group_id, member_id)
-//   );
-//   CREATE TABLE IF NOT EXISTS dm_group_messages (
-//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
-//     sender_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     body        TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
-//     deleted_at  TIMESTAMPTZ,
-//     is_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
-//     replied_to_id     UUID REFERENCES dm_group_messages(id) ON DELETE SET NULL,
-//     replied_to_body   TEXT,
-//     replied_to_sender TEXT,
-//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-//   );
-//   -- member_notifications (DMs) also needs replied_to columns:
-//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_id UUID;
-//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_body TEXT;
-//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_sender TEXT;
-//   CREATE INDEX IF NOT EXISTS idx_grp_msgs_group ON dm_group_messages(group_id, created_at);
-//   CREATE INDEX IF NOT EXISTS idx_grp_members_member ON dm_group_members(member_id);
-//
-//   -- Message reactions (Instagram-style — one reaction per member per message,
-//   -- shared by both DMs and group chats via the chat_type discriminator)
-//   CREATE TABLE IF NOT EXISTS message_reactions (
-//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-//     chat_type   TEXT NOT NULL CHECK (chat_type IN ('dm','group')),
-//     message_id  UUID NOT NULL,
-//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-//     emoji       TEXT NOT NULL CHECK (char_length(emoji) BETWEEN 1 AND 8),
-//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-//     UNIQUE (chat_type, message_id, member_id)
-//   );
-//   CREATE INDEX IF NOT EXISTS idx_msg_reactions_msg ON message_reactions(chat_type, message_id);
-//   ALTER TABLE message_reactions DISABLE ROW LEVEL SECURITY; -- server uses service_role key
-// ─────────────────────────────────────────────────────────────────────────────
-
-const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
-const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
-const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
-const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
-// reactionLimit — defined earlier, near first use
-
-// ── Message reactions — shared helpers (DM + group) ───────────────────────────
-// One reaction per member per message (tap a new emoji to switch, tap your
-// current one again to remove — same toggle pattern as Studio Wall reactions).
-
-/**
- * Fetch + aggregate reactions for a batch of message ids.
- * Returns { [messageId]: [{ emoji, count, mine }, ...] }, sorted by count desc.
- */
-async function fetchReactionsFor(messageIds, chatType, myId) {
-  if (!messageIds || !messageIds.length) return {};
-  const { data, error } = await supabase
-    .from("message_reactions")
-    .select("message_id, member_id, emoji")
-    .eq("chat_type", chatType)
-    .in("message_id", messageIds);
-  if (error) {
-    if (error.code !== "42P01") console.error("[reactions] fetch:", error.message);
-    return {};
-  }
-  const byMsg = {};
-  (data || []).forEach(r => {
-    const bucket = (byMsg[r.message_id] = byMsg[r.message_id] || {});
-    const slot   = (bucket[r.emoji] = bucket[r.emoji] || { emoji: r.emoji, count: 0, mine: false });
-    slot.count++;
-    if (r.member_id === myId) slot.mine = true;
-  });
-  const out = {};
-  Object.keys(byMsg).forEach(mid => {
-    out[mid] = Object.values(byMsg[mid]).sort((a, b) => b.count - a.count);
-  });
-  return out;
-}
-
-/** Toggle a member's reaction on a message: same emoji → remove, different → switch, none → add. */
-async function toggleMessageReaction(messageId, chatType, myId, emoji) {
-  const { data: existing } = await supabase
-    .from("message_reactions")
-    .select("id, emoji")
-    .eq("chat_type", chatType).eq("message_id", messageId).eq("member_id", myId)
-    .maybeSingle();
-  if (existing && existing.emoji === emoji) {
-    await supabase.from("message_reactions").delete().eq("id", existing.id);
-  } else if (existing) {
-    await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
-  } else {
-    await supabase.from("message_reactions").insert([{ chat_type: chatType, message_id: messageId, member_id: myId, emoji }]);
-  }
-}
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
@@ -16055,3 +15880,180 @@ app.listen(PORT, async () => {
   await refreshLeaderboards();
   setInterval(refreshLeaderboards, 30 * 60 * 1000);
 });
+
+// ── CATCH-ALL ─────────────────────────────────────────────────────────────────
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
+// Ping every 29 minutes to prevent the connection from going idle.
+// Supabase times out idle connections at 30 min — this stays safely inside that window.
+setInterval(
+  async () => {
+    try {
+      await supabasePublic.from("settings").select("key", { count: "exact", head: true }).limit(1); // zero egress bytes
+      // Silent success — log only on failure
+    } catch (e) {
+      console.error("Supabase keepalive failed:", e.message);
+    }
+  },
+  1000 * 60 * 29,
+);
+
+// Trim old page_view rows older than 90 days — run once per day
+setInterval(
+  async () => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      await supabasePublic
+        .from("page_views")
+        .delete()
+        .lt("date", cutoff.toISOString().slice(0, 10));
+    } catch (e) {
+      console.error("[page_views trim]", e.message);
+    }
+  },
+  1000 * 60 * 60 * 24,
+); // every 24h
+
+// ── GLOBAL ERROR HANDLER ──────────────────────────────────────────────────────
+// Catches any error passed via next(err) or thrown inside async route handlers
+// that weren't caught locally. Logs the real error server-side, sends a safe
+// generic message to the client — never leaks stack traces or internals.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[unhandled] ${req.method} ${req.path}`, err);
+  if (res.headersSent) return next(err);
+  const status = typeof err.status === 'number' ? err.status : 500;
+  res.status(status).json({ error: status < 500 ? (err.message || 'Bad request') : 'Internal server error' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION MA-35 — Social: Block/Unblock · Nicknames · Group Chats
+//
+// SQL migration (run once in Supabase):
+//
+//   -- Block list
+//   CREATE TABLE IF NOT EXISTS member_blocks (
+//     blocker_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     blocked_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (blocker_id, blocked_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON member_blocks(blocker_id);
+//   CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON member_blocks(blocked_id);
+//
+//   -- Nicknames (one per direction — giver → target)
+//   CREATE TABLE IF NOT EXISTS member_nicknames (
+//     giver_id    UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     target_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     nickname    TEXT NOT NULL CHECK (char_length(nickname) BETWEEN 1 AND 40),
+//     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (giver_id, target_id)
+//   );
+//
+//   -- Group chats
+//   CREATE TABLE IF NOT EXISTS dm_group_chats (
+//     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     name         TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
+//     created_by   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE TABLE IF NOT EXISTS dm_group_members (
+//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
+//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     nickname    TEXT,                -- group-scoped nickname for this member (visible to all)
+//     joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (group_id, member_id)
+//   );
+//   CREATE TABLE IF NOT EXISTS dm_group_messages (
+//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     group_id    UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
+//     sender_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     body        TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
+//     deleted_at  TIMESTAMPTZ,
+//     is_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
+//     replied_to_id     UUID REFERENCES dm_group_messages(id) ON DELETE SET NULL,
+//     replied_to_body   TEXT,
+//     replied_to_sender TEXT,
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   -- member_notifications (DMs) also needs replied_to columns:
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_id UUID;
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_body TEXT;
+//   -- ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS replied_to_sender TEXT;
+//   CREATE INDEX IF NOT EXISTS idx_grp_msgs_group ON dm_group_messages(group_id, created_at);
+//   CREATE INDEX IF NOT EXISTS idx_grp_members_member ON dm_group_members(member_id);
+//
+//   -- Message reactions (Instagram-style — one reaction per member per message,
+//   -- shared by both DMs and group chats via the chat_type discriminator)
+//   CREATE TABLE IF NOT EXISTS message_reactions (
+//     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     chat_type   TEXT NOT NULL CHECK (chat_type IN ('dm','group')),
+//     message_id  UUID NOT NULL,
+//     member_id   UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     emoji       TEXT NOT NULL CHECK (char_length(emoji) BETWEEN 1 AND 8),
+//     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     UNIQUE (chat_type, message_id, member_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_msg_reactions_msg ON message_reactions(chat_type, message_id);
+//   ALTER TABLE message_reactions DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+// ─────────────────────────────────────────────────────────────────────────────
+
+const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+// reactionLimit — defined earlier, near first use
+
+// ── Message reactions — shared helpers (DM + group) ───────────────────────────
+// One reaction per member per message (tap a new emoji to switch, tap your
+// current one again to remove — same toggle pattern as Studio Wall reactions).
+
+/**
+ * Fetch + aggregate reactions for a batch of message ids.
+ * Returns { [messageId]: [{ emoji, count, mine }, ...] }, sorted by count desc.
+ */
+async function fetchReactionsFor(messageIds, chatType, myId) {
+  if (!messageIds || !messageIds.length) return {};
+  const { data, error } = await supabase
+    .from("message_reactions")
+    .select("message_id, member_id, emoji")
+    .eq("chat_type", chatType)
+    .in("message_id", messageIds);
+  if (error) {
+    if (error.code !== "42P01") console.error("[reactions] fetch:", error.message);
+    return {};
+  }
+  const byMsg = {};
+  (data || []).forEach(r => {
+    const bucket = (byMsg[r.message_id] = byMsg[r.message_id] || {});
+    const slot   = (bucket[r.emoji] = bucket[r.emoji] || { emoji: r.emoji, count: 0, mine: false });
+    slot.count++;
+    if (r.member_id === myId) slot.mine = true;
+  });
+  const out = {};
+  Object.keys(byMsg).forEach(mid => {
+    out[mid] = Object.values(byMsg[mid]).sort((a, b) => b.count - a.count);
+  });
+  return out;
+}
+
+/** Toggle a member's reaction on a message: same emoji → remove, different → switch, none → add. */
+async function toggleMessageReaction(messageId, chatType, myId, emoji) {
+  const { data: existing } = await supabase
+    .from("message_reactions")
+    .select("id, emoji")
+    .eq("chat_type", chatType).eq("message_id", messageId).eq("member_id", myId)
+    .maybeSingle();
+  if (existing && existing.emoji === emoji) {
+    await supabase.from("message_reactions").delete().eq("id", existing.id);
+  } else if (existing) {
+    await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
+  } else {
+    await supabase.from("message_reactions").insert([{ chat_type: chatType, message_id: messageId, member_id: myId, emoji }]);
+  }
+}
+
