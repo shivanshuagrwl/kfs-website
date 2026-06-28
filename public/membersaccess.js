@@ -7478,8 +7478,16 @@ async function gcSend() {
       tmpBubble.remove();
       if (grp && !grp.querySelector('.dm-bubble')) grp.remove();
     }
-    input.value = body; // restore on error
-    console.error('[GC] send:', e.message);
+    // Same moderation handling as DM: a warned/muted/banned member gets a
+    // visible toast (and, for mute/ban, a locked compose box) instead of the
+    // message just silently vanishing with no explanation.
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
+      _vioShowClientNotice(ed, e.message, 'gc-input', 'gc-send-btn');
+    } else {
+      input.value = body; // restore on error
+      console.error('[GC] send:', e.message);
+    }
   } finally {
     GC.pendingBodies.delete(body);
   }
