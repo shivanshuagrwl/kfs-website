@@ -142,7 +142,8 @@
   function installGcRenderPatch() {
     if (typeof gcRenderMsgs !== "function") return;
     var orig = gcRenderMsgs;
-    gcRenderMsgs = function patchedGcRenderMsgs(msgs, opts) {
+    gcRenderMsgs = function patchedGcRenderMsgs() {
+      var msgs = arguments[0];
       if (Array.isArray(msgs)) {
         msgs.forEach(function (m) {
           if (m && m.id && typeof m.is_pinned === "boolean") {
@@ -150,7 +151,11 @@
           }
         });
       }
-      return orig.call(this, msgs, opts);
+      // IMPORTANT: forward every argument the caller actually passed
+      // (msgs, container, myId, lastSenderHint) — the original two-param
+      // signature here silently dropped myId/lastSenderHint on every call,
+      // which broke "mine" detection and message grouping site-wide.
+      return orig.apply(this, arguments);
     };
   }
 

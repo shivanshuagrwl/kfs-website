@@ -1040,7 +1040,11 @@ async function loadDashboard() {
   // (instant) then reconciles with the server. blocksEnsureLoaded is a
   // no-op if it already ran. Both are non-blocking.
   if (typeof nicksLoadGlobal === 'function') nicksLoadGlobal().catch(() => {});
-  if (typeof blocksEnsureLoaded === 'function') blocksEnsureLoaded().catch(() => {});
+  if (typeof blocksEnsureLoaded === 'function') {
+    blocksEnsureLoaded()
+      .then(() => { if (typeof dmUpdateBlockedBanner === 'function') dmUpdateBlockedBanner(); })
+      .catch(() => {});
+  }
 
   // ── First-time login detection ──────────────────────────────────────────
   // We track this with a per-member localStorage key so it only fires once
@@ -6199,6 +6203,16 @@ function _showMsgContextMenu(e, info) {
 
   const { id, body, mine, senderName, type /* 'dm'|'group' */, senderId } = info;
 
+  // The `info` object closed over by _attachMsgContextMenu was built once,
+  // at render time. After a pin/unpin toggle, GC.msgs is updated in memory
+  // but that closure is not, so info.is_pinned can be stale on re-open.
+  // GC.msgs is the single live source of truth for group messages — always
+  // re-derive from it rather than trusting the closure snapshot.
+  const liveMsg = (type === 'group' && typeof GC !== 'undefined')
+    ? GC.msgs.find(m => m.id === id)
+    : null;
+  const isPinnedLive = liveMsg ? !!liveMsg.is_pinned : !!info.is_pinned;
+
   const menu = document.createElement('div');
   menu.className = 'dm-ctx-menu';
   _ctxMenu = menu;
@@ -6240,7 +6254,7 @@ function _showMsgContextMenu(e, info) {
   // Pin — works for group messages; DM pin shows a toast (server doesn't support DM pins)
   actions.push({
     icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>',
-    label: type === 'group' ? (info.is_pinned ? 'Unpin' : 'Pin') : 'Pin',
+    label: type === 'group' ? (isPinnedLive ? 'Unpin' : 'Pin') : 'Pin',
     fn: async () => {
       if (type !== 'group') {
         if (typeof swShowToast === 'function') swShowToast('📌 Message pinned to this conversation.');
@@ -6519,10 +6533,21 @@ async function nicksLoadGlobal() {
         // Persist to localStorage so next refresh has instant nicknames
         try { localStorage.setItem('kfs-nicks-' + myId, JSON.stringify(data)); } catch { /* ignore */ }
       } else {
-        // Server returned {} — genuinely no nicknames set.
-        // Clear both in-memory cache and localStorage so stale entries don't persist.
-        Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
-        try { localStorage.removeItem('kfs-nicks-' + myId); } catch { /* ignore */ }
+        // Server returned {} — this is ambiguous: it can mean "you genuinely
+        // have no nicknames" OR it can be the same {} that api() returns for
+        // a 304 Not Modified or a JSON-parse failure (see api(), where both
+        // of those fall back to {} and are indistinguishable from a real
+        // empty payload here). Wiping the cache on the very first load of
+        // the session — before we've ever confirmed a real response — risks
+        // destroying a perfectly good localStorage seed because of a network
+        // artifact. Only accept {} as authoritative once we've already had
+        // at least one confirmed load this session; on the first load,
+        // leave the localStorage-seeded cache alone and let the next
+        // fetch (which will use a fresh _cb cache-buster) re-confirm.
+        if (NICKS_GLOBAL_LOADED) {
+          Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
+          try { localStorage.removeItem('kfs-nicks-' + myId); } catch { /* ignore */ }
+        }
       }
       NICKS_GLOBAL_LOADED = true;
     }
