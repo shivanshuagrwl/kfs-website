@@ -14993,7 +14993,8 @@ app.post("/api/member/blocks", memberAuthMiddleware, blockWriteLimit, async (req
     const { blocked_id } = req.body || {};
     if (!blocked_id) return res.status(400).json({ error: "blocked_id required" });
     if (blocked_id === myId) return res.status(400).json({ error: "Cannot block yourself" });
-    await supabase.from("member_blocks").upsert([{ blocker_id: myId, blocked_id }], { onConflict: "blocker_id,blocked_id" });
+    const { error: blockErr } = await supabase.from("member_blocks").upsert([{ blocker_id: myId, blocked_id }], { onConflict: "blocker_id,blocked_id" });
+    if (blockErr) { console.error("[blocks POST] upsert:", blockErr.message, blockErr.code); throw blockErr; }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to block member" });
@@ -15019,7 +15020,8 @@ app.get("/api/member/blocks/check/:id", memberAuthMiddleware, async (req, res) =
 app.delete("/api/member/blocks/:id", memberAuthMiddleware, blockWriteLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
-    await supabase.from("member_blocks").delete().eq("blocker_id", myId).eq("blocked_id", req.params.id);
+    const { error: unblockErr } = await supabase.from("member_blocks").delete().eq("blocker_id", myId).eq("blocked_id", req.params.id);
+    if (unblockErr) { console.error("[blocks DELETE] delete:", unblockErr.message, unblockErr.code); throw unblockErr; }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to unblock member" });
@@ -15049,12 +15051,14 @@ app.put("/api/member/nicknames/:targetId", memberAuthMiddleware, nicknameLimit, 
     const nickname = (req.body?.nickname || "").trim().slice(0, 40);
     if (targetId === myId) return res.status(400).json({ error: "Cannot nickname yourself" });
     if (!nickname) {
-      await supabase.from("member_nicknames").delete().eq("giver_id", myId).eq("target_id", targetId);
+      const { error: delErr } = await supabase.from("member_nicknames").delete().eq("giver_id", myId).eq("target_id", targetId);
+      if (delErr) { console.error("[nicknames PUT] delete:", delErr.message, delErr.code); throw delErr; }
     } else {
-      await supabase.from("member_nicknames").upsert(
+      const { error: nickErr } = await supabase.from("member_nicknames").upsert(
         [{ giver_id: myId, target_id: targetId, nickname, updated_at: new Date().toISOString() }],
         { onConflict: "giver_id,target_id" }
       );
+      if (nickErr) { console.error("[nicknames PUT] upsert:", nickErr.message, nickErr.code); throw nickErr; }
     }
     res.json({ success: true, nickname: nickname || null });
   } catch (e) {
@@ -15357,7 +15361,8 @@ app.patch("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (r
     if (!name) return res.status(400).json({ error: "Name required" });
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
-    await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    const { error: renameErr } = await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    if (renameErr) { console.error("[groups PATCH name] update:", renameErr.message, renameErr.code); throw renameErr; }
     // Activity message (sentinel prefix, no schema change)
     const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
     (async () => { try { await supabase.from("dm_group_messages").insert([{
@@ -15398,7 +15403,8 @@ app.post("/api/member/groups/:id/photo", memberAuthMiddleware, gcWriteLimit,
       });
 
       const photoUrl = uploadResult.secure_url;
-      await supabase.from("dm_group_chats").update({ photo_url: photoUrl }).eq("id", gid);
+      const { error: photoErr } = await supabase.from("dm_group_chats").update({ photo_url: photoUrl }).eq("id", gid);
+      if (photoErr) { console.error("[groups photo POST] update:", photoErr.message, photoErr.code); throw photoErr; }
 
       // System message
       const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
@@ -15431,7 +15437,8 @@ app.post("/api/member/groups/:id/messages/:msgId/pin", memberAuthMiddleware, gcW
     if (!msg) return res.status(404).json({ error: "Message not found" });
 
     const newPinned = !msg.is_pinned;
-    await supabase.from("dm_group_messages").update({ is_pinned: newPinned }).eq("id", msgId);
+    const { error: pinErr } = await supabase.from("dm_group_messages").update({ is_pinned: newPinned }).eq("id", msgId);
+    if (pinErr) { console.error("[groups/pin] update:", pinErr.message, pinErr.code); throw pinErr; }
 
     // System message
     const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
@@ -15493,7 +15500,8 @@ app.patch("/api/member/groups/:id/name", memberAuthMiddleware, gcWriteLimit, asy
     if (!name) return res.status(400).json({ error: "Name required" });
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
-    await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    const { error: renameErr2 } = await supabase.from("dm_group_chats").update({ name }).eq("id", gid);
+    if (renameErr2) { console.error("[groups PATCH /name] update:", renameErr2.message, renameErr2.code); throw renameErr2; }
     const { data: actor } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
     (async () => { try { await supabase.from("dm_group_messages").insert([{
       group_id:  gid,
@@ -15586,7 +15594,8 @@ app.put("/api/member/groups/:id/members/:memberId/nickname", memberAuthMiddlewar
     // Caller must be in the group
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
-    await supabase.from("dm_group_members").update({ nickname: nickname || null }).eq("group_id", gid).eq("member_id", memberId);
+    const { error: grpNickErr } = await supabase.from("dm_group_members").update({ nickname: nickname || null }).eq("group_id", gid).eq("member_id", memberId);
+    if (grpNickErr) { console.error("[group-nick PUT] update:", grpNickErr.message, grpNickErr.code); throw grpNickErr; }
     res.json({ success: true, nickname: nickname || null });
   } catch (e) {
     res.status(500).json({ error: "Failed to set group nickname" });

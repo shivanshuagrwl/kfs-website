@@ -1036,6 +1036,14 @@ async function loadDashboard() {
   loadNotificationBadge(); // populate badge count without opening the panel
   startNotifPolling();     // keep badge fresh while page is open
 
+  // Pre-load nicknames and block list on every session restore so they are
+  // available immediately when any panel renders — not deferred until the
+  // DM tab is first clicked. nicksLoadGlobal seeds from localStorage first
+  // (instant) then reconciles with the server. blocksEnsureLoaded is a
+  // no-op if it already ran. Both are non-blocking.
+  if (typeof nicksLoadGlobal === 'function') nicksLoadGlobal().catch(() => {});
+  if (typeof blocksEnsureLoaded === 'function') blocksEnsureLoaded().catch(() => {});
+
   // ── First-time login detection ──────────────────────────────────────────
   // We track this with a per-member localStorage key so it only fires once
   // per device. Keyed by member id so different members on the same device
@@ -6467,42 +6475,63 @@ async function nicksLoadGlobal() {
 
   try {
     const data = await api('GET', '/api/member/nicknames');
-    // Only wipe the cache AFTER a successful fetch — clearing before the
-    // round-trip means a slow/failing request leaves the sidebar nameless.
+    // Only replace the cache when the server returns a non-empty object.
+    // An empty {} means "you have no nicknames" which is valid — but we
+    // only accept that verdict when the object has actually been parsed
+    // from a successful response AND is confirmed empty, not when the
+    // request failed or returned garbage. Distinguish "empty" from "failed"
+    // by checking Object.keys length: if the server truly has no nicknames
+    // for this member, clear the cache; if data is falsy/array (error path),
+    // leave whatever was seeded from localStorage intact.
     if (data && typeof data === 'object' && !Array.isArray(data)) {
-      Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
-      Object.entries(data).forEach(([target_id, nickname]) => {
-        NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
-      });
-      // Persist to localStorage so next refresh has instant nicknames
-      try { localStorage.setItem('kfs-nicks-' + myId, JSON.stringify(data)); } catch { /* ignore */ }
-    } else {
+      const serverNicks = Object.entries(data);
+      if (serverNicks.length > 0) {
+        // Server has nicknames — replace cache wholesale
+        Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
+        serverNicks.forEach(([target_id, nickname]) => {
+          NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+        });
+        // Persist to localStorage so next refresh has instant nicknames
+        try { localStorage.setItem('kfs-nicks-' + myId, JSON.stringify(data)); } catch { /* ignore */ }
+      } else {
+        // Server returned {} — genuinely no nicknames set.
+        // Clear both in-memory cache and localStorage so stale entries don't persist.
+        Object.keys(NICKS_BY_TARGET).forEach(k => delete NICKS_BY_TARGET[k]);
+        try { localStorage.removeItem('kfs-nicks-' + myId); } catch { /* ignore */ }
+      }
+      NICKS_GLOBAL_LOADED = true;
     }
-    NICKS_GLOBAL_LOADED = true;
-  } catch { /* ignore */ }
+    // If data is falsy or array (parse error / network failure), leave cache
+    // as-is — localStorage seed is better than nothing. Don't set NICKS_GLOBAL_LOADED
+    // so the next call will retry the fetch.
+  } catch { /* ignore — localStorage seed remains */ }
 }
 
 async function nicksLoad(convKey) {
   try {
     // Server returns { [target_id]: nickname } for all nicknames set BY me (DM nicknames table)
     const data = await api('GET', '/api/member/nicknames');
-    // Convert to array format expected by NICKS cache
     const myId = dmMyId();
     if (data && typeof data === 'object' && !Array.isArray(data)) {
-      NICKS[convKey] = Object.entries(data).map(([target_id, nickname]) => ({
+      const entries = Object.entries(data);
+      NICKS[convKey] = entries.map(([target_id, nickname]) => ({
         giver_id: myId, target_id, nickname
       }));
-      // Keep the flat global cache in sync too, so other conv keys / the
-      // sidebar list benefit from this round-trip without a separate fetch.
-      Object.entries(data).forEach(([target_id, nickname]) => {
-        NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
-      });
+      // Sync into the flat global cache — but only replace when we got actual
+      // nicknames back. An empty {} from the server is valid and clears the
+      // conv-level cache, but don't wipe NICKS_BY_TARGET entries seeded
+      // from nicksLoadGlobal / localStorage for other conversations.
+      if (entries.length > 0) {
+        entries.forEach(([target_id, nickname]) => {
+          NICKS_BY_TARGET[target_id] = { giver_id: myId, target_id, nickname };
+        });
+      }
       NICKS_GLOBAL_LOADED = true;
-    } else {
-      NICKS[convKey] = [];
     }
+    // On bad/null response: leave NICKS[convKey] as-is. Don't overwrite with
+    // an empty array — it may already be seeded from group rows or a prior fetch.
   } catch {
-    NICKS[convKey] = [];
+    // Network / auth error — preserve whatever cache we have, don't blank it.
   }
 }
 
