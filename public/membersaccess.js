@@ -468,7 +468,22 @@ async function api(method, path, body, isForm = false) {
   if (method.toUpperCase() === 'GET' && (path.includes('/groups') || path.includes('/nicknames'))) {
     fetchPath += (path.includes('?') ? '&' : '?') + '_cb=' + Date.now() + Math.random().toString(36).slice(2);
   }
-  const r = await fetch(API + fetchPath, opts);
+  let r = await fetch(API + fetchPath, opts);
+
+  // ── 401 auto-refresh ─────────────────────────────────────────────────────
+  // Member JWTs expire after 15 min. On 401, silently refresh via the httpOnly
+  // cookie and retry once with the new token — keeps long sessions alive.
+  if (r.status === 401 && typeof refreshToken === 'function') {
+    const refreshed = await refreshToken().catch(() => false);
+    if (refreshed && _token) {
+      const retryHeaders = { ...headers, 'Authorization': `Bearer ${_token}` };
+      if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())) {
+        retryHeaders['x-csrf-token'] = await getCsrf();
+      }
+      r = await fetch(API + fetchPath, { ...opts, headers: retryHeaders });
+    }
+  }
+
   // A 304 means "nothing changed" — it is not a failure, but r.ok is false for
   // it (only 200–299 counts), and a 304 has no body, so r.json() would throw.
   // Treat it as an empty-but-successful response rather than an error.
@@ -7053,7 +7068,6 @@ async function gcLoadGroupDetails(groupId, _retryCount, _floorCount) {
     // If still 0 and haven't retried enough, try again with backoff
     if (count === 0 && _retryCount < 3) {
       setTimeout(() => {
-        // Only retry if we're still looking at the same group
         if (GC.activeId === groupId) gcLoadGroupDetails(groupId, _retryCount + 1, _floorCount);
       }, 800);
     }
@@ -8948,7 +8962,6 @@ if (document.readyState === "loading") {
     }
 
     // ── Delete Group button (owner only) ─────────────────────────────────────
-    // The old gcShowInfoModal had this but dpShowGroup never did — wiring it in.
     let deleteGrpBtn = document.getElementById('dp-delete-group-btn');
     if (group.my_role === 'owner') {
       if (!deleteGrpBtn) {
@@ -8956,43 +8969,32 @@ if (document.readyState === "loading") {
         deleteGrpBtn.id = 'dp-delete-group-btn';
         deleteGrpBtn.className = 'dm-detail-action-btn dm-detail-danger';
         deleteGrpBtn.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:8px;font-size:13px';
-        deleteGrpBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Delete group for everyone`;
+        deleteGrpBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Delete group for everyone';
         const leaveBtn = document.getElementById('dm-detail-leave-btn');
         if (leaveBtn && leaveBtn.parentNode) leaveBtn.parentNode.appendChild(deleteGrpBtn);
       }
       deleteGrpBtn.style.display = '';
       deleteGrpBtn.onclick = async () => {
-        if (!confirm(`Delete "${group.name}" for everyone? This cannot be undone.`)) return;
+        if (!confirm('Delete "' + group.name + '" for everyone? This cannot be undone.')) return;
         try {
-          await api('DELETE', `/api/member/groups/${group.id}`);
-          // Remove from local state
+          await api('DELETE', '/api/member/groups/' + group.id);
           if (typeof GC !== 'undefined') {
             GC.groups = (GC.groups || []).filter(g => g.id !== group.id);
-            if (GC.activeId === group.id) {
-              GC.activeId    = null;
-              GC.activeGroup = null;
-              GC.msgs        = [];
-            }
+            if (GC.activeId === group.id) { GC.activeId = null; GC.activeGroup = null; GC.msgs = []; }
           }
           if (typeof dpClose === 'function') dpClose();
           if (typeof window.gcGoBack === 'function') window.gcGoBack();
           if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups || []);
           if (typeof swShowToast === 'function') swShowToast('Group deleted.');
-          // Purge from localStorage cache
           try {
             const myId = typeof gcMyId === 'function' ? gcMyId() : null;
             if (myId) {
               const cacheKey = 'kfs-groups-' + myId;
               const raw = localStorage.getItem(cacheKey);
-              if (raw) {
-                const arr = JSON.parse(raw).filter(g => g?.id && g.id !== group.id);
-                localStorage.setItem(cacheKey, JSON.stringify(arr));
-              }
+              if (raw) localStorage.setItem(cacheKey, JSON.stringify(JSON.parse(raw).filter(g => g?.id && g.id !== group.id)));
             }
           } catch { /* silent */ }
-        } catch (e) {
-          alert(e.message || 'Could not delete group. Please try again.');
-        }
+        } catch (e) { alert(e.message || 'Could not delete group.'); }
       };
     } else if (deleteGrpBtn) {
       deleteGrpBtn.style.display = 'none';
@@ -9237,12 +9239,10 @@ if (document.readyState === "loading") {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length && typeof GC !== 'undefined') {
       if (!GC.groups || !GC.groups.length) {
-        // Strip any entries with null/undefined id — these were written during
-        // the kfs-groups-null bug and cause /api/member/groups/null 401 errors
-        GC.groups = parsed.filter(g => g?.id);
+        GC.groups = parsed.filter(g => g?.id); // strip null-id entries
       }
     }
-    // Also sanitize the stored key itself so nulls don't persist across refreshes
+    // Sanitize the stored key so nulls don't persist across refreshes
     try {
       const clean = parsed.filter(g => g?.id);
       if (clean.length !== parsed.length) localStorage.setItem(key, JSON.stringify(clean));
