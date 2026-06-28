@@ -402,6 +402,28 @@ const E2EE = (() => {
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
+
+  /**
+   * Unwrap a message AES key that was wrapped for the current user (as sender),
+   * then re-wrap it for a different member. Used by gcAutoRewrapMissingKeys so
+   * that function doesn't need access to any private (_-prefixed) internals.
+   *
+   * @param {string} myWrappedKey  - The wrapped key entry from wrapped_keys[myId]
+   * @param {string} targetMemberId - The member who is missing a wrapped key
+   * @returns {Promise<string>} The new wrapped key string for targetMemberId
+   */
+  async function rewrapMsgKey(myWrappedKey, targetMemberId) {
+    // Unwrap using our ECDH shared key with ourselves (sender wraps for self
+    // the same way encryptGroup does: deriveSharedKey(myPrivate, myPublic))
+    const myPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
+    const mySharedKey = await _deriveSharedKey(_myPrivateKey, myPublicKey);
+    const msgKey      = await _unwrapAesKey(myWrappedKey, mySharedKey);
+    // Re-wrap for the target member using our ECDH shared key with them
+    const peerKey   = await _getPeerPublicKey(targetMemberId);
+    const sharedKey = await _deriveSharedKey(_myPrivateKey, peerKey);
+    return _wrapAesKey(msgKey, sharedKey);
+  }
+
   return {
     init,
     ready,
@@ -412,6 +434,7 @@ const E2EE = (() => {
     decryptGroup,
     decryptForReport,
     regenerateKeyPair,
+    rewrapMsgKey,
     getMyPublicKeyJwk: () => _myPublicKeyJwk,
   };
 
@@ -7099,6 +7122,59 @@ function gcUpdateInputState() {
 
 // ─── Load messages ────────────────────────────────────────────────────────────
 
+// ── Auto-rewrap missing E2EE keys ────────────────────────────────────────────
+// When the sender of a group message opens the group chat, this checks all
+// loaded messages they sent for any current members who are missing a wrapped
+// key (i.e. they joined after the message was sent, or their key wasn't
+// available at send time). For each such gap it decrypts the AES key using
+// the sender's own wrapped key, then re-wraps it for the missing member and
+// patches the server. Runs silently in the background — no UI impact.
+async function gcAutoRewrapMissingKeys(groupId, msgs, myId) {
+  if (!E2EE.ready()) return;
+
+  // Get the current member list so we know who should have wrapped keys
+  const groupData = GC.activeGroup;
+  if (!groupData?.members?.length) return;
+  const memberIds = groupData.members.map(m => m.id).filter(Boolean);
+
+  // Filter to E2EE messages I sent that are missing at least one member's key
+  const toFix = msgs.filter(m =>
+    m.e2ee &&
+    m.sender_id === myId &&
+    m.wrapped_keys &&
+    memberIds.some(mid => !m.wrapped_keys[mid])
+  );
+  if (!toFix.length) return;
+
+  for (const msg of toFix) {
+    try {
+      const myWrappedKey = msg.wrapped_keys[myId];
+      if (!myWrappedKey) continue; // I don't have my own key either — can't help
+
+      // For each member missing a wrapped key, re-wrap and patch the server.
+      // E2EE.rewrapMsgKey handles the unwrap+rewrap entirely within the E2EE
+      // closure so we never need to reach private (_-prefixed) internals here.
+      const missing = memberIds.filter(mid => !msg.wrapped_keys[mid]);
+      for (const memberId of missing) {
+        try {
+          const wrappedKey = await E2EE.rewrapMsgKey(myWrappedKey, memberId);
+          await api('PATCH', `/api/member/groups/${groupId}/messages/${msg.id}/wrapped-key`, {
+            member_id:   memberId,
+            wrapped_key: wrappedKey,
+          });
+          // Update local cache so the recipient can decrypt immediately on next render
+          msg.wrapped_keys = { ...msg.wrapped_keys, [memberId]: wrappedKey };
+        } catch (e) {
+          // Member may not have published a key yet — skip silently
+          console.warn('[E2EE] auto-rewrap skipped for member', memberId, e.message);
+        }
+      }
+    } catch (e) {
+      console.warn('[E2EE] auto-rewrap failed for msg', msg.id, e.message);
+    }
+  }
+}
+
 async function gcLoadMsgs(prepend) {
   if (!GC.activeId) return;
   if (!prepend) GC.loadingMsgs = true;
@@ -7140,6 +7216,13 @@ async function gcLoadMsgs(prepend) {
     }
 
     GC.oldestSentAt = GC.msgs.find(m => !m.id.startsWith('tmp-'))?.sent_at || null;
+
+    // ── Auto-rewrap: silently fix old E2EE messages where a member's
+    // wrapped key is missing. Only the original sender can do this,
+    // since only they can unwrap the AES key and re-wrap it for others.
+    if (myId && E2EE.ready()) {
+      gcAutoRewrapMissingKeys(GC.activeId, GC.msgs, myId).catch(() => {});
+    }
 
     const list = $id('gc-msg-list');
     if (!list) return;

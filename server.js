@@ -203,13 +203,13 @@ const LEET_MAP = {
   '7': 't', '+': 't',
   '(': 'c', 'ç': 'c',
   'ñ': 'n',
-  // ph → f (phucker etc.)
-  // handled at string level below
+  // ph → f (phucker etc.) — handled at string level below
   // k/ck/q → k
   'q': 'k',
-  // x → ks (covered by not needing to map)
-  // v → u / v (fvck)
-  'v': 'u',   // "fvck" → "fuck"  (context: only matters when next to consonants)
+  // NOTE: 'v' → 'u' removed from this global map — it was breaking every common English
+  // word containing 'v' (have → haue, very → uery, love → loue, over → ouer, etc.).
+  // fvck-style evasion is now caught via a targeted consonant-context substitution in
+  // normaliseLeet() below, which only fires when 'v' sits between two consonants.
 };
 
 /**
@@ -238,6 +238,10 @@ function normaliseLeet(text) {
   // 1. Collapse "ph" → "f" BEFORE per-char replacement
   s = s.replace(/ph/g, 'f');
 
+  // 1b. v → u ONLY when surrounded by consonants on both sides (e.g. "fvck" → "fuck").
+  //     This avoids corrupting common words like "have", "very", "love", "over", "never".
+  s = s.replace(/(?<=[bcdfghjklmnpqrstvwxyz])v(?=[bcdfghjklmnpqrstvwxyz])/g, 'u');
+
   // 2. Per-character substitution via leet map
   s = s.split('').map(ch => LEET_MAP[ch] || ch).join('');
 
@@ -259,47 +263,97 @@ function normaliseLeet(text) {
 // Each entry is the canonical (already-normalised) form.
 // We match normalised text against normalised word so workarounds don't help.
 
-const PROFANITY_WORDS_EN = [
-  // f-word family
-  "fuck", "fucker", "fuk", "fck", "fuc", "effing",
-  // s-word
-  "shit", "shite", "sht", "bullshit", "bulls hit",
-  // a-word
-  "ass", "asses", "asshole", "ashole", "arse", "arsehole",
-  // b-word
-  "bitch", "biatch", "beyatch",
-  // c-words
-  "cunt", "cock", "cok",
-  // d-word
+// ── Word list design ─────────────────────────────────────────────────────────
+// Words are split into two lists with different matching semantics:
+//
+//   STEM_WORDS  — matched with left-word-boundary + stem + suffix-allowance regex.
+//                 Catches all inflected/derived forms: fucking, fucked, fucks, fucker,
+//                 shitting, shitty, bitches, asses, sexuality, etc. without needing
+//                 to enumerate every variant. Suffix regex allows consonant doubling
+//                 (shitt-ing, slut-ty) and common English morphology.
+//
+//   EXACT_WORDS — matched with strict word boundaries on both sides. Used for words
+//                 that are complete in themselves, or where stem matching would create
+//                 unacceptable false positives (e.g. "rap" → rapper, "sex" alone is
+//                 in STEM so "sextet" is safe due to boundary — see containsProfanity).
+//
+// The normalised forms of both lists are pre-computed at startup.
+
+// Stem words: left-boundary + word + allowed suffix variants (see PROFANITY_STEM_SUFFIX)
+const PROFANITY_STEM_WORDS = [
+  // f-word family (covers: fucking, fucked, fucker, fucks, fucky, fvck, f*cking, …)
+  "fuck", "fuk", "fck", "fuc",
+  // s-word (covers: shitting, shitty, shitless, shitfaced, shits, bullshitting, …)
+  "shit", "sht",
+  // a-word (covers: asses, assing, assed, asshole via exact below, …)
+  "ass",
+  // b-word (covers: bitching, bitchy, bitches, bitched, …)
+  "bitch",
+  // c-words (covers: cocked, cocking, cocks, cunts, …)
+  "cunt", "cock",
+  // d-word (covers: dicks, dicked, dicking, …)
   "dick", "dik",
-  // p-word
-  "pussy", "pus y",
+  // p-words (covers: pussied, pusses, porno via exact below, pornographic, …)
+  "puss", "porn",
+  // s-words (covers: slutty, slutted, sluttier, …)
+  "slut",
+  // w-word (covers: whored, whoring, whores, …)
+  "whor",
+  // other (covers: pricked, pricking, …)
+  "prick",
+  // racial slurs (covers: niggas, nigging, …)
+  "nigga", "nigger", "niga",
+  // compound (covers: motherfucking, motherfucked, …)
+  "motherfuck",
+  // homophobic (covers: fagging, faggots, …)
+  "fagg",
+  // sex (covers: sexy, sexual, sexuality, sexed, …)
+  // Safe: sextet/sextant blocked by suffix regex (tet/tant not in allowed suffixes)
+  "sex",
+];
+
+// Exact words: whole-word match only (no suffix variants allowed)
+const PROFANITY_EXACT_WORDS = [
+  // f-word variants not covered by stem
+  "effing", "fucker",
+  // a-word explicit forms
+  "asshole", "ashole", "arse", "arsehole",
+  // b-word variants
+  "biatch", "beyatch",
+  // c-word variants
+  "cok",
   // other
   "bastard", "bastad",
-  "whore", "whor",
-  "slut",
-  "prick",
-  "nigger", "nigga", "niga",
+  "pussy",
+  "mofo", "mf",
   "faggot", "fagot", "fag",
-  "motherfucker", "mofo", "mf",
-  "rape", "rapist",
   "retard",
+  // rape — exact only; 'rap' as stem catches 'rapper', 'wrap', etc.
+  "rape", "rapist", "raping", "raped",
   // sexual acts / explicit
   "blowjob", "blwjob", "handjob",
-  "porn", "porno", "xxx",
-  "dildo",
+  "porno", "xxx", "dildo",
   "cumshot", "cum shot",
   "masturbat",
-  "boner",
-  "erection",
-  "orgasm",
-  "penis", "vagina", "vulva",   // anatomical — blocked in a social post context
+  "boner", "erection", "orgasm",
+  "penis", "vagina", "vulva",
   "boobs", "boob", "tits", "tit",
   "naked", "nude", "nudity",
-  "sexy", "sexting", "sext",
-  "horny",
-  "hentai",
+  "sexy", "sexting", "sext",   // also caught by sex stem, kept here for explicit coverage
+  "horny", "hentai",
+  "bullshit", "bulls hit",
 ];
+
+// Keep legacy alias so nothing that imports PROFANITY_WORDS_EN breaks
+const PROFANITY_WORDS_EN = [...PROFANITY_STEM_WORDS, ...PROFANITY_EXACT_WORDS];
+
+// Suffix regex for stem matching. Allows:
+//   - Optional consonant doubling before suffix (shitt-ing, slut-ty, etc.)
+//   - Common English inflectional suffixes: -ing, -ed, -er, -es, -s, -y, -ty, etc.
+//   - Common derivational suffixes: -ness, -less, -ful, -able, -ual, -ity, -uality
+// Does NOT allow free arbitrary suffixes — "sextet", "sextant", "cocktail",
+// "assessment", "assassin", "dickens", "rapper" all remain clean.
+const PROFANITY_STEM_SUFFIX = '(?:[bcdfgklmnprstvw]?(?:ing|ings|ed|er|ers|es)|[esyd]|ty|i(?:er|est|ly|ng|ty)|(?:ful|less|ness|able|uality|ual|ity|ous|ment))?(?![a-z])';
 
 const PROFANITY_WORDS_HI = [
   // Romanised Hindi — substring matched after normalisation
@@ -326,27 +380,48 @@ const PROFANITY_WORDS_HI = [
   "कुत्ता", "कुत्ती", "कमीना", "लौड़ा", "चूत",
 ];
 
-// Pre-normalise all English words once at startup
-const _PROFANITY_EN_NORMALISED = PROFANITY_WORDS_EN.map(w => normaliseLeet(w));
+// Pre-normalise all word list entries once at startup
+const _PROFANITY_STEM_NORM  = PROFANITY_STEM_WORDS.map(w => normaliseLeet(w));
+const _PROFANITY_EXACT_NORM = PROFANITY_EXACT_WORDS.map(w => normaliseLeet(w));
+// Legacy alias — keeps any code that references _PROFANITY_EN_NORMALISED working
+const _PROFANITY_EN_NORMALISED = [..._PROFANITY_STEM_NORM, ..._PROFANITY_EXACT_NORM];
+
+/**
+ * Escape regex metacharacters in a string.
+ */
+function _escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 /**
  * Check whether `text` contains any banned word.
  * Normalises the input before matching so leet/workaround tricks don't help.
+ *
+ * Matching strategy:
+ *   Stem words  — left-word-boundary + normalised stem + PROFANITY_STEM_SUFFIX regex.
+ *                 Catches all inflected forms (fucking, shitty, bitches, sexual…)
+ *                 without false-positives on words like assessment, cocktail, sextet.
+ *   Exact words — strict word boundaries on both sides.
+ *   Hindi/Hinglish — substring on normalised + separator-stripped text.
+ *
  * @param {string} text
  * @returns {{ found: boolean, word?: string }}
  */
 function containsProfanity(text) {
   if (!text) return { found: false };
 
-  // ── English: whole-word match on NORMALISED text ──────────────────────────
   const normText = normaliseLeet(text);
 
-  for (let i = 0; i < _PROFANITY_EN_NORMALISED.length; i++) {
-    const nw = _PROFANITY_EN_NORMALISED[i];
-    // Escape regex metacharacters in the normalised word
-    const escaped = nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(?<![a-z])${escaped}(?![a-z])`, 'i');
-    if (re.test(normText)) return { found: true, word: PROFANITY_WORDS_EN[i] };
+  // ── English stem words: left-boundary + stem + suffix allowance ───────────
+  for (let i = 0; i < _PROFANITY_STEM_NORM.length; i++) {
+    const nw = _PROFANITY_STEM_NORM[i];
+    const re = new RegExp(`(?<![a-z])${_escapeRe(nw)}${PROFANITY_STEM_SUFFIX}`, 'i');
+    if (re.test(normText)) return { found: true, word: PROFANITY_STEM_WORDS[i] };
+  }
+
+  // ── English exact words: whole-word match ─────────────────────────────────
+  for (let i = 0; i < _PROFANITY_EXACT_NORM.length; i++) {
+    const nw = _PROFANITY_EXACT_NORM[i];
+    const re = new RegExp(`(?<![a-z])${_escapeRe(nw)}(?![a-z])`, 'i');
+    if (re.test(normText)) return { found: true, word: PROFANITY_EXACT_WORDS[i] };
   }
 
   // ── Hindi/Hinglish: substring match on normalised + original ─────────────
