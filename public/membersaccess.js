@@ -3755,9 +3755,9 @@ function _swEnsureVioModal() {
       <div id="sw-vio-icon" style="
         width:56px;height:56px;border-radius:50%;
         display:flex;align-items:center;justify-content:center;
-        margin:0 auto 18px;font-size:26px;
-        background:rgba(255,59,48,.15);border:1.5px solid rgba(255,59,48,.3);
-      ">⚠️</div>
+        margin:0 auto 18px;color:#e8e8e8;
+        background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14);
+      "></div>
       <div id="sw-vio-title" style="
         font-size:18px;font-weight:700;letter-spacing:-.025em;
         color:#f5f5f5;margin-bottom:8px;line-height:1.25;
@@ -3774,9 +3774,7 @@ function _swEnsureVioModal() {
         <div id="sw-vio-timer" style="
           font-size:38px;font-weight:800;letter-spacing:-.04em;
           font-variant-numeric:tabular-nums;
-          background:linear-gradient(135deg,#ff9f0a,#ff6b00);
-          -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-          background-clip:text;line-height:1;
+          color:#f5f5f5;line-height:1;
         ">—</div>
         <div style="
           margin-top:10px;height:3px;background:rgba(255,255,255,.08);
@@ -3784,7 +3782,7 @@ function _swEnsureVioModal() {
         ">
           <div id="sw-vio-timer-bar" style="
             height:100%;width:100%;border-radius:2px;
-            background:linear-gradient(90deg,#ff9f0a,#ff6b00);
+            background:#e8e8e8;
             transform-origin:left;transition:transform .9s linear;
           "></div>
         </div>
@@ -3792,7 +3790,7 @@ function _swEnsureVioModal() {
       <div id="sw-vio-appeal-wrap" style="display:none;margin-bottom:12px">
         <button id="sw-vio-appeal-btn" onclick="_swVioSubmitAppeal()" style="
           width:100%;padding:13px 20px;border-radius:12px;border:none;
-          background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;
+          background:#f5f5f5;color:#000;
           font-size:15px;font-weight:600;letter-spacing:-.01em;
           cursor:pointer;transition:opacity .15s;margin-bottom:8px;
           -webkit-tap-highlight-color:transparent;
@@ -3845,13 +3843,25 @@ function _swVioShowModal(data, msg) {
   if (appealStat) appealStat.textContent = '';
   if (appealBtn)  { appealBtn.disabled = false; appealBtn.textContent = 'Ask Admin to Review'; }
 
-  // ── Ladder step labels shown in descriptions ───────────────────────────────
+  // ── Tiny inline SVG icon set (grayscale, no emojis) ────────────────────────
+  const _vioIconSvg = {
+    warning: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    mute:    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+    ban:     '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+    lock:    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    check:   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  };
+  function _vioIconSmall(name) {
+    return _vioIconSvg[name].replace('width="26" height="26"', 'width="12" height="12"');
+  }
+
+  // ── Ladder step labels shown in descriptions (icon + text, no emoji) ───────
   const ladderSteps = [
-    '1st violation → ⚠️ Warning',
-    '2nd violation → 🔇 1-minute mute',
-    '3rd violation → 🔇 2-minute mute',
-    '4th violation → 🔇 5-minute mute',
-    '5th violation → 🔴 Temporary ban',
+    { icon: 'warning', label: '1st violation \u2192 Warning' },
+    { icon: 'mute',    label: '2nd violation \u2192 1-minute mute' },
+    { icon: 'mute',    label: '3rd violation \u2192 2-minute mute' },
+    { icon: 'mute',    label: '4th violation \u2192 5-minute mute' },
+    { icon: 'ban',     label: '5th violation \u2192 Temporary ban' },
   ];
   function _ladderHtml(currentOffense) {
     return ladderSteps.map((s, i) => {
@@ -3859,17 +3869,15 @@ function _swVioShowModal(data, msg) {
       const isCurrent = n === currentOffense;
       const isPast    = n < currentOffense;
       return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${isCurrent ? 'font-weight:700;color:#f5f5f5' : isPast ? 'color:rgba(255,255,255,.3);text-decoration:line-through' : 'color:rgba(255,255,255,.45)'}">
-        <span style="width:18px;height:18px;border-radius:50%;background:${isCurrent ? '#e53e3e' : isPast ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.06)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">${isPast ? '✓' : n}</span>
-        <span style="font-size:12.5px">${s}</span>
+        <span style="width:18px;height:18px;border-radius:50%;background:${isCurrent ? '#f5f5f5' : isPast ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.06)'};color:${isCurrent ? '#000' : 'inherit'};display:flex;align-items:center;justify-content:center;flex-shrink:0">${isPast ? _vioIconSmall('check') : _vioIconSmall(s.icon)}</span>
+        <span style="font-size:12.5px">${s.label}</span>
       </div>`;
     }).join('');
   }
 
   if (data.temp_banned || data.action === 'temp_ban') {
     // ── TEMP BAN ─────────────────────────────────────────────────────────────
-    icon.textContent = '🔴';
-    icon.style.background  = 'rgba(229,62,62,.18)';
-    icon.style.borderColor = 'rgba(229,62,62,.4)';
+    icon.innerHTML = _vioIconSvg.ban;
     title.textContent = 'Temporarily Banned';
 
     let untilStr = '';
@@ -3890,9 +3898,7 @@ function _swVioShowModal(data, msg) {
 
   } else if (data.banned) {
     // ── PERMANENT BAN ────────────────────────────────────────────────────────
-    icon.textContent = '🚫';
-    icon.style.background  = 'rgba(255,59,48,.15)';
-    icon.style.borderColor = 'rgba(255,59,48,.3)';
+    icon.innerHTML = _vioIconSvg.lock;
     title.textContent = 'Account Disabled';
     desc.innerHTML = `<div style="margin-bottom:6px">Your account has been permanently disabled for repeated violations of our community guidelines.</div><div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:8px">Contact KFS leadership directly to appeal this decision.</div>`;
     timerWrap.style.display = 'none';
@@ -3905,9 +3911,7 @@ function _swVioShowModal(data, msg) {
     const totalMs    = muteUntil - Date.now();
     const offenseNum = data.offense || 2;
 
-    icon.textContent = '🔇';
-    icon.style.background  = 'rgba(255,159,10,.12)';
-    icon.style.borderColor = 'rgba(255,159,10,.3)';
+    icon.innerHTML = _vioIconSvg.mute;
     title.textContent = `Warning #${offenseNum} — Posting Paused`;
 
     const nextHint = offenseNum === 2 ? 'Next: 2-min mute'
@@ -3916,7 +3920,7 @@ function _swVioShowModal(data, msg) {
 
     desc.innerHTML = `<div style="margin-bottom:12px;font-size:13px;line-height:1.6">Your message contained language that violates our community guidelines. Posting is paused until the timer expires.</div>
       <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;margin-bottom:6px;text-align:left">${_ladderHtml(offenseNum)}</div>
-      <div style="font-size:11.5px;color:rgba(255,159,10,.7);margin-top:8px">⚠️ ${nextHint}</div>`;
+      <div style="font-size:11.5px;color:rgba(255,255,255,.4);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:5px">${_vioIconSmall('warning')} ${nextHint}</div>`;
 
     timerWrap.style.display = 'block';
     dismiss.textContent = 'I understand';
@@ -3935,7 +3939,7 @@ function _swVioShowModal(data, msg) {
       if (rem <= 0) {
         clearInterval(_swVioTimerInterval);
         timerEl.textContent = '0:00';
-        timerEl.style.background = 'linear-gradient(135deg,#34c759,#30d158)';
+        timerEl.style.color = '#f5f5f5';
         desc.innerHTML = `<div style="color:rgba(255,255,255,.65);font-size:13px">Your posting is now unlocked. Please keep the community respectful going forward.</div>`;
         dismiss.textContent = 'Start posting again';
         return;
@@ -3946,14 +3950,12 @@ function _swVioShowModal(data, msg) {
   } else {
     // ── WARNING ONLY (offense 1) ──────────────────────────────────────────────
     const offenseNum = data.offense || 1;
-    icon.textContent = '⚠️';
-    icon.style.background  = 'rgba(255,204,0,.12)';
-    icon.style.borderColor = 'rgba(255,204,0,.3)';
+    icon.innerHTML = _vioIconSvg.warning;
     title.textContent = `Warning #${offenseNum} — Post Blocked`;
 
     desc.innerHTML = `<div style="margin-bottom:12px;font-size:13px;line-height:1.6">${msg || 'Your post contained language that violates our community guidelines.'}</div>
       <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;text-align:left">${_ladderHtml(offenseNum)}</div>
-      <div style="font-size:11.5px;color:rgba(255,204,0,.75);margin-top:10px">⚠️ Next violation will result in a 1-min mute.</div>`;
+      <div style="font-size:11.5px;color:rgba(255,255,255,.4);margin-top:10px;display:flex;align-items:center;justify-content:center;gap:5px">${_vioIconSmall('warning')} Next violation will result in a 1-min mute.</div>`;
 
     timerWrap.style.display = 'none';
     dismiss.textContent = 'I understand';
@@ -3996,14 +3998,14 @@ async function _swVioSubmitAppeal() {
   status.textContent = '';
   try {
     const res = await api('POST', '/api/member/ban-appeal', { reason: 'Member requested review via Social Strand.' });
-    btn.textContent    = '✓ Appeal Submitted';
+    btn.textContent    = 'Appeal Submitted';
     status.textContent = 'An admin will review your case. You will be notified when a decision is made.';
-    status.style.color = 'rgba(52,199,89,.8)';
+    status.style.color = 'rgba(255,255,255,.5)';
   } catch (e) {
     btn.disabled   = false;
     btn.textContent = 'Ask Admin to Review';
     status.textContent = e.message || 'Could not submit appeal. Try again.';
-    status.style.color = 'rgba(255,80,60,.8)';
+    status.style.color = 'rgba(255,255,255,.5)';
   }
 }
 
@@ -4027,7 +4029,9 @@ function _swShowTempBanOverlay(suspendedUntil) {
   }
 
   el.innerHTML = `
-    <div style="font-size:48px;margin-bottom:4px">🔴</div>
+    <div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:4px;color:#e8e8e8;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14)">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    </div>
     <div style="font-size:22px;font-weight:800;letter-spacing:-.03em;color:#f5f5f5">Account Suspended</div>
     ${untilHtml}
     <div style="font-size:14px;color:rgba(255,255,255,.5);max-width:340px;line-height:1.6;margin-top:2px">
@@ -4035,7 +4039,7 @@ function _swShowTempBanOverlay(suspendedUntil) {
     </div>
     <button id="sw-tempban-appeal-btn" style="
       margin-top:10px;padding:14px 32px;border-radius:14px;border:none;
-      background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;
+      background:#f5f5f5;color:#000;
       font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.01em;
       font-family:inherit;transition:opacity .15s;
     ">Ask Admin to Review</button>
@@ -4050,14 +4054,14 @@ function _swShowTempBanOverlay(suspendedUntil) {
     btn.textContent = 'Submitting…';
     try {
       await api('POST', '/api/member/ban-appeal', { reason: 'Member requested review via ban overlay.' });
-      btn.textContent = '✓ Appeal Submitted';
+      btn.textContent = 'Appeal Submitted';
       stat.textContent = 'An admin will review your case and you\'ll be notified.';
-      stat.style.color = 'rgba(52,199,89,.8)';
+      stat.style.color = 'rgba(255,255,255,.5)';
     } catch (e) {
       btn.disabled = false;
       btn.textContent = 'Ask Admin to Review';
       stat.textContent = e.message || 'Could not submit — try again.';
-      stat.style.color = 'rgba(255,80,60,.8)';
+      stat.style.color = 'rgba(255,255,255,.5)';
     }
   });
 }
@@ -9380,7 +9384,7 @@ if (document.readyState === "loading") {
             cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
           ">
             <div style="width:42px;height:42px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="#fff"><path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/></svg>
             </div>
             WhatsApp
           </button>
@@ -9390,7 +9394,7 @@ if (document.readyState === "loading") {
             cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
           ">
             <div style="width:42px;height:42px;border-radius:50%;background:#000;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="#fff"><path d="M12.6.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867-5.07-4.425 5.07H.316l5.733-6.57L0 .75h5.063l3.495 4.633L12.601.75Zm-.86 13.028h1.36L4.323 2.145H2.865z"/></svg>
             </div>
             X
           </button>
@@ -9400,7 +9404,7 @@ if (document.readyState === "loading") {
             cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
           ">
             <div style="width:42px;height:42px;border-radius:50%;background:#FFFC00;display:flex;align-items:center;justify-content:center">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-3 0-5 2.2-5 5.2 0 1.3.1 2.3-.4 3-.5.6-1.6.9-2.1 1.4-.3.3-.1.8.3 1 .7.4 1 .6.9 1-.1.5-.7.5-.6 1 .1.4.8.5.7.9-.1.4-1 .5-1 .9.1.6 1.6.9 2.7 1.1.1.5.2 1.1.5 1.4.6.6 2 .1 3 .6.8.4 1.5 1 2.5 1s1.7-.6 2.5-1c1-.5 2.4 0 3-.6.3-.3.4-.9.5-1.4 1.1-.2 2.6-.5 2.7-1.1 0-.4-.9-.5-1-.9-.1-.4.6-.5.7-.9.1-.5-.5-.6-.6-1-.1-.4.2-.6.9-1 .4-.2.6-.7.3-1-.5-.5-1.6-.8-2.1-1.4-.5-.7-.4-1.7-.4-3C17 5.2 15 3 12 3z"/></svg>
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="#111"><path d="M15.943 11.526c-.111-.303-.323-.465-.564-.599a1 1 0 0 0-.123-.064l-.219-.111c-.752-.399-1.339-.902-1.746-1.498a3.4 3.4 0 0 1-.3-.531c-.034-.1-.032-.156-.008-.207a.3.3 0 0 1 .097-.1c.129-.086.262-.173.352-.231.162-.104.289-.187.371-.245.309-.216.525-.446.66-.702a1.4 1.4 0 0 0 .069-1.16c-.205-.538-.713-.872-1.329-.872a1.8 1.8 0 0 0-.487.065c.006-.368-.002-.757-.035-1.139-.116-1.344-.587-2.048-1.077-2.61a4.3 4.3 0 0 0-1.095-.881C9.764.216 8.92 0 7.999 0s-1.76.216-2.505.641c-.412.232-.782.53-1.097.883-.49.562-.96 1.267-1.077 2.61-.033.382-.04.772-.036 1.138a1.8 1.8 0 0 0-.487-.065c-.615 0-1.124.335-1.328.873a1.4 1.4 0 0 0 .067 1.161c.136.256.352.486.66.701.082.058.21.14.371.246l.339.221a.4.4 0 0 1 .109.11c.026.053.027.11-.012.217a3.4 3.4 0 0 1-.295.52c-.398.583-.968 1.077-1.696 1.472-.385.204-.786.34-.955.8-.128.348-.044.743.28 1.075q.18.189.409.31a4.4 4.4 0 0 0 1 .4.7.7 0 0 1 .202.09c.118.104.102.26.259.488q.12.178.296.3c.33.229.701.243 1.095.258.355.014.758.03 1.217.18.19.064.389.186.618.328.55.338 1.305.802 2.566.802 1.262 0 2.02-.466 2.576-.806.227-.14.424-.26.609-.321.46-.152.863-.168 1.218-.181.393-.015.764-.03 1.095-.258a1.14 1.14 0 0 0 .336-.368c.114-.192.11-.327.217-.42a.6.6 0 0 1 .19-.087 4.5 4.5 0 0 0 1.014-.404c.16-.087.306-.2.429-.336l.004-.005c.304-.325.38-.709.256-1.047m-1.121.602c-.684.378-1.139.337-1.493.565-.3.193-.122.61-.34.76-.269.186-1.061-.012-2.085.326-.845.279-1.384 1.082-2.903 1.082s-2.045-.801-2.904-1.084c-1.022-.338-1.816-.14-2.084-.325-.218-.15-.041-.568-.341-.761-.354-.228-.809-.187-1.492-.563-.436-.24-.189-.39-.044-.46 2.478-1.199 2.873-3.05 2.89-3.188.022-.166.045-.297-.138-.466-.177-.164-.962-.65-1.18-.802-.36-.252-.52-.503-.402-.812.082-.214.281-.295.49-.295a1 1 0 0 1 .197.022c.396.086.78.285 1.002.338q.04.01.082.011c.118 0 .16-.06.152-.195-.026-.433-.087-1.277-.019-2.066.094-1.084.444-1.622.859-2.097.2-.229 1.137-1.22 2.93-1.22 1.792 0 2.732.987 2.931 1.215.416.475.766 1.013.859 2.098.068.788.009 1.632-.019 2.065-.01.142.034.195.152.195a.4.4 0 0 0 .082-.01c.222-.054.607-.253 1.002-.338a1 1 0 0 1 .197-.023c.21 0 .409.082.49.295.117.309-.04.56-.401.812-.218.152-1.003.638-1.18.802-.184.169-.16.3-.139.466.018.14.413 1.991 2.89 3.189.147.073.394.222-.041.464"/></svg>
             </div>
             Snapchat
           </button>
@@ -9410,7 +9414,7 @@ if (document.readyState === "loading") {
             cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
           ">
             <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7);display:flex;align-items:center;justify-content:center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.5" cy="9.5" r="0.6" fill="#fff"/></svg>
+              <svg width="19" height="19" viewBox="0 0 16 16" fill="#fff"><path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.9 3.9 0 0 0-1.417.923A3.9 3.9 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.9 3.9 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.9 3.9 0 0 0-.923-1.417A3.9 3.9 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599s.453.546.598.92c.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.5 2.5 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.5 2.5 0 0 1-.92-.598 2.5 2.5 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233s.008-2.388.046-3.231c.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92s.546-.453.92-.598c.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92m-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217m0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334"/></svg>
             </div>
             Instagram
           </button>

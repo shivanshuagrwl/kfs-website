@@ -15627,8 +15627,15 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
       .insert([{
         group_id:          gid,
         sender_id:         myId,
-        // E2EE: body is empty sentinel; plaintext never stored server-side
-        body:              e2ee ? "" : body,
+        // E2EE: body is a sentinel; plaintext never stored server-side.
+        // NOTE: must be non-empty — dm_group_messages.body has
+        // CHECK (char_length(body) BETWEEN 1 AND 2000), so an empty string
+        // here fails the insert (silently, from the client's perspective:
+        // the message just never shows up). A single zero-width space
+        // satisfies the constraint without leaking anything when rendered
+        // (the client always decrypts ciphertext for e2ee messages and
+        // never displays this field).
+        body:              e2ee ? "\u200B" : body,
         replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
         replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
         replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
