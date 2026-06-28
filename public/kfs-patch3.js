@@ -6,9 +6,15 @@
  *   <script src="/kfs-patch3.js" defer></script>
  *
  * Fixes:
- *   1. RACE CONDITION — _member not set when inboxLoad/nicksLoadGlobal
- *      fire on DOMContentLoaded. Waits for loadDashboard() to resolve
- *      before calling these — no more kfs-nicks-null / kfs-groups-null.
+ *   1. RACE CONDITION — FIXED IN SOURCE (membersaccess.js); wrappers removed.
+ *      window.dmPanelOpened now gates on _token before calling inboxLoad
+ *      (fixes the primary call path). blocksEnsureLoaded now waits for _token
+ *      and preserves BLOCKS.set on failure instead of wiping it.
+ *      The window._inboxLoad wrapper previously here targeted the wrong
+ *      binding — the real call path uses a closure-local inboxLoad reference
+ *      that the wrapper never intercepted. The nicksLoadGlobal wrapper was
+ *      redundant because nicksLoadGlobal already has its own internal
+ *      member-ID polling guard.
  *   2. PROFANITY MODAL — server sends temp_banned but client checks
  *      banned. Normalises the error object so the right overlay fires.
  *   3. PIN — context menu label flips correctly on re-open after toggle.
@@ -84,42 +90,32 @@
     setTimeout(() => { clearInterval(_memberPollTimer); memberReadyFired(); }, 10000);
   }
 
-  // Patch inboxLoad to gate on member-ready
-  var _inboxLoadPatched = false;
+  // NOTE (fixed in membersaccess.js — wrapper removed):
+  // The window._inboxLoad wrapper that previously lived here targeted the wrong
+  // binding. The primary call path is:
+  //   switchPanel('dms') → window.dmPanelOpened() → closure-local inboxLoad()
+  // window._inboxLoad is only an alias used by poll-tick callers, which only
+  // fire after loadDashboard completes and _token is already set, so they never
+  // needed guarding. The fix now lives in window.dmPanelOpened in
+  // membersaccess.js, which gates on _token before calling inboxLoad directly.
   function patchInboxLoad() {
-    if (_inboxLoadPatched || typeof window._inboxLoad !== 'function') return;
-    _inboxLoadPatched = true;
-    var origInboxLoad = window._inboxLoad;
-    window._inboxLoad = function guardedInboxLoad() {
-      return new Promise(resolve => {
-        onMemberReady(() => {
-          origInboxLoad.apply(this, arguments).then(resolve).catch(resolve);
-        });
-      });
-    };
-    log('inboxLoad patched for member-ready gate');
+    // No-op — kept so the DOMContentLoaded call sites below do not throw.
   }
 
-  // Patch nicksLoadGlobal
-  var _nicksPatched = false;
+  // NOTE (redundant wrapper removed):
+  // nicksLoadGlobal already contains its own internal "wait for member ID"
+  // polling loop (membersaccess.js lines 6430+). Stacking a second,
+  // uncoordinated onMemberReady gate on top created two sources of truth that
+  // could both resolve at different times and trigger double fetches.
+  // nicksLoadGlobal handles its own readiness — no wrapper needed here.
   function patchNicksLoadGlobal() {
-    if (_nicksPatched || typeof nicksLoadGlobal !== 'function') return;
-    _nicksPatched = true;
-    var origNicks = nicksLoadGlobal;
-    nicksLoadGlobal = function guardedNicksLoad() {
-      return new Promise(resolve => {
-        onMemberReady(() => {
-          origNicks.apply(this, arguments).then(resolve).catch(resolve);
-        });
-      });
-    };
-    log('nicksLoadGlobal patched for member-ready gate');
+    // No-op — kept so the DOMContentLoaded call sites below do not throw.
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     patchInboxLoad();
     patchNicksLoadGlobal();
-    // Re-run in case _inboxLoad is exposed later by the IIFE
+    // Kept for compatibility; both functions are now no-ops.
     setTimeout(() => { patchInboxLoad(); patchNicksLoadGlobal(); }, 500);
   });
   // Also try immediately

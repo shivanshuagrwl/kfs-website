@@ -6348,13 +6348,40 @@ const BLOCKS = {
   loaded: false,
 };
 
+// _blocksInFlight deduplicates concurrent calls so two simultaneous startup
+// callers share one request rather than racing to overwrite BLOCKS.set.
+let _blocksInFlight = null;
+
 async function blocksEnsureLoaded() {
   if (BLOCKS.loaded) return;
-  try {
-    const ids = await api('GET', '/api/member/blocks');
-    BLOCKS.set = new Set(Array.isArray(ids) ? ids : []);
-    BLOCKS.loaded = true;
-  } catch { BLOCKS.set = new Set(); }
+  if (_blocksInFlight) return _blocksInFlight;
+
+  _blocksInFlight = (async () => {
+    try {
+      // Wait for the session token before touching the API — prevents the
+      // startup-401 race where initDMExtensions fires this before
+      // refreshToken() has set _token, which previously wiped BLOCKS.set.
+      if (!_token) {
+        await new Promise(resolve => {
+          let tries = 0;
+          const poll = setInterval(() => {
+            if (_token || ++tries > 150) { clearInterval(poll); resolve(); }
+          }, 80);
+        });
+      }
+      if (BLOCKS.loaded) return; // another caller succeeded while we waited
+      const ids = await api('GET', '/api/member/blocks');
+      BLOCKS.set = new Set(Array.isArray(ids) ? ids : []);
+      BLOCKS.loaded = true;
+    } catch {
+      // Do NOT wipe BLOCKS.set — preserve whatever state already exists.
+      // Do NOT set BLOCKS.loaded — allow the next call to retry the server.
+    } finally {
+      _blocksInFlight = null;
+    }
+  })();
+
+  return _blocksInFlight;
 }
 
 async function blocksToggle(memberId, btn) {
@@ -8431,9 +8458,28 @@ if (document.readyState === "loading") {
   window._inboxOpenGroup = inboxOpenGroup;
 
   // ── Override dmPanelOpened to use unified load ────────────────────────────
+  // Gate on _token being set before calling inboxLoad — this is the public
+  // entry point that switchPanel() always calls via window.dmPanelOpened(),
+  // so gating here means inboxLoad (and the api() calls inside it) never
+  // fire before refreshToken() has completed, regardless of which internal
+  // binding inboxLoad is reached through.
   window.dmPanelOpened = async function() {
     DM.panelVisible = true;
     GC.panelVisible = true;
+    // Wait for the session token before touching the API. If _token is already
+    // set (normal case: user clicked Messages after login completed) this
+    // resolves synchronously on the next microtask and adds no perceptible
+    // delay. If we somehow arrive here before refreshToken() finished (the
+    // startup race), we wait up to 12 s rather than sending guaranteed-401
+    // requests that would break inbox rendering and the block list.
+    if (!_token) {
+      await new Promise(resolve => {
+        let tries = 0;
+        const poll = setInterval(() => {
+          if (_token || ++tries > 150) { clearInterval(poll); resolve(); }
+        }, 80);
+      });
+    }
     await inboxLoad();
     dmStartPolling();
     gcStartPolling();
