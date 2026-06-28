@@ -14851,6 +14851,12 @@ app.get("/api/admin/moderation/dm/:convKey", authMiddleware, async (req, res) =>
 });
 
 
+// ── Rate limiters for blocks / nicknames / groups ────────────────────────────
+const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
 // GET /api/member/blocks — list of IDs the caller has blocked
@@ -16002,10 +16008,6 @@ app.use((err, req, res, next) => {
 //   ALTER TABLE message_reactions DISABLE ROW LEVEL SECURITY; -- server uses service_role key
 // ─────────────────────────────────────────────────────────────────────────────
 
-const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
-const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
-const gcWriteLimit    = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
-const gcReadLimit     = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 // reactionLimit — defined earlier, near first use
 
 // ── Message reactions — shared helpers (DM + group) ───────────────────────────
