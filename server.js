@@ -15400,6 +15400,31 @@ app.patch("/api/member/groups/:id/name", memberAuthMiddleware, gcWriteLimit, asy
   }
 });
 
+// DELETE /api/member/groups/:id  — owner deletes entire group for everyone
+app.delete("/api/member/groups/:id", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    // Only the owner can delete the group
+    const { data: group, error: gErr } = await supabase
+      .from("dm_group_chats")
+      .select("id, created_by")
+      .eq("id", gid)
+      .maybeSingle();
+    if (gErr || !group) return res.status(404).json({ error: "Group not found" });
+    if (group.created_by !== myId) return res.status(403).json({ error: "Only the group owner can delete this group" });
+    // Delete messages, members, then group (cascade order)
+    await supabase.from("dm_group_messages").delete().eq("group_id", gid);
+    await supabase.from("dm_group_members").delete().eq("group_id", gid);
+    const { error: delErr } = await supabase.from("dm_group_chats").delete().eq("id", gid);
+    if (delErr) throw delErr;
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[groups DELETE]", e.message);
+    res.status(500).json({ error: "Failed to delete group" });
+  }
+});
+
 // POST /api/member/groups/:id/members  { member_id }  — add member (any member can add)
 app.post("/api/member/groups/:id/members", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
   try {

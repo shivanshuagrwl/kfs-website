@@ -7947,7 +7947,11 @@ function gcShowInfoModal(data) {
     <button class="dm-icon-btn" style="width:100%;margin-top:12px;padding:8px;border-radius:8px;color:#ef4444;justify-content:center;gap:6px;font-size:12px" onclick="gcLeave()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Leave group
-    </button>`;
+    </button>
+    ${data.my_role === 'owner' ? `<button class="dm-icon-btn" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;color:#ef4444;justify-content:center;gap:6px;font-size:12px;background:rgba(239,68,68,.08)" onclick="gcDeleteGroup()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      Delete group for everyone
+    </button>` : ''}`;
 
   // Nickname buttons
   modal.querySelectorAll('.gc-nick-btn').forEach(btn => {
@@ -7995,9 +7999,6 @@ async function gcRemoveMember(memberId) {
 async function gcLeave() {
   if (!confirm('Leave this group?')) return;
   const myId    = gcMyId();
-  // Capture groupId NOW — gcGoBack() sets GC.activeId = null, so filtering
-  // AFTER gcGoBack() would be `filter(g => g.id !== null)` which removes nothing
-  // and leaves the group stuck in the sidebar even after you've left it.
   const groupId = GC.activeId;
   try {
     await api('DELETE', `/api/member/groups/${groupId}/members/${myId}`);
@@ -8010,6 +8011,24 @@ async function gcLeave() {
     else gcRenderGroups(GC.groups);
   } catch (e) {
     alert(e.message || 'Could not leave group.');
+  }
+}
+
+async function gcDeleteGroup() {
+  if (!confirm('Delete this group for ALL members? This cannot be undone.')) return;
+  const groupId = GC.activeId;
+  try {
+    await api('DELETE', `/api/member/groups/${groupId}`);
+    const overlay = document.getElementById('gc-info-overlay');
+    if (overlay) overlay.style.display = 'none';
+    GC.groups = GC.groups.filter(g => g.id !== groupId);
+    if (typeof window.gcGoBack === 'function') window.gcGoBack();
+    else gcGoBack();
+    if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+    else gcRenderGroups(GC.groups);
+    if (typeof swShowToast === 'function') swShowToast('Group deleted.');
+  } catch (e) {
+    alert(e.message || 'Could not delete group.');
   }
 }
 
