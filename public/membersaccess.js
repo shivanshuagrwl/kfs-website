@@ -4730,6 +4730,7 @@ if(document.readyState==='loading'){
 
 const DM = {
   convs:         [],    // loaded conversations
+  loaded:        false, // true once DM.convs has been fetched at least once this session
   activeKey:     null,  // current conv_key
   activePeer:    null,  // { id, name, photo, role, batch, domain }
   msgs:          [],    // messages in active convo
@@ -8510,6 +8511,9 @@ if (document.readyState === "loading") {
       })(),
       nicksPromise,
     ]);
+    // Mark convs as having been fetched at least once — lets other call sites
+    // (e.g. the share modal) tell "never loaded" apart from "loaded, but empty".
+    DM.loaded = true;
     // Primary render — all three fetches (DMs, groups, nicknames) done.
     inboxRender();
     // Belt-and-suspenders: re-render once nicksPromise settles in case it
@@ -9351,16 +9355,56 @@ if (document.readyState === "loading") {
         <!-- Divider -->
         <div style="height:1px;background:#1e1e1e;flex-shrink:0;margin:0 0 2px"></div>
         <!-- Action buttons row -->
-        <div style="display:flex;gap:0;padding:8px 6px;flex-shrink:0;border-bottom:1px solid #1e1e1e">
+        <div id="kfs-share-actions" style="display:flex;gap:4px;padding:8px 6px;overflow-x:auto;flex-shrink:0;border-bottom:1px solid #1e1e1e;scrollbar-width:none">
           <button class="kfs-share-action-btn" id="kfs-share-copy" style="
             display:flex;flex-direction:column;align-items:center;gap:5px;
-            flex:1;padding:8px 4px;background:none;border:none;color:#f5f5f5;
-            cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;
+            flex:0 0 64px;padding:8px 2px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
           ">
             <div style="width:42px;height:42px;border-radius:50%;background:#252525;display:flex;align-items:center;justify-content:center">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </div>
             Copy link
+          </button>
+          <button class="kfs-share-action-btn kfs-share-social-btn" data-platform="whatsapp" style="
+            display:flex;flex-direction:column;align-items:center;gap:5px;
+            flex:0 0 64px;padding:8px 2px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
+          ">
+            <div style="width:42px;height:42px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            WhatsApp
+          </button>
+          <button class="kfs-share-action-btn kfs-share-social-btn" data-platform="twitter" style="
+            display:flex;flex-direction:column;align-items:center;gap:5px;
+            flex:0 0 64px;padding:8px 2px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
+          ">
+            <div style="width:42px;height:42px;border-radius:50%;background:#000;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+            </div>
+            X
+          </button>
+          <button class="kfs-share-action-btn kfs-share-social-btn" data-platform="snapchat" style="
+            display:flex;flex-direction:column;align-items:center;gap:5px;
+            flex:0 0 64px;padding:8px 2px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
+          ">
+            <div style="width:42px;height:42px;border-radius:50%;background:#FFFC00;display:flex;align-items:center;justify-content:center">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-3 0-5 2.2-5 5.2 0 1.3.1 2.3-.4 3-.5.6-1.6.9-2.1 1.4-.3.3-.1.8.3 1 .7.4 1 .6.9 1-.1.5-.7.5-.6 1 .1.4.8.5.7.9-.1.4-1 .5-1 .9.1.6 1.6.9 2.7 1.1.1.5.2 1.1.5 1.4.6.6 2 .1 3 .6.8.4 1.5 1 2.5 1s1.7-.6 2.5-1c1-.5 2.4 0 3-.6.3-.3.4-.9.5-1.4 1.1-.2 2.6-.5 2.7-1.1 0-.4-.9-.5-1-.9-.1-.4.6-.5.7-.9.1-.5-.5-.6-.6-1-.1-.4.2-.6.9-1 .4-.2.6-.7.3-1-.5-.5-1.6-.8-2.1-1.4-.5-.7-.4-1.7-.4-3C17 5.2 15 3 12 3z"/></svg>
+            </div>
+            Snapchat
+          </button>
+          <button class="kfs-share-action-btn kfs-share-social-btn" data-platform="instagram" style="
+            display:flex;flex-direction:column;align-items:center;gap:5px;
+            flex:0 0 64px;padding:8px 2px;background:none;border:none;color:#f5f5f5;
+            cursor:pointer;font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap;
+          ">
+            <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.5" cy="9.5" r="0.6" fill="#fff"/></svg>
+            </div>
+            Instagram
           </button>
         </div>
         <!-- Conversation list -->
@@ -9389,6 +9433,11 @@ if (document.readyState === "loading") {
         swShowToast('Link copied!');
         closeShareModal();
       } catch { swShowToast('Could not copy link.'); }
+    });
+
+    // Social platform share buttons (WhatsApp, X/Twitter, Snapchat, Instagram)
+    el.querySelectorAll('.kfs-share-social-btn').forEach(btn => {
+      btn.addEventListener('click', () => _shareToPlatform(btn.dataset.platform));
     });
 
     // Send
@@ -9453,7 +9502,33 @@ if (document.readyState === "loading") {
     return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.38)}px;font-weight:700;color:#888">${init}</div>`;
   }
 
-  window.openShareModal = function(projectId) {
+  // ── Share to an external social platform ──────────────────────────────────
+  function _shareToPlatform(platform) {
+    const url = `${location.origin}/strand/${_shareProjectId}`;
+    const text = 'Check this out on Social Strand';
+
+    // Instagram has no public web-share intent for arbitrary links (only
+    // their native app SDK supports posting to feed/story) — copy the link
+    // instead so the member can paste it into a DM or Story themselves.
+    if (platform === 'instagram') {
+      navigator.clipboard?.writeText(url)
+        .then(() => swShowToast('Link copied — paste it into Instagram!'))
+        .catch(() => swShowToast('Could not copy link.'));
+      closeShareModal();
+      return;
+    }
+
+    const intents = {
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${text}: ${url}`)}`,
+      twitter:  `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      snapchat: `https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`,
+    };
+    const intentUrl = intents[platform];
+    if (intentUrl) window.open(intentUrl, '_blank', 'noopener,noreferrer');
+    closeShareModal();
+  }
+
+  window.openShareModal = async function(projectId) {
     _shareProjectId = projectId;
     const overlay = _createShareOverlay();
     overlay.style.display = 'flex';
@@ -9471,6 +9546,29 @@ if (document.readyState === "loading") {
     const search = overlay.querySelector('#kfs-share-search');
     if (search) search.value = '';
 
+    // Lazy-fetch DM conversations (+ groups) if the messaging tab has never
+    // been opened this session. DM.convs/GC.groups are normally populated by
+    // _inboxLoad() the first time the Messages panel opens — if a member
+    // shares a post before ever opening Messages, those arrays are still
+    // empty and the sheet would wrongly look like "no conversations yet".
+    if (!DM.loaded && typeof window._inboxLoad === 'function') {
+      const peopleGrid = overlay.querySelector('#kfs-share-people');
+      const convsList = overlay.querySelector('#kfs-share-convs');
+      if (peopleGrid) peopleGrid.innerHTML = '<div style="padding:10px 14px;color:#555;font-size:12px">Loading contacts…</div>';
+      if (convsList) convsList.innerHTML = '';
+      try {
+        await window._inboxLoad();
+      } catch { /* fall through and render with whatever we have */ }
+      // The modal may have been closed (or re-opened for a different post)
+      // while we were awaiting the fetch — bail out rather than render stale data.
+      if (_shareOverlay.style.display === 'none' || _shareProjectId !== projectId) return;
+    }
+
+    _populateShareLists(overlay);
+  };
+
+  // ── Populate the people grid + conversation list from DM.convs/GC.groups ──
+  function _populateShareLists(overlay) {
     // Populate people grid (top 8 DM contacts)
     const peopleGrid = overlay.querySelector('#kfs-share-people');
     if (peopleGrid) {
@@ -9548,7 +9646,7 @@ if (document.readyState === "loading") {
         convsList.innerHTML = '<div style="padding:24px;text-align:center;color:#444;font-size:13px">No conversations yet. Start chatting to share!</div>';
       }
     }
-  };
+  }
 
   function closeShareModal() {
     if (_shareOverlay) {
@@ -9570,7 +9668,7 @@ if (document.readyState === "loading") {
     // Inject share (paper-plane) button into the action bar, before the views span
     html = html.replace(
       '<span class="ig-post-views-inline">',
-      `<button class="ig-action-btn" onclick="event.stopPropagation();openShareModal('${p.id}')" title="Share" style="margin-left:auto">
+      `<button class="ig-action-btn kfs-share-fab" onclick="event.stopPropagation();openShareModal('${p.id}')" title="Share">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
         </svg>
@@ -9953,6 +10051,7 @@ if (document.readyState === "loading") {
     #kfs-share-convs::-webkit-scrollbar { width: 3px; }
     #kfs-share-convs::-webkit-scrollbar-track { background: transparent; }
     #kfs-share-convs::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 10px; }
+    #kfs-share-actions::-webkit-scrollbar { height: 0; display: none; }
 
     /* ── Post share button: hide until hover on desktop ───────────────────── */
     @media (min-width: 769px) {
@@ -10070,11 +10169,38 @@ if (document.readyState === "loading") {
 
 // ── 10. INSTAGRAM-STYLE SHARE BUTTON STYLING ────────────────────────────────
 // Inject the kfs-share-fab class on the injected share buttons (workaround
-// since we inject into the HTML string via swFeedCard)
+// since we inject into the HTML string via swFeedCard). Section 5 now adds
+// the class directly at injection time, but this stays as a safety net in
+// case any share button ever renders without it (e.g. a stale cached
+// reference to swFeedCard captured before the patch in section 5 ran).
 (function styleShareButton() {
-  document.addEventListener('DOMContentLoaded', () => {
-    // Handled via CSS in section 7 above
-  });
+  function _tagShareButtons(root) {
+    (root || document).querySelectorAll('.ig-action-btn[title="Share"]:not(.kfs-share-fab)')
+      .forEach(btn => btn.classList.add('kfs-share-fab'));
+  }
+
+  function _start() {
+    _tagShareButtons();
+    // Posts re-render dynamically (feed scroll/pagination, likes, new posts) —
+    // observe the document and re-tag any share button that slips through
+    // without the class.
+    const observer = new MutationObserver(muts => {
+      for (const m of muts) {
+        m.addedNodes && m.addedNodes.forEach(node => {
+          if (node.nodeType !== 1) return;
+          if (node.matches?.('.ig-action-btn[title="Share"]')) node.classList.add('kfs-share-fab');
+          else _tagShareButtons(node);
+        });
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _start);
+  } else {
+    _start();
+  }
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
