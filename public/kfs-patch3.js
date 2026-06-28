@@ -12,7 +12,7 @@
  *   2. PROFANITY MODAL — server sends temp_banned but client checks
  *      banned. Normalises the error object so the right overlay fires.
  *   3. PIN — context menu label flips correctly on re-open after toggle.
- *   4. 404 on broadcast DM — wrong endpoint used; patched to /dm/send.
+ *   4. 404 on broadcast DM — FIXED IN SOURCE (membersaccess.js); wrapper removed.
  *   5. INSTAGRAM UI — Apple-clean mobile + desktop overhaul:
  *      · Message rows: photo, name, preview, time — all IG-style
  *      · Conversation header with avatar + online dot
@@ -209,40 +209,11 @@
 
   document.addEventListener('DOMContentLoaded', patchPinAction);
 
-  // ─── 4. BROADCAST 404 FIX ─────────────────────────────────────────────────
-  // The broadcast modal sends to:
-  //   POST /api/member/dm/messages  { peer_id, body, as_kfs:true }  → 404
-  // Correct endpoints:
-  //   Single member DM: POST /api/member/dm/send { to_member_id, body }
-  //   Broadcast (all):  POST /api/member/kfs-broadcast { body, target:'all' }
-  //   Group message:    already correct → /api/member/groups/:id/messages
-  //
-  // We also fix the /api/admin/broadcast → /api/member/kfs-broadcast path
-  // (the broadcast modal uses /api/admin/broadcast which may not handle member auth).
-
-  function patchBroadcastEndpoint() {
-    if (typeof api !== 'function') return;
-    var _a = api;
-    api = async function patchedApiBroadcast(method, path, body, opts) {
-      // Case 1: broadcast modal sending individual DM (peer_id present)
-      if (method === 'POST' && path === '/api/member/dm/messages' && body && body.peer_id) {
-        log('broadcast DM rewritten: /dm/messages → /dm/send');
-        return _a.call(this, method, '/api/member/dm/send',
-          Object.assign({}, body, { to_member_id: body.peer_id }),
-          opts);
-      }
-      // Case 2: broadcast to all members via admin route → member kfs-broadcast
-      if (method === 'POST' && path === '/api/admin/broadcast' && body && body.target === 'all') {
-        log('broadcast all rewritten: /admin/broadcast → /member/kfs-broadcast');
-        return _a.call(this, method, '/api/member/kfs-broadcast',
-          { body: body.body, target: 'all' },
-          opts);
-      }
-      return _a.call(this, method, path, body, opts);
-    };
-  }
-  document.addEventListener('DOMContentLoaded', patchBroadcastEndpoint);
-  patchBroadcastEndpoint();
+  // ─── 4. BROADCAST 404 FIX — REMOVED ──────────────────────────────────────────
+  // This wrapper is no longer needed. Both wrong /api/member/dm/messages call
+  // sites have been corrected directly in membersaccess.js (share modal line
+  // 9244 and broadcast modal line 9659). The patchedApiBroadcast api() wrapper
+  // that lived here has been removed to reduce the api() call stack depth.
 
   // ─── 5. INSTAGRAM / APPLE UI OVERHAUL ────────────────────────────────────────
 

@@ -220,7 +220,20 @@ const LEET_MAP = {
  */
 function normaliseLeet(text) {
   if (!text) return '';
-  let s = text.toLowerCase();
+  let s = text;
+
+  // 0. Unicode decomposition — catches circled letters (Ⓕ→f), fullwidth (Ａ→a),
+  //    small-caps (ᴀ→a), and strips combining diacritics not already in LEET_MAP.
+  //    NFKD decomposes compatibility forms; then we strip combining marks (U+0300–U+036F).
+  try { s = s.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (_) { /* older env fallback */ }
+  // Circled Latin: Ⓐ–Ⓩ (U+24B6–U+24D9) and ⓐ–ⓩ (U+24D0–U+24E9)
+  s = s.replace(/[\u24B6-\u24D9]/g, ch => String.fromCharCode(ch.codePointAt(0) - 0x24B6 + 65));
+  s = s.replace(/[\u24D0-\u24E9]/g, ch => String.fromCharCode(ch.codePointAt(0) - 0x24D0 + 97));
+  // Fullwidth Latin: Ａ–Ｚ (U+FF21–U+FF3A) and ａ–ｚ (U+FF41–U+FF5A)
+  s = s.replace(/[\uFF21-\uFF3A]/g, ch => String.fromCharCode(ch.codePointAt(0) - 0xFF21 + 65));
+  s = s.replace(/[\uFF41-\uFF5A]/g, ch => String.fromCharCode(ch.codePointAt(0) - 0xFF41 + 97));
+
+  s = s.toLowerCase();
 
   // 1. Collapse "ph" → "f" BEFORE per-char replacement
   s = s.replace(/ph/g, 'f');
@@ -234,7 +247,7 @@ function normaliseLeet(text) {
   // 4. Remove separators between individual letters (f.u.c.k / f-u-c-k / f_u_c_k)
   //    Only strip a separator that is surrounded by single letters on both sides
   //    so we don't destroy real words like "good-morning".
-  s = s.replace(/(?<=[a-z])[.\-_ *]+(?=[a-z])/g, '');
+  s = s.replace(/(?<=[a-z])[\.\-_*]+(?=[a-z])/g, ''); // FIX: removed space from char class — was collapsing words into one string, breaking word-boundary profanity matching
 
   // 5. Collapse repeated chars to max 2 (fuuuuck → fuuck)
   s = s.replace(/(.)\1{2,}/g, '$1$1');
@@ -248,7 +261,7 @@ function normaliseLeet(text) {
 
 const PROFANITY_WORDS_EN = [
   // f-word family
-  "fuck", "fucker", "fuk", "fck", "fuk", "fuc", "effing",
+  "fuck", "fucker", "fuk", "fck", "fuc", "effing",
   // s-word
   "shit", "shite", "sht", "bullshit", "bulls hit",
   // a-word
@@ -554,6 +567,21 @@ async function vioRecord(memberId) {
   };
 }
 
+async function loadMemberViolations() {
+  const { data } = await supabase
+    .from('member_violations')
+    .select('member_id, offense, muted_until, banned')
+    .gt('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+  (data || []).forEach(row => {
+    _violations.set(row.member_id, {
+      offense:    row.offense,
+      mutedUntil: row.muted_until ? new Date(row.muted_until) : null,
+      banned:     row.banned || false,
+    });
+  });
+  console.log(`[vio] Restored ${data?.length || 0} active member violations from DB`);
+}
+
 function _muteLabel(ms) {
   const s = Math.ceil(ms / 1000);
   if (s < 3600)  return `${Math.ceil(s / 60)} minute${Math.ceil(s/60) !== 1 ? 's' : ''}`;
@@ -585,6 +613,9 @@ async function vioGate(req, res, memberId, text) {
 
   // 3. Record offense and respond
   const vio = await vioRecord(memberId);
+
+  // Audit log — every moderation decision is recorded for admin review
+  console.log(`[profanity-gate] memberId=${memberId} offense=${vio.offense} action=${vio.action} word="${check.word}" path=${req.path}`);
 
   if (vio.action === "temp_ban") {
     return res.status(403).json({
@@ -9819,8 +9850,11 @@ app.get("/api/admin/scanner/events", authMiddleware, async (req, res) => {
 // SECTION MA-1 — Member JWT helpers (parallel to admin, separate secret namespace)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MEMBER_JWT_SECRET = process.env.MEMBER_JWT_SECRET || process.env.JWT_SECRET + "_member";
-// NOTE: Set MEMBER_JWT_SECRET as its own env var in Render for proper isolation.
+if (!process.env.MEMBER_JWT_SECRET) {
+  console.error('[FATAL] MEMBER_JWT_SECRET env var not set. Refusing to start.');
+  process.exit(1);
+}
+const MEMBER_JWT_SECRET = process.env.MEMBER_JWT_SECRET;
 
 function signMemberAccessToken(payload) {
   const jti = crypto.randomBytes(16).toString("hex");
@@ -10583,7 +10617,13 @@ app.post("/api/member/refresh", async (req, res) => {
   const { raw: newRaw } = await issueMemberRefreshToken(account.id);
   setMemberRefreshCookie(res, newRaw);
 
-  res.json({ token: accessToken });
+  const { data: memberProfile } = await supabase
+    .from('members')
+    .select('id, name, photo, role, batch, domain, email, mobile')
+    .eq('id', account.member_id)
+    .maybeSingle();
+
+  res.json({ token: accessToken, member: memberProfile || null });
 });
 
 // POST /api/member/logout
@@ -12149,6 +12189,7 @@ app.post(
   studioWriteLimit,
   upload.single("cover_image"),
   async (req, res) => {
+  try {
     const { title, description, video_url, domain, tags: rawTags, collab_ids: rawCollabIds } = req.body;
 
     if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
@@ -12250,6 +12291,10 @@ app.post(
 
     await logMemberActivity(req.member.id, req.member.memberId, "studio_post_create", { id: project.id, title: title.trim() }, req.ip);
     res.json({ success: true, id: project.id });
+  } catch (e) {
+    console.error("[studio:create] unhandled error:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
+  }
   }
 );
 
@@ -12262,6 +12307,7 @@ app.put(
   studioWriteLimit,
   upload.single("cover_image"),
   async (req, res) => {
+  try {
     const { data: existing } = await supabase
       .from("member_projects")
       .select("id, member_id, cover_image")
@@ -12309,6 +12355,10 @@ app.put(
 
     await logMemberActivity(req.member.id, req.member.memberId, "studio_post_edit", { id: req.params.id }, req.ip);
     res.json({ success: true });
+  } catch (e) {
+    console.error("[studio:edit] unhandled error:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
+  }
   }
 );
 
@@ -12511,6 +12561,7 @@ app.get("/api/member/studio/projects/:id/comments", memberAuthMiddleware, studio
 
 // POST /api/member/studio/projects/:id/comments  { body, parent_id? }
 app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, commentWriteLimit, async (req, res) => {
+  try {
   const { body: commentBody, parent_id } = req.body;
   if (!commentBody || !commentBody.trim()) return res.status(400).json({ error: "Comment body is required" });
   if (commentBody.trim().length > 1000) return res.status(400).json({ error: "Comment must be ≤ 1000 characters" });
@@ -12554,6 +12605,10 @@ app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, comme
   }
 
   res.json({ success: true, comment });
+  } catch (e) {
+    console.error("[studio:comment] unhandled error:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // DELETE /api/member/studio/comments/:id (soft-delete; author or project-owner)
@@ -15961,6 +16016,7 @@ app.listen(PORT, async () => {
   console.log(`KFS server running on port ${PORT}`);
   await initDB();
   await initMemberDB();      // ← member portal init
+  await loadMemberViolations(); // ← restore mutes/bans across restarts
   await initStudioWallDB();  // ← studio wall table check
   await initSocialDB();      // ← social: blocks, nicknames, group chats
   await loadRevokedTokens();

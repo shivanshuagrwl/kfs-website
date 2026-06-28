@@ -469,8 +469,6 @@ async function api(method, path, body, isForm = false) {
     fetchPath += (path.includes('?') ? '&' : '?') + '_cb=' + Date.now() + Math.random().toString(36).slice(2);
   }
   const r = await fetch(API + fetchPath, opts);
-  if (path.includes('/groups') || path.includes('/nicknames')) {
-  }
   // A 304 means "nothing changed" — it is not a failure, but r.ok is false for
   // it (only 200–299 counts), and a 304 has no body, so r.json() would throw.
   // Treat it as an empty-but-successful response rather than an error.
@@ -7402,13 +7400,8 @@ async function gcSend() {
       tmpBubble.remove();
       if (grp && !grp.querySelector('.dm-bubble')) grp.remove();
     }
-    const ed = e._data || {};
-    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
-      _vioShowClientNotice(ed, e.message, 'gc-input', 'gc-send-btn');
-    } else {
-      input.value = body; // restore on non-violation errors
-      console.error('[GC] send:', e.message);
-    }
+    input.value = body; // restore on error
+    console.error('[GC] send:', e.message);
   } finally {
     GC.pendingBodies.delete(body);
   }
@@ -9241,8 +9234,8 @@ if (document.readyState === "loading") {
       for (const item of selected) {
         try {
           if (item.dataset.type === 'dm') {
-            await api('POST', '/api/member/dm/messages', {
-              peer_id: item.dataset.id,
+            await api('POST', '/api/member/dm/send', {
+              to_member_id: item.dataset.id,
               body,
             });
           } else if (item.dataset.type === 'group') {
@@ -9656,8 +9649,8 @@ if (document.readyState === "loading") {
           payload = { body, is_admin_post: true };
         } else {
           if (!_bcMemberId) { errEl.textContent = 'Please select a member.'; errEl.style.display = ''; return; }
-          endpoint = '/api/member/dm/messages';
-          payload = { peer_id: _bcMemberId, body, as_kfs: true };
+          endpoint = '/api/member/dm/send';
+          payload = { to_member_id: _bcMemberId, body };
         }
 
         await api('POST', endpoint, payload);
