@@ -96,6 +96,7 @@ let allEvents = [];
       // If moderation section was already open when token hydrated, reload reports now
       var modSection = document.getElementById('section-moderation');
       if (modSection && modSection.classList.contains('active')) { loadModReports(); loadModerationBadge(); }
+      document.dispatchEvent(new Event('adminTokenReady'));
     }).catch(function() {});
   // Then every 12 minutes proactively
   setInterval(async function() {
@@ -3065,8 +3066,15 @@ async function loadAdminData(name) {
   else if (name==='member-movie-submissions') { loadMemberMovieSubmissions('pending'); }
   else if (name==='work-edit-requests') { loadWorkEditRequests('pending'); }
   else if (name==='grievances') { loadAdminGrievances(); }
-  else if (name==='moderation') { loadModReports(); loadModerationBadge(); }
-  else if (name==='dm-messaging') { dmMsgTab('broadcast'); loadDmMemberCache(); }
+  else if (name==='moderation') {
+    if (adminToken) { loadModReports(); loadModerationBadge(); }
+    else document.addEventListener('adminTokenReady', function() { loadModReports(); loadModerationBadge(); }, { once: true });
+  }
+  else if (name==='dm-messaging') {
+    dmMsgTab('broadcast');
+    if (adminToken) loadDmMemberCache();
+    else document.addEventListener('adminTokenReady', loadDmMemberCache, { once: true });
+  }
 }
 
 function openBlogModal(blog=null) {
@@ -14043,14 +14051,13 @@ async function sendTargetedDm() {
   }
   if (msgEl) msgEl.textContent = 'Sending…';
   try {
-    // kfs-broadcast uses memberAuthMiddleware so it needs the member token
-    const memberToken = localStorage.getItem('kfs-member-token') || '';
-    const r = await fetch('/api/member/kfs-broadcast', {
+    const r = await fetch('/api/admin/kfs-broadcast', {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + memberToken,
+        'Authorization': 'Bearer ' + adminToken,
+        'X-CSRF-Token': _csrfToken || '',
       },
       body: JSON.stringify({ body, target: 'member_ids', member_ids: [_dmTargetMemberId] }),
     });
@@ -14078,13 +14085,13 @@ async function sendBroadcastDm() {
   if (!confirm('Send this DM to ALL active members as KFS? This cannot be undone.')) return;
   if (msgEl) msgEl.textContent = 'Sending…';
   try {
-    const memberToken = localStorage.getItem('kfs-member-token') || '';
-    const r = await fetch('/api/member/kfs-broadcast', {
+    const r = await fetch('/api/admin/kfs-broadcast', {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + memberToken,
+        'Authorization': 'Bearer ' + adminToken,
+        'X-CSRF-Token': _csrfToken || '',
       },
       body: JSON.stringify({ body, target: 'all' }),
     });

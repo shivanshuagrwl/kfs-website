@@ -14603,7 +14603,7 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const status = req.query.status || "pending"; // pending | approved | rejected | all
     let q = supabase
       .from("ban_appeals")
-      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at, members!ban_appeals_member_id_fkey(name, photo)")
+      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -14612,13 +14612,22 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Flatten the nested members join so the frontend can read appeal.member_name
-    // directly instead of appeal.members?.name (avoids JS-side join mismatch).
+    // Two-step member lookup — avoids FK hint name mismatch (Supabase auto-generated
+    // constraint names don't always match ban_appeals_member_id_fkey).
+    const memberIds = [...new Set((data || []).map(a => a.member_id).filter(Boolean))];
+    let memberMap = {};
+    if (memberIds.length) {
+      const { data: mems } = await supabase
+        .from("members")
+        .select("id, name, photo")
+        .in("id", memberIds);
+      (mems || []).forEach(m => { memberMap[m.id] = m; });
+    }
+
     const appeals = (data || []).map(a => ({
       ...a,
-      member_name:  a.members?.name  || null,
-      member_photo: a.members?.photo || null,
-      members: undefined, // strip nested object — keep payload clean
+      member_name:  memberMap[a.member_id]?.name  || null,
+      member_photo: memberMap[a.member_id]?.photo || null,
     }));
 
     res.json({ appeals });
@@ -16016,6 +16025,69 @@ app.post("/api/member/kfs-broadcast", memberAuthMiddleware, async (req, res) => 
     res.json({ success: true, sent });
   } catch (e) {
     console.error("[kfs-broadcast]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/kfs-broadcast ─────────────────────────────────────────────
+// Admin-JWT version of kfs-broadcast — called from the admin panel DM section.
+// CSRF is already enforced globally via app.use("/api/admin", csrfProtectAdmin).
+app.post("/api/admin/kfs-broadcast", authMiddleware, async (req, res) => {
+  try {
+    const { body, target = "all", member_ids } = req.body || {};
+    if (!body || !String(body).trim())
+      return res.status(400).json({ error: "Message body is required" });
+
+    // Resolve KFS sentinel member ID
+    const { data: kfsSetting } = await supabase
+      .from("settings").select("value").eq("key", "kfs_admin_member_id").maybeSingle();
+    let kfsMemberId = kfsSetting?.value || null;
+    if (!kfsMemberId) {
+      const { data: kfsMember } = await supabase
+        .from("members").select("id").ilike("name", "KFS%").limit(1).maybeSingle();
+      kfsMemberId = kfsMember?.id || null;
+    }
+    if (!kfsMemberId)
+      return res.status(400).json({
+        error: "No KFS sentinel member found. Create a member named 'KFS' or set kfs_admin_member_id in settings.",
+      });
+
+    // Collect recipients
+    let recipientIds = [];
+    if (target === "member_ids" && Array.isArray(member_ids) && member_ids.length) {
+      recipientIds = member_ids.filter(id => typeof id === "string" && id.length > 0);
+    } else {
+      const { data: allMembers } = await supabase
+        .from("members").select("id").eq("is_active", true);
+      recipientIds = (allMembers || []).map(m => m.id).filter(id => id !== kfsMemberId);
+    }
+
+    if (!recipientIds.length)
+      return res.status(400).json({ error: "No recipients found" });
+
+    const msgBody = String(body).trim().slice(0, 2000);
+    const now     = new Date().toISOString();
+    let   sent    = 0;
+    const BATCH   = 50;
+
+    for (let i = 0; i < recipientIds.length; i += BATCH) {
+      const batch = recipientIds.slice(i, i + BATCH);
+      const rows  = batch.map(recipientId => ({
+        sender_id:    kfsMemberId,
+        recipient_id: recipientId,
+        body:         msgBody,
+        created_at:   now,
+      }));
+      const { error: insErr } = await supabase.from("dm_messages").insert(rows);
+      if (!insErr) sent += batch.length;
+      else console.error("[admin/kfs-broadcast] batch insert error:", insErr.message);
+    }
+
+    logActivity(req.admin.id, req.admin.name || "Admin", "kfs_broadcast", "dm_messages",
+      `Sent to ${sent} member(s)`).catch(() => {});
+    res.json({ success: true, sent });
+  } catch (e) {
+    console.error("[admin/kfs-broadcast]", e.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
