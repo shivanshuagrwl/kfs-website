@@ -10868,6 +10868,7 @@ async function loadBcEvents() {
 }
 
 async function previewBroadcastRecipients() {
+  if (!adminToken) return; // token not yet hydrated — skip
   const countEl = document.getElementById('bc-recipient-count');
   countEl.textContent = '…';
   const eventId = _bcAudienceType === 'event' ? (document.getElementById('bc-event-select')?.value || null) : null;
@@ -10948,6 +10949,7 @@ function showBcMsg(text, type) {
 }
 
 async function loadBroadcastHistory() {
+  if (!adminToken) return; // token not yet hydrated — skip
   const tbody = document.getElementById('bc-history-tbody');
   try {
     const data = await apiFetch('/api/admin/broadcasts');
@@ -13529,6 +13531,7 @@ function modTab(tab) {
 
 // ── Load reports ─────────────────────────────────────────────────────────────
 async function loadModReports() {
+  if (!adminToken) return; // token not yet hydrated from refresh cookie — skip
   const status = document.getElementById('mod-report-status')?.value || 'pending';
   const type   = document.getElementById('mod-report-type')?.value   || '';
   const tbody  = document.getElementById('mod-reports-tbody');

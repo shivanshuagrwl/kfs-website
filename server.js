@@ -7198,7 +7198,7 @@ app.get("/api/track-open/:broadcastId/:recipientHash", async (req, res) => {
 // ADMIN: Preview recipients count for a broadcast (before sending)
 app.post(
   "/api/admin/broadcast/preview",
-  requireSection("settings"),
+  requireSection("broadcast"),
   async (req, res) => {
     try {
       const { audience_type, event_id } = req.body;
@@ -7217,7 +7217,7 @@ app.post(
 // Reuse existing /api/events but scoped to events that have responses
 app.get(
   "/api/admin/broadcast/events-with-registrants",
-  requireSection("settings"),
+  requireSection("broadcast"),
   async (req, res) => {
     try {
       // Get distinct event_ids that have at least one form_response
@@ -7246,7 +7246,7 @@ app.get(
 // ADMIN: Send a broadcast
 app.post(
   "/api/admin/broadcast/send",
-  requireSection("settings"),
+  requireSection("broadcast"),
   async (req, res) => {
     try {
       const { subject, body_html, body_text, audience_type, event_id } =
@@ -7398,7 +7398,7 @@ app.post(
 // ADMIN: List all broadcasts (for history view)
 app.get(
   "/api/admin/broadcasts",
-  requireSection("settings"),
+  requireSection("broadcast"),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -7420,7 +7420,7 @@ app.get(
 // ADMIN: Get open-rate stats for a specific broadcast
 app.get(
   "/api/admin/broadcasts/:id/stats",
-  requireSection("settings"),
+  requireSection("broadcast"),
   async (req, res) => {
     try {
       const { data: broadcast, error: bErr } = await supabase
@@ -13804,14 +13804,14 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
     const [{ data: received }, { data: sent }] = await Promise.all([
       supabase
         .from("member_notifications")
-        .select("id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at")
+        .select("id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at, e2ee")
         .eq("member_id", myId)
         .eq("link_type", "dm")
         .order("created_at", { ascending: false })
         .limit(500),
       supabase
         .from("member_notifications")
-        .select("id, member_id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at")
+        .select("id, member_id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at, e2ee")
         .eq("actor_id", myId)
         .eq("link_type", "dm")
         .order("created_at", { ascending: false })
@@ -13884,7 +13884,8 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
           conv_key:          c.key,
           peer,
           last_msg_at:       lastMsg.created_at,
-          last_snippet:      (lastMsg.body || "").slice(0, 80),
+          last_snippet:      lastMsg.e2ee ? null : (lastMsg.body || "").slice(0, 80),
+          last_is_e2ee:      lastMsg.e2ee || false,
           last_sender_is_me: isMine,
           unread_count:      c.unreadCount,
         };
@@ -14602,7 +14603,7 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const status = req.query.status || "pending"; // pending | approved | rejected | all
     let q = supabase
       .from("ban_appeals")
-      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at, members(name, photo)")
+      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at, members!ban_appeals_member_id_fkey(name, photo)")
       .order("created_at", { ascending: false })
       .limit(100);
 

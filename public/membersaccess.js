@@ -4854,9 +4854,11 @@ function dmRenderConvs(list) {
     const row = document.createElement('div');
     row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
     row.dataset.key = c.conv_key;
-    const preview = c.last_snippet
-      ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
-      : 'No messages yet';
+    const preview = c.last_is_e2ee
+      ? (c.last_sender_is_me ? 'You: ' : '') + '🔒 Encrypted message'
+      : c.last_snippet
+        ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
+        : 'No messages yet';
     const displayName = (typeof nicksResolveDisplay === 'function')
       ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
       : (c.peer?.name || 'Member');
@@ -5266,7 +5268,8 @@ async function dmSend() {
     // Update conv list locally (avoid full refetch on every send)
     const existingConv = DM.convs.find(c => c.conv_key === DM.activeKey);
     if (existingConv) {
-      existingConv.last_snippet      = body.slice(0, 80);
+      existingConv.last_snippet      = dmPayload.e2ee ? null : body.slice(0, 80);
+      existingConv.last_is_e2ee      = dmPayload.e2ee ? true : false;
       existingConv.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
       existingConv.last_sender_is_me = true;
       dmRenderConvs(DM.convs);
@@ -8352,9 +8355,11 @@ if (document.readyState === "loading") {
           row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
           row.dataset.key  = c.conv_key;
           row.dataset.type = 'dm';
-          const preview = c.last_snippet
-            ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
-            : 'No messages yet';
+          const preview = c.last_is_e2ee
+            ? (c.last_sender_is_me ? 'You: ' : '') + '🔒 Encrypted message'
+            : c.last_snippet
+              ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
+              : 'No messages yet';
           const displayName = (typeof nicksResolveDisplay === 'function')
             ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
             : (c.peer?.name || 'Member');
