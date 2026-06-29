@@ -93,6 +93,9 @@ let allEvents = [];
       localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
       var panel = document.getElementById('admin-panel');
       if (panel && panel.classList.contains('active')) { showAdminPanel(); }
+      // If moderation section was already open when token hydrated, reload reports now
+      var modSection = document.getElementById('section-moderation');
+      if (modSection && modSection.classList.contains('active')) { loadModReports(); loadModerationBadge(); }
     }).catch(function() {});
   // Then every 12 minutes proactively
   setInterval(async function() {
@@ -3062,6 +3065,8 @@ async function loadAdminData(name) {
   else if (name==='member-movie-submissions') { loadMemberMovieSubmissions('pending'); }
   else if (name==='work-edit-requests') { loadWorkEditRequests('pending'); }
   else if (name==='grievances') { loadAdminGrievances(); }
+  else if (name==='moderation') { loadModReports(); loadModerationBadge(); }
+  else if (name==='dm-messaging') { dmMsgTab('broadcast'); loadDmMemberCache(); }
 }
 
 function openBlogModal(blog=null) {
@@ -13953,6 +13958,179 @@ async function unsuspendMember(memberId) {
     if (!r.ok) { const d = await r.json(); alert(d.error || 'Error'); return; }
     if (typeof loadMembers === 'function') loadMembers();
   } catch { alert('Network error'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: DM & Messaging — Admin Panel JS
+// Covers: broadcast DM, targeted DM, member conversation viewer
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _dmTargetMemberId = null;
+let _allMembersCache = [];
+
+async function loadDmMemberCache() {
+  if (_allMembersCache.length) return; // already loaded
+  try {
+    const data = await apiFetch('/api/admin/members');
+    if (Array.isArray(data)) _allMembersCache = data;
+  } catch {}
+}
+
+function dmMsgTab(tab) {
+  ['broadcast', 'targeted', 'conversations'].forEach(t => {
+    const panel = document.getElementById('dm-panel-' + t);
+    const btn   = document.getElementById('dm-tab-' + t);
+    if (panel) panel.style.display = t === tab ? '' : 'none';
+    if (btn) {
+      if (t === tab) {
+        btn.className = 'btn btn-primary';
+        btn.style.cssText = 'font-size:12px;padding:8px 18px;border-radius:20px';
+      } else {
+        btn.className = 'btn';
+        btn.style.cssText = 'font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)';
+      }
+    }
+  });
+  if (tab === 'conversations') loadAdminDmConversations();
+}
+
+function dmTargetSearch(val) {
+  _dmTargetMemberId = null;
+  const box = document.getElementById('dm-target-results');
+  if (!box) return;
+  if (!val || val.length < 2) { box.style.display = 'none'; return; }
+  const q = val.toLowerCase();
+  const matches = _allMembersCache.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) {
+    box.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--grey)">No members found</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = matches.map(m =>
+    `<div onclick="dmSelectMember('${m.id}','${escHtml(m.name).replace(/'/g,"\\'")}')" style="padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2,#222)'" onmouseout="this.style.background=''">${escHtml(m.name)}</div>`
+  ).join('');
+  box.style.display = 'block';
+}
+
+function dmSelectMember(id, name) {
+  _dmTargetMemberId = id;
+  const inp = document.getElementById('dm-target-input');
+  if (inp) inp.value = name;
+  const box = document.getElementById('dm-target-results');
+  if (box) box.style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const box = document.getElementById('dm-target-results');
+  const inp = document.getElementById('dm-target-input');
+  if (box && inp && !inp.contains(e.target) && !box.contains(e.target)) {
+    box.style.display = 'none';
+  }
+});
+
+async function sendTargetedDm() {
+  const msgEl = document.getElementById('dm-targeted-msg');
+  const body  = document.getElementById('dm-targeted-body')?.value?.trim();
+  if (msgEl) { msgEl.style.color = 'var(--grey)'; msgEl.textContent = ''; }
+  if (!_dmTargetMemberId) {
+    if (msgEl) msgEl.textContent = 'Please select a member from the dropdown.';
+    return;
+  }
+  if (!body) {
+    if (msgEl) msgEl.textContent = 'Message cannot be empty.';
+    return;
+  }
+  if (msgEl) msgEl.textContent = 'Sending…';
+  try {
+    // kfs-broadcast uses memberAuthMiddleware so it needs the member token
+    const memberToken = localStorage.getItem('kfs-member-token') || '';
+    const r = await fetch('/api/member/kfs-broadcast', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + memberToken,
+      },
+      body: JSON.stringify({ body, target: 'member_ids', member_ids: [_dmTargetMemberId] }),
+    });
+    const d = await r.json();
+    if (!r.ok) { if (msgEl) msgEl.textContent = d.error || 'Failed to send.'; return; }
+    if (msgEl) { msgEl.style.color = '#22c55e'; msgEl.textContent = `✓ Sent to ${d.sent} member.`; }
+    const bodyEl = document.getElementById('dm-targeted-body');
+    if (bodyEl) bodyEl.value = '';
+    _dmTargetMemberId = null;
+    const inp = document.getElementById('dm-target-input');
+    if (inp) inp.value = '';
+  } catch(e) {
+    if (msgEl) msgEl.textContent = 'Network error. Please try again.';
+  }
+}
+
+async function sendBroadcastDm() {
+  const msgEl = document.getElementById('dm-broadcast-msg');
+  const body  = document.getElementById('dm-broadcast-body')?.value?.trim();
+  if (msgEl) { msgEl.style.color = 'var(--grey)'; msgEl.textContent = ''; }
+  if (!body) {
+    if (msgEl) msgEl.textContent = 'Message cannot be empty.';
+    return;
+  }
+  if (!confirm('Send this DM to ALL active members as KFS? This cannot be undone.')) return;
+  if (msgEl) msgEl.textContent = 'Sending…';
+  try {
+    const memberToken = localStorage.getItem('kfs-member-token') || '';
+    const r = await fetch('/api/member/kfs-broadcast', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + memberToken,
+      },
+      body: JSON.stringify({ body, target: 'all' }),
+    });
+    const d = await r.json();
+    if (!r.ok) { if (msgEl) msgEl.textContent = d.error || 'Failed to send.'; return; }
+    if (msgEl) { msgEl.style.color = '#22c55e'; msgEl.textContent = `✓ Broadcast sent to ${d.sent} members.`; }
+    const bodyEl = document.getElementById('dm-broadcast-body');
+    if (bodyEl) bodyEl.value = '';
+  } catch(e) {
+    if (msgEl) msgEl.textContent = 'Network error. Please try again.';
+  }
+}
+
+async function loadAdminDmConversations() {
+  const box = document.getElementById('dm-conv-list');
+  if (!box) return;
+  box.innerHTML = '<div style="color:var(--grey);font-size:13px;padding:12px">Loading conversations…</div>';
+  try {
+    const r = await fetch('/api/admin/moderation/dm-list', {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+    });
+    if (r.status === 403 || r.status === 401) {
+      box.innerHTML = '<div style="color:var(--grey);font-size:13px;padding:12px">Member conversations are restricted to master admins.</div>';
+      return;
+    }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      box.innerHTML = `<div style="color:#e53e3e;font-size:13px;padding:12px">${escHtml(d.error || 'Failed to load conversations.')}</div>`;
+      return;
+    }
+    const data = await r.json();
+    if (!data.length) {
+      box.innerHTML = '<div style="color:var(--grey);font-size:13px;padding:12px">No DM conversations found.</div>';
+      return;
+    }
+    box.innerHTML = data.map(c => {
+      const last = c.last_msg ? new Date(c.last_msg).toLocaleDateString('en-IN', { day:'numeric', month:'short' }) : '';
+      return `<div onclick="viewDmConv('${c.conv_key}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2,#222)'" onmouseout="this.style.background=''">
+        <span style="font-size:13px">${escHtml(c.member_a)} <span style="color:var(--grey)">↔</span> ${escHtml(c.member_b)}</span>
+        <span style="font-size:11px;color:var(--grey)">${c.message_count} msgs · ${last}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    box.innerHTML = '<div style="color:#e53e3e;font-size:13px;padding:12px">Network error. Please try again.</div>';
+  }
 }
 
 // Refresh badge whenever admin section shows

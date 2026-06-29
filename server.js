@@ -14939,6 +14939,64 @@ app.get("/api/admin/moderation/dm/:convKey", authMiddleware, async (req, res) =>
 });
 
 
+// ── GET /api/admin/moderation/dm-list  — list all unique DM conversations ────
+// Master-only. Scans dm_messages for unique conversation pairs so the admin
+// can browse/select a conv_key to inspect.
+app.get("/api/admin/moderation/dm-list", masterMiddleware, async (req, res) => {
+  try {
+    // Fetch the most recent 1000 messages to build conversation index
+    const { data, error } = await supabase
+      .from("dm_messages")
+      .select("sender_id, recipient_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
+    if (error) throw error;
+
+    // Collapse into unique conv_keys
+    const convMap = new Map();
+    for (const row of (data || [])) {
+      const [a, b] = [row.sender_id, row.recipient_id].sort();
+      const key = `${a}:${b}`;
+      if (!convMap.has(key)) {
+        convMap.set(key, { conv_key: key, last_msg: row.created_at, message_count: 1 });
+      } else {
+        convMap.get(key).message_count++;
+      }
+    }
+
+    // Fetch member names for all IDs that appear in conversations
+    const ids = [...new Set([...convMap.keys()].flatMap(k => k.split(":")))];
+    let nameMap = {};
+    if (ids.length) {
+      const { data: members } = await supabase
+        .from("members")
+        .select("id, name")
+        .in("id", ids);
+      (members || []).forEach(m => { nameMap[m.id] = m.name; });
+    }
+
+    const result = [...convMap.values()]
+      .sort((a, b) => new Date(b.last_msg) - new Date(a.last_msg))
+      .map(c => {
+        const [idA, idB] = c.conv_key.split(":");
+        return {
+          conv_key:      c.conv_key,
+          member_a:      nameMap[idA] || idA,
+          member_b:      nameMap[idB] || idB,
+          message_count: c.message_count,
+          last_msg:      c.last_msg,
+        };
+      });
+
+    logActivity(req.admin.id, req.admin.name, "list_dm_conversations", "dm", `${result.length} conversations`).catch(() => {});
+    res.json(result);
+  } catch (e) {
+    console.error("[admin/moderation/dm-list]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Rate limiters for blocks / nicknames / groups ────────────────────────────
 const blockWriteLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 const nicknameLimit   = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });

@@ -4050,6 +4050,8 @@ body.light-mode .psw-comment-gate a{color:#111}
     <div data-action="showAdminSection" data-args='["work-edit-requests"]' class="admin-sidebar-item" data-section="work-edit-requests"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> Work Edit Requests</div>
     <div data-action="showAdminSection" data-args='["grievances"]' class="admin-sidebar-item" data-section="grievances"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Grievances &amp; Suggestions</div>
     <div data-action="showAdminSection" data-args='["moderation"]' class="admin-sidebar-item" data-section="moderation" id="sidebar-moderation-link"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span> Moderation <span id="moderation-badge" style="display:none;background:#e53e3e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px">0</span></div>
+    <div class="admin-sidebar-group">Messaging</div>
+    <div data-action="showAdminSection" data-args='["dm-messaging"]' class="admin-sidebar-item" data-section="dm-messaging"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> DM &amp; Messaging</div>
     <div class="admin-sidebar-group">System</div>
     <div data-action="showAdminSection" data-args='["credits"]' class="admin-sidebar-item" data-section="credits"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><polyline points="16 3 18 5 22 1"/></svg></span> Site Credits</div>
     <div data-action="showAdminSection" data-args='["settings"]' class="admin-sidebar-item" data-section="settings"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> Settings</div>
@@ -5415,6 +5417,72 @@ KFS — KIIT Film Society"></textarea>
               <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--grey)">Loading&#x2026;</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- DM & MESSAGING SECTION -->
+    <div class="admin-section" id="section-dm-messaging">
+      <div class="admin-header">
+        <div><h2>DM &amp; Messaging</h2><p>Send broadcast DMs as KFS, view reported conversations, and send targeted messages</p></div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+        <button onclick="dmMsgTab('broadcast')" id="dm-tab-broadcast" class="btn btn-primary" style="font-size:12px;padding:8px 18px;border-radius:20px">&#x1F4E3; Broadcast DM</button>
+        <button onclick="dmMsgTab('targeted')"  id="dm-tab-targeted"  class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x2709; Targeted DM</button>
+        <button onclick="dmMsgTab('conversations')" id="dm-tab-conversations" class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x1F4AC; Member Conversations</button>
+      </div>
+
+      <!-- Broadcast DM panel -->
+      <div id="dm-panel-broadcast">
+        <div class="admin-card" style="padding:24px;max-width:680px">
+          <h4 style="margin:0 0 6px;font-size:14px">Send Broadcast DM as KFS</h4>
+          <p style="font-size:12px;color:var(--grey);margin:0 0 18px">Sends a DM from the KFS sentinel account to <strong>all</strong> active members at once.</p>
+          <div class="form-group">
+            <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">MESSAGE</label>
+            <textarea id="dm-broadcast-body" rows="5" placeholder="Write your broadcast message here&#x2026;" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+          </div>
+          <button onclick="sendBroadcastDm()" class="btn btn-primary" style="font-size:13px;padding:10px 22px;border-radius:20px">&#x1F4E3; Send Broadcast</button>
+          <span id="dm-broadcast-msg" style="margin-left:12px;font-size:12px;color:var(--grey)"></span>
+        </div>
+      </div>
+
+      <!-- Targeted DM panel -->
+      <div id="dm-panel-targeted" style="display:none">
+        <div class="admin-card" style="padding:24px;max-width:680px">
+          <h4 style="margin:0 0 6px;font-size:14px">Send Targeted DM as KFS</h4>
+          <p style="font-size:12px;color:var(--grey);margin:0 0 18px">Send a one-to-one direct message to a specific member as the KFS official account. Useful for warnings, personal follow-ups, or confirmations.</p>
+          <div class="form-group">
+            <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">TO (MEMBER)</label>
+            <div style="position:relative">
+              <input id="dm-target-input" type="text" placeholder="Type member name to search&#x2026;" oninput="dmTargetSearch(this.value)" autocomplete="off" style="border-radius:12px;width:100%;box-sizing:border-box">
+              <div id="dm-target-results" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface,#1a1a1a);border:1px solid var(--border);border-radius:12px;z-index:999;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="font-size:11px;letter-spacing:.08em;color:var(--grey);font-weight:600">MESSAGE</label>
+            <textarea id="dm-targeted-body" rows="5" placeholder="Write your message here&#x2026;" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+          </div>
+          <button onclick="sendTargetedDm()" class="btn btn-primary" style="font-size:13px;padding:10px 22px;border-radius:20px">&#x2709; Send Message</button>
+          <span id="dm-targeted-msg" style="margin-left:12px;font-size:12px;color:var(--grey)"></span>
+        </div>
+      </div>
+
+      <!-- Member Conversations panel -->
+      <div id="dm-panel-conversations" style="display:none">
+        <div class="admin-card" style="padding:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <h4 style="margin:0 0 4px;font-size:14px">&#x1F4AC; Member Conversations</h4>
+              <p style="margin:0;font-size:12px;color:var(--grey)">Browse DM conversations. Content is E2EE &#x2014; use the Reports tab to read reported message content.</p>
+            </div>
+            <button onclick="loadAdminDmConversations()" class="btn-sm" style="flex-shrink:0">&#x21BB; Refresh</button>
+          </div>
+          <div id="dm-conv-list" style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
+            <div style="color:var(--grey);font-size:13px;padding:16px;text-align:center">Click this tab to load conversations&#x2026;</div>
+          </div>
         </div>
       </div>
 
