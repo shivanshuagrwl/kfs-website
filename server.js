@@ -14368,7 +14368,10 @@ app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
 });
 
 // ── GET /api/admin/reports/count  — pending report badge count ───────────────
-app.get("/api/admin/reports/count", masterMiddleware, async (req, res) => {
+// authMiddleware (not masterMiddleware) — the badge is just a number, not
+// sensitive content. Regular admins can see the badge; the full reports list
+// and resolve actions remain master-only.
+app.get("/api/admin/reports/count", authMiddleware, async (req, res) => {
   try {
     const { count } = await supabase
       .from("content_reports")
@@ -14608,7 +14611,16 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    res.json({ appeals: data || [] });
+    // Flatten the nested members join so the frontend can read appeal.member_name
+    // directly instead of appeal.members?.name (avoids JS-side join mismatch).
+    const appeals = (data || []).map(a => ({
+      ...a,
+      member_name:  a.members?.name  || null,
+      member_photo: a.members?.photo || null,
+      members: undefined, // strip nested object — keep payload clean
+    }));
+
+    res.json({ appeals });
   } catch (e) {
     console.error("[admin/ban-appeals]", e.message);
     res.status(500).json({ error: "Internal server error" });

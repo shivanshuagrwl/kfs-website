@@ -13485,12 +13485,13 @@ function pswShowAuthNudge() {
 
 // ── Moderation sidebar badge ─────────────────────────────────────────────────
 async function loadModerationBadge() {
+  if (!adminToken) return; // token not yet hydrated from refresh cookie — skip
   try {
     const r = await fetch('/api/admin/reports/count', {
       credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken }
     });
-    if (!r.ok) return;
+    if (!r.ok) return; // 401/403 — silently skip, don't surface an error
     const { count } = await r.json();
     const badge = document.getElementById('moderation-badge');
     if (!badge) return;
@@ -13540,6 +13541,15 @@ async function loadModReports() {
       credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken }
     });
+    if (r.status === 403) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">Reports inbox is restricted to master admins.</td></tr>';
+      return;
+    }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red,#e53e3e)">Failed to load reports: ${escHtml(d.error || 'Unknown error')}</td></tr>`;
+      return;
+    }
     const data = await r.json();
     if (!Array.isArray(data) || data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">No reports found.</td></tr>';
@@ -13652,6 +13662,11 @@ async function quickDismissReport(reportId) {
 }
 
 // ── View DM conversation (admin) ─────────────────────────────────────────────
+// NOTE: DMs are end-to-end encrypted (E2EE). The bodies stored in the DB are
+// AES-GCM ciphertext — admins cannot decrypt them. Plaintext is only available
+// when a member explicitly reports a specific message via the E2EE report flow
+// (the reporter's client decrypts locally and submits the plaintext to the
+// /api/admin/e2ee/report-decrypt endpoint, visible in the Reports tab).
 async function viewDmConv(convKey) {
   const modal = document.getElementById('mod-dm-modal');
   const msgBox = document.getElementById('mod-dm-messages');
@@ -13666,7 +13681,7 @@ async function viewDmConv(convKey) {
       headers: { 'Authorization': 'Bearer ' + adminToken }
     });
     const data = await r.json();
-    if (!r.ok) { msgBox.innerHTML = `<div style="color:#e53e3e;font-size:13px">${data.error || 'Failed'}</div>`; return; }
+    if (!r.ok) { msgBox.innerHTML = `<div style="color:#e53e3e;font-size:13px">${escHtml(data.error || 'Failed')}</div>`; return; }
 
     const memberList = Object.values(data.members || {}).join(' ↔ ');
     membersBox.textContent = `Conversation between: ${memberList}`;
@@ -13676,13 +13691,25 @@ async function viewDmConv(convKey) {
       return;
     }
 
-    msgBox.innerHTML = data.messages.map(m => {
+    // Check if first message body looks like E2EE ciphertext (base64:base64 format)
+    const looksEncrypted = /^[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$/.test(data.messages[0]?.body || '');
+    const e2eeWarning = looksEncrypted
+      ? `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#888">
+          ⚠️ <strong style="color:#f5f5f5">E2EE messages</strong> — DMs are end-to-end encrypted. The content below is ciphertext that cannot be read here.
+          To view a reported message's content, use the <strong style="color:#f5f5f5">Reports tab</strong> where the member submitted decrypted content via the report flow.
+         </div>`
+      : '';
+
+    msgBox.innerHTML = e2eeWarning + data.messages.map(m => {
       const name = m.sender_name || 'Unknown';
       const time = new Date(m.sent_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
       const date = new Date(m.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const bodyDisplay = looksEncrypted
+        ? '<em style="color:#555;font-size:12px">[encrypted]</em>'
+        : `<div style="font-size:13px;white-space:pre-wrap">${escHtml(m.body)}</div>`;
       return `<div style="background:var(--surface,#1a1a1a);border-radius:10px;padding:10px 12px">
         <div style="font-size:11px;color:var(--grey);margin-bottom:4px">${escHtml(name)} · ${date} ${time}</div>
-        <div style="font-size:13px;white-space:pre-wrap">${escHtml(m.body)}</div>
+        ${bodyDisplay}
       </div>`;
     }).join('');
     msgBox.scrollTop = msgBox.scrollHeight;
@@ -13764,12 +13791,21 @@ async function deleteAdminPost(id) {
 async function loadBanAppeals() {
   const tbody = document.getElementById('mod-appeals-tbody');
   if (!tbody) return;
+  if (!adminToken) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--grey)">Please wait…</td></tr>';
+    return;
+  }
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--grey)">Loading…</td></tr>';
   try {
     const r = await fetch('/api/admin/ban-appeals', {
       credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + adminToken }
     });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:#e53e3e">${escHtml(d.error || 'Failed to load appeals')}</td></tr>`;
+      return;
+    }
     const d = await r.json();
     const appeals = d.appeals || [];
 
@@ -13790,12 +13826,13 @@ async function loadBanAppeals() {
       const date = new Date(a.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
       const statusColor = a.status === 'pending' ? '#dd6b20' : a.status === 'approved' ? '#38a169' : '#e53e3e';
       const statusLabel = a.status === 'pending' ? '⏳ Pending' : a.status === 'approved' ? '✓ Approved' : '✗ Rejected';
+      // Server now flattens members join → a.member_name (was a.members?.name before)
       const memberName = escHtml(a.member_name || a.member_id || 'Unknown');
-      const reason = escHtml((a.reason || 'No reason provided').slice(0, 100));
+      const reason = escHtml((a.message || 'No message provided').slice(0, 100));
       const actions = a.status === 'pending'
         ? `<button onclick="approveBanAppeal('${a.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:#38a169;color:#fff;border:none;border-radius:6px;margin-right:4px">✓ Approve</button>
            <button onclick="rejectBanAppeal('${a.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:#e53e3e;color:#fff;border:none;border-radius:6px">✗ Reject</button>`
-        : `<span style="font-size:11px;color:var(--grey)">Reviewed by ${escHtml(a.reviewed_by_name || 'admin')}</span>`;
+        : `<span style="font-size:11px;color:var(--grey)">Reviewed by ${escHtml(a.reviewed_by || 'admin')}</span>`;
       return `<tr>
         <td style="font-weight:600">${memberName}</td>
         <td style="white-space:nowrap;font-size:12px;color:var(--grey)">${date}</td>
@@ -13841,10 +13878,12 @@ async function rejectBanAppeal(id) {
 // ── Poll appeals badge periodically so admin sees new requests ──────────────
 (function startAppealsBadgePoll() {
   async function pollAppeals() {
+    const tok = adminToken || window.adminToken;
+    if (!tok) return; // token not yet hydrated — skip silently
     try {
       const r = await fetch('/api/admin/ban-appeals', {
         credentials: 'include',
-        headers: { 'Authorization': 'Bearer ' + (window.adminToken || '') }
+        headers: { 'Authorization': 'Bearer ' + tok }
       });
       if (!r.ok) return;
       const d = await r.json();
@@ -13857,7 +13896,6 @@ async function rejectBanAppeal(id) {
       // Also bump the sidebar moderation badge to include appeals
       const sideBadge = document.getElementById('moderation-badge');
       if (sideBadge && pending > 0) {
-        const current = parseInt(sideBadge.textContent, 10) || 0;
         // Only update if no reports are loaded yet (avoid double-counting)
         if (sideBadge.style.display === 'none') {
           sideBadge.textContent = pending;
@@ -13866,9 +13904,10 @@ async function rejectBanAppeal(id) {
       }
     } catch {}
   }
-  // Run after page load
-  setTimeout(pollAppeals, 3000);
-  setInterval(pollAppeals, 60000); // check every 60s
+  // Wait 6 s so the /api/admin/refresh token hydration (fires on load) has
+  // time to complete before the first poll — avoids spurious 401 on cold load.
+  setTimeout(pollAppeals, 6000);
+  setInterval(pollAppeals, 60000); // check every 60 s
 })();
 
 // ── Temp Suspend (called from Members section) ───────────────────────────────
