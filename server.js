@@ -176,6 +176,10 @@ async function sendConfirmationEmail({
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Canonical KFS logo — used as a fallback for the KFS sentinel member's
+// avatar in DMs/notifications if the members.photo column is left blank.
+const KFS_SENTINEL_LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFANITY FILTER — English + Hindi/Hinglish (v2 — Strict)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16094,7 +16098,7 @@ app.post("/api/member/kfs-broadcast", memberAuthMiddleware, async (req, res) => 
         body:        msgBody,
         actor_id:    kfsMemberId,
         actor_name:  kfsMember?.name  || "KFS",
-        actor_photo: kfsMember?.photo || null,
+        actor_photo: kfsMember?.photo || KFS_SENTINEL_LOGO_URL,
         link_type:   "dm",
         link_id:     dmConvKey(kfsMemberId, recipientId),
         is_read:     false,
@@ -16170,7 +16174,7 @@ app.post("/api/admin/kfs-broadcast", authMiddleware, async (req, res) => {
         body:        msgBody,
         actor_id:    kfsMemberId,
         actor_name:  kfsMember?.name  || "KFS",
-        actor_photo: kfsMember?.photo || null,
+        actor_photo: kfsMember?.photo || KFS_SENTINEL_LOGO_URL,
         link_type:   "dm",
         link_id:     dmConvKey(kfsMemberId, recipientId),
         is_read:     false,
