@@ -15019,24 +15019,26 @@ app.get("/api/admin/moderation/dm/:convKey", authMiddleware, async (req, res) =>
 
 
 // ── GET /api/admin/moderation/dm-list  — list all unique DM conversations ────
-// Master-only. Scans dm_messages for unique conversation pairs so the admin
-// can browse/select a conv_key to inspect.
+// Master-only. Scans member_notifications (type/link_type "dm") for unique
+// conversation pairs so the admin can browse/select a conv_key to inspect.
 app.get("/api/admin/moderation/dm-list", masterMiddleware, async (req, res) => {
   try {
-    // Fetch the most recent 1000 messages to build conversation index
+    // Fetch the most recent 1000 DM notifications to build conversation index
     const { data, error } = await supabase
-      .from("dm_messages")
-      .select("sender_id, recipient_id, created_at")
+      .from("member_notifications")
+      .select("actor_id, member_id, link_id, created_at")
+      .eq("link_type", "dm")
       .order("created_at", { ascending: false })
       .limit(1000);
 
     if (error) throw error;
 
-    // Collapse into unique conv_keys
+    // Collapse into unique conv_keys — prefer the stored link_id (the real
+    // conv_key used by dmConvKey), falling back to deriving it from the
+    // sender/recipient pair for any older rows that might lack link_id.
     const convMap = new Map();
     for (const row of (data || [])) {
-      const [a, b] = [row.sender_id, row.recipient_id].sort();
-      const key = `${a}:${b}`;
+      const key = row.link_id || [row.actor_id, row.member_id].sort().join(":");
       if (!convMap.has(key)) {
         convMap.set(key, { conv_key: key, last_msg: row.created_at, message_count: 1 });
       } else {
@@ -16064,8 +16066,10 @@ app.post("/api/member/kfs-broadcast", memberAuthMiddleware, async (req, res) => 
     if (target === "member_ids" && Array.isArray(member_ids) && member_ids.length) {
       recipientIds = member_ids.filter(id => typeof id === "string" && id.length > 0);
     } else {
+      // NOTE: members has no is_active column — use deleted_at IS NULL,
+      // the same liveness check the real DM-send route uses.
       const { data: allMembers } = await supabase
-        .from("members").select("id").eq("is_active", true);
+        .from("members").select("id").is("deleted_at", null);
       recipientIds = (allMembers || []).map(m => m.id).filter(id => id !== kfsMemberId);
     }
 
@@ -16077,20 +16081,31 @@ app.post("/api/member/kfs-broadcast", memberAuthMiddleware, async (req, res) => 
     let   sent    = 0;
     const BATCH   = 50;
 
+    // Fetch KFS sentinel's display info for the notification snapshot
+    const { data: kfsMember } = await supabase
+      .from("members").select("id, name, photo").eq("id", kfsMemberId).maybeSingle();
+
     for (let i = 0; i < recipientIds.length; i += BATCH) {
       const batch = recipientIds.slice(i, i + BATCH);
       const rows  = batch.map(recipientId => ({
-        sender_id:    kfsMemberId,
-        recipient_id: recipientId,
-        body:         msgBody,
-        created_at:   now,
+        member_id:   recipientId,
+        type:        "dm",
+        title:       `Message from ${kfsMember?.name || "KFS"}`,
+        body:        msgBody,
+        actor_id:    kfsMemberId,
+        actor_name:  kfsMember?.name  || "KFS",
+        actor_photo: kfsMember?.photo || null,
+        link_type:   "dm",
+        link_id:     dmConvKey(kfsMemberId, recipientId),
+        is_read:     false,
+        created_at:  now,
       }));
-      const { error: insErr } = await supabase.from("dm_messages").insert(rows);
+      const { error: insErr } = await supabase.from("member_notifications").insert(rows);
       if (!insErr) sent += batch.length;
-      else console.error("[kfs-broadcast] batch insert error:", insErr.message);
+      else console.error("[kfs-broadcast] batch insert error:", insErr.message, insErr.details || "");
     }
 
-    logActivity(myId, member.name || "Admin", "kfs_broadcast", "dm_messages",
+    logActivity(myId, member.name || "Admin", "kfs_broadcast", "member_notifications",
       `Sent to ${sent} member(s)`).catch(() => {});
     res.json({ success: true, sent });
   } catch (e) {
@@ -16127,8 +16142,10 @@ app.post("/api/admin/kfs-broadcast", authMiddleware, async (req, res) => {
     if (target === "member_ids" && Array.isArray(member_ids) && member_ids.length) {
       recipientIds = member_ids.filter(id => typeof id === "string" && id.length > 0);
     } else {
+      // NOTE: members has no is_active column — use deleted_at IS NULL,
+      // the same liveness check the real DM-send route uses.
       const { data: allMembers } = await supabase
-        .from("members").select("id").eq("is_active", true);
+        .from("members").select("id").is("deleted_at", null);
       recipientIds = (allMembers || []).map(m => m.id).filter(id => id !== kfsMemberId);
     }
 
@@ -16140,20 +16157,31 @@ app.post("/api/admin/kfs-broadcast", authMiddleware, async (req, res) => {
     let   sent    = 0;
     const BATCH   = 50;
 
+    // Fetch KFS sentinel's display info for the notification snapshot
+    const { data: kfsMember } = await supabase
+      .from("members").select("id, name, photo").eq("id", kfsMemberId).maybeSingle();
+
     for (let i = 0; i < recipientIds.length; i += BATCH) {
       const batch = recipientIds.slice(i, i + BATCH);
       const rows  = batch.map(recipientId => ({
-        sender_id:    kfsMemberId,
-        recipient_id: recipientId,
-        body:         msgBody,
-        created_at:   now,
+        member_id:   recipientId,
+        type:        "dm",
+        title:       `Message from ${kfsMember?.name || "KFS"}`,
+        body:        msgBody,
+        actor_id:    kfsMemberId,
+        actor_name:  kfsMember?.name  || "KFS",
+        actor_photo: kfsMember?.photo || null,
+        link_type:   "dm",
+        link_id:     dmConvKey(kfsMemberId, recipientId),
+        is_read:     false,
+        created_at:  now,
       }));
-      const { error: insErr } = await supabase.from("dm_messages").insert(rows);
+      const { error: insErr } = await supabase.from("member_notifications").insert(rows);
       if (!insErr) sent += batch.length;
-      else console.error("[admin/kfs-broadcast] batch insert error:", insErr.message);
+      else console.error("[admin/kfs-broadcast] batch insert error:", insErr.message, insErr.details || "");
     }
 
-    logActivity(req.admin.id, req.admin.name || "Admin", "kfs_broadcast", "dm_messages",
+    logActivity(req.admin.id, req.admin.name || "Admin", "kfs_broadcast", "member_notifications",
       `Sent to ${sent} member(s)`).catch(() => {});
     res.json({ success: true, sent });
   } catch (e) {
