@@ -13646,9 +13646,11 @@ function openModResolveModal(reportId, contentType, contentId, preview, affected
   document.getElementById('mod-resolve-preview').textContent = preview || '(no preview available)';
   document.getElementById('mod-resolve-note').value = '';
   document.getElementById('mod-resolve-action').value = 'reviewed';
-  document.getElementById('mod-resolve-hide').checked = false;
-  document.getElementById('mod-resolve-delete').checked = false;
-  // Only show hide/delete for post/comment (not DM hide, only delete makes sense for DMs)
+  // Rebuild hide/delete checkboxes for this content_type FIRST — a DM report
+  // only renders the "delete" checkbox (no "hide"), so if the previous report
+  // reviewed was a DM, document.getElementById('mod-resolve-hide') would be
+  // null at this point and throw, silently aborting the whole function before
+  // the modal ever opened. Build the markup before touching .checked.
   const contentActions = document.getElementById('mod-resolve-content-actions');
   if (contentType === 'dm') {
     contentActions.innerHTML = '<label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Remove this DM (marks it as removed by admin)</label>';
@@ -13657,6 +13659,9 @@ function openModResolveModal(reportId, contentType, contentId, preview, affected
       <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="mod-resolve-hide"> Hide content (unpublish, reversible)</label>
       <label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Delete content permanently</label>`;
   }
+  const hideCb = document.getElementById('mod-resolve-hide');
+  if (hideCb) hideCb.checked = false;
+  document.getElementById('mod-resolve-delete').checked = false;
   // Suspend-while-reviewing convenience row — only shown when we know who to suspend.
   const suspendRow = document.getElementById('mod-resolve-suspend-row');
   if (suspendRow) {
