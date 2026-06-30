@@ -13576,12 +13576,15 @@ async function loadModReports() {
       const date = new Date(rep.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
       const reporterName = rep.reporter?.name || 'Unknown';
       const preview = buildReportPreview(rep);
+      const affected = getReportAffectedMember(rep);
       const typeBadge = { post: '📝 Post', dm: '💬 DM', comment: '🗨️ Comment' }[rep.content_type] || rep.content_type;
+      const reviewArgs = `'${rep.id}','${rep.content_type}','${rep.content_id}',${JSON.stringify(preview).replace(/"/g,'&quot;')},${affected ? `'${affected.id}',${JSON.stringify(affected.name).replace(/"/g,'&quot;')}` : 'null,null'}`;
       const actionsBtns = status === 'pending'
         ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button onclick="openModResolveModal('${rep.id}','${rep.content_type}','${rep.content_id}',${JSON.stringify(preview).replace(/"/g,'&quot;')})" class="btn-sm btn-success" style="font-size:11px;padding:4px 10px">Review</button>
+            <button onclick="openModResolveModal(${reviewArgs})" class="btn-sm btn-success" style="font-size:11px;padding:4px 10px">Review</button>
             <button onclick="quickDismissReport('${rep.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">Dismiss</button>
             ${rep.content_type === 'dm' && rep.snapshot?.link_id ? `<button onclick="viewDmConv('${rep.snapshot.link_id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">View DM</button>` : ''}
+            ${affected ? `<button onclick="openSuspendModal('${affected.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33">Suspend</button>` : ''}
            </div>`
         : `<span style="font-size:11px;color:var(--grey)">${rep.reviewed_by || '—'} · ${rep.reviewed_at ? new Date(rep.reviewed_at).toLocaleDateString('en-IN') : ''}</span>`;
 
@@ -13610,12 +13613,33 @@ function buildReportPreview(rep) {
   return '(no preview)';
 }
 
+// Extracts { id, name } of the member who actually generated/owns the reported
+// content (i.e. who an admin would want to suspend), from the snapshot shape
+// returned by GET /api/admin/reports. Shape differs per content_type.
+function getReportAffectedMember(rep) {
+  if (!rep.snapshot) return null;
+  if (rep.content_type === 'post' || rep.content_type === 'comment' || rep.content_type === 'group_message') {
+    const m = rep.snapshot.members;
+    return m?.id ? { id: m.id, name: m.name || 'Member' } : null;
+  }
+  if (rep.content_type === 'dm') {
+    // actor_id is who sent the offending DM; fall back to member_id (recipient) only if absent
+    const id = rep.snapshot.actor_id || rep.snapshot.member_id;
+    const name = rep.snapshot.actor_name || 'Member';
+    return id ? { id, name } : null;
+  }
+  if (rep.content_type === 'member') {
+    return rep.snapshot.id ? { id: rep.snapshot.id, name: rep.snapshot.name || 'Member' } : null;
+  }
+  return null;
+}
+
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Resolve modal ────────────────────────────────────────────────────────────
-function openModResolveModal(reportId, contentType, contentId, preview) {
+function openModResolveModal(reportId, contentType, contentId, preview, affectedMemberId, affectedMemberName) {
   document.getElementById('mod-resolve-report-id').value  = reportId;
   document.getElementById('mod-resolve-content-type').value = contentType;
   document.getElementById('mod-resolve-content-id').value  = contentId;
@@ -13632,6 +13656,17 @@ function openModResolveModal(reportId, contentType, contentId, preview) {
     contentActions.innerHTML = `
       <label style="font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><input type="checkbox" id="mod-resolve-hide"> Hide content (unpublish, reversible)</label>
       <label style="font-size:12px;display:flex;align-items:center;gap:8px"><input type="checkbox" id="mod-resolve-delete"> Delete content permanently</label>`;
+  }
+  // Suspend-while-reviewing convenience row — only shown when we know who to suspend.
+  const suspendRow = document.getElementById('mod-resolve-suspend-row');
+  if (suspendRow) {
+    if (affectedMemberId) {
+      suspendRow.style.display = '';
+      suspendRow.innerHTML = `<button type="button" class="btn-sm" style="background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33" onclick="openSuspendModal('${affectedMemberId}')">Suspend ${escHtml(affectedMemberName || 'member')}</button>`;
+    } else {
+      suspendRow.style.display = 'none';
+      suspendRow.innerHTML = '';
+    }
   }
   document.getElementById('mod-resolve-modal').classList.add('active');
 }

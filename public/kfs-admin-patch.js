@@ -166,9 +166,23 @@
                 style="display:block;background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:4px 0 0;margin:0">less</button>
             </div>`;
 
-          // Affected member (from snapshot)
-          const affectedMemberId   = rep.snapshot?.author_id || rep.snapshot?.sender_id;
-          const affectedMemberName = esc(rep.snapshot?.author_name || rep.snapshot?.sender_name || '—');
+          // Affected member (from snapshot) — shape differs per content_type, mirrors
+          // server.js's enrichment: post/comment/group_message embed members{id,name};
+          // dm embeds actor_id/actor_name (the sender); member reports embed id/name directly.
+          let affectedMemberId = null, affectedMemberName = '—';
+          if (rep.snapshot) {
+            if (['post', 'comment', 'group_message'].includes(rep.content_type) && rep.snapshot.members) {
+              affectedMemberId   = rep.snapshot.members.id;
+              affectedMemberName = rep.snapshot.members.name || 'Member';
+            } else if (rep.content_type === 'dm') {
+              affectedMemberId   = rep.snapshot.actor_id || rep.snapshot.member_id;
+              affectedMemberName = rep.snapshot.actor_name || 'Member';
+            } else if (rep.content_type === 'member') {
+              affectedMemberId   = rep.snapshot.id;
+              affectedMemberName = rep.snapshot.name || 'Member';
+            }
+          }
+          affectedMemberName = esc(affectedMemberName);
           const memberLink = affectedMemberId
             ? `<a href="javascript:void(0)" onclick="KFSAdminPatch.openMemberProfile('${affectedMemberId}')"
                 style="font-size:11px;color:#58a6ff;text-decoration:none"
@@ -180,7 +194,7 @@
           if (status === 'pending') {
             actions = `
               <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-                <button onclick="openModResolveModal('${rep.id}','${rep.content_type}','${rep.content_id}',${JSON.stringify(_buildFullPreview(rep)).replace(/"/g,'&quot;')})"
+                <button onclick="openModResolveModal('${rep.id}','${rep.content_type}','${rep.content_id}',${JSON.stringify(_buildFullPreview(rep)).replace(/"/g,'&quot;')}${affectedMemberId ? `,'${affectedMemberId}',${JSON.stringify(affectedMemberName).replace(/"/g,'&quot;')}` : ',null,null'})"
                   class="btn-sm btn-success" style="font-size:11px;padding:4px 10px">Review</button>
                 <button onclick="quickDismissReport('${rep.id}')"
                   class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">Dismiss</button>

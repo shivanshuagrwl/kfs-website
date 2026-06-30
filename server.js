@@ -180,6 +180,26 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // avatar in DMs/notifications if the members.photo column is left blank.
 const KFS_SENTINEL_LOGO_URL = "https://kiitfilmsociety.in/images/kfs-logo.png";
 
+// Cached lookup for the KFS sentinel member id (settings.kfs_admin_member_id).
+// Used to identify the official "KFS" account so member-to-KFS DMs can be
+// treated as one-way broadcasts (members can read but not reply).
+// Cached for 5 minutes since this is checked on every DM send.
+let _kfsSentinelIdCache = { id: null, fetchedAt: 0 };
+async function getKfsSentinelId() {
+  const FIVE_MIN = 5 * 60 * 1000;
+  if (_kfsSentinelIdCache.id && Date.now() - _kfsSentinelIdCache.fetchedAt < FIVE_MIN) {
+    return _kfsSentinelIdCache.id;
+  }
+  const { data } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "kfs_admin_member_id")
+    .maybeSingle();
+  const id = data?.value || null;
+  _kfsSentinelIdCache = { id, fetchedAt: Date.now() };
+  return id;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFANITY FILTER — English + Hindi/Hinglish (v2 — Strict)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9394,6 +9414,91 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
   console.log(`[ticket-email] ✓ Sent to ${reg.email} for "${event.title}" (PDF: ${pdfAttachment ? "attached" : "inline-only"})`);
 }
 
+// ── Email helper — account suspension notice ──────────────────────────────────
+// Sends a simple transactional email when a member is temp-banned, so they
+// learn about it even if they don't check the in-app notification.
+async function sendSuspensionEmail({ toEmail, toName, hours, reason, suspendedUntil }) {
+  if (!toEmail) {
+    console.warn("[suspension-email] No email on file — skipping");
+    return;
+  }
+  const { data: rows } = await supabase
+    .from("settings")
+    .select("key,value")
+    .in("key", ["brevo_api_key", "smtp_from_name"]);
+
+  const s = {};
+  (rows || []).forEach((r) => (s[r.key] = r.value));
+  if (!s.brevo_api_key) {
+    console.warn("[suspension-email] Brevo API key not configured — skipping suspension email");
+    return;
+  }
+
+  const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
+  const untilStr = suspendedUntil
+    ? new Date(suspendedUntil).toLocaleString("en-IN", {
+        day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit",
+      })
+    : null;
+
+  const reasonLine = reason ? `\n\nReason: ${reason}` : "";
+  const untilLine  = untilStr ? `\n\nYour access will be automatically restored on ${untilStr}.` : "";
+
+  const textContent =
+    `Hi ${toName || "there"},\n\n` +
+    `Your KFS account has been temporarily suspended for ${hours} hour${hours !== 1 ? "s" : ""} ` +
+    `due to a violation of community guidelines.${reasonLine}${untilLine}\n\n` +
+    `If you believe this was a mistake, you can submit an appeal from within the app once you log in.\n\n` +
+    `Regards,\nKFS — KIIT Film Society`;
+
+  const htmlContent = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:Helvetica,Arial,sans-serif">
+<table role="presentation" width="100%" style="background:#0a0a0a;padding:32px 0"><tr><td align="center">
+<table role="presentation" width="480" style="background:#141414;border-radius:12px;overflow:hidden">
+  <tr><td style="background:#e53e3e;padding:20px 28px">
+    <p style="margin:0;color:#fff;font-size:16px;font-weight:700">Account Temporarily Suspended</p>
+  </td></tr>
+  <tr><td style="padding:28px">
+    <p style="margin:0 0 14px;color:#eee;font-size:14px;line-height:1.6">Hi ${toName || "there"},</p>
+    <p style="margin:0 0 14px;color:#ccc;font-size:14px;line-height:1.6">
+      Your KFS account has been temporarily suspended for <strong>${hours} hour${hours !== 1 ? "s" : ""}</strong>
+      due to a violation of community guidelines.
+    </p>
+    ${reason ? `<p style="margin:0 0 14px;color:#ccc;font-size:14px;line-height:1.6"><strong>Reason:</strong> ${reason}</p>` : ""}
+    ${untilStr ? `<p style="margin:0 0 14px;color:#ccc;font-size:14px;line-height:1.6">Your access will be automatically restored on <strong>${untilStr}</strong>.</p>` : ""}
+    <p style="margin:18px 0 0;color:#999;font-size:13px;line-height:1.6">
+      If you believe this was a mistake, you can submit an appeal from within the app once you log in.
+    </p>
+  </td></tr>
+  <tr><td style="padding:16px 28px;border-top:1px solid #222">
+    <p style="margin:0;font-size:11px;color:#555">This is an automated notice from
+      <a href="https://kiitfilmsociety.in" style="color:#777;text-decoration:none">kiitfilmsociety.in</a>.
+      Please do not reply to this email.</p>
+  </td></tr>
+</table></td></tr></table></body></html>`;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": s.brevo_api_key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: "noreply@kiitfilmsociety.in" },
+      to: [{ email: toEmail, name: toName || toEmail }],
+      subject: "Your KFS account has been temporarily suspended",
+      textContent,
+      htmlContent,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Brevo suspension email error ${response.status}: ${err}`);
+  }
+  console.log(`[suspension-email] ✓ Sent to ${toEmail}`);
+}
+
 
 // ── PUBLIC: Register for event (creates registration + sends QR ticket email) ──
 const registrationRateLimit = rateLimit({
@@ -14115,6 +14220,12 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     if (iBlocked) return res.status(403).json({ error: "You have blocked this member." });
     if (blockedMe) return res.status(403).json({ error: "You can't message this person." });
 
+    // KFS official DMs are one-way broadcasts — members can read them but not reply.
+    const kfsSentinelId = await getKfsSentinelId();
+    if (kfsSentinelId && to_member_id === kfsSentinelId) {
+      return res.status(403).json({ error: "You can't reply to KFS — this is an official one-way announcement channel." });
+    }
+
     // Fetch sender info for snapshot
     const { data: sender } = await supabase
       .from("members")
@@ -14549,12 +14660,22 @@ app.post("/api/admin/members/:id/account/suspend", requireSection("members"), as
         .eq("member_id", req.params.id);
     }
 
-    // Notify the member
+    // Notify the member — in-app + email
     createMemberNotification(
       req.params.id, "account",
       "Account temporarily suspended",
       `Your account has been suspended for ${h} hour${h !== 1 ? "s" : ""}.${reason ? " Reason: " + reason : ""} It will be restored automatically after this period.`
     ).catch(() => {});
+
+    supabase.from("members").select("name, email").eq("id", req.params.id).maybeSingle()
+      .then(({ data: m }) => {
+        if (m?.email) {
+          return sendSuspensionEmail({
+            toEmail: m.email, toName: m.name, hours: h, reason, suspendedUntil,
+          });
+        }
+      })
+      .catch(e => console.error("[admin/suspend] suspension email failed:", e.message));
 
     logActivity(req.admin.id, req.admin.name, "suspend", "member_account",
       `${req.params.id} — ${h}h${reason ? ": " + reason : ""}`).catch(() => {});
@@ -14639,8 +14760,8 @@ app.post("/api/member/ban-appeal", memberAuthMiddleware, async (req, res) => {
       .from("ban_appeals")
       .insert([{
         member_id:      memberId,
-        offense:        vio.offense || 5,
-        message:        message || null,
+        member_name:    member?.name || "Member",
+        reason:         message || `Offense level ${vio.offense || 5}`,
         status:         "pending",
         created_at:     new Date().toISOString(),
       }])
@@ -14677,7 +14798,7 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const status = req.query.status || "pending"; // pending | approved | rejected | all
     let q = supabase
       .from("ban_appeals")
-      .select("id, member_id, offense, message, status, reviewed_by, reviewed_at, created_at")
+      .select("id, member_id, member_name, reason, status, reviewed_by, reviewed_by_name, reviewed_at, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -14686,22 +14807,22 @@ app.get("/api/admin/ban-appeals", authMiddleware, async (req, res) => {
     const { data, error } = await q;
     if (error) throw error;
 
-    // Two-step member lookup — avoids FK hint name mismatch (Supabase auto-generated
-    // constraint names don't always match ban_appeals_member_id_fkey).
+    // member_name is already stored on the row, but photo isn't — fetch that
+    // separately for the avatar in the admin table.
     const memberIds = [...new Set((data || []).map(a => a.member_id).filter(Boolean))];
-    let memberMap = {};
+    let photoMap = {};
     if (memberIds.length) {
       const { data: mems } = await supabase
         .from("members")
-        .select("id, name, photo")
+        .select("id, photo")
         .in("id", memberIds);
-      (mems || []).forEach(m => { memberMap[m.id] = m; });
+      (mems || []).forEach(m => { photoMap[m.id] = m.photo; });
     }
 
     const appeals = (data || []).map(a => ({
       ...a,
-      member_name:  memberMap[a.member_id]?.name  || null,
-      member_photo: memberMap[a.member_id]?.photo || null,
+      message:      a.reason || null,
+      member_photo: photoMap[a.member_id] || null,
     }));
 
     res.json({ appeals });
@@ -14734,7 +14855,7 @@ app.post("/api/admin/ban-appeals/:id/approve", authMiddleware, async (req, res) 
 
     // Update appeal status
     await supabase.from("ban_appeals")
-      .update({ status: "approved", reviewed_by: req.admin.id, reviewed_at: new Date().toISOString() })
+      .update({ status: "approved", reviewed_by: req.admin.id, reviewed_by_name: req.admin.name || null, reviewed_at: new Date().toISOString() })
       .eq("id", req.params.id);
 
     // Notify member
@@ -14765,7 +14886,7 @@ app.post("/api/admin/ban-appeals/:id/reject", authMiddleware, async (req, res) =
     if (appeal.status !== "pending") return res.status(400).json({ error: "Appeal already reviewed" });
 
     await supabase.from("ban_appeals")
-      .update({ status: "rejected", reviewed_by: req.admin.id, reviewed_at: new Date().toISOString() })
+      .update({ status: "rejected", reviewed_by: req.admin.id, reviewed_by_name: req.admin.name || null, reviewed_at: new Date().toISOString() })
       .eq("id", req.params.id);
 
     createMemberNotification(
