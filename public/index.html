@@ -1747,7 +1747,7 @@ body.light-mode .search-egg-noshorts strong{color:#111}
 /* ── MODAL ────────────────────────────────────────────────────────────── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;
   align-items:flex-start;justify-content:center;padding:40px 24px;overflow-y:auto}
-.modal-overlay.open{display:flex;animation:modalIn .3s var(--ease) both}
+.modal-overlay.open,.modal-overlay.active{display:flex;animation:modalIn .3s var(--ease) both}
 @keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
 .modal{background:#0f0f0f;border:1px solid var(--border);padding:40px;width:100%;
   max-width:640px;max-height:90vh;overflow-y:auto;border-radius:4px}
