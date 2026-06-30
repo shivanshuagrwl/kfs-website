@@ -1245,6 +1245,39 @@ function clearRefreshCookie(res) {
 
 const _revokedJtis = new Set();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Refresh-rotation grace cache — guards against the legitimate multi-tab /
+// double-fire case where two requests race in with the SAME (still valid)
+// refresh cookie. Without this, the second request sees `used: true` and
+// nukes every session for the admin, even though no theft occurred — just
+// two browser tabs (or a duplicate network call) hitting /api/admin/refresh
+// within milliseconds of each other. We cache the rotation result for a few
+// seconds keyed by the consumed token's hash; a repeat call within that
+// window gets the same fresh token back instead of being treated as reuse.
+// Genuine reuse outside the window (e.g. a stolen/replayed token used much
+// later) still falls through to the theft-protection revoke below.
+// ─────────────────────────────────────────────────────────────────────────────
+const _refreshGraceCache = new Map(); // token_hash -> { response, expiresAt }
+const REFRESH_GRACE_MS = 10 * 1000;
+
+function setRefreshGrace(tokenHash, response) {
+  _refreshGraceCache.set(tokenHash, { response, expiresAt: Date.now() + REFRESH_GRACE_MS });
+  // opportunistic cleanup of stale entries
+  for (const [k, v] of _refreshGraceCache) {
+    if (v.expiresAt < Date.now()) _refreshGraceCache.delete(k);
+  }
+}
+
+function getRefreshGrace(tokenHash) {
+  const entry = _refreshGraceCache.get(tokenHash);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    _refreshGraceCache.delete(tokenHash);
+    return null;
+  }
+  return entry.response;
+}
+
 async function loadRevokedTokens() {
   const { data } = await supabase
     .from("revoked_tokens")
@@ -2238,7 +2271,18 @@ app.post("/api/admin/refresh", async (req, res) => {
     return res.status(401).json({ error: "Invalid refresh token" });
 
   if (stored.used) {
-    // Token reuse detected — possible theft, revoke ALL tokens for this admin
+    // Could be a genuine theft/replay, OR a harmless race — two tabs (or a
+    // duplicate request) hitting /refresh with the same cookie within the
+    // same instant. Check the short grace cache first: if THIS exact token
+    // was rotated moments ago, hand back that same rotation result instead
+    // of nuking every session for the admin.
+    const graced = getRefreshGrace(hash);
+    if (graced) {
+      setRefreshCookie(res, graced.newRefreshRaw);
+      console.log(`[refresh] grace-window reuse for admin ${stored.admin_id} — same token served`);
+      return res.json(graced.body);
+    }
+    // Outside the grace window — treat as genuine reuse/theft, revoke ALL tokens
     await revokeAllForAdmin(stored.admin_id);
     clearRefreshCookie(res);
     return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
@@ -2249,11 +2293,34 @@ app.post("/api/admin/refresh", async (req, res) => {
     return res.status(401).json({ error: "Refresh token expired" });
   }
 
-  // Mark as used (single-use)
-  await supabase
+  // Mark as used (single-use) — conditional update so two requests racing in
+  // at the exact same instant can't both believe they're the one rotating
+  // this token. Only the request whose UPDATE actually matches a row wins;
+  // the loser (rowsAffected === 0) falls through to a short wait + grace
+  // cache check, since the winner will populate the cache a moment later.
+  const { data: claimRows, error: claimErr } = await supabase
     .from("refresh_tokens")
     .update({ used: true })
-    .eq("id", stored.id);
+    .eq("id", stored.id)
+    .eq("used", false)
+    .select("id");
+
+  if (claimErr) {
+    return res.status(500).json({ error: "Refresh failed" });
+  }
+
+  if (!claimRows || claimRows.length === 0) {
+    // Lost the race — another concurrent request is rotating this token
+    // right now. Briefly wait for it to populate the grace cache, then
+    // serve that result instead of treating this as theft.
+    await new Promise(r => setTimeout(r, 250));
+    const graced = getRefreshGrace(hash);
+    if (graced) {
+      setRefreshCookie(res, graced.newRefreshRaw);
+      return res.json(graced.body);
+    }
+    return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
+  }
 
   // Fetch fresh admin data (picks up permission changes)
   const { data: admin } = await supabase
@@ -2284,8 +2351,11 @@ app.post("/api/admin/refresh", async (req, res) => {
   const newRefreshRaw = await issueRefreshToken(admin.id);
   setRefreshCookie(res, newRefreshRaw);
 
+  const responseBody = { token: accessToken, name: admin.name, role: admin.role, permissions: perms };
+  setRefreshGrace(hash, { newRefreshRaw, body: responseBody });
+
   console.log(`[refresh] ${admin.username} — role: ${admin.role}`);
-  res.json({ token: accessToken, name: admin.name, role: admin.role, permissions: perms });
+  res.json(responseBody);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
