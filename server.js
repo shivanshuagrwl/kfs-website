@@ -12434,6 +12434,38 @@ app.get("/api/member/studio/projects/:id", memberAuthMiddleware, studioFeedLimit
   });
 });
 
+// ── Lightweight preview (Instagram-style link card) ─────────────────────────
+// GET /api/member/studio/preview/:id
+// Used to render a rich preview card when a member pastes/shares a
+// /social-strand or /strand link into a DM or group chat message, instead
+// of showing the raw URL as plain text. Deliberately minimal — no view
+// increment, no reactions/comments — this is just enough to draw the card.
+app.get("/api/member/studio/preview/:id", memberAuthMiddleware, studioFeedLimit, async (req, res) => {
+  const id = req.params.id;
+
+  const { data: project, error } = await supabasePublic
+    .from("member_projects")
+    .select(`
+      id, title, cover_image, domain, status,
+      members!member_projects_member_id_fkey(id, name, photo)
+    `)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (error || !project) return res.status(404).json({ error: "Post not found" });
+
+  res.json({
+    id: project.id,
+    title: project.title,
+    cover_image: project.cover_image || null,
+    domain: project.domain || null,
+    author_name: project.members?.name || "a KFS member",
+    author_photo: project.members?.photo || null,
+  });
+});
+
 // ── Create project ────────────────────────────────────────────────────────────
 
 // POST /api/member/studio/projects
@@ -13832,6 +13864,8 @@ app.get("/scanner.js", (req, res) => {
 //   link_id     → canonical conversation key = "<smaller_uuid>:<larger_uuid>"
 //   is_read     → false until recipient reads
 //   created_at  → send timestamp
+//   edited_at   → set when the sender edits the message (NULL until then)
+//                 ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
 //
 // Conversation key is deterministic: sort the two UUIDs lexicographically and
 // join with ":", guaranteeing a stable unique ID for any pair of members.
@@ -14034,6 +14068,86 @@ app.post("/api/member/dm/conversations/:convKey/clear", memberAuthMiddleware, as
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mute / Archive — per-member conversation preferences, for both DMs and
+// group chats. Separate from Block: muting/archiving never affects what the
+// other side sees or whether messages still arrive, just how *you* see them.
+//
+// SQL migration (run once in Supabase):
+//
+//   CREATE TABLE IF NOT EXISTS dm_conv_settings (
+//     member_id  UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     conv_key   TEXT NOT NULL,        -- DM conv_key ("a:b") or group id
+//     conv_type  TEXT NOT NULL CHECK (conv_type IN ('dm','group')),
+//     muted      BOOLEAN NOT NULL DEFAULT FALSE,
+//     archived   BOOLEAN NOT NULL DEFAULT FALSE,
+//     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (member_id, conv_key)
+//   );
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── GET /api/member/conv-settings ─────────────────────────────────────────────
+// All of my mute/archive flags in one call, across DMs and groups.
+app.get("/api/member/conv-settings", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { data, error } = await supabase
+      .from("dm_conv_settings")
+      .select("conv_key, conv_type, muted, archived")
+      .eq("member_id", myId);
+    if (error) {
+      if (error.code === "42P01") return res.json([]); // table not migrated yet
+      throw error;
+    }
+    res.json(data || []);
+  } catch (e) {
+    dmLogErr("[conv-settings GET]", e);
+    res.status(500).json({ error: "Failed to load conversation settings" });
+  }
+});
+
+// ── POST /api/member/conv-settings/:convKey ───────────────────────────────────
+// Body: { conv_type: 'dm'|'group', muted?, archived? } — partial update,
+// upserts. For DM conv_key, validates it actually contains my own id.
+app.post("/api/member/conv-settings/:convKey", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId    = req.member.memberId;
+    const convKey = req.params.convKey;
+    const { conv_type, muted, archived } = req.body || {};
+    if (!["dm", "group"].includes(conv_type)) {
+      return res.status(400).json({ error: "conv_type must be 'dm' or 'group'" });
+    }
+    if (conv_type === "dm") {
+      const parts = convKey.split(":");
+      if (parts.length !== 2 || !parts.includes(myId)) return res.status(403).json({ error: "Forbidden" });
+    } else {
+      const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", convKey).eq("member_id", myId).maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Not in this group" });
+    }
+
+    const { data: existing } = await supabase
+      .from("dm_conv_settings")
+      .select("muted, archived")
+      .eq("member_id", myId).eq("conv_key", convKey)
+      .maybeSingle();
+
+    const row = {
+      member_id:  myId,
+      conv_key:   convKey,
+      conv_type,
+      muted:      typeof muted === "boolean" ? muted : (existing?.muted || false),
+      archived:   typeof archived === "boolean" ? archived : (existing?.archived || false),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("dm_conv_settings").upsert([row], { onConflict: "member_id,conv_key" });
+    if (error) throw error;
+    res.json({ success: true, muted: row.muted, archived: row.archived });
+  } catch (e) {
+    dmLogErr("[conv-settings POST]", e);
+    res.status(500).json({ error: "Failed to update conversation settings" });
+  }
+});
+
 // ── GET /api/member/dm/conversations ─────────────────────────────────────────
 // Returns all unique conversations the logged-in member has participated in,
 // sorted newest-first, with peer info + last snippet + unread count.
@@ -14047,7 +14161,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
     const [{ data: received }, { data: sent }] = await Promise.all([
       supabase
         .from("member_notifications")
-        .select("id, actor_id, actor_name, actor_photo, body, link_id, is_read, created_at, e2ee")
+        .select("id, actor_id, actor_name, actor_photo, body, link_id, is_read, delivered_at, created_at, e2ee")
         .eq("member_id", myId)
         .eq("link_type", "dm")
         .order("created_at", { ascending: false })
@@ -14111,6 +14225,20 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
           // If last msg is mine, update last_sender_is_me
         }
       }
+    }
+
+    // Read receipts — "delivered" (gray double-tick) fires the moment the
+    // recipient's client syncs their inbox, even before they open the thread;
+    // "seen" (blue double-tick) is stamped separately, in the thread GET route,
+    // when they actually view the conversation. Fire-and-forget, never blocks.
+    const undeliveredIds = (received || []).filter(r => !r.delivered_at).map(r => r.id);
+    if (undeliveredIds.length) {
+      supabase
+        .from("member_notifications")
+        .update({ delivered_at: new Date().toISOString() })
+        .in("id", undeliveredIds)
+        .then(() => {})
+        .catch(e => console.error("[dm/mark-delivered]", e.message));
     }
 
     if (convMap.size === 0) return res.json([]);
@@ -14177,7 +14305,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const asc = !!since;
 
     // Fetch both sides: messages received by me + messages I sent in this conv
-    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self";
+    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, delivered_at, read_at, created_at, edited_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, attachment_url, attachment_type";
     let qRecv = supabase
       .from("member_notifications")
       .select(_dmSelect)
@@ -14218,15 +14346,22 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .slice(since ? 0 : -limit); // for since: keep all new msgs; for before: keep last N
 
-    // Mark unread received messages as read — fire-and-forget, never blocks response
+    // Mark unread received messages as read — fire-and-forget, never blocks response.
+    // Opening/polling this thread means the recipient has both received (delivered)
+    // and viewed (read/seen) the message, so both timestamps are stamped together.
+    const nowIso = new Date().toISOString();
     const unreadIds = (recv || []).filter(m => !m.is_read).map(m => m.id);
     if (unreadIds.length) {
       supabase
         .from("member_notifications")
-        .update({ is_read: true })
+        .update({ is_read: true, delivered_at: nowIso, read_at: nowIso })
         .in("id", unreadIds)
         .then(() => {})
         .catch(e => console.error("[dm/mark-read]", e.message));
+      unreadIds.forEach(id => {
+        const m = msgs.find(x => x.id === id);
+        if (m) { m.delivered_at = nowIso; m.read_at = nowIso; }
+      });
     }
 
     const reactionMap = await fetchReactionsFor(msgs.map(m => m.id), "dm", myId);
@@ -14237,6 +14372,9 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       body:                 m.body,
       sent_at:              m.created_at,
       is_read:              m.is_read,
+      delivered_at:         m.delivered_at || null,
+      read_at:              m.read_at || null,
+      edited_at:            m.edited_at || null,
       replied_to_id:        m.replied_to_id    || null,
       replied_to_body:      m.replied_to_body  || null,
       replied_to_sender:    m.replied_to_sender || null,
@@ -14245,6 +14383,9 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       e2ee:                 m.e2ee || false,
       cipher_for_recipient: m.cipher_for_recipient || null,
       cipher_for_self:      m.cipher_for_self || null,
+      // Attachments (image sharing) — null for plain text messages
+      attachment_url:       m.attachment_url || null,
+      attachment_type:      m.attachment_type || null,
     })));
   } catch (e) {
     dmLogErr("[dm/messages GET]", e);
@@ -14351,6 +14492,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         sender_id:            myId,
         body:                 msg.body,
         sent_at:              msg.created_at,
+        delivered_at:         null,
         read_at:              null,
         replied_to_id:        msg.replied_to_id    || null,
         replied_to_body:      msg.replied_to_body  || null,
@@ -14396,9 +14538,183 @@ app.delete("/api/member/dm/messages/:msgId", memberAuthMiddleware, async (req, r
   }
 });
 
+// ── PATCH /api/member/dm/messages/:msgId ──────────────────────────────────────
+// Edit a message you sent. Body: { body } for plaintext, or
+// { e2ee: true, body: "", cipher_for_recipient, cipher_for_self } for E2EE —
+// same shape as /dm/send, just re-encrypted client-side for the new text.
+// Stamps edited_at so the client can show an "(edited)" tag, same pattern as
+// the soft-delete above.
+app.patch("/api/member/dm/messages/:msgId", memberAuthMiddleware, dmRateLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const msgId = req.params.msgId;
+    const { body: rawBody, e2ee, cipher_for_recipient, cipher_for_self } = req.body || {};
+
+    const { data: msg } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, link_type, title")
+      .eq("id", msgId)
+      .maybeSingle();
+
+    if (!msg || msg.link_type !== "dm") return res.status(404).json({ error: "Not found" });
+    if (msg.actor_id !== myId) return res.status(403).json({ error: "Cannot edit another member's message" });
+    if (msg.title === "Message deleted") return res.status(400).json({ error: "Can't edit a deleted message" });
+
+    let update;
+    if (e2ee) {
+      if (!cipher_for_recipient || !cipher_for_self) {
+        return res.status(400).json({ error: "E2EE ciphertext missing" });
+      }
+      update = { body: "", e2ee: true, cipher_for_recipient, cipher_for_self, edited_at: new Date().toISOString() };
+    } else {
+      const trimmed = (rawBody || "").trim();
+      if (!trimmed || trimmed.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
+      update = { body: trimmed, e2ee: false, cipher_for_recipient: null, cipher_for_self: null, edited_at: new Date().toISOString() };
+    }
+
+    const { data: updated, error } = await supabase
+      .from("member_notifications")
+      .update(update)
+      .eq("id", msgId)
+      .select("id, body, edited_at, e2ee, cipher_for_recipient, cipher_for_self")
+      .single();
+    if (error) throw error;
+
+    res.json({ success: true, message: updated });
+  } catch (e) {
+    dmLogErr("[dm/edit]", e);
+    res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+// ── POST /api/member/dm/messages/image ────────────────────────────────────────
+// multipart/form-data: image=<file>, to_member_id=<uuid>, replied_to_id/body/sender?
+// Reuses the same Cloudinary/sharp pipeline as group photos / member photos.
+// NOTE: attachments are stored as plain URLs (not E2EE-wrapped) — same tradeoff
+// WhatsApp/Signal media makes in practice; the image itself lives on Cloudinary,
+// only visible to someone with the URL, but is not client-side-encrypted like text.
+//
+// SQL migration (run once in Supabase):
+//   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+//   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS attachment_type TEXT;
+app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
+  multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }).single("image"),
+  async (req, res) => {
+    try {
+      const myId = req.member.memberId;
+      const { to_member_id, replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
+      if (!req.file) return res.status(400).json({ error: "No image uploaded" });
+      if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
+      if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
+
+      const { data: target } = await supabase.from("members").select("id, name").eq("id", to_member_id).is("deleted_at", null).maybeSingle();
+      if (!target) return res.status(404).json({ error: "Member not found" });
+
+      const [{ data: iBlocked }, { data: blockedMe }] = await Promise.all([
+        supabase.from("member_blocks").select("id").eq("blocker_id", myId).eq("blocked_id", to_member_id).maybeSingle(),
+        supabase.from("member_blocks").select("id").eq("blocker_id", to_member_id).eq("blocked_id", myId).maybeSingle(),
+      ]);
+      if (iBlocked) return res.status(403).json({ error: "You have blocked this member." });
+      if (blockedMe) return res.status(403).json({ error: "You can't message this person." });
+
+      // Compress: cap at 1280px on the long edge, JPEG quality 82
+      const resized = await sharp(req.file.buffer)
+        .resize(1280, 1280, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "kfs-dm-attachments", resource_type: "image" },
+          (err, result) => err ? reject(err) : resolve(result)
+        ).end(resized);
+      });
+
+      const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
+      const key = dmConvKey(myId, to_member_id);
+
+      const { data: msg, error: insertErr } = await supabase
+        .from("member_notifications")
+        .insert([{
+          member_id:          to_member_id,
+          type:                "dm",
+          title:               `Photo from ${sender?.name || req.member.username}`,
+          body:                "📷 Photo",
+          actor_id:            myId,
+          actor_name:          sender?.name  || req.member.username,
+          actor_photo:         sender?.photo || null,
+          link_type:           "dm",
+          link_id:             key,
+          is_read:             false,
+          replied_to_id:       replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
+          replied_to_body:     replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
+          replied_to_sender:   replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
+          attachment_url:      uploadResult.secure_url,
+          attachment_type:     "image",
+        }])
+        .select("id, actor_id, member_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type")
+        .single();
+      if (insertErr) throw insertErr;
+
+      res.json({
+        success:  true,
+        conv_key: key,
+        message: {
+          id:                msg.id,
+          sender_id:         myId,
+          body:              msg.body,
+          sent_at:           msg.created_at,
+          delivered_at:      null,
+          read_at:           null,
+          replied_to_id:     msg.replied_to_id    || null,
+          replied_to_body:   msg.replied_to_body  || null,
+          replied_to_sender: msg.replied_to_sender || null,
+          reactions:         [],
+          e2ee:              false,
+          attachment_url:    msg.attachment_url,
+          attachment_type:   msg.attachment_type,
+        },
+      });
+    } catch (e) {
+      dmLogErr("[dm/messages/image]", e);
+      res.status(500).json({ error: "Failed to send image" });
+    }
+  }
+);
+
+// ── GET /api/member/dm/messages/status?ids=a,b,c ──────────────────────────────
+// Lightweight delivered/read-receipt refresh for own sent messages already
+// rendered on screen — piggybacked on the DM poll tick, same pattern as
+// /api/member/messages/reactions, so tick status (sent/delivered/seen) updates
+// live without re-fetching the whole thread. Only the original sender gets a
+// message's receipt info back; everyone else's ids are silently dropped.
+const reactionLimit = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
+app.get("/api/member/dm/messages/status", memberAuthMiddleware, reactionLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const ids  = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 100);
+    if (!ids.length) return res.json({});
+
+    const { data } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, link_type, delivered_at, read_at")
+      .eq("link_type", "dm")
+      .in("id", ids);
+
+    const map = {};
+    (data || []).forEach(r => {
+      if (r.actor_id !== myId) return; // only the sender may see their own message's receipts
+      map[r.id] = { delivered_at: r.delivered_at || null, read_at: r.read_at || null };
+    });
+    res.json(map);
+  } catch (e) {
+    console.error("[dm/messages/status GET]", e.message);
+    res.json({});
+  }
+});
+
 // ── POST /api/member/dm/messages/:msgId/react ─────────────────────────────────
 // Body: { emoji }. Toggle: same emoji again → remove, different → switch, none → add.
-const reactionLimit = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
 app.post("/api/member/dm/messages/:msgId/react", memberAuthMiddleware, reactionLimit, async (req, res) => {
   try {
     const myId  = req.member.memberId;
@@ -15959,13 +16275,24 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
 
+    // Stamp my last-read watermark for this group — fire-and-forget, never blocks
+    // the response. This is the WhatsApp-style "seen by" mechanism: one row per
+    // (group, member) rather than a flag per message, so the client can compute
+    // who's seen the latest message by comparing everyone's last_read_at against
+    // that message's created_at. See GET /api/member/groups/:id/seen below.
+    supabase
+      .from("dm_group_reads")
+      .upsert([{ group_id: gid, member_id: myId, last_read_at: new Date().toISOString() }], { onConflict: "group_id,member_id" })
+      .then(() => {})
+      .catch(e => console.error("[group/mark-read]", e.message));
+
     // Pull nicknames for this group
     const { data: nickRows } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid);
     const nickMap = Object.fromEntries((nickRows || []).map(r => [r.member_id, r.nickname]));
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
+      .select("id, sender_id, body, created_at, edited_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, attachment_url, attachment_type")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -16005,6 +16332,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           sender_photo:     sender.photo || null,
           body:             cleanBody,
           sent_at:          m.created_at,
+          edited_at:        m.edited_at || null,
           is_pinned:        m.is_pinned || false,
           is_system:        isSystem,
           replied_to_id:    m.replied_to_id    || null,
@@ -16015,6 +16343,9 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           e2ee:             m.e2ee || false,
           ciphertext:       m.ciphertext || null,
           wrapped_keys:     m.wrapped_keys || null,
+          // Attachments (image sharing)
+          attachment_url:   m.attachment_url || null,
+          attachment_type:  m.attachment_type || null,
         };
       });
 
@@ -16022,6 +16353,25 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
   } catch (e) {
     console.error("[groups/messages GET]", e.message);
     res.status(500).json({ error: "Failed to load messages" });
+  }
+});
+
+// ── GET /api/member/groups/:id/seen ────────────────────────────────────────────
+// Returns every member's last-read watermark for this group. The client uses this
+// to build a WhatsApp-style avatar stack under the most recent message: a member
+// has "seen" that message if their last_read_at >= the message's created_at.
+// Polled alongside reactions on the group poll tick — see gcPollTick.
+app.get("/api/member/groups/:id/seen", memberAuthMiddleware, gcReadLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+    const { data } = await supabase.from("dm_group_reads").select("member_id, last_read_at").eq("group_id", gid);
+    res.json(data || []);
+  } catch (e) {
+    console.error("[groups/seen GET]", e.message);
+    res.json([]);
   }
 });
 
@@ -16080,6 +16430,59 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
       .single();
     if (error) throw error;
 
+    // ── @mentions: parse plaintext body against group member names, notify ──
+    // Skipped for E2EE messages — the server never sees plaintext for those,
+    // so there's nothing to match against.
+    if (!e2ee && body) {
+      (async () => {
+        try {
+          const { data: memberRows } = await supabase
+            .from("dm_group_members").select("member_id, nickname").eq("group_id", gid);
+          const otherIds = (memberRows || []).map(r => r.member_id).filter(id => id !== myId);
+          if (!otherIds.length) return;
+          const { data: profiles } = await supabase
+            .from("members").select("id, name").in("id", otherIds);
+          const nickByI = {};
+          (memberRows || []).forEach(r => { if (r.nickname) nickByI[r.member_id] = r.nickname; });
+
+          // Build lookup: lowercased, no-space token -> member id
+          const lookup = new Map();
+          (profiles || []).forEach(p => {
+            const candidates = [nickByI[p.id], p.name, (p.name || "").split(/\s+/)[0]].filter(Boolean);
+            candidates.forEach(c => {
+              const key = c.toLowerCase().replace(/\s+/g, "");
+              if (key) lookup.set(key, p.id);
+            });
+          });
+
+          const mentionTokens = [...body.matchAll(/@([A-Za-z0-9_.]{2,40})/g)].map(m => m[1].toLowerCase());
+          const mentionedIds = [...new Set(mentionTokens.map(t => lookup.get(t)).filter(Boolean))];
+          if (!mentionedIds.length) return;
+
+          const { data: group } = await supabase.from("dm_group_chats").select("name").eq("id", gid).maybeSingle();
+          const senderName = mem.nickname || sender?.name || "Member";
+          const now = new Date().toISOString();
+          const rows = mentionedIds.map(recipientId => ({
+            member_id:   recipientId,
+            type:        "group_mention",
+            title:       `${senderName} mentioned you in ${group?.name || "a group"}`,
+            body:        body.slice(0, 300),
+            actor_id:    myId,
+            actor_name:  senderName,
+            actor_photo: sender?.photo || null,
+            link_type:   "group",
+            link_id:     gid,
+            is_read:     false,
+            created_at:  now,
+          }));
+          const { error: mentionErr } = await supabase.from("member_notifications").insert(rows);
+          if (mentionErr) console.error("[group mention] insert:", mentionErr.message);
+        } catch (mentionEx) {
+          console.error("[group mention]", mentionEx.message);
+        }
+      })();
+    }
+
     res.json({
       success: true,
       message: {
@@ -16121,6 +16524,127 @@ app.delete("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWri
     res.status(500).json({ error: "Failed to delete message" });
   }
 });
+
+// PATCH /api/member/groups/:id/messages/:msgId — edit own message
+// Body: { body } for plaintext, or { e2ee: true, body: "", ciphertext, wrapped_keys }
+// for E2EE — same shape as POST .../messages, re-encrypted client-side for
+// the new text against the current member list. Stamps edited_at so the
+// client can render an "(edited)" tag, same pattern as the delete above.
+//
+// SQL migration (run once in Supabase):
+//   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+app.patch("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const msgId = req.params.msgId;
+    const { body: rawBody, e2ee, ciphertext, wrapped_keys } = req.body || {};
+
+    const { data: msg } = await supabase.from("dm_group_messages").select("sender_id, group_id, deleted_at").eq("id", msgId).maybeSingle();
+    if (!msg || msg.group_id !== gid) return res.status(404).json({ error: "Not found" });
+    if (msg.sender_id !== myId) return res.status(403).json({ error: "Cannot edit another member's message" });
+    if (msg.deleted_at) return res.status(400).json({ error: "Can't edit a deleted message" });
+
+    let update;
+    if (e2ee) {
+      if (!ciphertext || typeof ciphertext !== 'string' || ciphertext.length > 8000)
+        return res.status(400).json({ error: "E2EE ciphertext missing or invalid" });
+      if (!wrapped_keys || typeof wrapped_keys !== 'object' || Array.isArray(wrapped_keys))
+        return res.status(400).json({ error: "E2EE wrapped_keys must be an object { memberId: wrappedKey }" });
+      update = { body: "\u200B", e2ee: true, ciphertext, wrapped_keys, edited_at: new Date().toISOString() };
+    } else {
+      const trimmed = (rawBody || "").trim();
+      if (!trimmed || trimmed.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
+      update = { body: trimmed, e2ee: false, ciphertext: null, wrapped_keys: null, edited_at: new Date().toISOString() };
+    }
+
+    const { data: updated, error } = await supabase
+      .from("dm_group_messages")
+      .update(update)
+      .eq("id", msgId)
+      .select("id, body, edited_at, e2ee, ciphertext, wrapped_keys")
+      .single();
+    if (error) throw error;
+
+    res.json({ success: true, message: updated });
+  } catch (e) {
+    console.error("[groups/messages PATCH]", e.message);
+    res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+// POST /api/member/groups/:id/messages/image — send a photo to the group
+// multipart/form-data: image=<file>, replied_to_id/body/sender?
+// SQL migration (run once in Supabase):
+//   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+//   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS attachment_type TEXT;
+app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteLimit,
+  multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }).single("image"),
+  async (req, res) => {
+    try {
+      const myId = req.member.memberId;
+      const gid  = req.params.id;
+      const { replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
+      if (!req.file) return res.status(400).json({ error: "No image uploaded" });
+
+      const { data: mem } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+      const resized = await sharp(req.file.buffer)
+        .resize(1280, 1280, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "kfs-group-attachments", resource_type: "image" },
+          (err, result) => err ? reject(err) : resolve(result)
+        ).end(resized);
+      });
+
+      const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
+
+      const { data: msg, error } = await supabase
+        .from("dm_group_messages")
+        .insert([{
+          group_id:          gid,
+          sender_id:         myId,
+          body:              "📷 Photo",
+          replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
+          replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
+          replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
+          attachment_url:    uploadResult.secure_url,
+          attachment_type:   "image",
+        }])
+        .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type")
+        .single();
+      if (error) throw error;
+
+      res.json({
+        success: true,
+        message: {
+          id:                msg.id,
+          group_id:          gid,
+          sender_id:         myId,
+          sender_name:       mem.nickname || sender?.name || "Member",
+          sender_photo:      sender?.photo || null,
+          body:              msg.body,
+          sent_at:           msg.created_at,
+          replied_to_id:     msg.replied_to_id    || null,
+          replied_to_body:   msg.replied_to_body  || null,
+          replied_to_sender: msg.replied_to_sender || null,
+          reactions:         [],
+          e2ee:              false,
+          attachment_url:    msg.attachment_url,
+          attachment_type:   msg.attachment_type,
+        },
+      });
+    } catch (e) {
+      console.error("[groups/messages/image POST]", e.message);
+      res.status(500).json({ error: "Failed to send image" });
+    }
+  }
+);
 
 // POST /api/member/groups/:id/messages/:msgId/react  { emoji }
 // Toggle: same emoji again → remove, different → switch, none → add.
@@ -16189,6 +16713,80 @@ app.get("/api/member/messages/reactions", memberAuthMiddleware, reactionLimit, a
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION — Typing indicators (DM + group)
+//
+// Kept in an in-memory Map rather than a DB table: typing state is ephemeral
+// (a few seconds of relevance, refreshed constantly while someone types) and
+// never needs to survive a restart or be queried historically — writing it to
+// Supabase on every keystroke would be pure overhead. Piggybacks on the same
+// poll-tick pattern the rest of DM/group chat already uses (reactions, seen-by,
+// read receipts), so "X is typing…" shows up within one poll cycle.
+//
+// If this app is ever run across multiple Node instances behind a load
+// balancer, swap this Map for a shared store (Redis, or a Supabase table with
+// a short TTL sweep) — a single instance is assumed here, consistent with the
+// rest of the in-memory state in this file (e.g. lockout tracking).
+// ─────────────────────────────────────────────────────────────────────────────
+const _typingState = new Map(); // conv_key -> Map(member_id -> { name, at })
+const TYPING_TTL_MS = 6000; // a typing signal is considered stale after 6s
+
+const typingLimit = rateLimit({ windowMs: 10_000, max: 40, standardHeaders: true, legacyHeaders: false });
+
+// POST /api/member/typing  { conv_key, conv_type: 'dm'|'group' }
+// Called by the client every ~2s while the user has text in the composer.
+app.post("/api/member/typing", memberAuthMiddleware, typingLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { conv_key, conv_type } = req.body || {};
+    if (!conv_key || !["dm", "group"].includes(conv_type)) return res.status(400).json({ error: "conv_key and conv_type required" });
+
+    // Verify membership before recording a typing signal, same trust boundary
+    // as reading messages in that conversation.
+    if (conv_type === "dm") {
+      const parts = String(conv_key).split(":");
+      if (parts.length !== 2 || !parts.includes(myId)) return res.status(403).json({ error: "Forbidden" });
+    } else {
+      const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", conv_key).eq("member_id", myId).maybeSingle();
+      if (!mem) return res.status(403).json({ error: "Not in this group" });
+    }
+
+    const { data: me } = await supabase.from("members").select("name").eq("id", myId).maybeSingle();
+    if (!_typingState.has(conv_key)) _typingState.set(conv_key, new Map());
+    _typingState.get(conv_key).set(myId, { name: me?.name || "Someone", at: Date.now() });
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[typing POST]", e.message);
+    res.json({ success: false });
+  }
+});
+
+// GET /api/member/typing?conv_key=...&conv_type=dm|group
+// Returns everyone (other than me) whose last typing signal is still fresh.
+app.get("/api/member/typing", memberAuthMiddleware, typingLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const { conv_key, conv_type } = req.query || {};
+    if (!conv_key || !["dm", "group"].includes(conv_type)) return res.json([]);
+
+    const bucket = _typingState.get(conv_key);
+    if (!bucket) return res.json([]);
+
+    const now = Date.now();
+    const typers = [];
+    for (const [memberId, info] of bucket.entries()) {
+      if (memberId === myId) continue;
+      if (now - info.at > TYPING_TTL_MS) { bucket.delete(memberId); continue; }
+      typers.push({ member_id: memberId, name: info.name });
+    }
+    res.json(typers);
+  } catch (e) {
+    console.error("[typing GET]", e.message);
+    res.json([]);
+  }
+});
+
 // ── init check ────────────────────────────────────────────────────────────────
 // ── SQL MIGRATION REQUIRED for pin + group photo features ─────────────────────
 // Run once in Supabase SQL editor:
@@ -16196,6 +16794,25 @@ app.get("/api/member/messages/reactions", memberAuthMiddleware, reactionLimit, a
 //   ALTER TABLE dm_group_chats ADD COLUMN IF NOT EXISTS photo_url TEXT;
 //   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
 //   CREATE INDEX IF NOT EXISTS idx_group_msgs_pinned ON dm_group_messages(group_id, is_pinned) WHERE is_pinned = TRUE;
+//
+// ── SQL MIGRATION REQUIRED for read receipts / seen indicators ────────────────
+// Run once in Supabase SQL editor:
+//
+//   -- DMs: delivered→seen distinction (WhatsApp-style double ticks)
+//   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
+//   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+//
+//   -- Groups: one row per (group, member) holding a last-read watermark, rather
+//   -- than a flag per message — this is how WhatsApp/Slack-style "seen by" scales:
+//   -- a member has seen a message if their last_read_at >= that message's created_at.
+//   CREATE TABLE IF NOT EXISTS dm_group_reads (
+//     group_id     UUID NOT NULL REFERENCES dm_group_chats(id) ON DELETE CASCADE,
+//     member_id    UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (group_id, member_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_grp_reads_group ON dm_group_reads(group_id);
+//   ALTER TABLE dm_group_reads DISABLE ROW LEVEL SECURITY; -- server uses service_role key
 //
 // ─────────────────────────────────────────────────────────────────────────────
 async function initSocialDB() {
@@ -16206,6 +16823,7 @@ async function initSocialDB() {
     "dm_group_members",
     "dm_group_messages",
     "message_reactions",
+    "dm_group_reads",
   ];
   let allOk = true;
   for (const t of tables) {

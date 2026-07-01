@@ -4511,9 +4511,28 @@
                     </div>
                     <button
                       class="dm-icon-btn"
+                      id="dm-thread-search-btn"
+                      title="Search in conversation"
+                      style="margin-left: auto"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="7" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                    </button>
+                    <button
+                      class="dm-icon-btn"
                       id="dm-info-btn"
                       title="Details"
-                      style="margin-left: auto"
                     >
                       <svg
                         width="17"
@@ -4531,11 +4550,35 @@
                     </button>
                   </div>
 
+                  <div class="dm-search-bar" id="dm-search-bar">
+                    <input
+                      type="text"
+                      id="dm-search-input"
+                      placeholder="Search in conversation…"
+                      autocomplete="off"
+                    />
+                    <span class="dm-search-count" id="dm-search-count"></span>
+                    <button class="dm-search-nav-btn" id="dm-search-prev" title="Previous">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                    </button>
+                    <button class="dm-search-nav-btn" id="dm-search-next" title="Next">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                    <button class="dm-search-close-btn" id="dm-search-close" title="Close">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </div>
+
                   <div class="dm-msgs" id="dm-msgs">
                     <div id="dm-load-earlier-wrap" style="display: none">
                       <button id="dm-load-earlier">Load earlier</button>
                     </div>
                     <div id="dm-msg-list"></div>
+                  </div>
+
+                  <div class="dm-typing-indicator" id="dm-typing-indicator">
+                    <span class="dm-typing-dots"><span></span><span></span><span></span></span>
+                    <span id="dm-typing-text"></span>
                   </div>
 
                   <div
@@ -4544,6 +4587,10 @@
                     style="display: none"
                   ></div>
                   <div class="dm-compose" id="dm-compose">
+                    <button class="dm-attach-btn" id="dm-attach-btn" title="Send photo" type="button">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                    </button>
+                    <input type="file" id="dm-attach-input" class="dm-attach-input" accept="image/*" />
                     <textarea
                       id="dm-input"
                       class="dm-textarea"
@@ -4614,9 +4661,28 @@
                     </div>
                     <button
                       class="dm-icon-btn"
+                      id="gc-thread-search-btn"
+                      title="Search in conversation"
+                      style="margin-left: auto"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="7" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                    </button>
+                    <button
+                      class="dm-icon-btn"
                       id="gc-info-btn"
                       title="Group info"
-                      style="margin-left: auto"
                     >
                       <svg
                         width="16"
@@ -4633,18 +4699,47 @@
                       </svg>
                     </button>
                   </div>
+                  <div class="dm-search-bar" id="gc-search-bar">
+                    <input
+                      type="text"
+                      id="gc-search-input"
+                      placeholder="Search in conversation…"
+                      autocomplete="off"
+                    />
+                    <span class="dm-search-count" id="gc-search-count"></span>
+                    <button class="dm-search-nav-btn" id="gc-search-prev" title="Previous">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                    </button>
+                    <button class="dm-search-nav-btn" id="gc-search-next" title="Next">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                    <button class="dm-search-close-btn" id="gc-search-close" title="Close">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </div>
+
                   <div class="dm-msgs" id="gc-msgs">
                     <div id="gc-load-earlier-wrap" style="display: none">
                       <button id="gc-load-earlier">Load earlier</button>
                     </div>
                     <div id="gc-msg-list"></div>
                   </div>
+
+                  <div class="dm-typing-indicator" id="gc-typing-indicator">
+                    <span class="dm-typing-dots"><span></span><span></span><span></span></span>
+                    <span id="gc-typing-text"></span>
+                  </div>
+
                   <div
                     id="gc-reply-bar"
                     class="dm-reply-bar"
                     style="display: none"
                   ></div>
                   <div class="dm-compose" id="gc-compose">
+                    <button class="dm-attach-btn" id="gc-attach-btn" title="Send photo" type="button">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                    </button>
+                    <input type="file" id="gc-attach-input" class="dm-attach-input" accept="image/*" />
                     <textarea
                       id="gc-input"
                       class="dm-textarea"
@@ -4769,6 +4864,37 @@
                       <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
                     </svg>
                     <span id="dm-detail-block-label">Block</span>
+                  </button>
+                  <button class="dm-detail-action-btn" id="dm-detail-mute-btn">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                    >
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    </svg>
+                    <span id="dm-detail-mute-label">Mute</span>
+                  </button>
+                  <button class="dm-detail-action-btn" id="dm-detail-archive-btn">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                    >
+                      <polyline points="21 8 21 21 3 21 3 8" />
+                      <rect x="1" y="3" width="22" height="5" />
+                      <line x1="10" y1="12" x2="14" y2="12" />
+                    </svg>
+                    <span id="dm-detail-archive-label">Archive</span>
                   </button>
                   <!-- DM only -->
                   <button
@@ -7721,6 +7847,46 @@
               color: #333;
               letter-spacing: 0.01em;
             }
+            .dm-edited-tag {
+              font-size: 10px;
+              color: #333;
+              letter-spacing: 0.01em;
+              font-style: italic;
+            }
+            .gc-mention-tag {
+              color: var(--accent, #3b82f6);
+              background: rgba(59, 130, 246, 0.14);
+              border-radius: 4px;
+              padding: 0 3px;
+              font-weight: 600;
+            }
+            .gc-mention-dropdown {
+              position: absolute;
+              bottom: 100%;
+              left: 0;
+              right: 0;
+              margin-bottom: 6px;
+              background: var(--surface, #1a1a1a);
+              border: 1px solid var(--border, #2a2a2a);
+              border-radius: 12px;
+              max-height: 200px;
+              overflow-y: auto;
+              box-shadow: 0 8px 28px rgba(0,0,0,.5);
+              z-index: 500;
+            }
+            .gc-mention-item {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 8px 12px;
+              cursor: pointer;
+              font-size: 13px;
+              font-weight: 500;
+            }
+            .gc-mention-item:hover,
+            .gc-mention-item.active {
+              background: rgba(255,255,255,.06);
+            }
             .dm-del-btn {
               background: none;
               border: none;
@@ -7745,8 +7911,62 @@
               color: #888;
             }
 
+            /* Read-receipt ticks (DM) */
+            .dm-ticks {
+              display: inline-flex;
+              align-items: center;
+              color: #333;
+              flex-shrink: 0;
+            }
+            .dm-ticks svg {
+              display: block;
+            }
+            .dm-ticks-delivered {
+              color: #555;
+            }
+            .dm-ticks-read {
+              color: #4a9eff;
+            }
+
+            /* "Seen by" avatar stack (groups) — sits under the last message */
+            .gc-seenby {
+              display: flex;
+              align-items: center;
+              gap: 2px;
+              padding: 2px 2px 0;
+              margin-left: auto;
+              width: fit-content;
+            }
+            .gc-seenby-avatar {
+              width: 14px;
+              height: 14px;
+              border-radius: 50%;
+              object-fit: cover;
+              border: 1px solid #0a0a0a;
+              margin-left: -5px;
+              background: #1e1e1e;
+              flex-shrink: 0;
+            }
+            .gc-seenby-avatar:first-child {
+              margin-left: 0;
+            }
+            .gc-seenby-initials {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 7px;
+              font-weight: 700;
+              color: #888;
+            }
+            .gc-seenby-more {
+              font-size: 10px;
+              color: #555;
+              margin-left: 3px;
+            }
+
             /* ── Compose bar ── */
             .dm-compose {
+              position: relative;
               display: flex;
               align-items: flex-end;
               gap: 8px;
@@ -7995,6 +8215,227 @@
               color: rgba(255, 255, 255, 0.4);
               flex-shrink: 0;
             }
+
+            /* ── Attach (image) button ── */
+            .dm-attach-btn {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 34px;
+              height: 34px;
+              border-radius: 50%;
+              border: none;
+              background: transparent;
+              color: rgba(255, 255, 255, 0.55);
+              cursor: pointer;
+              flex-shrink: 0;
+              transition: background 0.15s, color 0.15s;
+            }
+            .dm-attach-btn:hover {
+              background: rgba(255, 255, 255, 0.08);
+              color: #fff;
+            }
+            .dm-attach-input { display: none; }
+
+            /* ── Image message bubble ── */
+            .dm-bubble-img-wrap {
+              display: block;
+              max-width: 240px;
+              border-radius: 14px;
+              overflow: hidden;
+              cursor: pointer;
+              line-height: 0;
+            }
+            .dm-bubble-img-wrap img {
+              width: 100%;
+              max-height: 320px;
+              object-fit: cover;
+              display: block;
+            }
+            .dm-bubble.dm-bubble-image {
+              padding: 4px;
+              background: transparent !important;
+            }
+            .dm-img-uploading {
+              opacity: 0.55;
+            }
+            /* Fullscreen image lightbox */
+            .dm-img-lightbox {
+              position: fixed;
+              inset: 0;
+              z-index: 99995;
+              background: rgba(0, 0, 0, 0.88);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 24px;
+              cursor: zoom-out;
+            }
+            .dm-img-lightbox img {
+              max-width: 100%;
+              max-height: 100%;
+              border-radius: 8px;
+              box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+            }
+
+            /* ── Social Strand link preview card (DM + group chat) ── */
+            .strand-preview-card {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin-top: 6px;
+              padding: 8px;
+              max-width: 260px;
+              background: rgba(255, 255, 255, 0.04);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 14px;
+              cursor: pointer;
+              transition: background 0.15s ease;
+            }
+            .strand-preview-card:hover {
+              background: rgba(255, 255, 255, 0.08);
+            }
+            .strand-preview-card.strand-preview-loading {
+              opacity: 0.6;
+            }
+            .strand-preview-thumb {
+              flex: 0 0 44px;
+              width: 44px;
+              height: 44px;
+              border-radius: 9px;
+              overflow: hidden;
+              background: #222;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 18px;
+            }
+            .strand-preview-thumb img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+            }
+            .strand-preview-thumb-fallback {
+              background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+            }
+            .strand-preview-info {
+              min-width: 0;
+              flex: 1;
+            }
+            .strand-preview-title {
+              font-size: 12.5px;
+              font-weight: 600;
+              color: #f5f5f5;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .strand-preview-sub {
+              font-size: 11px;
+              color: rgba(255, 255, 255, 0.5);
+              margin-top: 2px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            /* ── Typing indicator ── */
+            .dm-typing-indicator {
+              display: none;
+              align-items: center;
+              gap: 6px;
+              padding: 4px 16px 2px;
+              font-size: 11.5px;
+              color: rgba(255, 255, 255, 0.45);
+              font-style: italic;
+              flex-shrink: 0;
+            }
+            .dm-typing-indicator.show { display: flex; }
+            .dm-typing-dots span {
+              display: inline-block;
+              width: 4px;
+              height: 4px;
+              margin-right: 2px;
+              border-radius: 50%;
+              background: rgba(255, 255, 255, 0.5);
+              animation: dmTypingBounce 1.2s infinite ease-in-out both;
+            }
+            .dm-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+            .dm-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+            @keyframes dmTypingBounce {
+              0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+              40% { transform: scale(1); opacity: 1; }
+            }
+
+            /* ── In-chat search bar ── */
+            .dm-search-bar {
+              display: none;
+              align-items: center;
+              gap: 8px;
+              padding: 8px 14px;
+              background: rgba(255, 255, 255, 0.03);
+              border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+              flex-shrink: 0;
+            }
+            .dm-search-bar.show { display: flex; }
+            .dm-search-bar input {
+              flex: 1;
+              background: rgba(0, 0, 0, 0.3);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: 8px;
+              padding: 6px 10px;
+              font-size: 13px;
+              color: #f5f5f5;
+              outline: none;
+            }
+            .dm-search-count {
+              font-size: 11px;
+              color: rgba(255, 255, 255, 0.4);
+              white-space: nowrap;
+              min-width: 34px;
+              text-align: center;
+            }
+            .dm-search-nav-btn,
+            .dm-search-close-btn {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 26px;
+              height: 26px;
+              border-radius: 50%;
+              border: none;
+              background: transparent;
+              color: rgba(255, 255, 255, 0.55);
+              cursor: pointer;
+              flex-shrink: 0;
+            }
+            .dm-search-nav-btn:hover,
+            .dm-search-close-btn:hover {
+              background: rgba(255, 255, 255, 0.08);
+              color: #fff;
+            }
+            .dm-bubble.dm-search-match {
+              outline: 2px solid rgba(59, 130, 246, 0.55);
+              outline-offset: 2px;
+            }
+            .dm-bubble.dm-search-current {
+              outline: 2px solid #3b82f6;
+              outline-offset: 2px;
+              box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.18);
+            }
+            .dm-search-older-btn {
+              display: block;
+              margin: 6px auto;
+              font-size: 11px;
+              color: rgba(255, 255, 255, 0.5);
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 8px;
+              padding: 5px 12px;
+              cursor: pointer;
+            }
+            .dm-search-older-btn:hover { color: #fff; }
           </style>
         </main>
       </div>

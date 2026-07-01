@@ -2327,6 +2327,7 @@ function _notifIcon(type) {
     network:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-6.5 7-6.5s7 2.5 7 6.5"/><line x1="18" y1="6" x2="18" y2="12"/><line x1="15" y1="9" x2="21" y2="9"/></svg>`,
     new_post:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><circle cx="6.5" cy="6" r="0.8" fill="currentColor" stroke="none"/></svg>`,
     studio:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/></svg>`,
+    group_mention:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5"/></svg>`,
     default:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
   };
   return icons[type] || icons.default;
@@ -2367,6 +2368,22 @@ function onNotifClick(id) {
     closeNotifPanel();
     if (n.actor_id && typeof dmStartWith === 'function') {
       dmStartWith(n.actor_id, { id: n.actor_id, name: n.actor_name, photo: n.actor_photo });
+    }
+  } else if (n.type === 'group_mention' || n.link_type === 'group') {
+    // Group @mention — jump into that group thread, same as tapping it
+    // in the inbox. link_id is the group id.
+    closeNotifPanel();
+    if (n.link_id) {
+      const messagesNav = document.querySelector('[data-panel="dms"]') || document.querySelector('[data-panel="messages"]');
+      if (messagesNav) switchPanel(messagesNav);
+      (async () => {
+        try {
+          if (!(GC.groups || []).length) await gcLoadGroups();
+          const g = (GC.groups || []).find(gr => gr.id === n.link_id);
+          if (g && typeof window._inboxOpenGroup === 'function') window._inboxOpenGroup(g);
+          else if (g && typeof gcOpenGroup === 'function') gcOpenGroup(g);
+        } catch { /* ignore */ }
+      })();
     }
   }
 }
@@ -4809,6 +4826,19 @@ function dmFull(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Read receipts (DM double-ticks) ──────────────────────────────────────────
+// Single gray check = sent, double gray = delivered (peer's client has synced
+// their inbox), double blue = seen (peer opened this thread). Only rendered on
+// my own, non-deleted, already-confirmed (non-"tmp-") messages.
+const _DM_TICK_SINGLE = '<svg width="14" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5L5 9.5L15 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const _DM_TICK_DOUBLE = '<svg width="17" height="10" viewBox="0 0 20 11" fill="none"><path d="M1 5.5L5 9.5L11 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 5.5L12 9.5L19 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function _dmTickSpanHTML(m) {
+  if (m.read_at)      return `<span class="dm-ticks dm-ticks-read" title="Seen">${_DM_TICK_DOUBLE}</span>`;
+  if (m.delivered_at) return `<span class="dm-ticks dm-ticks-delivered" title="Delivered">${_DM_TICK_DOUBLE}</span>`;
+  return `<span class="dm-ticks dm-ticks-sent" title="Sent">${_DM_TICK_SINGLE}</span>`;
+}
+
 // ─── Badge ────────────────────────────────────────────────────────────────────
 
 function dmSetBadge(n) {
@@ -4889,6 +4919,7 @@ function dmRenderConvs(list) {
 // ─── Open a conversation ──────────────────────────────────────────────────────
 
 async function dmOpenConv(conv) {
+  if (typeof _cancelEditMsg === 'function') _cancelEditMsg('dm');
   DM.activeKey   = conv.conv_key;
   DM.activePeer  = conv.peer;
   DM.msgs        = [];
@@ -5030,6 +5061,112 @@ async function dmLoadMsgs(prepend) {
   }
 }
 
+// ── Image attachments — shared lightbox + bubble rendering (DM + group) ────
+function _openImageLightbox(url) {
+  const overlay = document.createElement('div');
+  overlay.className = 'dm-img-lightbox';
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = 'Photo';
+  overlay.appendChild(img);
+  overlay.addEventListener('click', () => overlay.remove());
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(overlay);
+}
+
+// Appends an image wrapper to `bubble` if the message carries an attachment.
+// Returns true if the message is photo-only (no caption text to render).
+function _attachImageToBubble(bubble, m) {
+  if (!m.attachment_url) return false;
+  bubble.classList.add('dm-bubble-image');
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'dm-bubble-img-wrap';
+  if (String(m.id || '').startsWith('tmp-')) imgWrap.classList.add('dm-img-uploading');
+  const img = document.createElement('img');
+  img.src = m.attachment_url;
+  img.alt = 'Photo';
+  img.loading = 'lazy';
+  imgWrap.appendChild(img);
+  imgWrap.addEventListener('click', e => { e.stopPropagation(); _openImageLightbox(m.attachment_url); });
+  bubble.appendChild(imgWrap);
+  return !m.body || m.body === '📷 Photo';
+}
+
+// ─── Social Strand link preview cards (DM + group chat) ──────────────────────
+// When a message body contains a link to a Social Strand post — e.g. from the
+// "Share" sheet's Send-in-chat action, which sends plain text like
+// "Check this out on Social Strand: https://.../strand/<id>" — render an
+// Instagram-style rich preview card (cover image, title, author) under the
+// bubble instead of leaving it as a raw, unclickable URL.
+const _STRAND_LINK_RE = /https?:\/\/[^\s]+?\/(?:social-strand\/[^\/\s]+\/([a-zA-Z0-9-]+)|strand\/([a-zA-Z0-9-]+))(?=[\s]|$)/i;
+const _strandPreviewCache = new Map(); // projectId -> preview data (or in-flight Promise)
+
+function _detectStrandLink(text) {
+  if (!text) return null;
+  const m = String(text).match(_STRAND_LINK_RE);
+  if (!m) return null;
+  const id = m[1] || m[2];
+  if (!id) return null;
+  return { id, matched: m[0] };
+}
+
+function _fetchStrandPreview(id) {
+  if (_strandPreviewCache.has(id)) return _strandPreviewCache.get(id);
+  const p = api('GET', `/api/member/studio/preview/${id}`).catch(() => null);
+  _strandPreviewCache.set(id, p);
+  return p;
+}
+
+// Appends a strand-post preview card to `bubble` if `bodyText` contains a
+// Social Strand link. Safe to call multiple times (no-ops if no link found).
+function _attachStrandPreviewToBubble(bubble, bodyText) {
+  if (!bubble || bubble.querySelector('.strand-preview-card')) return;
+  const hit = _detectStrandLink(bodyText);
+  if (!hit) return;
+
+  const card = document.createElement('div');
+  card.className = 'strand-preview-card strand-preview-loading';
+  card.innerHTML = `
+    <div class="strand-preview-thumb"></div>
+    <div class="strand-preview-info">
+      <div class="strand-preview-title">Loading post…</div>
+      <div class="strand-preview-sub">Social Strand</div>
+    </div>
+  `;
+  bubble.appendChild(card);
+
+  card.addEventListener('click', e => {
+    e.stopPropagation();
+    if (typeof swOpenDetail === 'function') swOpenDetail(hit.id);
+    else window.open(`${location.origin}/strand/${hit.id}`, '_blank', 'noopener,noreferrer');
+  });
+
+  _fetchStrandPreview(hit.id).then(data => {
+    card.classList.remove('strand-preview-loading');
+    if (!data || !data.id) {
+      card.innerHTML = `
+        <div class="strand-preview-thumb strand-preview-thumb-fallback">🎬</div>
+        <div class="strand-preview-info">
+          <div class="strand-preview-title">Post unavailable</div>
+          <div class="strand-preview-sub">It may have been removed</div>
+        </div>
+      `;
+      return;
+    }
+    card.innerHTML = `
+      ${data.cover_image
+        ? `<div class="strand-preview-thumb"><img src="${swEsc(data.cover_image)}" alt="" loading="lazy"></div>`
+        : `<div class="strand-preview-thumb strand-preview-thumb-fallback">🎬</div>`}
+      <div class="strand-preview-info">
+        <div class="strand-preview-title">${swEsc(data.title || 'Social Strand post')}</div>
+        <div class="strand-preview-sub">By ${swEsc(data.author_name || 'a KFS member')}${data.domain ? ` · ${swEsc(data.domain)}` : ''}</div>
+      </div>
+    `;
+  });
+}
+
 function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
   // Group consecutive messages from same sender.
   // lastSenderHint: pass the sender_id of the last message already in the DOM
@@ -5076,10 +5213,15 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
       });
       bubble.appendChild(quote);
     }
+    // Attachment (image) — renders above/instead of the text caption
+    const _isPhotoOnly = !isDeleted && _attachImageToBubble(bubble, m);
+
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
     // E2EE: decrypt asynchronously; show placeholder while decrypting
-    if (m.e2ee && !isDeleted) {
+    if (_isPhotoOnly) {
+      // no caption to render
+    } else if (m.e2ee && !isDeleted) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _myId = myId;
@@ -5087,11 +5229,13 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
         bodyNode.textContent = pt;
         bodyNode.style.opacity = '';
         m._plaintext = pt; // cache for context menu / reply
+        _attachStrandPreviewToBubble(bubble, pt);
       }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
       bodyNode.textContent = m.body;
     }
-    bubble.appendChild(bodyNode);
+    if (!_isPhotoOnly) bubble.appendChild(bodyNode);
+    if (!_isPhotoOnly && !(m.e2ee && !isDeleted)) _attachStrandPreviewToBubble(bubble, m.body);
 
     wrap.appendChild(bubble);
 
@@ -5119,7 +5263,8 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
-    meta.innerHTML = `<span class="dm-msg-time">${dmFull(m.sent_at)}</span>${mine && !isDeleted ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
+    meta.dataset.metaFor = m.id;
+    meta.innerHTML = `${!isDeleted && m.edited_at ? `<span class="dm-edited-tag">edited</span>` : ''}<span class="dm-msg-time">${dmFull(m.sent_at)}</span>${mine && !isDeleted && !String(m.id).startsWith('tmp-') ? _dmTickSpanHTML(m) : ''}${mine && !isDeleted ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
 
     const delBtn = meta.querySelector('.dm-del-btn');
     if (delBtn) {
@@ -5131,7 +5276,7 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     // Context menu: right-click (desktop) + long-press (mobile)
     _attachMsgContextMenu(bubble, {
-      id: m.id, body: m.body, mine,
+      id: m.id, body: m.body, mine, isDeleted,
       senderName: mine ? 'You' : (DM.activePeer?.name || 'Member'),
       type: 'dm',
     });
@@ -5172,6 +5317,9 @@ async function dmSend() {
   if (!input) return;
   const body = input.value.trim();
   if (!body) return;
+
+  // Edit mode — route to the PATCH flow instead of posting a new message.
+  if (_editState.dm) { await _dmSubmitEdit(body); return; }
 
   const peerId = DM.activePeer?.id;
   if (!peerId) return;
@@ -5254,7 +5402,7 @@ async function dmSend() {
       _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('dm', realMsg.id, emoji, tmpBubble));
       // Re-attach context menu with real ID
       _attachMsgContextMenu(tmpBubble, { id: realMsg.id, body: realMsg.body, mine: true, senderName: 'You', type: 'dm' });
-      // Re-wire hover-action buttons with real ID
+      // Re-attach hover-action buttons with real ID
       const _hwrap = tmpBubble.closest('.dm-bubble-wrap');
       _hwrap?.querySelectorAll('.dm-ha-btn').forEach(btn => {
         if (btn.title === 'React') {
@@ -5267,6 +5415,18 @@ async function dmSend() {
           btn.replaceWith(nb);
         }
       });
+      // Now that the bubble is confirmed (no longer "tmp-"), it's eligible for
+      // a read-receipt tick — show the "sent" single check immediately.
+      const _dmMetaRow = tmpBubble.closest('.dm-msg-group')?.querySelector('.dm-meta');
+      if (_dmMetaRow) {
+        _dmMetaRow.dataset.metaFor = realMsg.id;
+        if (!_dmMetaRow.querySelector('.dm-ticks')) {
+          const _delBtn = _dmMetaRow.querySelector('.dm-del-btn');
+          const _tickHTML = _dmTickSpanHTML(realMsg);
+          if (_delBtn) _delBtn.insertAdjacentHTML('beforebegin', _tickHTML);
+          else _dmMetaRow.insertAdjacentHTML('beforeend', _tickHTML);
+        }
+      }
     } else if (list) {
       // Fallback: full rerender (bubble wasn't tagged somehow)
       list.innerHTML = '';
@@ -5429,6 +5589,33 @@ async function _dmPollNewMessages() {
   if (atEnd) dmScrollBottom();
 }
 
+// ── Typing indicator (DM) ──────────────────────────────────────────────────
+// Pings the server at most once every 2s while the user has the thread open
+// and is actively typing; polls (piggybacked on the normal poll tick) for the
+// peer's typing state and toggles the "X is typing…" pill under the thread.
+let _dmTypingLastSent = 0;
+function _dmPingTyping() {
+  if (!DM.activeKey) return;
+  const now = Date.now();
+  if (now - _dmTypingLastSent < 2000) return;
+  _dmTypingLastSent = now;
+  api('POST', '/api/member/typing', { conv_key: DM.activeKey, conv_type: 'dm' }).catch(() => {});
+}
+async function _dmPollTyping() {
+  const el  = $id('dm-typing-indicator');
+  const txt = $id('dm-typing-text');
+  if (!DM.activeKey) { el?.classList.remove('show'); return; }
+  try {
+    const typers = await api('GET', `/api/member/typing?conv_key=${encodeURIComponent(DM.activeKey)}&conv_type=dm`);
+    if (typers && typers.length) {
+      if (txt) txt.textContent = `${typers[0].name} is typing…`;
+      el?.classList.add('show');
+    } else {
+      el?.classList.remove('show');
+    }
+  } catch { /* silent */ }
+}
+
 async function dmPollTick() {
   // Always refresh visible reactions — even when we've gone "back" to the
   // sidebar, a reaction the other person added to a visible bubble should
@@ -5440,6 +5627,12 @@ async function dmPollTick() {
     // messages separately, every tick — this is how a friend's reaction shows
     // up live instead of needing a refresh.
     try { await _refreshVisibleReactions('dm'); } catch { /* silent */ }
+    // Same idea for read receipts: delivered/seen status on messages I sent
+    // changes on the peer's side, not mine, so it never rides the "since"
+    // cursor above — poll for it separately so double-ticks update live.
+    try { await _refreshVisibleDmStatus(); } catch { /* silent */ }
+    // "X is typing…" indicator — cheap read-only poll, same cadence as reactions.
+    try { await _dmPollTyping(); } catch { /* silent */ }
   }
   // When no DM is open, the poll keeps running (set by dmStartPolling) but
   // just does nothing — this is intentional so reactions are always live
@@ -5571,6 +5764,26 @@ function initDM() {
   $id('dm-input')?.addEventListener('input', function () {
     this.style.height = '';
     this.style.height = Math.min(this.scrollHeight, 110) + 'px';
+    if (this.value.trim()) _dmPingTyping();
+  });
+
+  // Photo attachment
+  $id('dm-attach-btn')?.addEventListener('click', () => $id('dm-attach-input')?.click());
+  $id('dm-attach-input')?.addEventListener('change', e => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file twice in a row
+    if (file) _dmSendImage(file);
+  });
+
+  // In-thread search
+  $id('dm-thread-search-btn')?.addEventListener('click', () => _threadSearchOpen('dm'));
+  $id('dm-search-close')?.addEventListener('click', () => _threadSearchClose('dm'));
+  $id('dm-search-prev')?.addEventListener('click', () => _threadSearchNav('dm', -1));
+  $id('dm-search-next')?.addEventListener('click', () => _threadSearchNav('dm', 1));
+  $id('dm-search-input')?.addEventListener('input', e => _threadSearchRun('dm', e.target.value));
+  $id('dm-search-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); _threadSearchNav('dm', e.shiftKey ? -1 : 1); }
+    if (e.key === 'Escape') { e.preventDefault(); _threadSearchClose('dm'); }
   });
 
   // Back (mobile)
@@ -5856,6 +6069,145 @@ function _gcGetReplyPayload() {
   return { replied_to_id: r.id, replied_to_body: r.body, replied_to_sender: r.sender };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MESSAGE EDITING — same soft pattern as delete: sender-only, stamps
+// edited_at, "(edited)" tag renders next to the timestamp. Reuses the reply
+// bar's markup/CSS (.dm-reply-bar) for the "Editing message…" strip above
+// the composer, so no new CSS is needed.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _editState = { dm: null, group: null }; // { id } | null
+
+function _beginEditMsg(type /* 'dm'|'group' */, id, body) {
+  // Can't reply and edit at the same time — editing wins.
+  _setReply(type, null);
+  _editState[type] = { id };
+
+  const inputId = type === 'dm' ? 'dm-input' : 'gc-input';
+  const input = $id(inputId);
+  if (input) {
+    input.value = body || '';
+    input.style.height = '';
+    input.style.height = input.scrollHeight + 'px';
+    input.focus();
+    // Cursor at the end
+    input.setSelectionRange?.(input.value.length, input.value.length);
+  }
+
+  const barId = type === 'dm' ? 'dm-edit-bar' : 'gc-edit-bar';
+  let bar = $id(barId);
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = barId;
+    bar.className = 'dm-reply-bar';
+    if (input) input.closest('.dm-compose')?.before(bar);
+  }
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <div class="dm-reply-bar-inner">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      <div class="dm-reply-bar-content">
+        <span class="dm-reply-bar-sender">Editing message</span>
+        <span class="dm-reply-bar-body">${swEsc((body || '').slice(0, 100))}</span>
+      </div>
+      <button class="dm-reply-bar-cancel" title="Cancel edit">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`;
+  bar.querySelector('.dm-reply-bar-cancel').onclick = () => _cancelEditMsg(type);
+}
+
+function _cancelEditMsg(type) {
+  _editState[type] = null;
+  const barId = type === 'dm' ? 'dm-edit-bar' : 'gc-edit-bar';
+  const bar = $id(barId);
+  if (bar) bar.style.display = 'none';
+  const inputId = type === 'dm' ? 'dm-input' : 'gc-input';
+  const input = $id(inputId);
+  if (input) { input.value = ''; input.style.height = ''; }
+}
+
+/** Update a single already-rendered bubble in place after a successful edit. */
+function _applyEditedBubble(msgId, newBody) {
+  const bubble = document.querySelector(`[data-msg-id="${CSS.escape(msgId)}"]`);
+  if (!bubble) return;
+  const textNode = bubble.querySelector('.dm-bubble-text');
+  if (textNode) textNode.textContent = newBody;
+  const meta = bubble.closest('.dm-bubble-wrap')?.nextElementSibling;
+  if (meta?.classList.contains('dm-meta') && !meta.querySelector('.dm-edited-tag')) {
+    meta.insertAdjacentHTML('afterbegin', '<span class="dm-edited-tag">edited</span>');
+  }
+}
+
+async function _dmSubmitEdit(newBody) {
+  const state = _editState.dm;
+  if (!state) return;
+  const input = $id('dm-input');
+  try {
+    let payload = { body: newBody };
+    const msg = (DM.msgs || []).find(m => m.id === state.id);
+    if (msg?.e2ee && E2EE.ready() && DM.activePeer?.id) {
+      try {
+        const enc = await E2EE.encryptDm(newBody, DM.activePeer.id);
+        payload = { body: '', ...enc };
+      } catch (encErr) {
+        console.warn('[E2EE] DM edit-encrypt failed, sending plaintext:', encErr.message);
+      }
+    }
+    const res = await api('PATCH', `/api/member/dm/messages/${state.id}`, payload);
+    if (msg) {
+      msg.body = res.message?.body ?? newBody;
+      msg.edited_at = res.message?.edited_at || new Date().toISOString();
+      msg.e2ee = res.message?.e2ee ?? msg.e2ee;
+      msg.cipher_for_recipient = res.message?.cipher_for_recipient ?? null;
+      msg.cipher_for_self = res.message?.cipher_for_self ?? null;
+      msg._plaintext = newBody; // avoid a re-decrypt round-trip
+    }
+    _applyEditedBubble(state.id, newBody);
+    if (typeof swShowToast === 'function') swShowToast('Message edited.');
+  } catch (e) {
+    alert(e.message || 'Could not edit message.');
+  } finally {
+    _cancelEditMsg('dm');
+    if (input) input.style.height = '';
+  }
+}
+
+async function _gcSubmitEdit(newBody) {
+  const state = _editState.group;
+  if (!state) return;
+  const input = $id('gc-input');
+  try {
+    let payload = { body: newBody };
+    const msg = (GC.msgs || []).find(m => m.id === state.id);
+    if (msg?.e2ee && E2EE.ready() && GC.activeMembers?.length) {
+      try {
+        const memberIds = GC.activeMembers.map(m => m.id || m.member_id).filter(Boolean);
+        const enc = await E2EE.encryptGroup(newBody, memberIds);
+        payload = { body: '', ...enc };
+      } catch (encErr) {
+        console.warn('[E2EE] Group edit-encrypt failed, sending plaintext:', encErr.message);
+      }
+    }
+    const res = await api('PATCH', `/api/member/groups/${GC.activeId}/messages/${state.id}`, payload);
+    if (msg) {
+      msg.body = res.message?.body ?? newBody;
+      msg.edited_at = res.message?.edited_at || new Date().toISOString();
+      msg.e2ee = res.message?.e2ee ?? msg.e2ee;
+      msg.ciphertext = res.message?.ciphertext ?? null;
+      msg.wrapped_keys = res.message?.wrapped_keys ?? null;
+      msg._plaintext = newBody;
+    }
+    _applyEditedBubble(state.id, newBody);
+    if (typeof swShowToast === 'function') swShowToast('Message edited.');
+  } catch (e) {
+    alert(e.message || 'Could not edit message.');
+  } finally {
+    _cancelEditMsg('group');
+    if (input) input.style.height = '';
+  }
+}
+
 // Forward picker — minimal inline modal
 function _openForwardPicker(body) {
   let overlay = $id('dm-forward-overlay');
@@ -5904,9 +6256,21 @@ function _openForwardPicker(body) {
         try {
           const msgEl = $id('dm-fwd-msg');
           if (item.type === 'dm') {
-            await api('POST', '/api/member/dm/send', { to_member_id: item.data.peer?.id, body });
+            let payload = { to_member_id: item.data.peer?.id, body };
+            if (E2EE.ready() && item.data.peer?.id) {
+              try { payload = { to_member_id: item.data.peer.id, body: '', ...(await E2EE.encryptDm(body, item.data.peer.id)) }; }
+              catch { /* fall back to plaintext */ }
+            }
+            await api('POST', '/api/member/dm/send', payload);
           } else {
-            await api('POST', `/api/member/groups/${item.data.id}/messages`, { body });
+            let payload = { body };
+            if (E2EE.ready() && item.data.members?.length) {
+              try {
+                const memberIds = item.data.members.map(m => m.id || m.member_id).filter(Boolean);
+                payload = { body: '', ...(await E2EE.encryptGroup(body, memberIds)) };
+              } catch { /* fall back to plaintext */ }
+            }
+            await api('POST', `/api/member/groups/${item.data.id}/messages`, payload);
           }
           overlay.remove();
           swShowToast('✓ Message forwarded.');
@@ -6241,6 +6605,34 @@ async function _refreshVisibleReactions(type) {
   });
 }
 
+/**
+ * Poll-driven read-receipt refresh: delivered_at/read_at on a message I sent
+ * only change on the recipient's side, so — same as reactions above — the
+ * "since" cursor never surfaces the update. This patches just the tick icon
+ * on already-rendered outgoing bubbles, every poll tick.
+ */
+async function _refreshVisibleDmStatus() {
+  const myId = dmMyId();
+  const ids = DM.msgs
+    .filter(m => m.id && !String(m.id).startsWith('tmp-') && m.sender_id === myId)
+    .slice(-40)
+    .map(m => m.id);
+  if (!ids.length) return;
+  const map = await api('GET', `/api/member/dm/messages/status?ids=${ids.map(encodeURIComponent).join(',')}`);
+  if (!map || typeof map !== 'object') return;
+  ids.forEach(id => {
+    const msg = DM.msgs.find(m => m.id === id);
+    const st  = map[id];
+    if (!msg || !st) return;
+    if (msg.delivered_at === st.delivered_at && msg.read_at === st.read_at) return;
+    msg.delivered_at = st.delivered_at;
+    msg.read_at      = st.read_at;
+    const metaRow = document.querySelector(`.dm-meta[data-meta-for="${id}"]`);
+    const oldTick = metaRow?.querySelector('.dm-ticks');
+    if (oldTick) oldTick.outerHTML = _dmTickSpanHTML(msg);
+  });
+}
+
 // Context menu implementation
 let _ctxMenu = null;
 let _longPressTimer = null;
@@ -6256,7 +6648,7 @@ function _showMsgContextMenu(e, info) {
   e.stopPropagation();
   _dismissCtxMenu();
 
-  const { id, body, mine, senderName, type /* 'dm'|'group' */, senderId } = info;
+  const { id, body, mine, senderName, type /* 'dm'|'group' */, senderId, isDeleted } = info;
 
   // The `info` object closed over by _attachMsgContextMenu was built once,
   // at render time. After a pin/unpin toggle, GC.msgs is updated in memory
@@ -6335,6 +6727,24 @@ function _showMsgContextMenu(e, info) {
       }
     },
   });
+
+  // Edit (own messages only, not yet deleted, not still sending)
+  if (mine && !isDeleted) {
+    actions.push({
+      icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+      label: 'Edit',
+      fn: () => {
+        if (id && String(id).startsWith('tmp-')) {
+          if (typeof swShowToast === 'function') swShowToast('Message is still sending — please wait before editing.');
+          return;
+        }
+        const list = (type === 'group' && typeof GC !== 'undefined') ? GC.msgs : (typeof DM !== 'undefined' ? DM.msgs : []);
+        const liveM = (list || []).find(mm => mm.id === id);
+        const text  = liveM ? (liveM._plaintext || liveM.body || '') : body;
+        if (typeof _beginEditMsg === 'function') _beginEditMsg(type === 'group' ? 'group' : 'dm', id, text);
+      },
+    });
+  }
 
   // Delete (own messages only)
   if (mine) {
@@ -6939,6 +7349,7 @@ const GC = {
   panelVisible:   false,
   pendingBodies:  new Set(),
   loadingMsgs:    false,
+  reads:          [],      // cached [{member_id, last_read_at}] for "seen by" — see _gcRefreshSeenBy
 };
 
 const GC_POLL = 5000;
@@ -7053,6 +7464,7 @@ function gcRenderGroups(list) {
 // ─── Open a group ─────────────────────────────────────────────────────────────
 
 async function gcOpenGroup(group) {
+  if (typeof _cancelEditMsg === 'function') _cancelEditMsg('group');
   GC.activeId    = group.id;
   GC.activeGroup = group;
   GC.msgs        = [];
@@ -7262,6 +7674,7 @@ async function gcLoadMsgs(prepend) {
 
     // Refresh pinned message banner
     if (!prepend) gcRefreshPinnedBanner().catch(() => {});
+    if (!prepend) _gcRefreshSeenBy().catch(() => {});
 
     const g = GC.groups.find(g => g.id === GC.activeId);
     if (g) {
@@ -7275,6 +7688,125 @@ async function gcLoadMsgs(prepend) {
     console.error('[GC] loadMsgs:', e.message);
   } finally {
     if (!prepend) GC.loadingMsgs = false;
+  }
+}
+
+// Wrap @mentions that match a real group member (by name/nickname, no-space
+// case-insensitive) in a highlighted span. Escapes the rest of the text, so
+// this always returns safe HTML — never use textContent alongside it.
+function _gcHighlightMentions(text) {
+  const raw = text || '';
+  const members = GC.activeMembers || [];
+  if (!members.length) return swEsc(raw);
+  const lookup = new Set();
+  members.forEach(m => {
+    [m.nickname, m.name, (m.name || '').split(/\s+/)[0]].filter(Boolean).forEach(c => {
+      const key = c.toLowerCase().replace(/\s+/g, '');
+      if (key) lookup.add(key);
+    });
+  });
+  let out = '';
+  let last = 0;
+  const re = /@([A-Za-z0-9_.]{2,40})/g;
+  let match;
+  while ((match = re.exec(raw))) {
+    const token = match[1].toLowerCase();
+    out += swEsc(raw.slice(last, match.index));
+    if (lookup.has(token)) {
+      out += `<span class="gc-mention-tag">${swEsc(match[0])}</span>`;
+    } else {
+      out += swEsc(match[0]);
+    }
+    last = match.index + match[0].length;
+  }
+  out += swEsc(raw.slice(last));
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// @MENTIONS — lightweight autocomplete on gc-input. Typing "@" followed by
+// letters opens a dropdown of matching group members; picking one inserts
+// their name as a single no-space token (e.g. "@RahulSharma ") so it matches
+// the same lookup the server uses to fire mention notifications.
+// ═══════════════════════════════════════════════════════════════════════════
+let _gcMentionDropdown = null;
+let _gcMentionActiveIdx = 0;
+let _gcMentionMatches = [];
+let _gcMentionRange = null; // { start, end } indices in input.value being replaced
+
+function _gcMentionClose() {
+  if (_gcMentionDropdown) { _gcMentionDropdown.remove(); _gcMentionDropdown = null; }
+  _gcMentionRange = null;
+  _gcMentionMatches = [];
+}
+
+function _gcMentionOnInput(input) {
+  const val = input.value;
+  const caret = input.selectionStart || 0;
+  // Find an unfinished "@token" run immediately before the caret
+  const before = val.slice(0, caret);
+  const m = before.match(/(^|\s)@([A-Za-z0-9_.]{0,40})$/);
+  if (!m) { _gcMentionClose(); return; }
+  const query = m[2].toLowerCase();
+  const start = caret - m[2].length - 1; // position of '@'
+  const members = (GC.activeMembers || []).filter(mm => mm.id !== gcMyId());
+  const matches = members.filter(mm => {
+    const name = (mm.nickname || mm.name || '').toLowerCase();
+    return !query || name.replace(/\s+/g, '').includes(query);
+  }).slice(0, 6);
+
+  if (!matches.length) { _gcMentionClose(); return; }
+  _gcMentionMatches = matches;
+  _gcMentionRange = { start, end: caret };
+  _gcMentionActiveIdx = 0;
+  _gcMentionRenderDropdown(input);
+}
+
+function _gcMentionRenderDropdown(input) {
+  _gcMentionDropdown?.remove();
+  const wrap = input.closest('.dm-compose') || input.parentElement;
+  if (!wrap) return;
+  const dd = document.createElement('div');
+  dd.className = 'gc-mention-dropdown';
+  _gcMentionMatches.forEach((mm, i) => {
+    const item = document.createElement('div');
+    item.className = 'gc-mention-item' + (i === _gcMentionActiveIdx ? ' active' : '');
+    item.innerHTML = `${gcAvatar(mm.nickname || mm.name, mm.photo, 26)}<span>${swEsc(mm.nickname || mm.name || 'Member')}</span>`;
+    item.onmousedown = e => { e.preventDefault(); _gcMentionPick(input, mm); };
+    dd.appendChild(item);
+  });
+  wrap.appendChild(dd);
+  _gcMentionDropdown = dd;
+}
+
+function _gcMentionPick(input, member) {
+  if (!_gcMentionRange) return;
+  const token = (member.nickname || member.name || 'member').replace(/\s+/g, '');
+  const val = input.value;
+  const newVal = val.slice(0, _gcMentionRange.start) + '@' + token + ' ' + val.slice(_gcMentionRange.end);
+  input.value = newVal;
+  const newCaret = _gcMentionRange.start + token.length + 2;
+  input.setSelectionRange?.(newCaret, newCaret);
+  input.focus();
+  _gcMentionClose();
+}
+
+function _gcMentionOnKeydown(e) {
+  if (!_gcMentionDropdown || !_gcMentionMatches.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _gcMentionActiveIdx = (_gcMentionActiveIdx + 1) % _gcMentionMatches.length;
+    _gcMentionRenderDropdown(e.target);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _gcMentionActiveIdx = (_gcMentionActiveIdx - 1 + _gcMentionMatches.length) % _gcMentionMatches.length;
+    _gcMentionRenderDropdown(e.target);
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    _gcMentionPick(e.target, _gcMentionMatches[_gcMentionActiveIdx]);
+  } else if (e.key === 'Escape') {
+    _gcMentionClose();
   }
 }
 
@@ -7371,22 +7903,29 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       });
       bubble.appendChild(quote);
     }
+    // Attachment (image) — renders above/instead of the text caption
+    const _isPhotoOnly = !isDeleted && !m.is_system && _attachImageToBubble(bubble, m);
+
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
     // E2EE: decrypt group message asynchronously
-    if (m.e2ee && !isDeleted && !m.is_system) {
+    if (_isPhotoOnly) {
+      // no caption to render
+    } else if (m.e2ee && !isDeleted && !m.is_system) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _gcMyId = mine ? m.sender_id : gcMyId();
       E2EE.decryptGroup(m, _gcMyId).then(pt => {
-        bodyNode.textContent = pt;
+        bodyNode.innerHTML = _gcHighlightMentions(pt);
         bodyNode.style.opacity = '';
         m._plaintext = pt;
+        _attachStrandPreviewToBubble(bubble, pt);
       }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
-      bodyNode.textContent = m.body;
+      bodyNode.innerHTML = _gcHighlightMentions(m.body);
     }
-    bubble.appendChild(bodyNode);
+    if (!_isPhotoOnly) bubble.appendChild(bodyNode);
+    if (!_isPhotoOnly && !m.is_system && !(m.e2ee && !isDeleted)) _attachStrandPreviewToBubble(bubble, m.body);
 
     wrap.appendChild(bubble);
 
@@ -7412,7 +7951,8 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
-    meta.innerHTML = `<span class="dm-msg-time">${gcFull(m.sent_at)}</span>${mine && !isDeleted && !m.id.startsWith('tmp-') ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
+    meta.dataset.metaFor = m.id;
+    meta.innerHTML = `${!isDeleted && m.edited_at ? `<span class="dm-edited-tag">edited</span>` : ''}<span class="dm-msg-time">${gcFull(m.sent_at)}</span>${mine && !isDeleted && !m.id.startsWith('tmp-') ? `<button class="dm-del-btn" data-id="${swEsc(m.id)}" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}`;
 
     const delBtn = meta.querySelector('.dm-del-btn');
     if (delBtn) {
@@ -7438,11 +7978,56 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
   });
 
   _markLastBubbleInGroups(container);
+  _gcRenderSeenBy();
 }
 
 function gcScrollBottom() {
   const el = $id('gc-msgs');
   if (el) el.scrollTop = el.scrollHeight;
+}
+
+// ─── "Seen by" avatar stack (WhatsApp-style, groups only) ────────────────────
+// Rather than tracking read state per message, the server keeps one row per
+// (group, member) — a last-read watermark (see GET /api/member/groups/:id/seen).
+// A member has "seen" a message if their last_read_at >= that message's
+// created_at. We only ever compute/show this for the single most recent
+// message in the thread, same as WhatsApp.
+function _gcRenderSeenBy() {
+  document.querySelectorAll('.gc-seenby').forEach(el => el.remove());
+  if (!GC.activeId || !GC.activeGroup) return;
+  const real = GC.msgs.filter(m => m.id && !String(m.id).startsWith('tmp-') && !m.is_system);
+  const last = real[real.length - 1];
+  if (!last) return;
+  const myId = gcMyId();
+  const seenMembers = (GC.reads || [])
+    .filter(r => r.member_id !== last.sender_id && r.member_id !== myId && new Date(r.last_read_at) >= new Date(last.sent_at))
+    .map(r => (GC.activeGroup.members || []).find(mm => mm.id === r.member_id))
+    .filter(Boolean);
+  if (!seenMembers.length) return;
+  const metaRow = document.querySelector(`.dm-meta[data-meta-for="${CSS.escape(last.id)}"]`);
+  if (!metaRow) return;
+  const shown = seenMembers.slice(0, 4);
+  const row = document.createElement('div');
+  row.className = 'gc-seenby';
+  row.title = 'Seen by ' + seenMembers.map(m => m.nickname || m.name || 'Member').join(', ');
+  row.innerHTML = shown.map(m => {
+    const initials = (m.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    return m.photo
+      ? `<img class="gc-seenby-avatar" src="${swEsc(m.photo)}" alt="">`
+      : `<span class="gc-seenby-avatar gc-seenby-initials">${swEsc(initials)}</span>`;
+  }).join('') + (seenMembers.length > 4 ? `<span class="gc-seenby-more">+${seenMembers.length - 4}</span>` : '');
+  metaRow.insertAdjacentElement('afterend', row);
+}
+
+async function _gcRefreshSeenBy() {
+  if (!GC.activeId) return;
+  try {
+    const reads = await api('GET', `/api/member/groups/${GC.activeId}/seen`);
+    if (Array.isArray(reads)) {
+      GC.reads = reads;
+      _gcRenderSeenBy();
+    }
+  } catch { /* silent — try again next poll tick */ }
 }
 
 // Show pinned message banner in the group topbar area
@@ -7485,6 +8070,9 @@ async function gcSend() {
   if (!input) return;
   const body = input.value.trim();
   if (!body || !GC.activeId) return;
+
+  // Edit mode — route to the PATCH flow instead of posting a new message.
+  if (_editState.group) { await _gcSubmitEdit(body); return; }
 
   if (GC.loadingMsgs) {
     const btn = $id('gc-send-btn');
@@ -7539,6 +8127,8 @@ async function gcSend() {
       const grp    = tmpBubble.closest('.dm-msg-group');
       const delBtn = grp?.querySelector('.dm-del-btn');
       if (delBtn) delBtn.dataset.id = realMsg.id;
+      const _gcMetaRow = grp?.querySelector('.dm-meta');
+      if (_gcMetaRow) _gcMetaRow.dataset.metaFor = realMsg.id;
       // Re-attach quick-heart with real ID
       _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('group', realMsg.id, emoji, tmpBubble));
       // Re-attach context menu with real ID
@@ -7561,6 +8151,7 @@ async function gcSend() {
       gcRenderMsgs(GC.msgs, list, myId);
       gcScrollBottom();
     }
+    _gcRenderSeenBy();
 
     const existing = GC.groups.find(g => g.id === GC.activeId);
     if (existing) {
@@ -7654,6 +8245,37 @@ async function _gcPollNewMessages() {
   if (atEnd) gcScrollBottom();
 }
 
+// ── Typing indicator (Group) ───────────────────────────────────────────────
+// Same pattern as DM: throttled ping on input, polled + rendered on tick.
+// Group typers can be multiple people, so the label lists up to two names.
+let _gcTypingLastSent = 0;
+function _gcPingTyping() {
+  if (!GC.activeId) return;
+  const now = Date.now();
+  if (now - _gcTypingLastSent < 2000) return;
+  _gcTypingLastSent = now;
+  api('POST', '/api/member/typing', { conv_key: GC.activeId, conv_type: 'group' }).catch(() => {});
+}
+async function _gcPollTyping() {
+  const el  = $id('gc-typing-indicator');
+  const txt = $id('gc-typing-text');
+  if (!GC.activeId) { el?.classList.remove('show'); return; }
+  try {
+    const typers = await api('GET', `/api/member/typing?conv_key=${encodeURIComponent(GC.activeId)}&conv_type=group`);
+    if (typers && typers.length) {
+      const label = typers.length === 1
+        ? `${typers[0].name} is typing…`
+        : typers.length === 2
+          ? `${typers[0].name} and ${typers[1].name} are typing…`
+          : `${typers[0].name} and ${typers.length - 1} others are typing…`;
+      if (txt) txt.textContent = label;
+      el?.classList.add('show');
+    } else {
+      el?.classList.remove('show');
+    }
+  } catch { /* silent */ }
+}
+
 async function gcPollTick() {
   if (!GC.activeId) {
     // No group open. The _sidebarRefreshTimer (every 10s) already handles the
@@ -7665,6 +8287,11 @@ async function gcPollTick() {
   // Same reasoning as DM: a groupmate's reaction on an existing message
   // doesn't come through the "since" cursor above, so refresh separately.
   try { await _refreshVisibleReactions('group'); } catch { /* silent */ }
+  // Refresh "seen by" watermarks so the avatar stack under the last message
+  // updates live as groupmates open the thread.
+  try { await _gcRefreshSeenBy(); } catch { /* silent */ }
+  // "X is typing…" indicator — cheap read-only poll, same cadence as reactions.
+  try { await _gcPollTyping(); } catch { /* silent */ }
 }
 
 function gcStartPolling() { gcPausePolling(); GC.poll = setInterval(gcPollTick, GC_POLL); }
@@ -8315,6 +8942,89 @@ if (document.readyState === "loading") {
 
 (function() {
 
+  // ── Mute/Archive — per-conversation settings loaded from the server ────────
+  // Keyed by conv_key (DM "a:b" or group id) -> { muted, archived }.
+  const _convSettings = {};
+  let _archivedExpanded = false;
+
+  async function _loadConvSettings() {
+    try {
+      const rows = await api('GET', '/api/member/conv-settings');
+      Object.keys(_convSettings).forEach(k => delete _convSettings[k]);
+      (rows || []).forEach(r => { _convSettings[r.conv_key] = { muted: !!r.muted, archived: !!r.archived }; });
+    } catch { /* table not migrated yet, or transient error — treat as no settings */ }
+  }
+  window._inboxConvSettings = _convSettings;
+
+  async function _setConvSetting(convKey, convType, patch) {
+    const prev = _convSettings[convKey] || { muted: false, archived: false };
+    _convSettings[convKey] = { ...prev, ...patch };
+    inboxRender();
+    try {
+      await api('POST', `/api/member/conv-settings/${encodeURIComponent(convKey)}`, { conv_type: convType, ...patch });
+    } catch (e) {
+      _convSettings[convKey] = prev; // roll back on failure
+      inboxRender();
+      if (typeof swShowToast === 'function') swShowToast('Could not update — try again.');
+    }
+  }
+
+  // ── Small context menu for a conv row: Mute/Unmute, Archive/Unarchive ──────
+  let _convCtxMenu = null;
+  function _dismissConvCtxMenu() { if (_convCtxMenu) { _convCtxMenu.remove(); _convCtxMenu = null; } }
+  document.addEventListener('click', _dismissConvCtxMenu);
+
+  function _showConvContextMenu(e, convKey, convType, label) {
+    e.preventDefault();
+    e.stopPropagation();
+    _dismissConvCtxMenu();
+
+    const settings = _convSettings[convKey] || { muted: false, archived: false };
+    const actions = [
+      {
+        label: settings.muted ? 'Unmute' : 'Mute',
+        icon: settings.muted
+          ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>'
+          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+        fn: () => _setConvSetting(convKey, convType, { muted: !settings.muted }),
+      },
+      {
+        label: settings.archived ? 'Unarchive' : 'Archive',
+        icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+        fn: () => _setConvSetting(convKey, convType, { archived: !settings.archived }),
+      },
+    ];
+
+    const menu = document.createElement('div');
+    menu.className = 'dm-ctx-menu';
+    _convCtxMenu = menu;
+    menu.innerHTML = actions.map((a, i) => `
+      <button class="dm-ctx-item" data-idx="${i}">${a.icon}<span>${a.label}</span></button>`).join('');
+    document.body.appendChild(menu);
+
+    const x = e.clientX ?? (e.touches?.[0]?.clientX ?? window.innerWidth / 2);
+    const y = e.clientY ?? (e.touches?.[0]?.clientY ?? window.innerHeight / 2);
+    const mw = menu.offsetWidth  || 160;
+    const mh = menu.offsetHeight || actions.length * 40;
+    menu.style.left = Math.max(8, Math.min(x, window.innerWidth  - mw - 8)) + 'px';
+    menu.style.top  = Math.max(8, Math.min(y, window.innerHeight - mh - 8)) + 'px';
+
+    menu.querySelectorAll('.dm-ctx-item').forEach((btn, i) => {
+      btn.addEventListener('click', ev => { ev.stopPropagation(); _dismissConvCtxMenu(); actions[i].fn(); });
+    });
+  }
+
+  // Right-click (desktop) + long-press (mobile) on a conv row
+  function _attachConvContextMenu(row, convKey, convType) {
+    row.addEventListener('contextmenu', e => _showConvContextMenu(e, convKey, convType));
+    let pressTimer = null;
+    row.addEventListener('touchstart', e => {
+      pressTimer = setTimeout(() => _showConvContextMenu(e, convKey, convType), 500);
+    }, { passive: true });
+    row.addEventListener('touchend',   () => clearTimeout(pressTimer));
+    row.addEventListener('touchmove',  () => clearTimeout(pressTimer));
+  }
+
   // ── Helper: group avatar HTML (rounded square, letter fallback) ─────────────
   function inboxGroupAv(group, size) {
     if (group.photo_url) {
@@ -8323,6 +9033,8 @@ if (document.readyState === "loading") {
     const letter = (group.avatar_text || group.name?.[0] || '?').slice(0, 2).toUpperCase();
     return `<div class="gc-group-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px">${swEsc(letter)}</div>`;
   }
+
+  const _muteIconHTML = '<svg class="dm-mute-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
 
   // ── Unified render: merges DM.convs + GC.groups, sorts by last_msg_at ───────
   // Hardened so that a single malformed conversation/group can never blank the
@@ -8341,83 +9053,95 @@ if (document.readyState === "loading") {
     const groups = GC.groups || [];
 
     if (!dms.length && !groups.length) {
-      container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
+      container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row, .inbox-archived-toggle').forEach(el => el.remove());
       $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = '');
       return;
     }
 
     // Tag each item with type and normalised sort key
-    const items = [
-      ...dms.map(c => ({ type: 'dm', data: c, ts: c.last_msg_at || '0' })),
+    const allItems = [
+      ...dms.map(c => ({ type: 'dm', data: c, ts: c.last_msg_at || '0', key: c.conv_key })),
       ...groups.map(g => ({
         type: 'group',
         data: g,
         // Normalise: server v2 sends last_msg_at flat; old server nested in last_msg
         ts: g.last_msg_at || g.last_msg?.created_at || g.created_at || '0',
+        key: g.id,
       })),
     ].sort((a, b) => (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
+
+    // Split into active + archived (archived chats collapse under a toggle,
+    // same idea as Instagram/WhatsApp's "Archived" row)
+    const items         = allItems.filter(i => !_convSettings[i.key]?.archived);
+    const archivedItems = allItems.filter(i =>  _convSettings[i.key]?.archived);
 
     const fragment = document.createDocumentFragment();
     let builtAny = false;
 
+    function buildRow(item) {
+      const row = document.createElement('div');
+      const muted = !!_convSettings[item.key]?.muted;
+
+      if (item.type === 'dm') {
+        const c = item.data;
+        row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
+        row.dataset.key  = c.conv_key;
+        row.dataset.type = 'dm';
+        const preview = c.last_is_e2ee
+          ? (c.last_sender_is_me ? 'You: ' : '') + '🔒 Encrypted message'
+          : c.last_snippet
+            ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
+            : 'No messages yet';
+        const displayName = (typeof nicksResolveDisplay === 'function')
+          ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
+          : (c.peer?.name || 'Member');
+        row.innerHTML = `
+          ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
+          <div class="dm-conv-info">
+            <div class="dm-conv-name">${swEsc(displayName)}${muted ? _muteIconHTML : ''}</div>
+            <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
+          </div>
+          <div class="dm-conv-right">
+            <span class="dm-conv-time">${dmTime(c.last_msg_at)}</span>
+            ${c.unread_count > 0 ? `<span class="dm-unread-pill">${c.unread_count > 9 ? '9+' : c.unread_count}</span>` : ''}
+          </div>`;
+        row.addEventListener('click', () => inboxOpenDm(c));
+        _attachConvContextMenu(row, c.conv_key, 'dm');
+
+      } else {
+        const g = item.data;
+        row.className = 'dm-conv-row inbox-group-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
+        row.dataset.key  = g.id;
+        row.dataset.type = 'group';
+        const gLastAt  = g.last_msg_at || g.last_msg?.created_at || g.created_at || null;
+        const gSnippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
+        let gPreview;
+        if (!gSnippet) {
+          gPreview = 'No messages yet';
+        } else if (g.last_is_system) {
+          gPreview = gSnippet;
+        } else {
+          gPreview = (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + gSnippet;
+        }
+        row.innerHTML = `
+          ${inboxGroupAv(g, 42)}
+          <div class="dm-conv-info">
+            <div class="dm-conv-name">${swEsc(g.name || 'Group')}${muted ? _muteIconHTML : ''}</div>
+            <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(gPreview)}</div>
+          </div>
+          <div class="dm-conv-right">
+            <span class="dm-conv-time">${dmTime(gLastAt)}</span>
+            ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
+          </div>`;
+        row.addEventListener('click', () => inboxOpenGroup(g));
+        _attachConvContextMenu(row, g.id, 'group');
+      }
+      return row;
+    }
+
     items.forEach(item => {
       try {
-        const row = document.createElement('div');
-
-        if (item.type === 'dm') {
-          const c = item.data;
-          row.className = 'dm-conv-row' + (c.conv_key === DM.activeKey ? ' dm-active-row' : '');
-          row.dataset.key  = c.conv_key;
-          row.dataset.type = 'dm';
-          const preview = c.last_is_e2ee
-            ? (c.last_sender_is_me ? 'You: ' : '') + '🔒 Encrypted message'
-            : c.last_snippet
-              ? (c.last_sender_is_me ? 'You: ' : '') + c.last_snippet
-              : 'No messages yet';
-          const displayName = (typeof nicksResolveDisplay === 'function')
-            ? nicksResolveDisplay(c.conv_key, c.peer?.id, c.peer?.name || 'Member')
-            : (c.peer?.name || 'Member');
-          row.innerHTML = `
-            ${dmAvatar(c.peer?.name, c.peer?.photo, 42)}
-            <div class="dm-conv-info">
-              <div class="dm-conv-name">${swEsc(displayName)}</div>
-              <div class="dm-conv-preview ${c.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(preview)}</div>
-            </div>
-            <div class="dm-conv-right">
-              <span class="dm-conv-time">${dmTime(c.last_msg_at)}</span>
-              ${c.unread_count > 0 ? `<span class="dm-unread-pill">${c.unread_count > 9 ? '9+' : c.unread_count}</span>` : ''}
-            </div>`;
-          row.addEventListener('click', () => inboxOpenDm(c));
-
-        } else {
-          const g = item.data;
-          row.className = 'dm-conv-row inbox-group-row' + (g.id === GC.activeId ? ' dm-active-row' : '');
-          row.dataset.key  = g.id;
-          row.dataset.type = 'group';
-          const gLastAt  = g.last_msg_at || g.last_msg?.created_at || g.created_at || null;
-          const gSnippet = g.last_snippet ?? g.last_msg?.body?.slice(0, 80) ?? null;
-          let gPreview;
-          if (!gSnippet) {
-            gPreview = 'No messages yet';
-          } else if (g.last_is_system) {
-            gPreview = gSnippet;
-          } else {
-            gPreview = (g.last_sender_is_me ? 'You: ' : (g.last_sender_name ? g.last_sender_name + ': ' : '')) + gSnippet;
-          }
-          row.innerHTML = `
-            ${inboxGroupAv(g, 42)}
-            <div class="dm-conv-info">
-              <div class="dm-conv-name">${swEsc(g.name || 'Group')}</div>
-              <div class="dm-conv-preview ${g.unread_count > 0 ? 'dm-has-unread' : ''}">${swEsc(gPreview)}</div>
-            </div>
-            <div class="dm-conv-right">
-              <span class="dm-conv-time">${dmTime(gLastAt)}</span>
-              ${g.unread_count > 0 ? `<span class="dm-unread-pill">${g.unread_count > 9 ? '9+' : g.unread_count}</span>` : ''}
-            </div>`;
-          row.addEventListener('click', () => inboxOpenGroup(g));
-        }
-
-        fragment.appendChild(row);
+        fragment.appendChild(buildRow(item));
         builtAny = true;
       } catch (e) {
         // Skip just this one row — never let a single bad conversation/group
@@ -8426,11 +9150,41 @@ if (document.readyState === "loading") {
       }
     });
 
+    // Archived section — collapsed by default, tap to expand/collapse.
+    if (archivedItems.length) {
+      const toggle = document.createElement('div');
+      toggle.className = 'dm-conv-row inbox-archived-toggle';
+      toggle.style.cssText = 'cursor:pointer;opacity:.75';
+      toggle.innerHTML = `
+        <div style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        </div>
+        <div class="dm-conv-info">
+          <div class="dm-conv-name">Archived (${archivedItems.length})</div>
+        </div>
+        <div class="dm-conv-right">
+          <span class="dm-conv-time">${_archivedExpanded ? '▲' : '▼'}</span>
+        </div>`;
+      toggle.addEventListener('click', () => { _archivedExpanded = !_archivedExpanded; inboxRender(); });
+      fragment.appendChild(toggle);
+      builtAny = true;
+
+      if (_archivedExpanded) {
+        archivedItems.forEach(item => {
+          try {
+            fragment.appendChild(buildRow(item));
+          } catch (e) {
+            console.error('[inbox] failed to render archived row, skipping:', e.message, item);
+          }
+        });
+      }
+    }
+
     // Only touch the live DOM once the new rows are fully built — if nothing
     // built successfully (e.g. every item somehow failed), leave whatever was
     // already on screen alone instead of leaving the user with a blank panel.
     if (!builtAny) return;
-    container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row').forEach(el => el.remove());
+    container.querySelectorAll('.dm-conv-row, .gc-conv-row, .inbox-group-row, .inbox-archived-toggle').forEach(el => el.remove());
     $id('dm-conv-empty') && ($id('dm-conv-empty').style.display = 'none');
     container.appendChild(fragment);
   }
@@ -8813,9 +9567,31 @@ if (document.readyState === "loading") {
     $id('gc-input')?.addEventListener('input', function() {
       this.style.height = '';
       this.style.height = Math.min(this.scrollHeight, 110) + 'px';
+      _gcMentionOnInput(this);
+      if (this.value.trim()) _gcPingTyping();
     });
+    $id('gc-input')?.addEventListener('keydown', e => _gcMentionOnKeydown(e), true);
     $id('gc-load-earlier')?.addEventListener('click', () => {
       if (typeof gcLoadMsgs === 'function') gcLoadMsgs(true);
+    });
+
+    // Photo attachment
+    $id('gc-attach-btn')?.addEventListener('click', () => $id('gc-attach-input')?.click());
+    $id('gc-attach-input')?.addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) _gcSendImage(file);
+    });
+
+    // In-thread search
+    $id('gc-thread-search-btn')?.addEventListener('click', () => _threadSearchOpen('group'));
+    $id('gc-search-close')?.addEventListener('click', () => _threadSearchClose('group'));
+    $id('gc-search-prev')?.addEventListener('click', () => _threadSearchNav('group', -1));
+    $id('gc-search-next')?.addEventListener('click', () => _threadSearchNav('group', 1));
+    $id('gc-search-input')?.addEventListener('input', e => _threadSearchRun('group', e.target.value));
+    $id('gc-search-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); _threadSearchNav('group', e.shiftKey ? -1 : 1); }
+      if (e.key === 'Escape') { e.preventDefault(); _threadSearchClose('group'); }
     });
     // NOTE: gc-info-btn is wired in the Detail Panel IIFE below (dpShowGroup) — don't double-bind here
   }
@@ -8917,7 +9693,47 @@ if (document.readyState === "loading") {
       : null;
     setText('dm-detail-nickname-label', nick ? `Nickname: ${nick}` : 'Nickname');
 
+    dpRefreshMuteArchiveLabels(convKey, 'dm');
+
     dpOpen();
+  }
+
+  // ── Mute / Archive labels (shared by DM + group panels) ───────────────────
+  function dpRefreshMuteArchiveLabels(convKey, convType) {
+    const s = (typeof convSettingsGet === 'function') ? convSettingsGet(convKey) : { muted: false, archived: false };
+    setText('dm-detail-mute-label', s.muted ? 'Unmute' : 'Mute');
+    setText('dm-detail-archive-label', s.archived ? 'Unarchive' : 'Archive');
+    document.getElementById('dm-detail-mute-btn')?.classList.toggle('dm-detail-danger', s.muted);
+    document.getElementById('dm-detail-archive-btn')?.classList.toggle('dm-detail-danger', s.archived);
+  }
+
+  async function dpToggleMute() {
+    const convKey  = DP.mode === 'group' ? DP.group?.id : (DM.activeKey || '');
+    const convType = DP.mode === 'group' ? 'group' : 'dm';
+    if (!convKey || typeof convSettingsToggleMute !== 'function') return;
+    const btn = document.getElementById('dm-detail-mute-btn');
+    btn && (btn.disabled = true);
+    try {
+      await convSettingsToggleMute(convKey, convType);
+      dpRefreshMuteArchiveLabels(convKey, convType);
+    } catch { /* toast already shown by convSettingsSet */ }
+    finally { btn && (btn.disabled = false); }
+  }
+
+  async function dpToggleArchive() {
+    const convKey  = DP.mode === 'group' ? DP.group?.id : (DM.activeKey || '');
+    const convType = DP.mode === 'group' ? 'group' : 'dm';
+    if (!convKey || typeof convSettingsToggleArchive !== 'function') return;
+    const btn = document.getElementById('dm-detail-archive-btn');
+    btn && (btn.disabled = true);
+    try {
+      await convSettingsToggleArchive(convKey, convType);
+      dpRefreshMuteArchiveLabels(convKey, convType);
+      if (typeof swShowToast === 'function') {
+        swShowToast(convSettingsGet(convKey).archived ? 'Conversation archived.' : 'Conversation unarchived.');
+      }
+    } catch { /* toast already shown by convSettingsSet */ }
+    finally { btn && (btn.disabled = false); }
   }
 
   // ── Populate for a Group ───────────────────────────────────────────────────
@@ -8984,6 +9800,7 @@ if (document.readyState === "loading") {
     document.getElementById('dm-detail-leave-btn').style.display = '';
     document.getElementById('dm-detail-block-btn').style.display = 'none';
     setText('dm-detail-nickname-label', 'Nicknames');
+    dpRefreshMuteArchiveLabels(group.id, 'group');
 
     const isAdminOrOwner = ['owner', 'admin'].includes(group.my_role);
     const myId = gcMyId();
@@ -9279,6 +10096,8 @@ if (document.readyState === "loading") {
     document.getElementById('dm-detail-close')?.addEventListener('click', dpClose);
     document.getElementById('dm-detail-nickname-btn')?.addEventListener('click', dpNickname);
     document.getElementById('dm-detail-block-btn')?.addEventListener('click', dpBlock);
+    document.getElementById('dm-detail-mute-btn')?.addEventListener('click', dpToggleMute);
+    document.getElementById('dm-detail-archive-btn')?.addEventListener('click', dpToggleArchive);
     document.getElementById('dm-detail-delete-btn')?.addEventListener('click', dpDeleteChat);
     document.getElementById('dm-detail-leave-btn')?.addEventListener('click', dpLeaveGroup);
     document.getElementById('dm-detail-add-member-btn')?.addEventListener('click', dpAddMembers);
