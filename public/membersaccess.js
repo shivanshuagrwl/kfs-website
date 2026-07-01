@@ -1704,8 +1704,17 @@ function openSettingsSheet() {
 }
 
 function closeSettingsSheet() {
-  $id('settings-sheet-backdrop')?.classList.remove('open');
-  $id('settings-sheet')?.classList.remove('open');
+  const sheet = $id('settings-sheet');
+  const backdrop = $id('settings-sheet-backdrop');
+  const hide = () => {
+    backdrop?.classList.remove('open');
+    sheet?.classList.remove('open');
+  };
+  if (sheet && sheet.classList.contains('open') && typeof window._kfsAnimateSheetOut === 'function') {
+    window._kfsAnimateSheetOut(sheet, '-50%', hide);
+  } else {
+    hide();
+  }
 }
 
 // panel: 'profile' | 'analytics' | 'movies' | 'works' | 'security' | 'activity'
@@ -4126,9 +4135,18 @@ async function swDeletePost(projectId,title) {
 }
 
 function swClosePostModal() {
-  const o=$id('studio-post-modal-overlay');if(o)o.style.display='none';
-  document.body.style.overflow='';
-  swResetPostModal();
+  const o = $id('studio-post-modal-overlay');
+  const sheet = $id('composer-sheet');
+  const finish = () => {
+    if (o) o.style.display = 'none';
+    document.body.style.overflow = '';
+    swResetPostModal();
+  };
+  if (o && sheet && o.style.display !== 'none' && typeof window._kfsAnimateSheetOut === 'function') {
+    window._kfsAnimateSheetOut(sheet, '0', finish);
+  } else {
+    finish();
+  }
 }
 
 function swCloseDetailModal() {
@@ -5981,7 +5999,7 @@ function _swDialogShow({ title, message, confirmLabel, cancelLabel, danger, aler
 
     const accentColor = danger ? '#ef4444' : '#3b82f6';
     overlay.innerHTML = `
-      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:24px 22px 20px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7);animation:dmSlideUp .18s cubic-bezier(.4,0,.2,1)">
+      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:24px 22px 20px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7);animation:dmSlideUp .26s cubic-bezier(.34,1.56,.64,1)">
         ${title ? `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;letter-spacing:-0.01em;color:var(--text,#f5f5f5)">${swEsc(title)}</h3>` : ''}
         <p style="margin:0 0 22px;font-size:13.5px;line-height:1.55;color:#aaa;white-space:pre-line">${message}</p>
         <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -6771,14 +6789,16 @@ let _longPressTimer = null;
 
 function _dismissCtxMenu() {
   if (_ctxMenu) { _ctxMenu.remove(); _ctxMenu = null; }
+  _dismissEmojiPicker();
 }
 document.addEventListener('click', _dismissCtxMenu);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') _dismissCtxMenu(); });
 
-function _showMsgContextMenu(e, info) {
+function _showMsgContextMenu(e, info, opts = {}) {
   e.preventDefault();
   e.stopPropagation();
   _dismissCtxMenu();
+  _dismissEmojiPicker();
 
   const { id, body, mine, senderName, type /* 'dm'|'group' */, senderId, isDeleted } = info;
 
@@ -6916,10 +6936,12 @@ function _showMsgContextMenu(e, info) {
     });
   }
 
-  menu.innerHTML = actions.map((a, i) => `
-    <button class="dm-ctx-item${a.danger ? ' dm-ctx-danger' : ''}" data-idx="${i}">
+  menu.innerHTML = actions.map((a, i) => {
+    const divider = (a.danger && i > 0 && !actions[i - 1].danger) ? '<div class="dm-ctx-divider"></div>' : '';
+    return `${divider}<button class="dm-ctx-item${a.danger ? ' dm-ctx-danger' : ''}" data-idx="${i}">
       ${a.icon}<span>${a.label}</span>
-    </button>`).join('');
+    </button>`;
+  }).join('');
 
   document.body.appendChild(menu);
 
@@ -6938,21 +6960,111 @@ function _showMsgContextMenu(e, info) {
       actions[i].fn();
     });
   });
+
+  // Apple/iMessage-style long-press: surface the quick-reaction bar directly
+  // above the bubble at the same time as the context menu, instead of making
+  // the person tap "React" as a separate step. Right-click (desktop) skips
+  // this — it's a touch-specific affordance.
+  if (opts.withReactionBar) {
+    const bubbleEl = document.querySelector(`[data-msg-id="${id}"]`);
+    if (bubbleEl) {
+      _showEmojiPicker(bubbleEl, emoji => {
+        _dismissCtxMenu();
+        _toggleReaction(type === 'group' ? 'group' : 'dm', id, emoji, bubbleEl);
+      });
+    }
+  }
 }
 
 function _attachMsgContextMenu(bubble, info) {
-  // Desktop: right-click
+  // Desktop: right-click (menu only — no reaction bar, that's a touch affordance)
   bubble.addEventListener('contextmenu', e => _showMsgContextMenu(e, info));
 
-  // Mobile: long-press (500 ms)
+  const wrap = bubble.closest('.dm-bubble-wrap') || bubble;
+  const { type, id, body, senderName } = info;
+
+  const SWIPE_TRIGGER = 64;   // px of drag before a release counts as "reply"
+  const SWIPE_CAP     = 84;   // px after which further drag gets rubber-banded
+  const SPRING = 'transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+  let touchStartX = 0, touchStartY = 0, swiping = false, swipeArmed = false;
+
+  function replyIcon() {
+    let icon = wrap.querySelector(':scope > .dm-swipe-reply-icon');
+    if (!icon) {
+      icon = document.createElement('div');
+      icon.className = 'dm-swipe-reply-icon';
+      icon.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
+      wrap.prepend(icon);
+    }
+    return icon;
+  }
+
+  // Mobile: long-press (500 ms) opens the combined reaction-bar + context
+  // menu, unless the touch turned into a horizontal swipe-to-reply instead.
   bubble.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    touchStartX = t.clientX; touchStartY = t.clientY;
+    swiping = false; swipeArmed = false;
     _longPressTimer = setTimeout(() => {
       _longPressTimer = null;
-      _showMsgContextMenu(e, info);
+      if (!swiping) _showMsgContextMenu(e, info, { withReactionBar: true });
     }, 500);
   }, { passive: true });
-  bubble.addEventListener('touchend',  () => { clearTimeout(_longPressTimer); _longPressTimer = null; });
-  bubble.addEventListener('touchmove', () => { clearTimeout(_longPressTimer); _longPressTimer = null; });
+
+  bubble.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+
+    if (!swipeArmed && !swiping) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        swipeArmed = true;
+        clearTimeout(_longPressTimer); _longPressTimer = null;
+      } else if (Math.abs(dy) > 8) {
+        // Vertical scroll — this isn't a swipe-to-reply gesture, bail.
+        clearTimeout(_longPressTimer); _longPressTimer = null;
+        return;
+      } else {
+        return;
+      }
+    }
+    if (!swipeArmed) return;
+
+    swiping = true;
+    let clamped = Math.max(0, dx); // right-swipe only, iMessage/WhatsApp style
+    if (clamped > SWIPE_CAP) clamped = SWIPE_CAP + (clamped - SWIPE_CAP) / 4; // rubber-band past cap
+    wrap.style.transition = 'none';
+    wrap.style.transform = `translateX(${clamped}px)`;
+
+    const icon = replyIcon();
+    const progress = Math.min(1, clamped / SWIPE_TRIGGER);
+    icon.style.opacity = String(progress);
+    icon.style.transform = `translateY(-50%) scale(${0.5 + progress * 0.5})`;
+  }, { passive: true });
+
+  bubble.addEventListener('touchend', () => {
+    clearTimeout(_longPressTimer); _longPressTimer = null;
+    if (swiping) {
+      const m = /translateX\(([-\d.]+)px\)/.exec(wrap.style.transform);
+      const dx = m ? parseFloat(m[1]) : 0;
+      wrap.style.transition = SPRING;
+      wrap.style.transform = 'translateX(0)';
+      const icon = wrap.querySelector(':scope > .dm-swipe-reply-icon');
+      if (icon) { icon.style.transition = 'opacity 0.2s ease'; icon.style.opacity = '0'; }
+      if (dx >= SWIPE_TRIGGER) {
+        _setReply(type === 'group' ? 'group' : 'dm', { id, body, sender: senderName });
+      }
+    }
+    swiping = false; swipeArmed = false;
+  });
+
+  bubble.addEventListener('touchcancel', () => {
+    clearTimeout(_longPressTimer); _longPressTimer = null;
+    wrap.style.transition = SPRING;
+    wrap.style.transform = 'translateX(0)';
+    swiping = false; swipeArmed = false;
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -10550,6 +10662,15 @@ if (document.readyState === "loading") {
     document.body.appendChild(el);
     _shareOverlay = el;
 
+    if (typeof window._kfsAttachSwipeDismiss === 'function') {
+      window._kfsAttachSwipeDismiss(
+        el.querySelector('#kfs-share-sheet'),
+        el.querySelector('#kfs-share-sheet > div:first-child'), // the drag pill
+        '0',
+        closeShareModal
+      );
+    }
+
     el.querySelector('#kfs-share-close').addEventListener('click', closeShareModal);
     el.addEventListener('click', e => { if (e.target === el) closeShareModal(); });
 
@@ -10777,8 +10898,13 @@ if (document.readyState === "loading") {
   }
 
   function closeShareModal() {
-    if (_shareOverlay) {
-      _shareOverlay.style.display = 'none';
+    if (!_shareOverlay) return;
+    const sheet = _shareOverlay.querySelector('#kfs-share-sheet');
+    const hide = () => { _shareOverlay.style.display = 'none'; };
+    if (sheet && _shareOverlay.style.display !== 'none' && typeof window._kfsAnimateSheetOut === 'function') {
+      window._kfsAnimateSheetOut(sheet, '0', hide);
+    } else {
+      hide();
     }
   }
   window.closeShareModal = closeShareModal;
@@ -11332,6 +11458,101 @@ if (document.readyState === "loading") {
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 10.5 SPRING SHEET POLISH — shared swipe-to-dismiss + spring exit animation
+//      for bottom sheets (share sheet, settings sheet, post composer).
+//      Dragging the handle down past a threshold — or a fast flick —
+//      dismisses with the same spring curve the button/backdrop close path
+//      uses; dragging up rubber-bands instead of moving freely.
+// ═══════════════════════════════════════════════════════════════════════════
+(function installSpringSheetHelpers() {
+  const SPRING = 'transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+  // Animate a sheet down and off-screen, then run the real close/cleanup
+  // (which hides the overlay etc). baseX is the sheet's own horizontal
+  // transform offset when open — '-50%' for sheets centered via left:50%,
+  // '0' for sheets that are just flex-centered with no X offset.
+  function animateSheetOut(sheet, baseX, doClose) {
+    if (!sheet) { doClose(); return; }
+    sheet.style.transition = SPRING;
+    sheet.style.transform = `translate(${baseX}, 100%)`;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      sheet.removeEventListener('transitionend', finish);
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      doClose();
+    };
+    sheet.addEventListener('transitionend', finish);
+    setTimeout(finish, 360); // safety net if transitionend never fires
+  }
+
+  // Wire drag-to-dismiss on a sheet via its drag handle element.
+  function attachSwipeDismiss(sheet, handle, baseX, doClose) {
+    if (!sheet || !handle || handle.dataset.swipeDismissWired) return;
+    handle.dataset.swipeDismissWired = '1';
+    const THRESHOLD = 90, FLICK_V = 0.55;
+    let startY = 0, lastY = 0, lastT = 0, v = 0, dragging = false;
+
+    handle.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      startY = lastY = t.clientY; lastT = Date.now(); v = 0; dragging = true;
+      sheet.style.transition = 'none';
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const t = e.touches[0];
+      let dy = t.clientY - startY;
+      if (dy < 0) dy = dy / 4; // rubber-band resistance dragging up past open
+      sheet.style.transform = `translate(${baseX}, ${dy}px)`;
+      const now = Date.now(), dt = now - lastT;
+      if (dt > 0) v = (t.clientY - lastY) / dt;
+      lastY = t.clientY; lastT = now;
+    }, { passive: true });
+
+    function release() {
+      if (!dragging) return;
+      dragging = false;
+      const m = /translate\([^,]+,\s*([-\d.]+)px\)/.exec(sheet.style.transform);
+      const dy = m ? parseFloat(m[1]) : 0;
+      if (dy > THRESHOLD || v > FLICK_V) {
+        animateSheetOut(sheet, baseX, doClose);
+      } else {
+        sheet.style.transition = SPRING;
+        sheet.style.transform = `translate(${baseX}, 0)`;
+      }
+    }
+    handle.addEventListener('touchend', release);
+    handle.addEventListener('touchcancel', release);
+  }
+
+  window._kfsAnimateSheetOut = animateSheetOut;
+  window._kfsAttachSwipeDismiss = attachSwipeDismiss;
+
+  function wireStaticSheets() {
+    attachSwipeDismiss(
+      document.getElementById('settings-sheet'),
+      document.querySelector('#settings-sheet .settings-sheet-handle'),
+      '-50%',
+      () => { if (typeof closeSettingsSheet === 'function') closeSettingsSheet(); }
+    );
+    attachSwipeDismiss(
+      document.getElementById('composer-sheet'),
+      document.querySelector('#composer-sheet .composer-handle'),
+      '0',
+      () => { if (typeof swClosePostModal === 'function') swClosePostModal(); }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireStaticSheets);
+  } else {
+    wireStaticSheets();
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 11. SETTINGS → CUSTOMIZATION — chat wallpaper (solid/gradient/photo) +
 //     message bubble color. Device-local only (localStorage), matches the
 //     "Saved only on this device" copy already in the panel. Wires up the
@@ -11421,7 +11642,9 @@ if (document.readyState === "loading") {
         <div class="cust-swatch-row">
           ${WALLPAPER_SOLIDS.map(c => `<div class="cust-swatch${wall.type === 'solid' && wall.value === c ? ' active' : ''}" style="background:${c}" data-wall-solid="${c}" title="${c}"></div>`).join('')}
           <div class="cust-swatch-custom${customActive ? ' active' : ''}" title="Custom color">
-            ${customActive ? `<span style="width:100%;height:100%;border-radius:50%;display:block;background:${swEsc(wall.value)}"></span>` : '+'}
+            ${customActive
+              ? `<span class="cust-swatch-custom-fill" style="background:${swEsc(wall.value)}"></span>`
+              : `<span class="cust-swatch-custom-ring"></span><svg class="cust-swatch-custom-plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`}
             <input type="color" id="cust-wall-color-input" value="${customActive ? wall.value : '#222222'}">
           </div>
         </div>
@@ -11503,7 +11726,9 @@ if (document.readyState === "loading") {
       <div class="cust-swatch-row">
         ${BUBBLE_PRESETS.map(p => `<div class="cust-swatch${bub.bg === p.bg ? ' active' : ''}" style="background:${p.bg}" data-bubble-bg="${p.bg}" data-bubble-text="${p.text}" title="${p.bg}"></div>`).join('')}
         <div class="cust-swatch-custom${customActive ? ' active' : ''}" title="Custom color">
-          ${customActive ? `<span style="width:100%;height:100%;border-radius:50%;display:block;background:${swEsc(bub.bg)}"></span>` : '+'}
+          ${customActive
+            ? `<span class="cust-swatch-custom-fill" style="background:${swEsc(bub.bg)}"></span>`
+            : `<span class="cust-swatch-custom-ring"></span><svg class="cust-swatch-custom-plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`}
           <input type="color" id="cust-bubble-color-input" value="${customActive ? bub.bg : '#f0f0f0'}">
         </div>
       </div>

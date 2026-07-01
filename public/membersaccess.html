@@ -34,6 +34,52 @@
         --chat-wallpaper-bg: transparent;
         --bubble-mine-bg: #f0f0f0;
         --bubble-mine-text: #0a0a0a;
+        /* Spring curve used across sheets, modals and tap feedback — a
+           slight overshoot-then-settle instead of a linear/eased curve. */
+        --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --spring-soft: cubic-bezier(0.32, 1.1, 0.5, 1);
+      }
+      /* ── Haptic-style micro-feedback ──────────────────────────────────────
+         Real haptics aren't possible on the web, so every tappable element
+         gets a tiny scale-bounce on press instead — the visual stand-in for
+         a click. Kept broad (button + role=button + the custom clickable
+         rows/cards used throughout) but excludes elements that already
+         drive their own transform (message bubbles mid-swipe, etc). */
+      button,
+      [role="button"],
+      .btn,
+      .btb-item,
+      .cust-seg-btn,
+      .cust-swatch,
+      .cust-swatch-custom,
+      .cust-upload-btn,
+      .settings-sheet-item,
+      .dm-ctx-item,
+      .dm-conv-row,
+      .ig-action-btn,
+      .kfs-share-action-btn,
+      .kfs-share-person,
+      .kfs-share-conv,
+      .composer-cancel-btn {
+        transition: transform 0.12s var(--spring);
+      }
+      button:active,
+      [role="button"]:active,
+      .btn:active,
+      .btb-item:active,
+      .cust-seg-btn:active,
+      .cust-swatch:active,
+      .cust-swatch-custom:active,
+      .cust-upload-btn:active,
+      .settings-sheet-item:active,
+      .dm-ctx-item:active,
+      .dm-conv-row:active,
+      .ig-action-btn:active,
+      .kfs-share-action-btn:active,
+      .kfs-share-person:active,
+      .kfs-share-conv:active,
+      .composer-cancel-btn:active {
+        transform: scale(0.96);
       }
       html,
       body {
@@ -238,7 +284,7 @@
         border-bottom: none;
         border-radius: 22px 22px 0 0;
         padding: 10px 14px max(16px, env(safe-area-inset-bottom));
-        transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+        transition: transform 0.3s var(--spring-soft, cubic-bezier(0.32, 1.1, 0.5, 1));
         box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
       }
       .settings-sheet.open {
@@ -1255,14 +1301,52 @@
         flex-shrink: 0;
         position: relative;
         overflow: hidden;
-        border: 2px dashed var(--faint);
+        border: 2px solid transparent;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         color: var(--muted);
-        font-size: 15px;
         background: #161616;
+      }
+      /* Inactive state: an Apple-style rainbow ring (conic gradient masked
+         into a donut) around a dark center with a plus icon — signals "pick
+         any color" the same way iOS's custom-color swatch does. */
+      .cust-swatch-custom-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+          from 180deg,
+          #ff375f,
+          #ff9f0a,
+          #ffd60a,
+          #34c759,
+          #0a84ff,
+          #bf5af2,
+          #ff375f
+        );
+        -webkit-mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 5px),
+          #000 calc(100% - 5px)
+        );
+        mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 5px),
+          #000 calc(100% - 5px)
+        );
+      }
+      .cust-swatch-custom-plus {
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+      }
+      .cust-swatch-custom-fill {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        display: block;
       }
       .cust-swatch-custom input[type="color"] {
         position: absolute;
@@ -1274,9 +1358,24 @@
         border: none;
         padding: 0;
       }
+      .cust-swatch-custom:hover {
+        transform: scale(1.08);
+      }
       .cust-swatch-custom.active {
         border-color: var(--text);
-        border-style: solid;
+      }
+      .cust-swatch-custom.active::after {
+        content: "✓";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+        z-index: 2;
       }
 
       .cust-preview {
@@ -7524,21 +7623,24 @@
             .dm-ctx-menu {
               position: fixed;
               z-index: 99999;
-              background: var(--surface, #1a1a1a);
+              background: rgba(26, 26, 26, 0.82);
+              backdrop-filter: blur(20px) saturate(1.6);
+              -webkit-backdrop-filter: blur(20px) saturate(1.6);
               border: 1px solid rgba(255, 255, 255, 0.1);
-              border-radius: 12px;
+              border-radius: 14px;
               padding: 6px;
-              min-width: 170px;
-              box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+              min-width: 180px;
+              box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
               display: flex;
               flex-direction: column;
               gap: 2px;
-              animation: ctxFadeIn 0.1s ease;
+              animation: ctxFadeIn 0.22s var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+              transform-origin: top left;
             }
             @keyframes ctxFadeIn {
               from {
                 opacity: 0;
-                transform: scale(0.95);
+                transform: scale(0.85);
               }
               to {
                 opacity: 1;
@@ -7562,7 +7664,7 @@
               width: 100%;
             }
             .dm-ctx-item:hover {
-              background: rgba(255, 255, 255, 0.07);
+              background: rgba(255, 255, 255, 0.09);
             }
             .dm-ctx-item svg {
               flex-shrink: 0;
@@ -7573,6 +7675,12 @@
             }
             .dm-ctx-item.dm-ctx-danger svg {
               opacity: 1;
+            }
+            .dm-ctx-divider {
+              height: 1px;
+              background: rgba(255, 255, 255, 0.08);
+              margin: 4px 4px;
+              flex-shrink: 0;
             }
 
             /* ── Instagram DM: message row — bubble + action buttons side by side ── */
