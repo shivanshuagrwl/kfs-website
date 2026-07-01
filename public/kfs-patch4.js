@@ -68,13 +68,58 @@
   ];
 
   function _load(key)     { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
-  function _save(key,val) { try { val===null ? localStorage.removeItem(key) : localStorage.setItem(key,JSON.stringify(val)); } catch {} }
+  function _save(key,val) {
+    try {
+      val===null ? localStorage.removeItem(key) : localStorage.setItem(key,JSON.stringify(val));
+      return true;
+    } catch {
+      // Storage full/blocked — most commonly an uncompressed photo wallpaper
+      // pushing past the ~5-10MB localStorage quota. Callers now check this
+      // instead of assuming the save always worked.
+      return false;
+    }
+  }
   function _isDark(hex)   {
     const c=(hex||'').replace('#','');
     if(c.length!==6) return true;
     return (0.299*parseInt(c.slice(0,2),16)+0.587*parseInt(c.slice(2,4),16)+0.114*parseInt(c.slice(4,6),16)) < 140;
   }
   function _esc(s) { return (s||'').replace(/"/g,'&quot;'); }
+
+  // Downscales + re-encodes an uploaded photo as a compressed JPEG data URL
+  // before it goes anywhere near localStorage. A raw phone photo is often
+  // 4-8MB, and base64 inflates that ~33% on top — comfortably enough to blow
+  // through the origin's ~5-10MB localStorage quota on its own. When that
+  // happened, the quota error was swallowed silently and the wallpaper just
+  // never changed (with whatever was previously saved — a solid color, or
+  // nothing — staying in place). Capping the long edge at 1280px and
+  // re-encoding at quality 0.78 keeps this to a few hundred KB.
+  function _resizeImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          try { resolve(canvas.toDataURL('image/jpeg', quality)); }
+          catch (e) { reject(e); }
+        };
+        img.onerror = () => reject(new Error('Could not read that image.'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.readAsDataURL(file);
+    });
+  }
 
   // Apply saved customization to CSS vars
   function applyCustomizationV2() {
@@ -240,10 +285,25 @@
       document.getElementById('cust-photo-input')?.addEventListener('change', e => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 5*1024*1024) { try { swShowToast('Please choose an image under 5MB.'); } catch {} return; }
-        const reader = new FileReader();
-        reader.onload = () => { _save(WALL_KEY,{type:'photo',value:reader.result}); applyCustomizationV2(); _renderWall(); _updatePreview(); };
-        reader.readAsDataURL(file);
+        if (file.size > 8*1024*1024) { try { swShowToast('Please choose an image under 8MB.'); } catch {} e.target.value = ''; return; }
+        const btn = document.getElementById('cust-photo-upload-btn');
+        const prevLabel = btn ? btn.textContent : null;
+        if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+        _resizeImageFile(file, 1280, 0.78)
+          .then(dataUrl => {
+            const ok = _save(WALL_KEY,{type:'photo',value:dataUrl});
+            if (!ok) {
+              try { swShowToast("Couldn't save that photo — try a smaller image."); } catch {}
+              if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+              return;
+            }
+            applyCustomizationV2(); _renderWall(); _updatePreview();
+          })
+          .catch(() => {
+            try { swShowToast('Could not process that image.'); } catch {}
+            if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+          })
+          .finally(() => { e.target.value = ''; });
       });
       section.querySelector('#cust-photo-remove-btn')?.addEventListener('click', () => {
         _save(WALL_KEY,{type:'default'}); applyCustomizationV2(); _renderWall(); _updatePreview();
