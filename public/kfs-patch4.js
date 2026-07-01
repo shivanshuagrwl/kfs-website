@@ -85,6 +85,22 @@
     return (0.299*parseInt(c.slice(0,2),16)+0.587*parseInt(c.slice(2,4),16)+0.114*parseInt(c.slice(4,6),16)) < 140;
   }
   function _esc(s) { return (s||'').replace(/"/g,'&quot;'); }
+  function _hexToRgb(hex) {
+    const c = (hex||'#0a0a0a').replace('#','');
+    if (c.length !== 6) return '10,10,10';
+    return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`;
+  }
+  // Builds the CSS `background` value for a photo wallpaper at a given opacity
+  // (0-100). We can't use the `opacity` CSS property directly on the chat
+  // container — that would fade the message bubbles too. Instead we layer a
+  // solid wash (matching the app's background color) over the photo at
+  // (1 - opacity) alpha, using two background layers. At opacity 100 the wash
+  // is fully transparent, i.e. the photo shows exactly as uploaded.
+  function _photoBg(dataUrl, opacity) {
+    const op  = Math.max(15, Math.min(100, Number(opacity) || 100)) / 100;
+    const rgb = _hexToRgb((_load(APP_BG_KEY)?.value) || '#0a0a0a');
+    return `linear-gradient(rgba(${rgb},${(1-op).toFixed(3)}),rgba(${rgb},${(1-op).toFixed(3)})), url("${dataUrl}")`;
+  }
 
   // Downscales + re-encodes an uploaded photo as a compressed JPEG data URL
   // before it goes anywhere near localStorage. A raw phone photo is often
@@ -129,7 +145,7 @@
     if (!wall || wall.type === 'default')  root.setProperty('--chat-wallpaper-bg','transparent');
     else if (wall.type === 'solid')        root.setProperty('--chat-wallpaper-bg', wall.value);
     else if (wall.type === 'gradient')     root.setProperty('--chat-wallpaper-bg', wall.value);
-    else if (wall.type === 'photo')        root.setProperty('--chat-wallpaper-bg', `url("${wall.value}")`);
+    else if (wall.type === 'photo')        root.setProperty('--chat-wallpaper-bg', _photoBg(wall.value, wall.opacity));
     // App background
     const appBg = _load(APP_BG_KEY);
     if (appBg && appBg.value) {
@@ -166,7 +182,7 @@
   function _previewBg() {
     const wall = _load(WALL_KEY) || { type: 'default' };
     if (wall.type === 'solid' || wall.type === 'gradient') return wall.value;
-    if (wall.type === 'photo') return `url("${wall.value}") center/cover no-repeat`;
+    if (wall.type === 'photo') return `${_photoBg(wall.value, wall.opacity)} center/cover no-repeat`;
     return 'var(--bg)';
   }
 
@@ -271,16 +287,26 @@
     } else {
       // Photo
       const hasPhoto = wall.type === 'photo' && wall.value;
+      const curOpacity = hasPhoto ? Math.max(15, Math.min(100, Number(wall.opacity) || 100)) : 100;
       section.innerHTML = `
         <div class="cust-photo-row">
           <div class="cust-photo-thumb">${hasPhoto?`<img src="${wall.value}">`:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`}</div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="cust-upload-btn" id="cust-photo-upload-btn">Upload Photo</button>
+            <button class="cust-upload-btn" id="cust-photo-upload-btn">${hasPhoto?'Change Photo':'Upload Photo'}</button>
             ${hasPhoto?`<button class="cust-photo-remove" id="cust-photo-remove-btn">Remove photo</button>`:''}
           </div>
           <input type="file" id="cust-photo-input" accept="image/*" style="display:none">
         </div>
-        <div class="cust-hint">Best with a photo at least 800px wide. Stored only on this device.</div>`;
+        <div class="cust-hint">Best with a photo at least 800px wide. Stored only on this device.</div>
+        ${hasPhoto ? `
+        <div style="margin-top:14px;background:#161616;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:600;color:#ccc">Photo opacity</span>
+            <span id="cust-wall-opacity-val" style="font-size:12px;color:#888;width:36px;text-align:right">${curOpacity}%</span>
+          </div>
+          <input type="range" id="cust-wall-opacity-slider" min="15" max="100" value="${curOpacity}" style="width:100%;accent-color:#fff">
+          <div class="cust-hint" style="margin-top:6px">Lower this if the photo makes messages hard to read.</div>
+        </div>` : ''}`;
       document.getElementById('cust-photo-upload-btn')?.addEventListener('click', () => document.getElementById('cust-photo-input')?.click());
       document.getElementById('cust-photo-input')?.addEventListener('change', e => {
         const file = e.target.files?.[0];
@@ -291,7 +317,10 @@
         if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
         _resizeImageFile(file, 1280, 0.78)
           .then(dataUrl => {
-            const ok = _save(WALL_KEY,{type:'photo',value:dataUrl});
+            // Keep whatever opacity the user already had dialed in when
+            // replacing a photo; default to fully opaque for a first upload.
+            const prevOpacity = (wall.type === 'photo' && wall.opacity) ? wall.opacity : 100;
+            const ok = _save(WALL_KEY,{type:'photo',value:dataUrl,opacity:prevOpacity});
             if (!ok) {
               try { swShowToast("Couldn't save that photo — try a smaller image."); } catch {}
               if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
@@ -308,6 +337,22 @@
       section.querySelector('#cust-photo-remove-btn')?.addEventListener('click', () => {
         _save(WALL_KEY,{type:'default'}); applyCustomizationV2(); _renderWall(); _updatePreview();
       });
+      const opSlider = document.getElementById('cust-wall-opacity-slider');
+      if (opSlider) {
+        opSlider.addEventListener('input', () => {
+          const val = parseInt(opSlider.value, 10) || 100;
+          const valLbl = document.getElementById('cust-wall-opacity-val');
+          if (valLbl) valLbl.textContent = `${val}%`;
+          // Live-preview without hitting storage on every tick of the slider
+          document.documentElement.style.setProperty('--chat-wallpaper-bg', _photoBg(wall.value, val));
+          _updatePreview();
+        });
+        opSlider.addEventListener('change', () => {
+          const val = parseInt(opSlider.value, 10) || 100;
+          _save(WALL_KEY, { type: 'photo', value: wall.value, opacity: val });
+          applyCustomizationV2(); _updatePreview();
+        });
+      }
     }
   }
 
