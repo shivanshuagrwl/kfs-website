@@ -2715,14 +2715,14 @@ function escHtml(str) {
 }
 
 async function deleteCollab(token, btn) {
-  if (!confirm('Delete this collab post? This cannot be undone.')) return;
+  if (!await swConfirm('Delete this collab post? This cannot be undone.', { title: 'Delete collab post', confirmLabel: 'Delete', danger: true })) return;
   btn.disabled = true; btn.textContent = 'Deleting…';
   try {
     await api('DELETE', `/api/collaborate/${token}`);
     await loadMyCollabs();
   } catch (e) {
     btn.disabled = false; btn.textContent = 'Delete';
-    alert('Could not delete: ' + e.message);
+    swAlert(e.message || 'Could not delete collab post.', { title: 'Error' });
   }
 }
 
@@ -3341,7 +3341,7 @@ async function swPostComment(projectId, parentId) {
     const list = $id('sw-comments-list');
     if (list) list.innerHTML = swRenderComments(comments, projectId);
     if (parentId) { const w=$id(`sw-reply-input-${parentId}`); if(w)w.innerHTML=''; }
-  } catch (e) { alert(e.message||'Could not post comment.'); }
+  } catch (e) { swAlert(e.message||'Could not post comment.', { title: 'Error' }); }
 }
 
 // ── Reactions ─────────────────────────────────────────────────────────────
@@ -3682,7 +3682,7 @@ async function swOpenEditModal(projectId) {
     swRenderCollabPicker();
     _fillComposerAuthor();
     const o = $id('studio-post-modal-overlay'); if (o) { o.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
-  } catch(e) { alert('Could not load post for editing: ' + e.message); }
+  } catch(e) { swAlert('Could not load post for editing: ' + e.message, { title: 'Error' }); }
 }
 
 function swResetPostModal() {
@@ -4117,12 +4117,12 @@ function _swShowTempBanOverlay(suspendedUntil) {
 
 
 async function swDeletePost(projectId,title) {
-  if(!confirm(`Delete "${title}"? This cannot be undone.`))return;
+  if (!await swConfirm(`Delete "${swEsc(title)}"? This cannot be undone.`, { title: 'Delete post', confirmLabel: 'Delete', danger: true })) return;
   try {
     await api('DELETE',`/api/member/studio/projects/${projectId}`);
     await swLoadMyPosts();
     await swLoadFeed(true);
-  } catch(e){alert('Could not delete: '+e.message);}
+  } catch(e){ swAlert('Could not delete: '+e.message, { title: 'Error' }); }
 }
 
 function swClosePostModal() {
@@ -4397,7 +4397,7 @@ async function toggleFollow(memberId, btnEl) {
     NW.followingExhausted = false;
   } catch (e) {
     if (btnEl) btnEl.disabled = false;
-    alert(e.message || 'Could not update follow status.');
+    swAlert(e.message || 'Could not update follow status.', { title: 'Error' });
   }
 }
 
@@ -5547,7 +5547,7 @@ function _vioFormatMs(ms) {
 }
 
 async function dmDeleteMsg(msgId, bubble, btn) {
-  if (!confirm('Delete this message?')) return;
+  if (!await swConfirm('Delete this message?', { confirmLabel: 'Delete', danger: true })) return;
   try {
     await api('DELETE', `/api/member/dm/messages/${msgId}`);
     bubble.textContent = '[deleted]';
@@ -5725,8 +5725,91 @@ function dmClosePicker() {
   $id('dm-picker-overlay') && ($id('dm-picker-overlay').style.display = 'none');
 }
 
-// ─── Conversation search/filter ───────────────────────────────────────────────
+// ─── In-thread message search (DM + group) ────────────────────────────────────
+// Shared by the DM panel (#dm-*) and group panel (#gc-*) via the `kind` param.
+const _threadSearchState = {
+  dm:    { open: false, query: '', matches: [], idx: -1 },
+  group: { open: false, query: '', matches: [], idx: -1 },
+};
 
+function _threadSearchIds(kind) {
+  return kind === 'group'
+    ? { bar: 'gc-search-bar', input: 'gc-search-input', count: 'gc-search-count', list: 'gc-msg-list', area: 'gc-msgs' }
+    : { bar: 'dm-search-bar', input: 'dm-search-input', count: 'dm-search-count', list: 'dm-msg-list',  area: 'dm-msgs' };
+}
+
+function _threadSearchOpen(kind) {
+  const st = _threadSearchState[kind];
+  const ids = _threadSearchIds(kind);
+  st.open = true;
+  $id(ids.bar)?.classList.add('show');
+  const input = $id(ids.input);
+  if (input) { input.value = st.query; input.focus(); }
+  if (st.query) _threadSearchRun(kind, st.query);
+}
+
+function _threadSearchClose(kind) {
+  const st = _threadSearchState[kind];
+  const ids = _threadSearchIds(kind);
+  st.open = false;
+  st.query = '';
+  st.matches = [];
+  st.idx = -1;
+  $id(ids.bar)?.classList.remove('show');
+  const input = $id(ids.input);
+  if (input) input.value = '';
+  const count = $id(ids.count);
+  if (count) count.textContent = '';
+  document.querySelectorAll(`#${ids.list} .dm-bubble.dm-search-match, #${ids.list} .dm-bubble.dm-search-current`)
+    .forEach(el => el.classList.remove('dm-search-match', 'dm-search-current'));
+}
+
+function _threadSearchRun(kind, query) {
+  const st = _threadSearchState[kind];
+  const ids = _threadSearchIds(kind);
+  st.query = query || '';
+
+  document.querySelectorAll(`#${ids.list} .dm-bubble.dm-search-match, #${ids.list} .dm-bubble.dm-search-current`)
+    .forEach(el => el.classList.remove('dm-search-match', 'dm-search-current'));
+
+  const q = st.query.trim().toLowerCase();
+  const count = $id(ids.count);
+  if (!q) {
+    st.matches = [];
+    st.idx = -1;
+    if (count) count.textContent = '';
+    return;
+  }
+
+  const bubbles = Array.from(document.querySelectorAll(`#${ids.list} .dm-bubble`));
+  st.matches = bubbles.filter(b => (b.querySelector('.dm-bubble-text')?.textContent || '').toLowerCase().includes(q));
+  st.matches.forEach(b => b.classList.add('dm-search-match'));
+  st.idx = st.matches.length ? 0 : -1;
+
+  if (count) count.textContent = st.matches.length ? `${st.idx + 1}/${st.matches.length}` : '0/0';
+  if (st.idx >= 0) _threadSearchHighlightCurrent(kind);
+}
+
+function _threadSearchHighlightCurrent(kind) {
+  const st = _threadSearchState[kind];
+  const ids = _threadSearchIds(kind);
+  st.matches.forEach(b => b.classList.remove('dm-search-current'));
+  const current = st.matches[st.idx];
+  if (!current) return;
+  current.classList.add('dm-search-current');
+  current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const count = $id(ids.count);
+  if (count) count.textContent = `${st.idx + 1}/${st.matches.length}`;
+}
+
+function _threadSearchNav(kind, dir) {
+  const st = _threadSearchState[kind];
+  if (!st.matches.length) return;
+  st.idx = (st.idx + dir + st.matches.length) % st.matches.length;
+  _threadSearchHighlightCurrent(kind);
+}
+
+// ─── Conversation search/filter ───────────────────────────────────────────────
 function dmFilterConvs(q) {
   const query = (q || '').toLowerCase().trim();
   dmRenderConvs(query ? DM.convs.filter(c => (c.peer?.name || '').toLowerCase().includes(query)) : DM.convs);
@@ -5869,8 +5952,9 @@ function swCopyPostLink(postId) {
   }).catch(() => { swShowToast('Could not copy — try manually.'); });
 }
 
-function swConfirmDeletePost(postId) {
-  if (!confirm('Delete this post? This cannot be undone.')) return;
+async function swConfirmDeletePost(postId) {
+  const ok = await swConfirm('Delete this post? This cannot be undone.', { title: 'Delete post', confirmLabel: 'Delete', danger: true });
+  if (!ok) return;
   // Use existing delete function if available
   if (typeof swDeleteProject === 'function') { swDeleteProject(postId); return; }
   // Fallback — use api() helper so CSRF is automatically attached
@@ -5880,7 +5964,55 @@ function swConfirmDeletePost(postId) {
       if (card) card.remove();
       swShowToast('Post deleted.');
     })
-    .catch(e => alert(e.message || 'Error deleting post. Please try again.'));
+    .catch(e => swAlert(e.message || 'Error deleting post. Please try again.'));
+}
+
+// ── Custom confirm/alert dialogs (replaces native confirm()/alert()) ─────────
+// swConfirm(message, opts) -> Promise<boolean>   (true = user confirmed)
+// swAlert(message, opts)   -> Promise<void>
+// opts: { title, confirmLabel, cancelLabel, danger }
+function _swDialogShow({ title, message, confirmLabel, cancelLabel, danger, alertOnly } = {}) {
+  return new Promise(resolve => {
+    document.getElementById('sw-dialog-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sw-dialog-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99995;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;animation:dmFadeIn .15s ease';
+
+    const accentColor = danger ? '#ef4444' : '#3b82f6';
+    overlay.innerHTML = `
+      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#222);border-radius:18px;padding:24px 22px 20px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.7);animation:dmSlideUp .18s cubic-bezier(.4,0,.2,1)">
+        ${title ? `<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;letter-spacing:-0.01em;color:var(--text,#f5f5f5)">${swEsc(title)}</h3>` : ''}
+        <p style="margin:0 0 22px;font-size:13.5px;line-height:1.55;color:#aaa;white-space:pre-line">${message}</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          ${alertOnly ? '' : `<button id="sw-dialog-cancel" style="background:transparent;border:1px solid var(--border,#333);color:#888;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='#555';this.style.color='#f5f5f5'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${swEsc(cancelLabel || 'Cancel')}</button>`}
+          <button id="sw-dialog-ok" style="background:${accentColor};color:#fff;border:none;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">${swEsc(confirmLabel || 'OK')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const cleanup = (result) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+      if (e.key === 'Enter')  { e.preventDefault(); cleanup(true); }
+    };
+    document.addEventListener('keydown', onKey);
+
+    overlay.querySelector('#sw-dialog-ok').addEventListener('click', () => cleanup(true));
+    overlay.querySelector('#sw-dialog-cancel')?.addEventListener('click', () => cleanup(false));
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+    overlay.querySelector('#sw-dialog-ok')?.focus();
+  });
+}
+function swConfirm(message, opts = {}) {
+  return _swDialogShow({ message, ...opts });
+}
+function swAlert(message, opts = {}) {
+  return _swDialogShow({ message, alertOnly: true, confirmLabel: opts.confirmLabel || 'OK', ...opts }).then(() => {});
 }
 
 function swShowToast(msg, duration = 2800) {
@@ -8191,7 +8323,7 @@ async function gcSend() {
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 async function gcDeleteMsg(msgId, bubble, btn) {
-  if (!confirm('Delete this message?')) return;
+  if (!await swConfirm('Delete this message?', { title: 'Delete message', confirmLabel: 'Delete', danger: true })) return;
   try {
     await api('DELETE', `/api/member/groups/${GC.activeId}/messages/${msgId}`);
     bubble.textContent = '[deleted]';
@@ -8744,7 +8876,7 @@ async function gcStartRename() {
 }
 
 async function gcRemoveMember(memberId) {
-  if (!confirm('Remove this member from the group?')) return;
+  if (!await swConfirm('Remove this member from the group?', { title: 'Remove member', confirmLabel: 'Remove', danger: true })) return;
   try {
     await api('DELETE', `/api/member/groups/${GC.activeId}/members/${memberId}`);
     const _removeOverlay = document.getElementById('gc-info-overlay');
@@ -8752,12 +8884,12 @@ async function gcRemoveMember(memberId) {
     // Re-open info so member count and list updates immediately
     gcOpenInfo();
   } catch (e) {
-    alert(e.message || 'Could not remove member.');
+    swAlert(e.message || 'Could not remove member.');
   }
 }
 
 async function gcLeave() {
-  if (!confirm('Leave this group?')) return;
+  if (!await swConfirm('Leave this group?', { title: 'Leave group', confirmLabel: 'Leave', danger: true })) return;
   const myId    = gcMyId();
   const groupId = GC.activeId;
   try {
@@ -8770,12 +8902,12 @@ async function gcLeave() {
     if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
     else gcRenderGroups(GC.groups);
   } catch (e) {
-    alert(e.message || 'Could not leave group.');
+    swAlert(e.message || 'Could not leave group.');
   }
 }
 
 async function gcDeleteGroup() {
-  if (!confirm('Delete this group for ALL members? This cannot be undone.')) return;
+  if (!await swConfirm('Delete this group for ALL members? This cannot be undone.', { title: 'Delete group', confirmLabel: 'Delete', danger: true })) return;
   const groupId = GC.activeId;
   try {
     await api('DELETE', `/api/member/groups/${groupId}`);
@@ -8788,7 +8920,7 @@ async function gcDeleteGroup() {
     else gcRenderGroups(GC.groups);
     if (typeof swShowToast === 'function') swShowToast('Group deleted.');
   } catch (e) {
-    alert(e.message || 'Could not delete group.');
+    swAlert(e.message || 'Could not delete group.');
   }
 }
 
@@ -8955,6 +9087,21 @@ if (document.readyState === "loading") {
     } catch { /* table not migrated yet, or transient error — treat as no settings */ }
   }
   window._inboxConvSettings = _convSettings;
+
+  // Exposed so the DM/group detail-panel Mute & Archive buttons (dpToggleMute /
+  // dpToggleArchive) can call them by name — they were previously undefined,
+  // which made those buttons silently no-op.
+  window.convSettingsGet = function(convKey) {
+    return _convSettings[convKey] || { muted: false, archived: false };
+  };
+  window.convSettingsToggleMute = function(convKey, convType) {
+    const cur = _convSettings[convKey] || { muted: false, archived: false };
+    return _setConvSetting(convKey, convType, { muted: !cur.muted });
+  };
+  window.convSettingsToggleArchive = function(convKey, convType) {
+    const cur = _convSettings[convKey] || { muted: false, archived: false };
+    return _setConvSetting(convKey, convType, { archived: !cur.archived });
+  };
 
   async function _setConvSetting(convKey, convType, patch) {
     const prev = _convSettings[convKey] || { muted: false, archived: false };
@@ -9386,6 +9533,7 @@ if (document.readyState === "loading") {
         }
       })(),
       nicksPromise,
+      _loadConvSettings(),
     ]);
     // Mark convs as having been fetched at least once — lets other call sites
     // (e.g. the share modal) tell "never loaded" apart from "loaded, but empty".
@@ -9835,7 +9983,7 @@ if (document.readyState === "loading") {
       // Wire remove buttons
       listEl.querySelectorAll('.dp-remove-member-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirm('Remove this member from the group?')) return;
+          if (!await swConfirm('Remove this member from the group?', { title: 'Remove member', confirmLabel: 'Remove', danger: true })) return;
           const memberId = btn.dataset.id;
           try {
             await api('DELETE', `/api/member/groups/${group.id}/members/${memberId}`);
@@ -9845,7 +9993,7 @@ if (document.readyState === "loading") {
             DP.group = GC.activeGroup;
             dpShowGroup(GC.activeGroup);
             if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
-          } catch (e) { alert(e.message || 'Could not remove member.'); }
+          } catch (e) { swAlert(e.message || 'Could not remove member.'); }
         });
       });
     }
@@ -9918,7 +10066,7 @@ if (document.readyState === "loading") {
       }
       deleteGrpBtn.style.display = '';
       deleteGrpBtn.onclick = async () => {
-        if (!confirm('Delete "' + group.name + '" for everyone? This cannot be undone.')) return;
+        if (!await swConfirm('Delete "' + group.name + '" for everyone? This cannot be undone.', { title: 'Delete group', confirmLabel: 'Delete', danger: true })) return;
         try {
           await api('DELETE', '/api/member/groups/' + group.id);
           if (typeof GC !== 'undefined') {
@@ -10042,13 +10190,13 @@ if (document.readyState === "loading") {
   // the chat is completely untouched — nothing is deleted for them, and no
   // messages are deleted server-side at all, just hidden below my watermark.
   async function dpDeleteChat() {
-    if (!confirm('Clear this chat? Messages will be removed for you only — the other person will still see them.')) return;
+    if (!await swConfirm('Messages will be removed for you only — the other person will still see them.', { title: 'Clear this chat?', confirmLabel: 'Clear', danger: true })) return;
     const convKey = DM.activeKey;
     if (!convKey) { dpClose(); if (typeof dmGoBack === 'function') dmGoBack(); return; }
     try {
       await api('POST', `/api/member/dm/conversations/${encodeURIComponent(convKey)}/clear`);
     } catch (e) {
-      alert(e.message || 'Could not clear chat. Please try again.');
+      swAlert(e.message || 'Could not clear chat. Please try again.');
       return;
     }
     dpClose();
@@ -10073,14 +10221,14 @@ if (document.readyState === "loading") {
   // ── Action: Leave Group ────────────────────────────────────────────────────
   async function dpLeaveGroup() {
     if (!DP.group) return;
-    if (!confirm(`Leave "${DP.group.name}"?`)) return;
+    if (!await swConfirm(`Leave "${DP.group.name}"?`, { title: 'Leave group', confirmLabel: 'Leave', danger: true })) return;
     const myId = window._memberProfile?.id;
     try {
       await api('DELETE', `/api/member/groups/${DP.group.id}/members/${myId}`);
       dpClose();
       GC.groups = (GC.groups || []).filter(g => g.id !== DP.group.id);
       if (typeof window.gcGoBack === 'function') window.gcGoBack();
-    } catch (e) { alert('Could not leave group. Please try again.'); }
+    } catch (e) { swAlert('Could not leave group. Please try again.'); }
   }
 
   // ── Action: Add Members (Group) ────────────────────────────────────────────
