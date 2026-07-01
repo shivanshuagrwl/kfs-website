@@ -5106,6 +5106,9 @@ function _attachImageToBubble(bubble, m) {
   img.src = m.attachment_url;
   img.alt = 'Photo';
   img.loading = 'lazy';
+  if (m.attachment_opacity != null && m.attachment_opacity < 100) {
+    img.style.opacity = Math.max(0, Math.min(100, m.attachment_opacity)) / 100;
+  }
   imgWrap.appendChild(img);
   imgWrap.addEventListener('click', e => { e.stopPropagation(); _openImageLightbox(m.attachment_url); });
   bubble.appendChild(imgWrap);
@@ -5486,6 +5489,168 @@ async function dmSend() {
   } finally {
     DM.pendingBodies.delete(body);
   }
+}
+
+// ── Send a photo attachment in a DM ───────────────────────────────────────────
+// Uploads via multipart/form-data to /api/member/dm/messages/image (the server
+// pipeline already existed — this client-side sender function was missing,
+// which is why tapping the attach button silently did nothing).
+async function _dmSendImage(file, opacity = 100) {
+  const peerId = DM.activePeer?.id;
+  if (!peerId) return;
+  if (file.size > 8 * 1024 * 1024) { swShowToast('Photo is too large (max 8MB).', 4000); return; }
+
+  const btn = $id('dm-attach-btn');
+  if (btn) btn.disabled = true;
+
+  // Optimistic "sending" bubble with a local object URL preview
+  const myId  = dmMyId();
+  const tmpId = 'tmp-' + Date.now();
+  const localUrl = URL.createObjectURL(file);
+  const replyData = _dmGetReplyPayload();
+  const tmp = { id: tmpId, sender_id: myId, body: '📷 Photo', attachment_url: localUrl, attachment_type: 'image', attachment_opacity: opacity, sent_at: new Date().toISOString(), read_at: null, reactions: [], ...replyData };
+  DM.msgs.push(tmp);
+
+  const list = $id('dm-msg-list');
+  const lastRenderedSender = DM.msgs.length > 1 ? DM.msgs[DM.msgs.length - 2].sender_id : null;
+  if (list) {
+    const beforeCount = list.querySelectorAll('.dm-bubble').length;
+    dmRenderMsgs([tmp], list, myId, lastRenderedSender);
+    const allBubbles = list.querySelectorAll('.dm-bubble');
+    if (allBubbles.length > beforeCount) allBubbles[allBubbles.length - 1].dataset.tmpId = tmpId;
+  }
+  dmScrollBottom();
+
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('to_member_id', peerId);
+    fd.append('opacity', String(opacity));
+    if (replyData.replied_to_id) {
+      fd.append('replied_to_id', replyData.replied_to_id);
+      fd.append('replied_to_body', replyData.replied_to_body || '');
+      fd.append('replied_to_sender', replyData.replied_to_sender || '');
+    }
+    const res = await api('POST', '/api/member/dm/messages/image', fd, true);
+    _setReply('dm', null);
+    if (!DM.activeKey && res.conv_key) DM.activeKey = res.conv_key;
+    const realMsg = res.message;
+
+    DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
+    if (realMsg) DM.msgs.push(realMsg);
+
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble && realMsg) {
+      delete tmpBubble.dataset.tmpId;
+      tmpBubble.dataset.msgId = realMsg.id;
+      const dmGrp  = tmpBubble.closest('.dm-msg-group');
+      const delBtn = dmGrp?.querySelector('.dm-del-btn');
+      if (delBtn) delBtn.dataset.id = realMsg.id;
+      _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('dm', realMsg.id, emoji, tmpBubble));
+      _attachMsgContextMenu(tmpBubble, { id: realMsg.id, body: realMsg.body, mine: true, senderName: 'You', type: 'dm' });
+    } else if (list) {
+      list.innerHTML = '';
+      dmRenderMsgs(DM.msgs, list, myId);
+      dmScrollBottom();
+    }
+
+    const existingConv = DM.convs.find(c => c.conv_key === DM.activeKey);
+    if (existingConv) {
+      existingConv.last_snippet      = '📷 Photo';
+      existingConv.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
+      existingConv.last_sender_is_me = true;
+      dmRenderConvs(DM.convs);
+    } else {
+      await dmLoadConvs();
+    }
+  } catch (e) {
+    DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble) {
+      const group = tmpBubble.closest('.dm-msg-group');
+      const meta  = tmpBubble.nextElementSibling;
+      if (meta?.classList.contains('dm-meta')) meta.remove();
+      tmpBubble.remove();
+      if (group && !group.querySelector('.dm-bubble')) group.remove();
+    }
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
+      _vioShowClientNotice(ed, e.message, 'dm-input', 'dm-send-btn');
+    } else {
+      swShowToast(e.message || 'Could not send photo.', 4000);
+      console.error('[DM] send image:', e.message);
+    }
+  } finally {
+    URL.revokeObjectURL(localUrl);
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── Photo attachment opacity picker (DM + group chat) ─────────────────────────
+// Shown right after picking a file, before upload — lets the user drag a
+// slider to set the image's opacity. The chosen value travels with the
+// message (attachment_opacity) and is applied as a CSS opacity on the bubble
+// image for every viewer, so it renders correctly against any chat theme
+// without baking/flattening the image itself.
+let _attachOpacityOverlay = null;
+function _openAttachOpacityPicker(file, onSend) {
+  if (!_attachOpacityOverlay) {
+    const el = document.createElement('div');
+    el.id = 'attach-opacity-overlay';
+    el.className = 'nick-modal-overlay';
+    el.innerHTML = `
+      <div class="nick-modal" id="attach-opacity-modal" style="max-width:320px">
+        <div class="nick-modal-head">
+          <span>Photo opacity</span>
+          <button class="dm-icon-btn" id="attach-opacity-close" aria-label="Close">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div style="width:100%;aspect-ratio:1/1;border-radius:12px;background:#181818 url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22><rect width=%228%22 height=%228%22 fill=%22%23222%22/><rect x=%228%22 y=%228%22 width=%228%22 height=%228%22 fill=%22%23222%22/></svg>') repeat;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+          <img id="attach-opacity-img" src="" alt="" style="width:100%;height:100%;object-fit:cover">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/></svg>
+          <input id="attach-opacity-slider" type="range" min="15" max="100" value="100" style="flex:1;accent-color:#0095f6">
+          <span id="attach-opacity-value" style="font-size:12px;color:var(--muted);width:36px;text-align:right;flex-shrink:0">100%</span>
+        </div>
+        <div class="nick-modal-actions" style="margin-top:16px">
+          <button class="nick-clear-btn" id="attach-opacity-cancel">Cancel</button>
+          <button class="nick-save-btn" id="attach-opacity-send">Send</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => { if (e.target === el) _closeAttachOpacityPicker(); });
+    _attachOpacityOverlay = el;
+  }
+
+  const el      = _attachOpacityOverlay;
+  const img     = $id('attach-opacity-img');
+  const slider  = $id('attach-opacity-slider');
+  const valLbl  = $id('attach-opacity-value');
+  const url     = URL.createObjectURL(file);
+  img.src = url;
+  slider.value = 100;
+  valLbl.textContent = '100%';
+  img.style.opacity = 1;
+
+  slider.oninput = () => {
+    valLbl.textContent = slider.value + '%';
+    img.style.opacity = slider.value / 100;
+  };
+  $id('attach-opacity-close').onclick  = () => _closeAttachOpacityPicker(url);
+  $id('attach-opacity-cancel').onclick = () => _closeAttachOpacityPicker(url);
+  $id('attach-opacity-send').onclick   = () => {
+    const opacity = parseInt(slider.value, 10) || 100;
+    _closeAttachOpacityPicker(url, /*revoke*/ false);
+    onSend(file, opacity);
+  };
+
+  el.style.display = 'flex';
+}
+function _closeAttachOpacityPicker(url, revoke = true) {
+  if (_attachOpacityOverlay) _attachOpacityOverlay.style.display = 'none';
+  if (url && revoke) URL.revokeObjectURL(url);
 }
 
 // ── Violation notice (warning / mute / temp-ban) shown inside DM & GC ─────────
@@ -5873,7 +6038,7 @@ function initDM() {
   $id('dm-attach-input')?.addEventListener('change', e => {
     const file = e.target.files?.[0];
     e.target.value = ''; // allow picking the same file twice in a row
-    if (file) _dmSendImage(file);
+    if (file) _openAttachOpacityPicker(file, (f, opacity) => _dmSendImage(f, opacity));
   });
 
   // In-thread search
@@ -8432,6 +8597,101 @@ async function gcSend() {
   }
 }
 
+// ── Send a photo attachment in a group chat ───────────────────────────────────
+// Uploads via multipart/form-data to /api/member/groups/:id/messages/image (the
+// server pipeline already existed — this client-side sender function was
+// missing, which is why tapping the attach button silently did nothing).
+async function _gcSendImage(file, opacity = 100) {
+  if (!GC.activeId) return;
+  if (file.size > 8 * 1024 * 1024) { swShowToast('Photo is too large (max 8MB).', 4000); return; }
+
+  const btn = $id('gc-attach-btn');
+  if (btn) btn.disabled = true;
+
+  const myId  = gcMyId();
+  const tmpId = 'tmp-' + Date.now();
+  const localUrl = URL.createObjectURL(file);
+  const replyData = _gcGetReplyPayload();
+  const tmp = { id: tmpId, sender_id: myId, sender: window._memberProfile || { id: myId, name: 'You', photo: null }, body: '📷 Photo', attachment_url: localUrl, attachment_type: 'image', attachment_opacity: opacity, sent_at: new Date().toISOString(), is_deleted: false, reactions: [], ...replyData };
+  GC.msgs.push(tmp);
+
+  const list = $id('gc-msg-list');
+  const lastRenderedSender = GC.msgs.length > 1 ? GC.msgs[GC.msgs.length - 2].sender_id : null;
+  if (list) {
+    const beforeCount = list.querySelectorAll('.dm-bubble').length;
+    gcRenderMsgs([tmp], list, myId, lastRenderedSender === myId ? '__mine__' : lastRenderedSender);
+    const allBubbles = list.querySelectorAll('.dm-bubble');
+    if (allBubbles.length > beforeCount) allBubbles[allBubbles.length - 1].dataset.tmpId = tmpId;
+  }
+  gcScrollBottom();
+
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('opacity', String(opacity));
+    if (replyData.replied_to_id) {
+      fd.append('replied_to_id', replyData.replied_to_id);
+      fd.append('replied_to_body', replyData.replied_to_body || '');
+      fd.append('replied_to_sender', replyData.replied_to_sender || '');
+    }
+    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages/image`, fd, true);
+    _setReply('group', null);
+    const realMsg = res.message;
+
+    GC.msgs = GC.msgs.filter(m => m.id !== tmpId);
+    if (realMsg) GC.msgs.push(realMsg);
+
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble && realMsg) {
+      delete tmpBubble.dataset.tmpId;
+      tmpBubble.dataset.msgId = realMsg.id;
+      const grp    = tmpBubble.closest('.dm-msg-group');
+      const delBtn = grp?.querySelector('.dm-del-btn');
+      if (delBtn) delBtn.dataset.id = realMsg.id;
+      const _gcMetaRow = grp?.querySelector('.dm-meta');
+      if (_gcMetaRow) _gcMetaRow.dataset.metaFor = realMsg.id;
+      _attachQuickHeart(tmpBubble, (emoji) => _toggleReaction('group', realMsg.id, emoji, tmpBubble));
+      _attachMsgContextMenu(tmpBubble, { id: realMsg.id, body: realMsg.body, mine: true, senderName: 'You', type: 'group', senderId: myId });
+    } else if (list) {
+      list.innerHTML = '';
+      gcRenderMsgs(GC.msgs, list, myId);
+      gcScrollBottom();
+    }
+    _gcRenderSeenBy();
+
+    const existing = GC.groups.find(g => g.id === GC.activeId);
+    if (existing) {
+      existing.last_snippet      = '📷 Photo';
+      existing.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
+      existing.last_sender_is_me = true;
+      if (typeof window.gcRenderGroups === 'function') window.gcRenderGroups(GC.groups);
+      else gcRenderGroups(GC.groups);
+    } else {
+      await gcLoadGroups();
+    }
+  } catch (e) {
+    GC.msgs = GC.msgs.filter(m => m.id !== tmpId);
+    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (tmpBubble) {
+      const grp  = tmpBubble.closest('.dm-msg-group');
+      const meta = tmpBubble.nextElementSibling;
+      if (meta?.classList.contains('dm-meta')) meta.remove();
+      tmpBubble.remove();
+      if (grp && !grp.querySelector('.dm-bubble')) grp.remove();
+    }
+    const ed = e._data || {};
+    if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
+      _vioShowClientNotice(ed, e.message, 'gc-input', 'gc-send-btn');
+    } else {
+      swShowToast(e.message || 'Could not send photo.', 4000);
+      console.error('[GC] send image:', e.message);
+    }
+  } finally {
+    URL.revokeObjectURL(localUrl);
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 async function gcDeleteMsg(msgId, bubble, btn) {
@@ -9840,7 +10100,7 @@ if (document.readyState === "loading") {
     $id('gc-attach-input')?.addEventListener('change', e => {
       const file = e.target.files?.[0];
       e.target.value = '';
-      if (file) _gcSendImage(file);
+      if (file) _openAttachOpacityPicker(file, (f, opacity) => _gcSendImage(f, opacity));
     });
 
     // In-thread search
@@ -10731,7 +10991,7 @@ if (document.readyState === "loading") {
     if (!overlay) return;
     overlay.querySelectorAll('.kfs-share-conv').forEach(row => {
       const name = (row.dataset.name || '').toLowerCase();
-      row.style.display = (!query || name.includes(query)) ? '' : 'none';
+      row.style.display = (!query || name.includes(query)) ? 'flex' : 'none';
     });
   }
 

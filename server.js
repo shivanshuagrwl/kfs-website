@@ -1031,7 +1031,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com", "https://accounts.google.com/gsi/client"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
-        "'self'", "data:",
+        "'self'", "data:", "blob:",
         "https://res.cloudinary.com",
         "https://*.supabase.co",
         "https://img.youtube.com",       // YouTube thumbnails
@@ -12400,12 +12400,11 @@ app.get("/api/member/studio/projects/:id", memberAuthMiddleware, studioFeedLimit
   const viewerKey = studioViewerKey(req.member.memberId);
   supabase.rpc("increment_project_view", { p_project_id: id, p_viewer_key: viewerKey })
     .then(({ data: newCount }) => {
-      if (newCount != null) {
-        // Bust feed cache so next load shows updated view count
-        Object.keys(require("./server").memCacheStore || {}).filter(k => k.startsWith("studio:feed")).forEach(k => {
-          // Best-effort: the in-process memCache map; no-op if export not available
-        });
-      }
+      // NOTE: intentionally NOT busting the feed cache here — views happen on
+      // every post open, and invalidating the shared feed cache that often
+      // would defeat its purpose. Slightly stale view counts in the feed list
+      // (refreshed within ~60s) are an acceptable tradeoff; the count is always
+      // exact on the post's own detail view.
     })
     .catch(() => {});
 
@@ -12576,6 +12575,12 @@ app.post(
     }
 
     await logMemberActivity(req.member.id, req.member.memberId, "studio_post_create", { id: project.id, title: title.trim() }, req.ip);
+
+    // Bust the feed caches (page cache + "for you" pool cache) so the new post
+    // shows up immediately instead of waiting out the 60-90s TTL. This was the
+    // cause of new posts not appearing until a delayed manual reload.
+    memInvalidate("studio:feed:");
+
     res.json({ success: true, id: project.id });
   } catch (e) {
     console.error("[studio:create] unhandled error:", e.message);
@@ -12640,6 +12645,7 @@ app.put(
     if (error) { console.error("[studio:edit]", error.message); return res.status(500).json({ error: "Internal server error" }); }
 
     await logMemberActivity(req.member.id, req.member.memberId, "studio_post_edit", { id: req.params.id }, req.ip);
+    memInvalidate("studio:feed:");
     res.json({ success: true });
   } catch (e) {
     console.error("[studio:edit] unhandled error:", e.message);
@@ -12662,6 +12668,7 @@ app.delete("/api/member/studio/projects/:id", memberAuthMiddleware, studioWriteL
     .eq("id", req.params.id);
 
   await logMemberActivity(req.member.id, req.member.memberId, "studio_post_delete", { id: req.params.id }, req.ip);
+  memInvalidate("studio:feed:");
   res.json({ success: true });
 });
 
@@ -14305,7 +14312,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const asc = !!since;
 
     // Fetch both sides: messages received by me + messages I sent in this conv
-    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, delivered_at, read_at, created_at, edited_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, attachment_url, attachment_type";
+    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, delivered_at, read_at, created_at, edited_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, attachment_url, attachment_type, attachment_opacity";
     let qRecv = supabase
       .from("member_notifications")
       .select(_dmSelect)
@@ -14386,6 +14393,7 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       // Attachments (image sharing) — null for plain text messages
       attachment_url:       m.attachment_url || null,
       attachment_type:      m.attachment_type || null,
+      attachment_opacity:   m.attachment_opacity ?? null,
     })));
   } catch (e) {
     dmLogErr("[dm/messages GET]", e);
@@ -14597,6 +14605,7 @@ app.patch("/api/member/dm/messages/:msgId", memberAuthMiddleware, dmRateLimit, a
 // SQL migration (run once in Supabase):
 //   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 //   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS attachment_type TEXT;
+//   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS attachment_opacity SMALLINT;
 app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
   multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }).single("image"),
   async (req, res) => {
@@ -14606,6 +14615,13 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
       if (!req.file) return res.status(400).json({ error: "No image uploaded" });
       if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
       if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
+
+      // Opacity is applied client-side as a CSS style on render (not baked into
+      // the pixels), so it works correctly against any theme/background and
+      // survives the server's JPEG re-encode without alpha-flattening issues.
+      let opacity = parseInt(req.body?.opacity, 10);
+      if (!Number.isFinite(opacity)) opacity = 100;
+      opacity = Math.max(15, Math.min(100, opacity));
 
       const { data: target } = await supabase.from("members").select("id, name").eq("id", to_member_id).is("deleted_at", null).maybeSingle();
       if (!target) return res.status(404).json({ error: "Member not found" });
@@ -14651,8 +14667,9 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
           replied_to_sender:   replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
           attachment_url:      uploadResult.secure_url,
           attachment_type:     "image",
+          attachment_opacity:  opacity,
         }])
-        .select("id, actor_id, member_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type")
+        .select("id, actor_id, member_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type, attachment_opacity")
         .single();
       if (insertErr) throw insertErr;
 
@@ -14673,6 +14690,7 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
           e2ee:              false,
           attachment_url:    msg.attachment_url,
           attachment_type:   msg.attachment_type,
+          attachment_opacity: msg.attachment_opacity ?? opacity,
         },
       });
     } catch (e) {
@@ -16292,7 +16310,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
 
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, edited_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, attachment_url, attachment_type")
+      .select("id, sender_id, body, created_at, edited_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, attachment_url, attachment_type, attachment_opacity")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -16346,6 +16364,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           // Attachments (image sharing)
           attachment_url:   m.attachment_url || null,
           attachment_type:  m.attachment_type || null,
+          attachment_opacity: m.attachment_opacity ?? null,
         };
       });
 
@@ -16574,10 +16593,11 @@ app.patch("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWrit
 });
 
 // POST /api/member/groups/:id/messages/image — send a photo to the group
-// multipart/form-data: image=<file>, replied_to_id/body/sender?
+// multipart/form-data: image=<file>, replied_to_id/body/sender?, opacity?
 // SQL migration (run once in Supabase):
 //   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 //   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS attachment_type TEXT;
+//   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS attachment_opacity SMALLINT;
 app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteLimit,
   multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }).single("image"),
   async (req, res) => {
@@ -16586,6 +16606,10 @@ app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteL
       const gid  = req.params.id;
       const { replied_to_id, replied_to_body, replied_to_sender } = req.body || {};
       if (!req.file) return res.status(400).json({ error: "No image uploaded" });
+
+      let opacity = parseInt(req.body?.opacity, 10);
+      if (!Number.isFinite(opacity)) opacity = 100;
+      opacity = Math.max(15, Math.min(100, opacity));
 
       const { data: mem } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid).eq("member_id", myId).maybeSingle();
       if (!mem) return res.status(403).json({ error: "Not in this group" });
@@ -16615,8 +16639,9 @@ app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteL
           replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
           attachment_url:    uploadResult.secure_url,
           attachment_type:   "image",
+          attachment_opacity: opacity,
         }])
-        .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type")
+        .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, attachment_url, attachment_type, attachment_opacity")
         .single();
       if (error) throw error;
 
@@ -16637,6 +16662,7 @@ app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteL
           e2ee:              false,
           attachment_url:    msg.attachment_url,
           attachment_type:   msg.attachment_type,
+          attachment_opacity: msg.attachment_opacity ?? opacity,
         },
       });
     } catch (e) {

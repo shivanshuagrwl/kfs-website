@@ -86,7 +86,7 @@
         height: 100%;
         background: var(--bg);
         color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
         font-size: 15px;
         line-height: 1.5;
       }
@@ -149,6 +149,7 @@
         padding: 36px;
       }
       .auth-logo {
+        font-family: "Microsoft Sans Serif", "Segoe UI", Tahoma, sans-serif;
         font-size: 18px;
         font-weight: 700;
         letter-spacing: -0.02em;
@@ -574,6 +575,7 @@
         z-index: 100;
       }
       .sidebar-logo {
+        font-family: "Microsoft Sans Serif", "Segoe UI", Tahoma, sans-serif;
         font-size: 16px;
         font-weight: 700;
         letter-spacing: -0.02em;
@@ -5349,7 +5351,7 @@
                     class="composer-text-body"
                     placeholder="What's on your mind?"
                     maxlength="2200"
-                    rows="6"
+                    rows="4"
                   ></textarea>
                   <div class="composer-char-counter">
                     <span id="sw-text-count">0</span>/2200
@@ -9183,6 +9185,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        font-family: "Microsoft Sans Serif", "Segoe UI", Tahoma, sans-serif;
         font-size: 20px;
         font-weight: 800;
         letter-spacing: -0.03em;
@@ -9806,7 +9809,7 @@
       .composer-sheet {
         background: #111;
         border-top: 1px solid #222;
-        border-radius: 20px 20px 0 0;
+        border-radius: 22px 22px 0 0;
         width: 100%;
         max-width: 540px;
         max-height: 92vh;
@@ -9814,6 +9817,7 @@
         flex-direction: column;
         animation: sheetUp 0.28s cubic-bezier(0.32, 1.1, 0.5, 1) both;
         overflow: hidden;
+        box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.45);
       }
       @keyframes sheetUp {
         from {
@@ -9869,10 +9873,13 @@
         padding: 7px 18px;
         border-radius: 20px;
         cursor: pointer;
-        transition: opacity 0.15s;
+        transition: opacity 0.15s, transform 0.1s;
       }
       .composer-publish-btn:hover {
         opacity: 0.88;
+      }
+      .composer-publish-btn:active {
+        transform: scale(0.96);
       }
       .composer-publish-btn:disabled {
         opacity: 0.45;
@@ -10020,7 +10027,7 @@
       }
       .composer-text-body {
         font-size: 18px;
-        min-height: 140px;
+        min-height: 90px;
       }
       .composer-caption::placeholder,
       .composer-text-body::placeholder {
