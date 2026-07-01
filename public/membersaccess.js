@@ -2359,6 +2359,15 @@ function onNotifClick(id) {
     const studioNav = document.querySelector('[data-panel="studio"]');
     if (studioNav) switchPanel(studioNav);
     swOpenDetail(n.link_id);
+  } else if (n.type === 'dm' || n.link_type === 'dm') {
+    // DM notification — jump straight into that chat, same as tapping the
+    // conversation in the inbox. link_id is the conv key, but actor_id is
+    // always the other person, so we go through dmStartWith which will
+    // reuse the existing conversation if one is already loaded.
+    closeNotifPanel();
+    if (n.actor_id && typeof dmStartWith === 'function') {
+      dmStartWith(n.actor_id, { id: n.actor_id, name: n.actor_name, photo: n.actor_photo });
+    }
   }
 }
 
@@ -7309,14 +7318,19 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
         const header = document.createElement('div');
         header.className = 'gc-msg-header';
         header.innerHTML = `
-          ${gcAvatar(sName, sPhoto, 28)}
+          <span class="gc-msg-avatar-btn" data-member-id="${swEsc(m.sender_id)}" style="cursor:pointer">${gcAvatar(sName, sPhoto, 28)}</span>
           <span class="gc-msg-sender-name" data-member-id="${swEsc(m.sender_id)}"
                 style="color:hsl(${hue},65%,65%);cursor:pointer">${swEsc(displayName)}</span>
         `;
-        header.querySelector('.gc-msg-sender-name')?.addEventListener('click', e => {
+        // Tap the name or avatar → open that member's profile info, same as
+        // tapping a person in Instagram/WhatsApp chats. Nickname editing is
+        // still available from the ⓘ info panel's "Nicknames" action.
+        const openSenderProfile = e => {
           e.stopPropagation();
-          nicksOpenModal(GC.activeId, m.sender_id, sName, true);
-        });
+          if (typeof openMemberProfile === 'function') openMemberProfile(m.sender_id);
+        };
+        header.querySelector('.gc-msg-sender-name')?.addEventListener('click', openSenderProfile);
+        header.querySelector('.gc-msg-avatar-btn')?.addEventListener('click', openSenderProfile);
         group.appendChild(header);
       }
 
@@ -9206,17 +9220,37 @@ if (document.readyState === "loading") {
     if (blockBtn) blockBtn.classList.toggle('dm-detail-danger', nowBlocked);
   }
 
-  // ── Action: Delete Chat (DM) ───────────────────────────────────────────────
+  // ── Action: Clear Chat (DM) — me only ──────────────────────────────────────
+  // Wipes the message history from MY view only. The other person's copy of
+  // the chat is completely untouched — nothing is deleted for them, and no
+  // messages are deleted server-side at all, just hidden below my watermark.
   async function dpDeleteChat() {
-    if (!confirm('Delete this conversation? This only removes it from your view.')) return;
-    dpClose();
-    // Reset DM panel to empty state
-    if (typeof dmGoBack === 'function') dmGoBack();
-    // Optimistically remove from list
-    if (DM.activeKey) {
-      DM.convs = (DM.convs || []).filter(c => c.conv_key !== DM.activeKey);
-      if (typeof dmRenderConvs === 'function') dmRenderConvs(DM.convs);
+    if (!confirm('Clear this chat? Messages will be removed for you only — the other person will still see them.')) return;
+    const convKey = DM.activeKey;
+    if (!convKey) { dpClose(); if (typeof dmGoBack === 'function') dmGoBack(); return; }
+    try {
+      await api('POST', `/api/member/dm/conversations/${encodeURIComponent(convKey)}/clear`);
+    } catch (e) {
+      alert(e.message || 'Could not clear chat. Please try again.');
+      return;
     }
+    dpClose();
+    // Wipe local message state and show the empty chat window (conversation
+    // stays selected — a new message from either side will repopulate it).
+    DM.msgs = [];
+    DM.oldestSentAt = null;
+    const list = $id('dm-msg-list');
+    if (list) list.innerHTML = '';
+    $id('dm-load-earlier-wrap') && ($id('dm-load-earlier-wrap').style.display = 'none');
+    // Reflect the clear in the conversation list preview immediately
+    const conv = (DM.convs || []).find(c => c.conv_key === convKey);
+    if (conv) {
+      conv.last_snippet = null;
+      conv.last_is_e2ee = false;
+    }
+    if (typeof window.dmRenderConvs === 'function') window.dmRenderConvs(DM.convs);
+    else if (typeof dmRenderConvs === 'function') dmRenderConvs(DM.convs);
+    if (typeof swShowToast === 'function') swShowToast('Chat cleared.');
   }
 
   // ── Action: Leave Group ────────────────────────────────────────────────────
@@ -10572,6 +10606,50 @@ if (document.readyState === "loading") {
     _custRenderBubbleSection();
     _custUpdatePreview();
   };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PATCH — chat header cleanup: Nickname/Block chips lived in two places at
+// once (inline in the topbar AND inside the ⓘ info panel). Keep just the ⓘ
+// panel as the single home for those actions, and make tapping the avatar
+// or name — same as Instagram/WhatsApp — open that panel too.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Neutralize the inline topbar nickname/block chips. These function names
+// are plain top-level declarations earlier in this file; re-declaring them
+// here overrides the earlier definitions, so initDMExtensions' calls into
+// them become harmless no-ops. Block-status/nickname *data* loading (used
+// elsewhere, e.g. the blocked banner) is untouched — only the extra chip UI
+// that used to render into #dm-topbar-actions is removed.
+function dmInjectTopbarActions() { /* no-op — actions live in the ⓘ info panel now */ }
+function dmRenderTopbarExtras() { /* no-op — actions live in the ⓘ info panel now */ }
+
+(function wireTopbarPersonClick() {
+  function attach(topbarId, infoBtnId) {
+    const topbar = document.getElementById(topbarId);
+    const infoBtn = document.getElementById(infoBtnId);
+    if (!topbar || !infoBtn) return;
+    const avatar = topbar.querySelector('.dm-topbar-avatar');
+    const info   = topbar.querySelector('.dm-topbar-info');
+    [avatar, info].forEach(el => {
+      if (!el || el.dataset.personClickWired) return;
+      el.dataset.personClickWired = '1';
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => infoBtn.click());
+    });
+  }
+  function init() {
+    attach('dm-topbar', 'dm-info-btn');
+    attach('gc-topbar', 'gc-info-btn');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  // dm-active / gc-active windows can be (re)shown after initial load —
+  // re-check once shortly after in case the topbar nodes weren't in the DOM yet.
+  setTimeout(init, 500);
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════

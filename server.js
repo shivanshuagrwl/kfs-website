@@ -13970,6 +13970,70 @@ function dmLogErr(label, e) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "Clear chat" (me-only) — WhatsApp/Instagram style. Wiping a chat only ever
+// hides history on the clearing member's own device/session; the other
+// member's copy is completely untouched, and nothing is deleted server-side.
+// We implement this as a per-member watermark: any message older than the
+// watermark is simply excluded from that member's queries. A new message
+// after clearing is unaffected and brings the conversation back to the top.
+//
+// SQL migration (run once in Supabase):
+//
+//   CREATE TABLE IF NOT EXISTS dm_chat_clears (
+//     member_id      UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     conv_key       TEXT NOT NULL,
+//     cleared_before TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     PRIMARY KEY (member_id, conv_key)
+//   );
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fetch this member's clear-watermarks for one or more conv keys → { conv_key: iso_string } */
+async function getDmClearWatermarks(myId, convKeys) {
+  if (!convKeys || !convKeys.length) return {};
+  try {
+    const { data, error } = await supabase
+      .from("dm_chat_clears")
+      .select("conv_key, cleared_before")
+      .eq("member_id", myId)
+      .in("conv_key", convKeys);
+    if (error) {
+      if (error.code !== "42P01") dmLogErr("[dm/clear watermarks]", error);
+      return {};
+    }
+    const out = {};
+    (data || []).forEach(r => { out[r.conv_key] = r.cleared_before; });
+    return out;
+  } catch (e) {
+    dmLogErr("[dm/clear watermarks]", e);
+    return {};
+  }
+}
+
+// ── POST /api/member/dm/conversations/:convKey/clear ─────────────────────────
+// "Clear chat" — for me only. Sets/refreshes my watermark to now(); messages
+// sent or received before this moment stop showing up for me. The other
+// member's view, and the underlying rows, are never touched.
+app.post("/api/member/dm/conversations/:convKey/clear", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId    = req.member.memberId;
+    const convKey = req.params.convKey;
+    const parts   = convKey.split(":");
+    if (parts.length !== 2 || !parts.includes(myId)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("dm_chat_clears")
+      .upsert([{ member_id: myId, conv_key: convKey, cleared_before: now }], { onConflict: "member_id,conv_key" });
+    if (error) throw error;
+    res.json({ success: true, cleared_before: now });
+  } catch (e) {
+    dmLogErr("[dm/clear]", e);
+    res.status(500).json({ error: "Failed to clear chat" });
+  }
+});
+
 // ── GET /api/member/dm/conversations ─────────────────────────────────────────
 // Returns all unique conversations the logged-in member has participated in,
 // sorted newest-first, with peer info + last snippet + unread count.
@@ -13997,6 +14061,11 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
         .limit(500),
     ]);
 
+    // My "clear chat" watermarks — messages at/before these timestamps are
+    // hidden from me only (see dm_chat_clears doc above the /clear route).
+    const allKeys = [...new Set([...(received || []), ...(sent || [])].map(r => r.link_id).filter(Boolean))];
+    const clearMap = await getDmClearWatermarks(myId, allKeys);
+
     // Build a map of conv_key → { lastMsg, unreadCount, peerId, peerName, peerPhoto }
     const convMap = new Map();
 
@@ -14004,6 +14073,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
     for (const row of (received || [])) {
       const key = row.link_id;
       if (!key) continue;
+      if (clearMap[key] && new Date(row.created_at) <= new Date(clearMap[key])) continue;
       if (!convMap.has(key)) {
         convMap.set(key, {
           key,
@@ -14024,6 +14094,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
     for (const row of (sent || [])) {
       const key = row.link_id;
       if (!key) continue;
+      if (clearMap[key] && new Date(row.created_at) <= new Date(clearMap[key])) continue;
       if (!convMap.has(key)) {
         convMap.set(key, {
           key,
@@ -14097,6 +14168,11 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const before = req.query.before; // load-earlier pagination
     const since  = req.query.since;  // poll-for-new cursor (ISO timestamp of newest known msg)
 
+    // "Clear chat" watermark — if I cleared this chat, never show me anything
+    // at/before that moment (the other member's view is unaffected).
+    const clearMap = await getDmClearWatermarks(myId, [convKey]);
+    const clearedBefore = clearMap[convKey] || null;
+
     // Ascending when fetching new messages (since), descending for initial/before load
     const asc = !!since;
 
@@ -14126,6 +14202,10 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     if (since) {
       qRecv = qRecv.gt("created_at", since);
       qSent = qSent.gt("created_at", since);
+    }
+    if (clearedBefore) {
+      qRecv = qRecv.gt("created_at", clearedBefore);
+      qSent = qSent.gt("created_at", clearedBefore);
     }
 
     const [{ data: recv }, { data: sent }] = await Promise.all([qRecv, qSent]);
