@@ -5133,6 +5133,16 @@ function _detectStrandLink(text) {
   return { id, matched: m[0] };
 }
 
+// True when the ENTIRE message body is just the auto-generated "Share to
+// chat" caption (see the share-send handler: `Check this out on Social
+// Strand: <url>`) with no extra text added by the sender. When true, we
+// render only the rich preview card (Instagram-style) instead of also
+// showing that boilerplate sentence as a separate text bubble above it.
+const _STRAND_SHARE_ONLY_RE = /^check this out on social strand:\s*https?:\/\/\S+$/i;
+function _isStrandShareOnly(text) {
+  return !!text && _STRAND_SHARE_ONLY_RE.test(String(text).trim());
+}
+
 function _fetchStrandPreview(id) {
   if (_strandPreviewCache.has(id)) return _strandPreviewCache.get(id);
   const p = api('GET', `/api/member/studio/preview/${id}`).catch(() => null);
@@ -5142,13 +5152,16 @@ function _fetchStrandPreview(id) {
 
 // Appends a strand-post preview card to `bubble` if `bodyText` contains a
 // Social Strand link. Safe to call multiple times (no-ops if no link found).
-function _attachStrandPreviewToBubble(bubble, bodyText) {
+// `standalone` (bool) — pass true when the message is ONLY the auto-share
+// caption (see _isStrandShareOnly): renders a bigger, Instagram-DM-style
+// card as the sole bubble content instead of a small inline link chip.
+function _attachStrandPreviewToBubble(bubble, bodyText, standalone) {
   if (!bubble || bubble.querySelector('.strand-preview-card')) return;
   const hit = _detectStrandLink(bodyText);
   if (!hit) return;
 
   const card = document.createElement('div');
-  card.className = 'strand-preview-card strand-preview-loading';
+  card.className = `strand-preview-card strand-preview-loading${standalone ? ' strand-preview-standalone' : ''}`;
   card.innerHTML = `
     <div class="strand-preview-thumb"></div>
     <div class="strand-preview-info">
@@ -5236,27 +5249,41 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
     // Attachment (image) — renders above/instead of the text caption
     const _isPhotoOnly = !isDeleted && _attachImageToBubble(bubble, m);
+    // "Check this out on Social Strand: <url>" auto-share messages — render
+    // only the rich card, not the boilerplate sentence as raw text too.
+    const _plainIsStrandOnly = !_isPhotoOnly && !isDeleted && !m.e2ee && _isStrandShareOnly(m.body);
 
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
     // E2EE: decrypt asynchronously; show placeholder while decrypting
-    if (_isPhotoOnly) {
-      // no caption to render
+    if (_isPhotoOnly || _plainIsStrandOnly) {
+      // no caption to render — image or standalone strand card handles it
     } else if (m.e2ee && !isDeleted) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _myId = myId;
       E2EE.decryptDm(m, _myId).then(pt => {
-        bodyNode.textContent = pt;
-        bodyNode.style.opacity = '';
         m._plaintext = pt; // cache for context menu / reply
-        _attachStrandPreviewToBubble(bubble, pt);
+        if (_isStrandShareOnly(pt)) {
+          bodyNode.remove();
+          bubble.classList.add('dm-bubble-strand-share');
+          _attachStrandPreviewToBubble(bubble, pt, true);
+        } else {
+          bodyNode.textContent = pt;
+          bodyNode.style.opacity = '';
+          _attachStrandPreviewToBubble(bubble, pt, false);
+        }
       }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
       bodyNode.textContent = m.body;
     }
-    if (!_isPhotoOnly) bubble.appendChild(bodyNode);
-    if (!_isPhotoOnly && !(m.e2ee && !isDeleted)) _attachStrandPreviewToBubble(bubble, m.body);
+    if (_plainIsStrandOnly) bubble.classList.add('dm-bubble-strand-share');
+    if (!_isPhotoOnly && !_plainIsStrandOnly) bubble.appendChild(bodyNode);
+    if (_plainIsStrandOnly) {
+      _attachStrandPreviewToBubble(bubble, m.body, true);
+    } else if (!_isPhotoOnly && !(m.e2ee && !isDeleted)) {
+      _attachStrandPreviewToBubble(bubble, m.body, false);
+    }
 
     wrap.appendChild(bubble);
 
@@ -8314,27 +8341,41 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     }
     // Attachment (image) — renders above/instead of the text caption
     const _isPhotoOnly = !isDeleted && !m.is_system && _attachImageToBubble(bubble, m);
+    // "Check this out on Social Strand: <url>" auto-share messages — render
+    // only the rich card, not the boilerplate sentence as raw text too.
+    const _plainIsStrandOnly = !_isPhotoOnly && !isDeleted && !m.is_system && !m.e2ee && _isStrandShareOnly(m.body);
 
     const bodyNode = document.createElement('span');
     bodyNode.className = 'dm-bubble-text';
     // E2EE: decrypt group message asynchronously
-    if (_isPhotoOnly) {
-      // no caption to render
+    if (_isPhotoOnly || _plainIsStrandOnly) {
+      // no caption to render — image or standalone strand card handles it
     } else if (m.e2ee && !isDeleted && !m.is_system) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _gcMyId = mine ? m.sender_id : gcMyId();
       E2EE.decryptGroup(m, _gcMyId).then(pt => {
-        bodyNode.innerHTML = _gcHighlightMentions(pt);
-        bodyNode.style.opacity = '';
         m._plaintext = pt;
-        _attachStrandPreviewToBubble(bubble, pt);
+        if (_isStrandShareOnly(pt)) {
+          bodyNode.remove();
+          bubble.classList.add('dm-bubble-strand-share');
+          _attachStrandPreviewToBubble(bubble, pt, true);
+        } else {
+          bodyNode.innerHTML = _gcHighlightMentions(pt);
+          bodyNode.style.opacity = '';
+          _attachStrandPreviewToBubble(bubble, pt, false);
+        }
       }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
     } else {
       bodyNode.innerHTML = _gcHighlightMentions(m.body);
     }
-    if (!_isPhotoOnly) bubble.appendChild(bodyNode);
-    if (!_isPhotoOnly && !m.is_system && !(m.e2ee && !isDeleted)) _attachStrandPreviewToBubble(bubble, m.body);
+    if (_plainIsStrandOnly) bubble.classList.add('dm-bubble-strand-share');
+    if (!_isPhotoOnly && !_plainIsStrandOnly) bubble.appendChild(bodyNode);
+    if (_plainIsStrandOnly) {
+      _attachStrandPreviewToBubble(bubble, m.body, true);
+    } else if (!_isPhotoOnly && !m.is_system && !(m.e2ee && !isDeleted)) {
+      _attachStrandPreviewToBubble(bubble, m.body, false);
+    }
 
     wrap.appendChild(bubble);
 
@@ -11850,7 +11891,47 @@ if (document.readyState === "loading") {
     try {
       if (val === null) localStorage.removeItem(key);
       else localStorage.setItem(key, JSON.stringify(val));
-    } catch { /* storage full/blocked — fail silently, not worth surfacing */ }
+      return true;
+    } catch {
+      // Storage full/blocked (most commonly: an uncompressed photo wallpaper
+      // pushed past the ~5-10MB localStorage quota). Caller decides how to
+      // surface this — we don't fail silently anymore.
+      return false;
+    }
+  }
+
+  // Downscales + re-encodes an uploaded photo as a compressed JPEG data URL
+  // before it goes anywhere near localStorage. A raw phone photo can easily
+  // be 4-8MB, and base64 inflates that by ~33% — comfortably enough to blow
+  // through the origin's storage quota on its own, which made "Upload Photo"
+  // silently do nothing (the failed write was swallowed). Capping the long
+  // edge at 1280px and re-encoding at quality 0.78 keeps this to a few
+  // hundred KB while still looking sharp as a chat background.
+  function _custResizeImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          try { resolve(canvas.toDataURL('image/jpeg', quality)); }
+          catch (e) { reject(e); }
+        };
+        img.onerror = () => reject(new Error('Could not read that image.'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.readAsDataURL(file);
+    });
   }
   function _custIsDark(hex) {
     const c = (hex || '').replace('#', '');
@@ -11962,13 +12043,25 @@ if (document.readyState === "loading") {
       fileInput.addEventListener('change', () => {
         const file = fileInput.files?.[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) { try { swShowToast('Please choose an image under 5MB.'); } catch {} return; }
-        const reader = new FileReader();
-        reader.onload = () => {
-          _custSave(WALL_KEY, { type: 'photo', value: reader.result });
-          applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
-        };
-        reader.readAsDataURL(file);
+        if (file.size > 8 * 1024 * 1024) { try { swShowToast('Please choose an image under 8MB.'); } catch {} fileInput.value = ''; return; }
+        const prevLabel = uploadBtn.textContent;
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Processing…';
+        _custResizeImageFile(file, 1280, 0.78)
+          .then(dataUrl => {
+            const ok = _custSave(WALL_KEY, { type: 'photo', value: dataUrl });
+            if (!ok) {
+              try { swShowToast("Couldn't save that photo — try a smaller image."); } catch {}
+              uploadBtn.disabled = false; uploadBtn.textContent = prevLabel;
+              return;
+            }
+            applyCustomization(); _custRenderWallpaperSection(); _custUpdatePreview();
+          })
+          .catch(() => {
+            try { swShowToast('Could not process that image.'); } catch {}
+            uploadBtn.disabled = false; uploadBtn.textContent = prevLabel;
+          })
+          .finally(() => { fileInput.value = ''; });
       });
     }
     section.querySelector('#cust-photo-remove-btn')?.addEventListener('click', () => {

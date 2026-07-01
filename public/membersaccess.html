@@ -8366,6 +8366,13 @@
               padding: 4px;
               background: transparent !important;
             }
+            /* "Check this out on Social Strand" auto-share messages render
+               only the rich card below — the bubble itself becomes an
+               invisible wrapper, same trick as the image bubble above. */
+            .dm-bubble.dm-bubble-strand-share {
+              padding: 0;
+              background: transparent !important;
+            }
             .dm-img-uploading {
               opacity: 0.55;
             }
@@ -8448,6 +8455,46 @@
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
+            }
+
+            /* Standalone card — used when the whole message is just the
+               "Check this out on Social Strand" auto-share text. Bigger,
+               vertical layout matching how Instagram renders a shared
+               post in DMs: full-width cover image on top, caption below. */
+            .strand-preview-card.strand-preview-standalone {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 0;
+              margin-top: 0;
+              padding: 0;
+              width: 220px;
+              max-width: 220px;
+              border-radius: 20px;
+              overflow: hidden;
+            }
+            .strand-preview-standalone .strand-preview-thumb {
+              width: 100%;
+              height: 220px;
+              flex: none;
+              border-radius: 20px 20px 0 0;
+            }
+            .strand-preview-standalone .strand-preview-thumb-fallback {
+              font-size: 34px;
+            }
+            .strand-preview-standalone .strand-preview-info {
+              padding: 10px 13px 12px;
+            }
+            .strand-preview-standalone .strand-preview-title {
+              font-size: 13px;
+              white-space: normal;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+              line-height: 1.35;
+            }
+            .strand-preview-standalone .strand-preview-sub {
+              margin-top: 5px;
             }
 
             /* ── Typing indicator ── */
