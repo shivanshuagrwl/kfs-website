@@ -1836,6 +1836,59 @@ body.light-mode .mprofile-blog-thumb-ph{background:#f0f0f0}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:28px;
   padding-top:20px;border-top:1px solid var(--border)}
 
+/* ── APPLE-STYLE TOGGLE (admin forms) ───────────────────────────────────── */
+.kfs-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  cursor:pointer;background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px}
+.kfs-toggle-row-title{display:block;font-size:13.5px;font-weight:600;color:var(--white);letter-spacing:-.01em}
+.kfs-toggle-row-sub{display:block;font-size:11.5px;color:var(--grey);margin-top:3px;line-height:1.4}
+.kfs-toggle{position:relative;flex-shrink:0;width:46px;height:28px}
+.kfs-toggle input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.kfs-toggle-track{position:absolute;inset:0;background:#333;border-radius:999px;
+  transition:background .25s var(--ease)}
+.kfs-toggle-thumb{position:absolute;top:2px;left:2px;width:24px;height:24px;background:#fff;
+  border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .25s var(--ease)}
+.kfs-toggle input:checked ~ .kfs-toggle-track{background:#ff9500}
+.kfs-toggle input:checked ~ .kfs-toggle-track .kfs-toggle-thumb{transform:translateX(18px)}
+body.light-mode .kfs-toggle-row{background:#fafafa;border-color:#e2e2e2}
+body.light-mode .kfs-toggle-row-title{color:#111}
+body.light-mode .kfs-toggle-track{background:#ddd}
+
+/* ── SPOILER GATE MODAL ─────────────────────────────────────────────────── */
+#spoiler-modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9995;display:none;
+  align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(20px) saturate(150%);
+  -webkit-backdrop-filter:blur(20px) saturate(150%)}
+#spoiler-modal.open{display:flex;animation:spoilerFadeIn .35s var(--ease) both}
+@keyframes spoilerFadeIn{from{opacity:0}to{opacity:1}}
+.spoiler-card{width:100%;max-width:400px;background:rgba(20,20,20,.82);border:1px solid rgba(255,255,255,.1);
+  border-radius:22px;padding:36px 32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  animation:spoilerPopIn .4s cubic-bezier(.2,.9,.25,1.15) both}
+@keyframes spoilerPopIn{from{opacity:0;transform:scale(.92) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.spoiler-icon{width:56px;height:56px;margin:0 auto 20px;border-radius:50%;background:rgba(255,149,0,.14);
+  display:flex;align-items:center;justify-content:center;color:#ff9500}
+.spoiler-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:#ff9500;margin-bottom:10px}
+.spoiler-title{font-size:19px;font-weight:700;letter-spacing:-.015em;color:#fff;line-height:1.3;margin-bottom:8px}
+.spoiler-subtitle{font-size:13.5px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:28px}
+.spoiler-actions{display:flex;flex-direction:column;gap:10px}
+.spoiler-btn{width:100%;padding:13px 20px;border-radius:980px;font-size:14px;font-weight:600;
+  letter-spacing:-.01em;font-family:inherit;cursor:pointer;transition:transform .15s ease,opacity .2s ease;
+  border:none;-webkit-tap-highlight-color:transparent}
+.spoiler-btn:active{transform:scale(.97)}
+.spoiler-btn-primary{background:#fff;color:#000}
+.spoiler-btn-primary:hover{opacity:.88}
+.spoiler-btn-secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.14)}
+.spoiler-btn-secondary:hover{background:rgba(255,255,255,.13)}
+body.light-mode .spoiler-card{background:rgba(255,255,255,.9);border-color:rgba(0,0,0,.08)}
+body.light-mode .spoiler-title{color:#111}
+body.light-mode .spoiler-subtitle{color:#555}
+body.light-mode .spoiler-btn-primary{background:#111;color:#fff}
+body.light-mode .spoiler-btn-secondary{background:rgba(0,0,0,.05);color:#111;border-color:rgba(0,0,0,.1)}
+.spoiler-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;padding:3px 9px 3px 7px;border-radius:20px;
+  background:rgba(255,149,0,.14);color:#ff9500;border:1px solid rgba(255,149,0,.3)}
+@media(max-width:480px){.spoiler-card{padding:30px 24px 24px;border-radius:18px}}
+
 /* ── EDITOR ──────────────────────────────────────────────────────────── */
 .editor-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid var(--border);
   border-bottom:none;background:#0d0d0d;border-radius:3px 3px 0 0}
@@ -5545,6 +5598,18 @@ KFS — KIIT Film Society"></textarea>
       <select id="blog-published"><option value="true">Published</option><option value="false">Draft</option></select>
     </div>
     <div class="form-group">
+      <label class="kfs-toggle-row" for="blog-has-spoilers">
+        <span>
+          <span class="kfs-toggle-row-title">Contains Spoilers</span>
+          <span class="kfs-toggle-row-sub">Readers see a warning before the post opens.</span>
+        </span>
+        <span class="kfs-toggle">
+          <input type="checkbox" id="blog-has-spoilers">
+          <span class="kfs-toggle-track"><span class="kfs-toggle-thumb"></span></span>
+        </span>
+      </label>
+    </div>
+    <div class="form-group">
       <label>Tags / Sections</label>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <select id="blog-section-type" style="flex:1;border-radius:10px">
@@ -5563,6 +5628,21 @@ KFS — KIIT Film Society"></textarea>
     <div class="modal-actions">
       <button data-action="closeBlogModal" class="btn-sm">Cancel</button>
       <button data-action="saveBlog" class="btn-sm btn-success">Save Post</button>
+    </div>
+  </div>
+</div>
+
+<div id="spoiler-modal">
+  <div class="spoiler-card">
+    <div class="spoiler-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+    </div>
+    <p class="spoiler-eyebrow">Spoiler Warning</p>
+    <h3 class="spoiler-title" id="spoiler-modal-title">This post contains spoilers</h3>
+    <p class="spoiler-subtitle" id="spoiler-modal-subtitle">The author has flagged this post as spoiler-heavy. Read on only if you're caught up.</p>
+    <div class="spoiler-actions">
+      <button class="spoiler-btn spoiler-btn-primary" id="spoiler-proceed-btn">I Wish to Proceed</button>
+      <button class="spoiler-btn spoiler-btn-secondary" id="spoiler-goback-btn">Go Back</button>
     </div>
   </div>
 </div>

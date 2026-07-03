@@ -452,10 +452,12 @@ async function loadHomeData() {
       const imgHtml = b.cover_image
         ? `<div class="hc-blog-img-wrap">${badge}<img class="hc-blog-img" src="${b.cover_image}" alt="" loading="lazy"><\/div>`
         : `<div class="hc-blog-placeholder" style="position:relative">${badge}<\/div>`;
+      const hcSpoilerPill = b.has_spoilers ? `<span class="spoiler-badge" style="margin-bottom:6px">⚠ Spoilers<\/span>` : '';
       return `<div class="hc-blog-card ${isViewed?'hc-viewed':'hc-unread'}" onclick="openBlog('${b.id}')">
         ${imgHtml}
         <div class="hc-blog-body">
           <div class="hc-blog-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
+          ${hcSpoilerPill}
           <div class="hc-blog-title">${b.title}<\/div>
           <div class="hc-blog-excerpt">${b.excerpt||''}<\/div>
         <\/div>
@@ -756,6 +758,9 @@ function renderBlogCard(b) {
   const tagPills = secs.length
     ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${secs.map(s=>`<span style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${s.label}<\/span>`).join('')}<\/div>`
     : '';
+  const spoilerPill = b.has_spoilers
+    ? `<div style="margin-bottom:8px"><span class="spoiler-badge">⚠ Spoilers<\/span><\/div>`
+    : '';
   return `<div class="blog-card ${cls}" onclick="openBlog('${b.id}')" data-blog-id="${b.id}">
     <div class="blog-card-img-wrap">
       <span class="blog-read-badge">${badge}<\/span>
@@ -765,6 +770,7 @@ function renderBlogCard(b) {
     <\/div>
     <div class="blog-card-body">
       <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}<\/p>
+      ${spoilerPill}
       ${tagPills}
       <h3 class="blog-card-title">${b.title}<\/h3>
       ${b.author ? `<p class="blog-card-author" style="font-size:11px;color:var(--grey);margin:4px 0 6px;letter-spacing:.04em">${b.author.split(';;').map(a=>{const p=a.indexOf('||');return p!==-1?a.slice(0,p).trim():a.trim();}).join(', ')}<\/p>` : ''}
@@ -776,6 +782,43 @@ function renderBlogCard(b) {
 async function openBlog(id) {
   const blog = await apiFetch('/api/blogs/'+id);
   if (!blog) return;
+  // Spoiler gate — ask before rendering anything, so nothing about the post
+  // (page switch, URL, meta tags, read-state) changes until the reader opts in.
+  if (blog.has_spoilers && !sessionStorage.getItem('kfs_spoiler_ok_'+id)) {
+    openSpoilerGate(blog, id);
+    return;
+  }
+  renderBlogDetail(blog, id);
+}
+
+function openSpoilerGate(blog, id) {
+  const modal = document.getElementById('spoiler-modal');
+  document.getElementById('spoiler-modal-title').textContent = 'This post contains spoilers';
+  document.getElementById('spoiler-modal-subtitle').textContent =
+    blog.title ? `"${blog.title}" has been flagged as spoiler-heavy. Read on only if you're caught up.`
+                : `This post has been flagged as spoiler-heavy. Read on only if you're caught up.`;
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  const proceedBtn = document.getElementById('spoiler-proceed-btn');
+  const backBtn = document.getElementById('spoiler-goback-btn');
+
+  const closeGate = () => {
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+    proceedBtn.onclick = null;
+    backBtn.onclick = null;
+  };
+
+  proceedBtn.onclick = () => {
+    sessionStorage.setItem('kfs_spoiler_ok_'+id, '1');
+    closeGate();
+    renderBlogDetail(blog, id);
+  };
+  backBtn.onclick = () => { closeGate(); };
+}
+
+async function renderBlogDetail(blog, id) {
   // Ensure members are loaded for author linking
   if (!allMembers || !allMembers.length) {
     const mdata = await apiFetch('/api/members');
@@ -3095,6 +3138,7 @@ function openBlogModal(blog=null) {
   document.getElementById('blog-excerpt').value = blog?.excerpt||'';
   document.getElementById('blog-editor-content').innerHTML = blog?.content||'';
   document.getElementById('blog-published').value = blog?.published ? 'true':'false';
+  document.getElementById('blog-has-spoilers').checked = !!blog?.has_spoilers;
   document.getElementById('blog-cover').value='';
   // Init author picker (multi-select member picker — supports multiple authors)
   if (!window._blogAuthorPicker) {
@@ -3282,6 +3326,7 @@ async function saveBlog() {
   fd.append('excerpt', document.getElementById('blog-excerpt').value);
   fd.append('content', document.getElementById('blog-editor-content').innerHTML);
   fd.append('published', document.getElementById('blog-published').value);
+  fd.append('has_spoilers', document.getElementById('blog-has-spoilers').checked ? 'true' : 'false');
   fd.append('sections', JSON.stringify(window._blogSections||[]));
   const cover = document.getElementById('blog-cover').files[0];
   if (cover) fd.append('cover', cover);

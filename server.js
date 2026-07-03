@@ -2892,7 +2892,7 @@ app.get("/api/blogs", async (req, res) => {
     const { data } = await supabasePublic
       .from("blogs")
       .select(
-        "id,title,author,excerpt,cover_image,published,created_at,sections,view_count",
+        "id,title,author,excerpt,cover_image,published,created_at,sections,view_count,has_spoilers",
       )
       .eq("published", true)
       .is("deleted_at", null)
@@ -3236,7 +3236,7 @@ app.get("/api/admin/blogs", requireSection("blogs"), async (req, res) => {
   const { data } = await supabase
     .from("blogs")
     .select(
-      "id,title,author,published,view_count,cover_image,created_at,sections",
+      "id,title,author,published,view_count,cover_image,created_at,sections,has_spoilers",
     )
     // Don't fetch `content` in the list — it's huge HTML. Only needed in /api/blogs/:id
     .is("deleted_at", null)
@@ -3319,7 +3319,7 @@ app.post(
   requireSection("blogs"),
   upload.single("cover"),
   async (req, res) => {
-    const { title, author, excerpt, content, published, sections } = req.body;
+    const { title, author, excerpt, content, published, sections, has_spoilers } = req.body;
     const coverUrl = await uploadImage(req.file, "blogs");
     const { data, error } = await supabase
       .from("blogs")
@@ -3332,6 +3332,7 @@ app.post(
           cover_image: coverUrl,
           published: published === "true",
           sections: sections || "[]",
+          has_spoilers: has_spoilers === "true",
         },
       ])
       .select()
@@ -3348,7 +3349,7 @@ app.put(
   requireSection("blogs"),
   upload.single("cover"),
   async (req, res) => {
-    const { title, author, excerpt, content, published, sections } = req.body;
+    const { title, author, excerpt, content, published, sections, has_spoilers } = req.body;
     const updates = {
       title,
       author: author || null,
@@ -3356,6 +3357,7 @@ app.put(
       content,
       published: published === "true",
       sections: sections || "[]",
+      has_spoilers: has_spoilers === "true",
     };
     if (req.file) updates.cover_image = await uploadImage(req.file, "blogs");
     const { data, error } = await supabase
