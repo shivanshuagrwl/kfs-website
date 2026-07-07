@@ -7370,7 +7370,9 @@ function dmUpdateBlockedBanner() {
     compose && (compose.style.display = 'none');
   } else {
     banner?.remove();
-    compose && (compose.style.display = '');
+    // Official KFS one-way channel keeps its compose box hidden regardless
+    // of block status — don't let this "not blocked" path re-show it.
+    if (!DM.activePeer?.is_official) compose && (compose.style.display = '');
   }
 }
 
@@ -9392,6 +9394,9 @@ function initDMExtensions() {
         const status = await api('GET', `/api/member/blocks/check/${peerId}`);
         DM.activePeer = { ...DM.activePeer, _blockedMe: status.blocked_me };
         dmUpdateBlockedBanner();
+        // Official KFS channel — re-assert one-way mode in case anything
+        // above touched the compose box's display state.
+        if (typeof _dmSetOneWayMode === 'function') _dmSetOneWayMode(!!DM.activePeer?.is_official);
         // Update topbar block button
         dmRenderTopbarExtras(convKey, peerId, conv.peer);
       } catch { /* silent */ }
