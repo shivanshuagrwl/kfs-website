@@ -13652,10 +13652,10 @@ async function modTogglePostStatus(id, newStatus) {
     const r = await fetch(`/api/admin/wall/projects/${id}`, {
       method: 'PATCH',
       credentials: 'include',
-      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
       body: JSON.stringify({ status: newStatus })
     });
-    if (!r.ok) { alert('Failed to update post.'); return; }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Failed to update post.'); return; }
     loadModPosts();
   } catch { alert('Failed to update post.'); }
 }
@@ -13666,9 +13666,9 @@ async function modDeletePost(id) {
     const r = await fetch(`/api/admin/wall/projects/${id}`, {
       method: 'DELETE',
       credentials: 'include',
-      headers: { 'Authorization': 'Bearer ' + adminToken }
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }
     });
-    if (!r.ok) { alert('Failed to delete post.'); return; }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Failed to delete post.'); return; }
     loadModPosts();
   } catch { alert('Failed to delete post.'); }
 }
@@ -13714,9 +13714,9 @@ async function modDeleteComment(commentId, projectId, title) {
     const r = await fetch(`/api/admin/wall/comments/${commentId}`, {
       method: 'DELETE',
       credentials: 'include',
-      headers: { 'Authorization': 'Bearer ' + adminToken }
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }
     });
-    if (!r.ok) { alert('Failed to delete comment.'); return; }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Failed to delete comment.'); return; }
     viewModPostComments(projectId, title);
     loadModPosts();
   } catch { alert('Failed to delete comment.'); }
