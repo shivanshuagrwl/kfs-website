@@ -4958,6 +4958,9 @@ async function dmOpenConv(conv) {
   $id('dm-window-empty') && ($id('dm-window-empty').style.display = 'none');
   $id('dm-active') && ($id('dm-active').style.display = 'flex');
 
+  // Official KFS channel — one-way broadcast, no reply UI.
+  _dmSetOneWayMode(!!conv.peer?.is_official);
+
   // Mobile only: slide sidebar out to reveal chat window
   if (window.innerWidth <= 768) {
     $id('dm-sidebar')?.classList.add('dm-slide-out');
@@ -4966,6 +4969,14 @@ async function dmOpenConv(conv) {
 
   await dmLoadMsgs(false);
   $id('dm-input')?.focus();
+}
+
+// Show/hide the reply compose box vs. the "one-way channel" notice.
+function _dmSetOneWayMode(isOfficial) {
+  const compose = $id('dm-compose');
+  const notice  = $id('dm-oneway-notice');
+  if (compose) compose.style.display = isOfficial ? 'none' : '';
+  if (notice)  notice.style.display  = isOfficial ? 'flex' : 'none';
 }
 
 // Open or create a conversation with a member by ID (called from Network cards)
@@ -4989,6 +5000,9 @@ async function dmStartWith(memberId, peerHint) {
   if (ta) ta.innerHTML = dmAvatar(DM.activePeer.name, DM.activePeer.photo, 34);
   setText('dm-topbar-name', DM.activePeer.name || 'Member');
   setText('dm-topbar-sub', [DM.activePeer.role, DM.activePeer.batch || DM.activePeer.domain].filter(Boolean).join(' · '));
+
+  // Official KFS channel — one-way broadcast, no reply UI.
+  _dmSetOneWayMode(!!DM.activePeer.is_official);
 
   $id('dm-window-empty') && ($id('dm-window-empty').style.display = 'none');
   $id('dm-active') && ($id('dm-active').style.display = 'flex');
@@ -5509,6 +5523,10 @@ async function dmSend() {
     const ed = e._data || {};
     if (ed.warned || ed.muted || ed.banned || ed.temp_banned) {
       _vioShowClientNotice(ed, e.message, 'dm-input', 'dm-send-btn');
+    } else if (/can.t reply to KFS/i.test(e.message || '')) {
+      // Safety net: server rejected a reply to the official one-way channel.
+      // Lock the compose UI so it can't be attempted again in this view.
+      _dmSetOneWayMode(true);
     } else {
       input.value = body;
       console.error('[DM] send:', e.message);

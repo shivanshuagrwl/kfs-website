@@ -5398,6 +5398,7 @@ KFS — KIIT Film Society"></textarea>
       <!-- Tabs -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
         <button onclick="modTab('reports')" id="mod-tab-reports" class="btn btn-primary" style="font-size:12px;padding:8px 18px;border-radius:20px">&#x1F6A8; Reports</button>
+        <button onclick="modTab('posts')" id="mod-tab-posts" class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x1F5D2; Strand Posts</button>
         <button onclick="modTab('admin-posts')" id="mod-tab-admin-posts" class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x1F4E3; KFS Posts</button>
         <button onclick="modTab('ban-appeals')" id="mod-tab-ban-appeals" class="btn" style="font-size:12px;padding:8px 18px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x1F6E1; Ban Appeals <span id="mod-appeals-badge" style="display:none;background:#e53e3e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px">0</span></button>
       </div>
@@ -5423,6 +5424,35 @@ KFS — KIIT Film Society"></textarea>
             <thead><tr><th>Date</th><th>Reporter</th><th>Type</th><th>Reason</th><th>Content Preview</th><th>Member</th><th>Actions</th></tr></thead>
             <tbody id="mod-reports-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--grey)">Loading&#x2026;</td></tr></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Strand Posts tab — browse & moderate ALL Social Strand posts, not just reported ones -->
+      <div id="mod-posts-panel" style="display:none">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+          <select id="mod-posts-status" onchange="loadModPosts()" style="font-size:12px;padding:8px 12px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">
+            <option value="published">Published</option>
+            <option value="hidden">Hidden</option>
+          </select>
+          <button onclick="loadModPosts()" class="btn" style="font-size:12px;padding:8px 14px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">&#x21BB; Refresh</button>
+        </div>
+        <div class="admin-card">
+          <table class="admin-table">
+            <thead><tr><th>Date</th><th>Title</th><th>Author</th><th>Views</th><th>Comments</th><th>Actions</th></tr></thead>
+            <tbody id="mod-posts-tbody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">Loading&#x2026;</td></tr></tbody>
+          </table>
+        </div>
+        <div id="mod-posts-comments-wrap" style="display:none;margin-top:18px">
+          <div class="admin-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <h4 style="margin:0;font-size:14px">Comments — <span id="mod-posts-comments-title"></span></h4>
+              <button onclick="document.getElementById('mod-posts-comments-wrap').style.display='none'" class="btn" style="font-size:11px;padding:5px 10px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">Close</button>
+            </div>
+            <table class="admin-table">
+              <thead><tr><th>Date</th><th>Member</th><th>Comment</th><th>Actions</th></tr></thead>
+              <tbody id="mod-posts-comments-tbody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--grey)">Loading&#x2026;</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -6074,6 +6104,14 @@ KFS — KIIT Film Society"></textarea>
           <div class="fb-toggle-thumb"></div>
         </span>
         <span id="fb-open-label">Form is Open</span>
+      </label>
+      <label class="fb-toggle-row" title="When on, every submission also creates a QR entry ticket and gets emailed one. Turn off for plain feedback/survey forms that don't need entry tickets.">
+        <span class="fb-toggle" id="fb-ticket-toggle">
+          <input type="checkbox" id="fb-issues-ticket" checked>
+          <div class="fb-toggle-track"></div>
+          <div class="fb-toggle-thumb"></div>
+        </span>
+        <span id="fb-ticket-label">Issues QR Ticket</span>
       </label>
       <span style="font-size:12px;color:var(--grey)" id="fb-response-count">0 responses</span>
     </div>

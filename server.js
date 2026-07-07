@@ -3549,7 +3549,13 @@ app.get("/api/members", async (req, res) => {
 
     return data || [];
   });
-  res.json(data);
+
+  // The "KFS" row is a sentinel account used internally for official
+  // one-way broadcast DMs — it's not a real member and must never show up
+  // on the public Members page.
+  const kfsSentinelId = await getKfsSentinelId();
+  const filtered = kfsSentinelId ? (data || []).filter(m => m.id !== kfsSentinelId) : data;
+  res.json(filtered);
 });
 
 // Admin GET — bypasses memCache so panel always shows fresh data after add/edit/delete
@@ -5139,17 +5145,28 @@ app.get("/api/events/:id/form", async (req, res) => {
   cacheFor(res, 120); // 2-min cache — form rarely changes
   try {
     const data = await memCache(`event:form:${req.params.id}`, 120, async () => {
-      const { data, error } = await supabasePublic
+      let { data, error } = await supabasePublic
         .from("event_forms")
-        .select("id,event_id,title,description,questions,is_open,created_at,updated_at")
+        .select("id,event_id,title,description,questions,is_open,issues_ticket,created_at,updated_at")
         .eq("event_id", req.params.id)
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) {
+        // issues_ticket column may not exist yet (pre-migration) — retry without it.
+        const retry = await supabasePublic
+          .from("event_forms")
+          .select("id,event_id,title,description,questions,is_open,created_at,updated_at")
+          .eq("event_id", req.params.id)
+          .maybeSingle();
+        if (retry.error) throw new Error(retry.error.message);
+        data = retry.data;
+      }
       return data;
     });
     if (!data)
       return res.status(404).json({ error: "No form found for this event" });
-    res.json(data);
+    // Default true when the column doesn't exist yet or was never set —
+    // preserves current behavior for every pre-existing form.
+    res.json({ ...data, issues_ticket: data.issues_ticket !== false });
   } catch (e) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -5221,7 +5238,7 @@ app.post(
   "/api/admin/events/:id/form",
   requireSection("events"),
   async (req, res) => {
-    const { title, description, sections, questions, is_open } = req.body;
+    const { title, description, sections, questions, is_open, issues_ticket } = req.body;
 
     // Preferred path: sections-based schema (branching + per-section payment).
     // `questions` (flat array) is still accepted for any older client code,
@@ -5268,6 +5285,9 @@ app.post(
       description: description || null,
       questions: storedQuestionsJson,
       is_open: is_open !== false && is_open !== "false",
+      // Default true — an admin who never touches this toggle keeps getting
+      // tickets exactly like before. Explicit false is the only opt-out.
+      issues_ticket: issues_ticket !== false && issues_ticket !== "false",
       updated_at: new Date().toISOString(),
     };
 
@@ -5284,6 +5304,26 @@ app.post(
         .insert([{ ...payload, created_at: new Date().toISOString() }])
         .select()
         .single());
+    }
+
+    // issues_ticket column may not exist yet (pre-migration) — retry once
+    // without it rather than failing the whole save.
+    if (error && /issues_ticket/i.test(error.message || "")) {
+      const { issues_ticket: _drop, ...payloadNoTicketCol } = payload;
+      if (existing) {
+        ({ data, error } = await supabase
+          .from("event_forms")
+          .update(payloadNoTicketCol)
+          .eq("id", existing.id)
+          .select()
+          .single());
+      } else {
+        ({ data, error } = await supabase
+          .from("event_forms")
+          .insert([{ ...payloadNoTicketCol, created_at: new Date().toISOString() }])
+          .select()
+          .single());
+      }
     }
 
     if (error) return res.status(500).json({ error: "Internal server error" });
@@ -5375,14 +5415,28 @@ app.delete(
 // Handles multipart/form-data so image files can be uploaded per-question
 app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (req, res) => {
   // 1. Verify the form exists and is open
-  const { data: form, error: formErr } = await supabasePublic
+  let { data: form, error: formErr } = await supabasePublic
     .from("event_forms")
-    .select("id,is_open,questions")
+    .select("id,is_open,questions,issues_ticket")
     .eq("event_id", req.params.id)
     .maybeSingle();
+  if (formErr) {
+    // issues_ticket column may not exist yet (pre-migration) — retry without it.
+    const retry = await supabasePublic
+      .from("event_forms")
+      .select("id,is_open,questions")
+      .eq("event_id", req.params.id)
+      .maybeSingle();
+    form = retry.data;
+    formErr = retry.error;
+  }
 
   if (formErr || !form)
     return res.status(404).json({ error: "Form not found" });
+  // Default true when the column doesn't exist yet or was never set —
+  // preserves current behavior (ticket + form response) for every
+  // pre-existing form that hasn't been explicitly switched off.
+  const issuesTicket = form.issues_ticket !== false;
   if (!form.is_open)
     return res
       .status(403)
@@ -5625,9 +5679,10 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
         .maybeSingle();
 
       // ── Create event_registrations row + send QR ticket ──────────────────
-      // This ensures form-based registrants appear in the scanner and receive
-      // a QR ticket email — not just a plain confirmation.
-      if (ev && toEmail) {
+      // Only when this form is configured to issue tickets. Pure feedback/
+      // survey forms (issues_ticket=false) just get a plain confirmation —
+      // no scanner entry, no QR.
+      if (ev && toEmail && issuesTicket) {
         (async () => {
           try {
             const EMAIL_NORM = toEmail.toLowerCase().trim();
@@ -5709,7 +5764,8 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           }
         })();
       } else {
-        // No event details or no email — send plain confirmation at minimum
+        // No event details, no email, or this form doesn't issue tickets —
+        // send plain confirmation at minimum.
         sendConfirmationEmail({
           toEmail,
           toName,
@@ -5717,6 +5773,23 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           eventDate: ev?.event_date || null,
           eventVenue: ev?.location || null,
         }).catch((e) => console.error("[email] send failed:", e.message));
+
+        // Paid but ticket-less form (e.g. a paid workshop feedback/entry
+        // form that doesn't need a scanner QR) — still send the receipt.
+        if (paymentRecord && toEmail) {
+          sendPaymentBill({
+            type:            "REGISTRATION",
+            donorId:         null,
+            recipientEmail:  toEmail,
+            recipientName:   toName,
+            isAnonymous:     false,
+            cause:           ev?.title || "Event Registration",
+            amountPaise:     paymentRecord.amount_paise,
+            paymentId:       paymentRecord.razorpay_payment_id,
+            orderId:         paymentRecord.razorpay_order_id,
+            paymentDateTime: paymentRecord.payment_verified_at,
+          }).catch(e => console.error("[form-submit] payment bill email failed:", e.message));
+        }
       }
     }
   } catch (e) {
@@ -13840,6 +13913,37 @@ app.patch("/api/admin/wall/comments/:commentId", authMiddleware, async (req, res
   res.json({ ok: true });
 });
 
+// GET /api/admin/wall/projects/:id/comments  (flat list, for moderation UI)
+app.get("/api/admin/wall/projects/:id/comments", authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("project_comments")
+      .select("id, body, is_pinned, created_at, parent_id, member_id, members!project_comments_member_id_fkey(id, name, photo)")
+      .eq("project_id", req.params.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/admin/wall/comments/:commentId  (soft-delete — admin moderation,
+// independent of the reports flow so admins can remove any comment on sight)
+app.delete("/api/admin/wall/comments/:commentId", authMiddleware, async (req, res) => {
+  try {
+    const { error } = await supabase.from("project_comments")
+      .update({ body: "[removed by admin]", deleted_at: new Date().toISOString() })
+      .eq("id", req.params.commentId);
+    if (error) throw error;
+    logActivity(req.admin.id, req.admin.name, "delete_comment", "project_comment", req.params.commentId).catch(() => {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /api/admin/wall/prune-views  (alternative to pg_cron)
 app.post("/api/admin/wall/prune-views", authMiddleware, async (req, res) => {
   const cutoff = new Date(Date.now() - 2 * 86_400_000).toISOString().split("T")[0];
@@ -14259,6 +14363,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
       .select("id, name, photo, role, batch, domain")
       .in("id", peerIds);
     const peerLookup = Object.fromEntries((peers || []).map(p => [p.id, p]));
+    const kfsSentinelId = await getKfsSentinelId();
 
     // Sort by most recent message
     const result = [...convMap.values()]
@@ -14269,7 +14374,7 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
         const isMine  = lastMsg.actor_id === myId;
         return {
           conv_key:          c.key,
-          peer,
+          peer:              { ...peer, is_official: !!kfsSentinelId && peer.id === kfsSentinelId },
           last_msg_at:       lastMsg.created_at,
           last_snippet:      lastMsg.e2ee ? null : (lastMsg.body || "").slice(0, 80),
           last_is_e2ee:      lastMsg.e2ee || false,

@@ -7153,6 +7153,8 @@ async function openFormBuilder(eventId, eventTitle) {
   document.getElementById('fb-form-desc').value = '';
   document.getElementById('fb-is-open').checked = true;
   document.getElementById('fb-open-label').textContent = 'Form is Open';
+  document.getElementById('fb-issues-ticket').checked = true;
+  document.getElementById('fb-ticket-label').textContent = 'Issues QR Ticket';
   document.getElementById('fb-response-count').textContent = '0 responses';
   document.getElementById('fb-sections').innerHTML = '';
 
@@ -7165,6 +7167,10 @@ async function openFormBuilder(eventId, eventTitle) {
       document.getElementById('fb-form-desc').value = form.description || '';
       document.getElementById('fb-is-open').checked = form.is_open !== false;
       document.getElementById('fb-open-label').textContent = form.is_open !== false ? 'Form is Open' : 'Form is Closed';
+      // Default true (existing forms keep issuing tickets like before) unless
+      // the admin explicitly turned it off.
+      document.getElementById('fb-issues-ticket').checked = form.issues_ticket !== false;
+      document.getElementById('fb-ticket-label').textContent = form.issues_ticket !== false ? 'Issues QR Ticket' : 'Responses Only (No Ticket)';
 
       const { sections } = clientParseFormSchema(form.questions);
       // amount_paise -> amount_rupees for editing; every section/question
@@ -7202,6 +7208,10 @@ async function openFormBuilder(eventId, eventTitle) {
   const isOpenEl = document.getElementById('fb-is-open');
   isOpenEl.onchange = function() {
     document.getElementById('fb-open-label').textContent = this.checked ? 'Form is Open' : 'Form is Closed';
+  };
+  const issuesTicketEl = document.getElementById('fb-issues-ticket');
+  issuesTicketEl.onchange = function() {
+    document.getElementById('fb-ticket-label').textContent = this.checked ? 'Issues QR Ticket' : 'Responses Only (No Ticket)';
   };
   document.getElementById('form-builder-overlay').classList.add('open');
 }
@@ -7478,6 +7488,7 @@ async function saveFormBuilder() {
   const title = document.getElementById('fb-form-title').value.trim() || _fbEventTitle + ' Registration';
   const desc = document.getElementById('fb-form-desc').value.trim();
   const is_open = document.getElementById('fb-is-open').checked;
+  const issues_ticket = document.getElementById('fb-issues-ticket').checked;
   const btn = document.getElementById('fb-save-btn');
 
   // Basic client-side guardrails before hitting the server
@@ -7514,7 +7525,7 @@ async function saveFormBuilder() {
     const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
-      body: JSON.stringify({ title, description: desc, sections: cleanedSections, is_open })
+      body: JSON.stringify({ title, description: desc, sections: cleanedSections, is_open, issues_ticket })
     });
     if (res.ok) {
       btn.textContent = '✓ Saved'; btn.disabled = false;
@@ -13567,7 +13578,7 @@ async function loadModerationBadge() {
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 function modTab(tab) {
-  const panels = ['reports', 'admin-posts', 'ban-appeals'];
+  const panels = ['reports', 'posts', 'admin-posts', 'ban-appeals'];
   panels.forEach(t => {
     const el = document.getElementById('mod-' + t + '-panel');
     const btn = document.getElementById('mod-tab-' + t);
@@ -13583,8 +13594,132 @@ function modTab(tab) {
     }
   });
   if (tab === 'reports') loadModReports();
+  if (tab === 'posts') loadModPosts();
   if (tab === 'admin-posts') loadAdminPosts();
   if (tab === 'ban-appeals') loadBanAppeals();
+}
+
+// ── Strand Posts moderation (browse + delete any post/comment, no report needed) ──
+async function loadModPosts() {
+  if (!adminToken) return;
+  const status = document.getElementById('mod-posts-status')?.value || 'published';
+  const tbody = document.getElementById('mod-posts-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">Loading…</td></tr>';
+  document.getElementById('mod-posts-comments-wrap').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/admin/wall/projects?status=${status}`, {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (!r.ok) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red,#e53e3e)">Failed to load posts.</td></tr>';
+      return;
+    }
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--grey)">No posts found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(p => {
+      const date = new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const author = p.members?.name || 'Member';
+      const toggleLabel = status === 'published' ? 'Hide' : 'Restore';
+      const toggleStatus = status === 'published' ? 'hidden' : 'published';
+      return `<tr>
+        <td style="white-space:nowrap">${date}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.title || '')}">${escHtml(p.title || '(untitled)')}</td>
+        <td>${escHtml(author)}</td>
+        <td>${p.views_count || 0}</td>
+        <td>${p.comments_count || 0}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="viewModPostComments('${p.id}', ${JSON.stringify(p.title || '(untitled)').replace(/"/g, '&quot;')})" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">Comments</button>
+            <button onclick="modTogglePostStatus('${p.id}', '${toggleStatus}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--grey)">${toggleLabel}</button>
+            <button onclick="modDeletePost('${p.id}')" class="btn-sm" style="font-size:11px;padding:4px 10px;background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red,#e53e3e)">Failed to load posts.</td></tr>';
+  }
+}
+
+async function modTogglePostStatus(id, newStatus) {
+  try {
+    const r = await fetch(`/api/admin/wall/projects/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (!r.ok) { alert('Failed to update post.'); return; }
+    loadModPosts();
+  } catch { alert('Failed to update post.'); }
+}
+
+async function modDeletePost(id) {
+  if (!confirm('Permanently delete this post? This cannot be undone.')) return;
+  try {
+    const r = await fetch(`/api/admin/wall/projects/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (!r.ok) { alert('Failed to delete post.'); return; }
+    loadModPosts();
+  } catch { alert('Failed to delete post.'); }
+}
+
+async function viewModPostComments(projectId, title) {
+  const wrap  = document.getElementById('mod-posts-comments-wrap');
+  const tbody = document.getElementById('mod-posts-comments-tbody');
+  document.getElementById('mod-posts-comments-title').textContent = title || '';
+  wrap.style.display = '';
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--grey)">Loading…</td></tr>';
+  try {
+    const r = await fetch(`/api/admin/wall/projects/${projectId}/comments`, {
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (!r.ok) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--red,#e53e3e)">Failed to load comments.</td></tr>';
+      return;
+    }
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--grey)">No comments on this post.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(c => {
+      const date = new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const name = c.members?.name || 'Member';
+      return `<tr>
+        <td style="white-space:nowrap">${date}</td>
+        <td>${escHtml(name)}</td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(c.body || '')}">${escHtml(c.body || '')}</td>
+        <td><button onclick="modDeleteComment('${c.id}', '${projectId}', ${JSON.stringify(title || '').replace(/"/g, '&quot;')})" class="btn-sm" style="font-size:11px;padding:4px 10px;background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33">Delete</button></td>
+      </tr>`;
+    }).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--red,#e53e3e)">Failed to load comments.</td></tr>';
+  }
+}
+
+async function modDeleteComment(commentId, projectId, title) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    const r = await fetch(`/api/admin/wall/comments/${commentId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (!r.ok) { alert('Failed to delete comment.'); return; }
+    viewModPostComments(projectId, title);
+    loadModPosts();
+  } catch { alert('Failed to delete comment.'); }
 }
 
 // ── Load reports ─────────────────────────────────────────────────────────────
