@@ -301,9 +301,12 @@ const E2EE = (() => {
    * Falls back to `msg.body` for legacy plaintext messages.
    */
   async function decryptDm(msg, myId) {
-    if (!_ready) return msg.body || ''; // no key yet
     // Legacy plaintext message (pre-E2EE)
     if (!msg.e2ee) return msg.body || '';
+    // E2EE message but our keys aren't loaded yet — body is just the empty
+    // server-side sentinel here, so don't return it (renders as a blank
+    // bubble). Show the same placeholder used for real decrypt failures.
+    if (!_ready) return '🔒 Message encrypted before your keys were set up';
     try {
       const isMine = msg.sender_id === myId;
       const cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
@@ -358,8 +361,10 @@ const E2EE = (() => {
    * `msg` has `ciphertext` + `wrapped_keys: { [myId]: wrappedKey }`.
    */
   async function decryptGroup(msg, myId) {
-    if (!_ready) return msg.body || '';
     if (!msg.e2ee) return msg.body || ''; // legacy plaintext
+    // E2EE message but our keys aren't loaded yet — see decryptDm for why we
+    // don't fall through to msg.body here (it's just the empty sentinel).
+    if (!_ready) return '🔒 Message encrypted before your keys were set up';
     try {
       const myWrappedKey = msg.wrapped_keys?.[myId];
       if (!myWrappedKey) return '🔒 Message encrypted before your keys were set up';
@@ -1127,6 +1132,12 @@ async function loadDashboard() {
       // letting people discover it message-by-message.
       swShowToast("New device detected — some older encrypted messages may show as locked here.", 5000);
     }
+    // If a conversation was opened before init() finished, its messages were
+    // decrypted with _ready still false and are showing as blank/placeholder
+    // bubbles (see decryptDm/decryptGroup). Re-render now that keys are
+    // loaded so people don't have to reload the page to see them.
+    if (typeof DM !== 'undefined' && DM.activeKey) dmLoadMsgs(false).catch(() => {});
+    if (typeof GC !== 'undefined' && GC.activeId)  gcLoadMsgs(false).catch(() => {});
   }).catch(e => console.warn('[E2EE] init error (non-fatal):', e.message));
   loadMovies();
   loadSecurity();
