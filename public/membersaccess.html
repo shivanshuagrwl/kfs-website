@@ -10261,14 +10261,47 @@
         flex: 1;
         justify-content: center;
       }
+      /* Each button gets its own settle-bounce the moment it becomes active —
+         not just a shared scale, so the row feels like three small distinct
+         objects reacting, not one template repeated three times. */
+      .composer-type-btn.active {
+        color: var(--bg);
+        animation: ctype-settle 0.4s var(--spring);
+      }
+      @keyframes ctype-settle {
+        0%   { transform: scale(0.92); }
+        55%  { transform: scale(1.05); }
+        100% { transform: scale(1); }
+      }
       .composer-type-btn svg {
         transition: transform 0.3s var(--spring);
       }
-      .composer-type-btn.active svg {
-        transform: scale(1.08);
+      /* Photo: a little aperture-close twist */
+      .composer-type-btn[data-post-type="image"].active svg {
+        animation: ctype-icon-photo 0.5s var(--spring);
       }
-      .composer-type-btn.active {
-        color: var(--bg);
+      @keyframes ctype-icon-photo {
+        0%   { transform: scale(1) rotate(0deg); }
+        45%  { transform: scale(1.25) rotate(-10deg); }
+        100% { transform: scale(1.1) rotate(0deg); }
+      }
+      /* Text: lines "stack in" with a quick vertical settle */
+      .composer-type-btn[data-post-type="text"].active svg {
+        animation: ctype-icon-text 0.45s var(--spring);
+      }
+      @keyframes ctype-icon-text {
+        0%   { transform: scale(1) translateY(0); }
+        40%  { transform: scale(0.85) translateY(-3px); }
+        100% { transform: scale(1.1) translateY(0); }
+      }
+      /* Video: a quick flip, like a play-button cueing up */
+      .composer-type-btn[data-post-type="video"].active svg {
+        animation: ctype-icon-video 0.5s var(--spring);
+      }
+      @keyframes ctype-icon-video {
+        0%   { transform: scale(1) rotate(0deg); }
+        50%  { transform: scale(1.3) rotate(8deg); }
+        100% { transform: scale(1.1) rotate(0deg); }
       }
       .composer-type-btn:not(.active):hover {
         color: var(--text);
