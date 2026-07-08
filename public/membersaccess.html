@@ -3787,7 +3787,8 @@
             <div class="card">
               <div class="card-title">Active Sessions</div>
               <div id="sessions-list">
-                <div style="color: var(--muted); font-size: 13px">Loading…</div>
+                <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+                <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
               </div>
               <button
                 class="btn-sm btn-danger"
@@ -3797,6 +3798,29 @@
                 Revoke All Sessions
               </button>
               <div id="sessions-msg" class="ok-msg" style="display: none"></div>
+            </div>
+
+            <!-- Replay tutorial -->
+            <div class="card">
+              <div class="card-title" style="margin-bottom: 6px">Guided Tour</div>
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--muted);
+                  margin-bottom: 16px;
+                  line-height: 1.5;
+                "
+              >
+                Replay the first-time walkthrough that highlights the main
+                parts of the app.
+              </div>
+              <button
+                class="btn-sm"
+                id="replay-tutorial-btn"
+                style="max-width: 200px"
+              >
+                Replay Tutorial
+              </button>
             </div>
 
             <!-- Sign out -->
@@ -3834,7 +3858,8 @@
               this device.
             </div>
             <div id="cust-root">
-              <div style="color: var(--muted); font-size: 13px">Loading…</div>
+              <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+              <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
             </div>
           </div>
 
@@ -3846,7 +3871,9 @@
               something's wrong
             </div>
             <div id="works-list">
-              <div style="color: var(--muted); font-size: 13px">Loading…</div>
+              <div class="sw-skel-row"><div class="sw-skel-avatar" style="border-radius:8px"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+              <div class="sw-skel-row"><div class="sw-skel-avatar" style="border-radius:8px"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+              <div class="sw-skel-row"><div class="sw-skel-avatar" style="border-radius:8px"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
             </div>
           </div>
 
@@ -4232,7 +4259,10 @@
               <div class="discover-section">
                 <div class="discover-section-title">Trending on the Wall</div>
                 <div id="discover-trending-row" class="discover-trending-row">
-                  <div class="sw-loading">Loading…</div>
+                  <div class="sw-skel-tile"><div class="sw-skel-img"></div><div class="sw-skel-line"></div></div>
+                  <div class="sw-skel-tile"><div class="sw-skel-img"></div><div class="sw-skel-line"></div></div>
+                  <div class="sw-skel-tile"><div class="sw-skel-img"></div><div class="sw-skel-line"></div></div>
+                  <div class="sw-skel-tile"><div class="sw-skel-img"></div><div class="sw-skel-line"></div></div>
                 </div>
               </div>
               <div class="discover-section">
@@ -4577,7 +4607,11 @@
                   />
                 </div>
                 <div id="dm-conv-list" class="dm-conv-list">
-                  <div id="dm-conv-loading" class="dm-state-msg">Loading…</div>
+                  <div id="dm-conv-loading">
+                    <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+                    <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+                    <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+                  </div>
                   <div
                     id="dm-conv-empty"
                     class="dm-state-msg"
@@ -6317,6 +6351,30 @@
               0% { background-position: 200% 0; }
               100% { background-position: -50% 0; }
             }
+            /* ── Generic row skeleton — sessions, works, DM conversation list,
+               discover row, customization panel: anywhere that previously
+               just showed a bare "Loading…" line. ── */
+            .sw-skel-row {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 10px 2px;
+            }
+            .sw-skel-row + .sw-skel-row {
+              border-top: 1px solid rgba(255,255,255,0.05);
+            }
+            .sw-skel-row .sw-skel-avatar { width: 36px; height: 36px; }
+            .sw-skel-row .sw-skel-lines { gap: 7px; }
+            .sw-skel-row .sw-skel-line:first-child { width: 45%; }
+            .sw-skel-row .sw-skel-line:last-child { width: 25%; height: 7px; }
+            .sw-skel-tile {
+              flex-shrink: 0;
+              width: 92px;
+              border-radius: 12px;
+              overflow: hidden;
+            }
+            .sw-skel-tile .sw-skel-img { aspect-ratio: 3 / 4; }
+            .sw-skel-tile .sw-skel-line { margin: 6px 4px; }
             /* ── First-time feature tour ────────────────────────────────── */
             #kfs-tour-root { position: fixed; inset: 0; z-index: 100000; }
             #kfs-tour-backdrop {
@@ -9733,7 +9791,7 @@
       .ig-post-actions {
         display: flex;
         align-items: center;
-        padding: 6px 14px 2px;
+        padding: 4px 14px 0;
         gap: 4px;
       }
       .ig-post-views-inline {
@@ -9930,10 +9988,11 @@
 
       /* Likes count */
       .ig-post-likes {
-        padding: 0 14px 4px;
+        padding: 4px 14px 6px;
         font-size: 13px;
         font-weight: 600;
         color: var(--text);
+        line-height: 1.3;
       }
       /* Caption */
       .ig-post-caption {

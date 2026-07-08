@@ -882,6 +882,12 @@ function wireStaticButtons() {
   on('sec-change-pw-btn',  'click', changePasswordFromSecurity);
   on('revoke-sessions-btn','click', revokeAllSessions);
   on('security-logout-btn','click', logoutMember);
+  on('replay-tutorial-btn','click', () => {
+    // Jump to the Strand feed first so the tour's spotlight targets (nav
+    // items, post button, etc.) are actually visible/in-DOM before it starts.
+    _goToStrandFeed();
+    setTimeout(() => kfsStartTour(true), 350);
+  });
 
   // Collab
   on('new-collab-btn',    'click', showCollabForm);
@@ -2228,7 +2234,7 @@ let _pendingEditMovieTitle = null;
 async function loadMyWorks() {
   const list = $id('works-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  list.innerHTML = swSkelRows(3);
   try {
     const works = await api('GET', '/api/member/works');
     if (!works.length) {
@@ -3127,6 +3133,28 @@ function swFeedCard(p) {
 }
 
 // ── Feed Load ─────────────────────────────────────────────────────────────
+
+/** Generic list-row skeleton — used anywhere a list previously showed a bare
+ *  "Loading…" line while it fetched (sessions, works, DM conversations). */
+function swSkelRows(n = 4) {
+  const row = `<div class="sw-skel-row">
+    <div class="sw-skel-avatar"></div>
+    <div class="sw-skel-lines">
+      <div class="sw-skel-line"></div>
+      <div class="sw-skel-line"></div>
+    </div>
+  </div>`;
+  return row.repeat(n);
+}
+
+/** Horizontal-scroll tile skeleton — used for the Discover "Trending" row. */
+function swSkelTiles(n = 4) {
+  const tile = `<div class="sw-skel-tile">
+    <div class="sw-skel-img"></div>
+    <div class="sw-skel-line"></div>
+  </div>`;
+  return tile.repeat(n);
+}
 
 function swSkeletonCards(n = 3) {
   const card = `<div class="sw-skel-card">
