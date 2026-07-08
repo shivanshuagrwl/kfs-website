@@ -8162,6 +8162,31 @@
               color: #333;
               letter-spacing: 0.01em;
             }
+            /* Collapsed run of undecryptable messages (see _collapseFailedDecrypts) —
+               styled as a muted system notice rather than a normal chat bubble. */
+            .dm-e2ee-summary-wrap { max-width: 100%; }
+            .dm-e2ee-summary {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              flex-wrap: wrap;
+              background: rgba(255,255,255,0.04);
+              border: 1px dashed rgba(255,255,255,0.12);
+              color: #777;
+              font-size: 12px;
+              font-style: italic;
+            }
+            .dm-e2ee-why {
+              background: none;
+              border: none;
+              padding: 0;
+              color: #4ba3d4;
+              font-size: 12px;
+              font-style: normal;
+              font-weight: 600;
+              cursor: pointer;
+              text-decoration: underline;
+            }
             .dm-edited-tag {
               font-size: 10px;
               color: #333;

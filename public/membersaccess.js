@@ -106,7 +106,7 @@ const E2EE = (() => {
   /**
    * Load our identity key pair from IndexedDB.
    * Creates a new one if none exists yet.
-   * Returns { publicKeyJwk, privateKey (CryptoKey) }.
+   * Returns { publicKeyJwk, privateKey (CryptoKey), isFresh }.
    */
   async function _loadMyKeyPair() {
     const stored = await _dbGet(MY_KEY_ID);
@@ -116,9 +116,10 @@ const E2EE = (() => {
         { name: 'ECDH', namedCurve: 'P-256' },
         false, ['deriveKey', 'deriveBits']
       );
-      return { publicKeyJwk: stored.publicKeyJwk, privateKey };
+      return { publicKeyJwk: stored.publicKeyJwk, privateKey, isFresh: false };
     }
-    return _generateKeyPair();
+    const fresh = await _generateKeyPair();
+    return { ...fresh, isFresh: true };
   }
 
   /**
@@ -209,6 +210,7 @@ const E2EE = (() => {
   let _myPublicKeyJwk = null;
   let _ready          = false;
   let _readyPromise   = null;
+  let _wasRotated     = false; // true only if the server already had a different key on file
 
   /**
    * Must be called once on login (after _member is set).
@@ -218,12 +220,17 @@ const E2EE = (() => {
     if (_readyPromise) return _readyPromise;
     _readyPromise = (async () => {
       try {
-        const { publicKeyJwk, privateKey } = await _loadMyKeyPair();
+        const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair();
         _myPrivateKey   = privateKey;
         _myPublicKeyJwk = publicKeyJwk;
         // Publish our public key so peers can encrypt messages to us.
         // The server stores it — it's not secret. Idempotent upsert.
-        await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+        // rotated=true means the server already had a *different* key on
+        // file — i.e. this is genuinely a new device/browser or cleared
+        // storage, not a first-ever setup, so older messages may not
+        // decrypt here.
+        const resp = await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+        _wasRotated = isFresh && !!resp?.rotated;
         _ready = true;
         console.log('[E2EE] Ready. Key fingerprint:', await fingerprint());
       } catch (e) {
@@ -235,6 +242,10 @@ const E2EE = (() => {
   }
 
   function ready() { return _ready; }
+  // True only when this device's key was freshly generated AND the server
+  // already had a prior key on file for this member — a real rotation
+  // (new device/browser, or local site data cleared), not first-time setup.
+  function wasFreshKey() { return _wasRotated; }
 
   // ── Fingerprint (for out-of-band verification) ───────────────────────────────
 
@@ -427,6 +438,7 @@ const E2EE = (() => {
   return {
     init,
     ready,
+    wasFreshKey,
     fingerprint,
     encryptDm,
     decryptDm,
@@ -1107,7 +1119,15 @@ async function loadDashboard() {
   await loadProfile();
   // Initialise E2EE: generate or load ECDH key pair, publish public key to server.
   // Non-blocking — runs in background. Falls back to plaintext if crypto unavailable.
-  E2EE.init().catch(e => console.warn('[E2EE] init error (non-fatal):', e.message));
+  E2EE.init().then(() => {
+    if (E2EE.wasFreshKey()) {
+      // Genuine rotation — server had a different key on file, so older
+      // DMs/group messages encrypted under the previous key won't decrypt
+      // here (see _collapseFailedDecrypts). One-time heads up rather than
+      // letting people discover it message-by-message.
+      swShowToast("New device detected — some older encrypted messages may show as locked here.", 5000);
+    }
+  }).catch(e => console.warn('[E2EE] init error (non-fatal):', e.message));
   loadMovies();
   loadSecurity();
   loadActivity();
@@ -5348,6 +5368,11 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     ? container.lastElementChild
     : null;
 
+  // Collected so we can collapse a run of failed decrypts into one summary
+  // row once we know how many failed, instead of leaving a wall of identical
+  // "encrypted before your keys were set up" bubbles (see _collapseFailedDecrypts).
+  const _pendingDecrypts = [];
+
   msgs.forEach(m => {
     const mine = m.sender_id === myId;
     const senderKey = m.sender_id;
@@ -5400,7 +5425,7 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _myId = myId;
-      E2EE.decryptDm(m, _myId).then(pt => {
+      const _decryptP = E2EE.decryptDm(m, _myId).then(pt => {
         m._plaintext = pt; // cache for context menu / reply
         if (_isStrandShareOnly(pt)) {
           bodyNode.remove();
@@ -5411,7 +5436,12 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
           bodyNode.style.opacity = '';
           _attachStrandPreviewToBubble(bubble, pt, false);
         }
-      }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
+      }).catch(() => {
+        bodyNode.textContent = '🔒 Message encrypted before your keys were set up';
+        bodyNode.style.opacity = '0.5';
+        bubble.classList.add('dm-e2ee-failed');
+      });
+      _pendingDecrypts.push(_decryptP);
     } else {
       bodyNode.textContent = m.body;
     }
@@ -5472,6 +5502,54 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
   });
 
   _markLastBubbleInGroups(container);
+  if (_pendingDecrypts.length) {
+    Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
+  }
+}
+
+/**
+ * If a device's local E2EE key changed (new device/browser, or the browser's
+ * local storage was cleared — the private key lives only in IndexedDB, it's
+ * never synced), every older message that was encrypted under the previous
+ * key fails to decrypt. Left as-is this rendered a long wall of identical
+ * "Message encrypted before your keys were set up" bubbles, which reads as
+ * broken. This collapses any run of 3+ consecutive failures inside a single
+ * message group into one compact system-style row with a "Why?" explainer,
+ * keeping the last message's timestamp for context.
+ */
+function _collapseFailedDecrypts(container) {
+  container.querySelectorAll('.dm-msg-group').forEach(group => {
+    const children = Array.from(group.children); // alternating .dm-bubble-wrap, .dm-meta
+    const runs = [];
+    let i = 0;
+    while (i < children.length) {
+      const isFailedWrap = n => n?.classList?.contains('dm-bubble-wrap') && n.querySelector('.dm-bubble.dm-e2ee-failed');
+      if (!isFailedWrap(children[i])) { i++; continue; }
+      const start = i;
+      const nodes = [];
+      let j = i;
+      while (isFailedWrap(children[j]) && children[j + 1]) {
+        nodes.push(children[j], children[j + 1]);
+        j += 2;
+      }
+      if (nodes.length >= 6) runs.push(nodes); // 3+ failed messages (wrap+meta pairs)
+      i = j > start ? j : i + 1;
+    }
+    runs.forEach(nodes => {
+      const count = nodes.length / 2;
+      const lastMeta = nodes[nodes.length - 1];
+      const toRemove = nodes.slice(0, -1); // everything except the last meta (keeps its timestamp)
+      const summary = document.createElement('div');
+      summary.className = 'dm-bubble-wrap dm-e2ee-summary-wrap';
+      summary.innerHTML = `<div class="dm-bubble dm-e2ee-summary">🔒 ${count} messages can't be decrypted on this device <button type="button" class="dm-e2ee-why">Why?</button></div>`;
+      summary.querySelector('.dm-e2ee-why').addEventListener('click', e => {
+        e.stopPropagation();
+        swAlert("These were encrypted before the secure keys on this device existed — usually because you're signed in on a new device/browser, or this browser's local data was cleared. They can't be recovered here, but new messages will work normally.", { title: 'Locked messages' });
+      });
+      toRemove[0].parentNode.insertBefore(summary, toRemove[0]);
+      toRemove.forEach(n => n.remove());
+    });
+  });
 }
 
 /**
@@ -8406,6 +8484,8 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
   let group = (lastSenderHint && container.lastElementChild?.classList.contains('dm-msg-group'))
     ? container.lastElementChild : null;
 
+  const _pendingDecrypts = [];
+
   msgs.forEach(m => {
     // ── System / activity messages → WhatsApp-style centered pill ─────────
     if (m.is_system) {
@@ -8509,7 +8589,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       bodyNode.textContent = '🔒 …';
       bodyNode.style.opacity = '0.5';
       const _gcMyId = mine ? m.sender_id : gcMyId();
-      E2EE.decryptGroup(m, _gcMyId).then(pt => {
+      const _decryptP = E2EE.decryptGroup(m, _gcMyId).then(pt => {
         m._plaintext = pt;
         if (_isStrandShareOnly(pt)) {
           bodyNode.remove();
@@ -8520,7 +8600,12 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
           bodyNode.style.opacity = '';
           _attachStrandPreviewToBubble(bubble, pt, false);
         }
-      }).catch(() => { bodyNode.textContent = '🔒 Message encrypted before your keys were set up'; bodyNode.style.opacity = '0.5'; });
+      }).catch(() => {
+        bodyNode.textContent = '🔒 Message encrypted before your keys were set up';
+        bodyNode.style.opacity = '0.5';
+        bubble.classList.add('dm-e2ee-failed');
+      });
+      _pendingDecrypts.push(_decryptP);
     } else {
       bodyNode.innerHTML = _gcHighlightMentions(m.body);
     }
@@ -8584,6 +8669,9 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 
   _markLastBubbleInGroups(container);
   _gcRenderSeenBy();
+  if (_pendingDecrypts.length) {
+    Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
+  }
 }
 
 function gcScrollBottom() {

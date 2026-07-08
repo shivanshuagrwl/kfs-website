@@ -14006,13 +14006,23 @@ app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eeKeyLimit, asy
       return res.status(400).json({ error: "Invalid public key: must be ECDH P-256 JWK with x, y coords" });
     if (public_key_jwk.d)
       return res.status(400).json({ error: "Private key component (d) must never be sent to the server" });
+    // Was there already a key on file? If so this publish is a *rotation*
+    // (new device/browser, or local storage was cleared) rather than a
+    // first-ever setup — the client uses this to decide whether to warn
+    // that older messages may no longer decrypt.
+    const { data: existing } = await supabase
+      .from("member_e2ee_keys")
+      .select("member_id")
+      .eq("member_id", myId)
+      .maybeSingle();
+    const rotated = !!existing;
     const now = new Date().toISOString();
     const { error } = await supabase
       .from("member_e2ee_keys")
       .upsert([{ member_id: myId, public_key_jwk, fingerprint: null, published_at: now, updated_at: now }],
               { onConflict: "member_id" });
     if (error) throw error;
-    res.json({ success: true });
+    res.json({ success: true, rotated });
   } catch (e) {
     console.error("[e2ee/publish-key]", e.message);
     res.status(500).json({ error: "Failed to publish key" });
