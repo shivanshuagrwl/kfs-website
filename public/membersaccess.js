@@ -449,6 +449,7 @@ const API = '';  // same-origin
 let _token      = null;
 let _member     = null;
 let _csrfToken  = null;
+let _sessionExpiredHandled = false; // guards against firing the expired-session reset more than once when several polls/requests 401 around the same time
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -504,6 +505,14 @@ async function api(method, path, body, isForm = false) {
         retryHeaders['x-csrf-token'] = await getCsrf();
       }
       r = await fetch(API + fetchPath, { ...opts, headers: retryHeaders });
+      if (r.status === 401) _handleSessionExpired(); // refreshed token was rejected too — truly expired
+    } else {
+      // The httpOnly refresh cookie is gone/expired too — there's no way to
+      // silently recover. Previously the request just threw here and
+      // whatever screen was open (e.g. a post detail modal mid-load) was
+      // left stuck with no feedback, looking unresponsive. Force a clean
+      // re-login instead.
+      _handleSessionExpired();
     }
   }
 
@@ -545,10 +554,30 @@ async function refreshToken() {
         localStorage.setItem('kfs-member-data', JSON.stringify(d.member));
         window._member = d.member;
       }
+      _sessionExpiredHandled = false; // a fresh, valid session — re-arm the expiry handler
       return true;
     }
     return false;
   } catch { return false; }
+}
+
+/** Called when a request 401s and the refresh-token cookie can't (or no
+ *  longer can) recover the session. Rather than leaving whatever was open
+ *  mid-load stuck and unresponsive, this clears local auth state, closes
+ *  any open modals/overlays, and drops the person back to the login screen
+ *  with a clear explanation. Guarded so a burst of concurrent 401s (e.g.
+ *  several polling timers firing around the same moment) only does this once. */
+function _handleSessionExpired() {
+  if (_sessionExpiredHandled) return;
+  _sessionExpiredHandled = true;
+  _token = null;
+  _member = null;
+  localStorage.removeItem('kfs-member-token');
+  localStorage.removeItem('kfs-member-data');
+  document.querySelectorAll('[id$="-modal-overlay"]').forEach(el => { el.style.display = 'none'; });
+  document.body.style.overflow = '';
+  if (typeof showLoginScreen === 'function') showLoginScreen();
+  showMsg('login-err', 'Your session expired. Please sign in again.', false);
 }
 
 function relTime(iso) {
@@ -777,15 +806,23 @@ function initMfGenreInput() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
+function _hideBootLoader() {
+  $id('kfs-boot-loader')?.classList.add('kfs-boot-hidden');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   wireStaticButtons();
 
   // Try to restore session via refresh token cookie
   if (document.cookie.includes('kfs_member_session=1')) {
     const ok = await refreshToken();
-    if (ok) { await loadDashboard(); return; }
+    if (ok) {
+      try { await loadDashboard(); } finally { _hideBootLoader(); }
+      return;
+    }
   }
   showLoginScreen();
+  _hideBootLoader();
 });
 
 // ── Wire all static HTML buttons via addEventListener ─────────────────────────
@@ -1105,12 +1142,14 @@ async function loadDashboard() {
         // Switch to profile panel
         const profileNav = document.querySelector('[data-panel="profile"]');
         if (profileNav) switchPanel(profileNav);
+        setTimeout(() => kfsStartTour(), 450);
       }, { once: true });
       if (skipBtn) skipBtn.addEventListener('click', () => {
         overlay.classList.remove('open');
         localStorage.setItem(firstTimeKey, '1');
         // Go straight to feed
         _goToStrandFeed();
+        setTimeout(() => kfsStartTour(), 450);
       }, { once: true });
     }
   } else {
@@ -3036,7 +3075,7 @@ function swFeedCard(p) {
         <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke="none"/><path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg> KFS
        </span>` : '';
 
-  return `<article class="ig-post" data-project-id="${swEsc(p.id)}"${isAdminPost ? ' style="border:1.5px solid #2d6a9f22;background:linear-gradient(180deg,rgba(45,106,159,.04),transparent)"' : ''} onclick="swOpenDetail('${swEsc(p.id)}')">
+  return `<article class="ig-post" data-project-id="${swEsc(p.id)}" data-rxn-count="${p.reactions_count||0}"${isAdminPost ? ' style="border:1.5px solid #2d6a9f22;background:linear-gradient(180deg,rgba(45,106,159,.04),transparent)"' : ''} onclick="swOpenDetail('${swEsc(p.id)}')">
     <!-- Header -->
     <div class="ig-post-header">
       <div class="ig-post-avatar-wrap" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
@@ -3089,6 +3128,24 @@ function swFeedCard(p) {
 
 // ── Feed Load ─────────────────────────────────────────────────────────────
 
+function swSkeletonCards(n = 3) {
+  const card = `<div class="sw-skel-card">
+    <div class="sw-skel-header">
+      <div class="sw-skel-avatar"></div>
+      <div class="sw-skel-lines">
+        <div class="sw-skel-line" style="width:35%"></div>
+        <div class="sw-skel-line" style="width:20%;height:7px"></div>
+      </div>
+    </div>
+    <div class="sw-skel-img"></div>
+    <div class="sw-skel-actions">
+      <div class="sw-skel-icon"></div>
+      <div class="sw-skel-icon"></div>
+    </div>
+  </div>`;
+  return card.repeat(n);
+}
+
 async function swLoadFeed(reset = false) {
   if (SW.feedLoading) return;
   if (!reset && SW.feedExhausted) return;
@@ -3096,7 +3153,7 @@ async function swLoadFeed(reset = false) {
     SW.feedPage = 1;
     SW.feedExhausted = false;
     const grid = $id('studio-feed');
-    if (grid) grid.innerHTML = '<div class="sw-loading">Loading…</div>';
+    if (grid) grid.innerHTML = swSkeletonCards(3);
   }
   SW.feedLoading = true;
   try {
@@ -3357,20 +3414,25 @@ async function swPostComment(projectId, parentId) {
 
 async function swToggleReaction(projectId, reactionType) {
   const current = SW.myReactions.get(projectId)||null;
-  SW.myReactions.set(projectId, current===reactionType ? null : reactionType);
-  swUpdateReactionUI(projectId);
+  const next = current===reactionType ? null : reactionType;
+  // Delta only fires on a null <-> non-null transition — switching from one
+  // reaction type straight to another (e.g. wow -> fire) is a swap, not an
+  // additional reaction, since it's one reaction per member per post.
+  const delta = (current===null && next!==null) ? 1 : (current!==null && next===null) ? -1 : 0;
+  SW.myReactions.set(projectId, next);
+  swUpdateReactionUI(projectId, delta);
   try {
     const resp = await api('POST', `/api/member/studio/projects/${projectId}/react`, { reaction_type: reactionType });
     // Server returns { active, reaction_type }; sync state with server truth
     SW.myReactions.set(projectId, resp.active ? resp.reaction_type : null);
-    swUpdateReactionUI(projectId);
+    swUpdateReactionUI(projectId, 0);
   } catch {
     SW.myReactions.set(projectId, current);
-    swUpdateReactionUI(projectId);
+    swUpdateReactionUI(projectId, -delta);
   }
 }
 
-function swUpdateReactionUI(projectId) {
+function swUpdateReactionUI(projectId, countDelta = 0) {
   const myRxn = SW.myReactions.get(projectId)||null;
   // Update detail modal reactions
   $id(`detail-reactions-${projectId}`)?.querySelectorAll('.studio-rxn-btn').forEach(btn=>{
@@ -3390,9 +3452,43 @@ function swUpdateReactionUI(projectId) {
         svg.setAttribute('stroke', isLiked ? '#4ba3d4' : 'currentColor');
       }
     }
+    if (countDelta !== 0) swBumpReactionCount(feedCard, countDelta);
+  }
+  // Keep the reaction count in the open post-detail modal in sync too
+  if (countDelta !== 0 && SW.detailProjectId === projectId) {
+    const overlay = $id('studio-detail-modal-overlay');
+    const statEl = overlay?.querySelectorAll('.studio-detail-stat')[1]; // [views, reactions, comments]
+    if (statEl) {
+      const cur = parseInt((statEl.textContent||'').replace(/[^\d]/g,''),10) || 0;
+      statEl.innerHTML = `${SW_ICONS.heart}&nbsp;${swFmtNum(Math.max(0, cur + countDelta))}`;
+    }
   }
   // Sync overlay active states if it's currently showing for this project
   if (RXN.currentId === projectId) _rxnSyncActive(projectId);
+}
+
+/** Update the "N reactions" line on a feed card in place, creating or
+ *  removing the element as the count crosses 0 — so the count never sits
+ *  stale after a reaction until the next full feed reload. */
+function swBumpReactionCount(feedCard, delta) {
+  const prevCount = parseInt(feedCard.dataset.rxnCount || '0', 10) || 0;
+  const newCount = Math.max(0, prevCount + delta);
+  feedCard.dataset.rxnCount = String(newCount);
+  let likesEl = feedCard.querySelector('.ig-post-likes');
+  if (newCount > 0) {
+    const text = `${swFmtNum(newCount)} ${newCount !== 1 ? 'reactions' : 'reaction'}`;
+    if (likesEl) {
+      likesEl.textContent = text;
+    } else {
+      likesEl = document.createElement('div');
+      likesEl.className = 'ig-post-likes';
+      likesEl.textContent = text;
+      const actions = feedCard.querySelector('.ig-post-actions');
+      actions?.insertAdjacentElement('afterend', likesEl);
+    }
+  } else if (likesEl) {
+    likesEl.remove();
+  }
 }
 
 // ── Reaction Overlay — single body-level portal ────────────────────────────
@@ -5363,6 +5459,17 @@ function _markLastBubbleInGroups(container) {
     wraps.forEach((w, i) => {
       const bubble = w.querySelector('.dm-bubble');
       if (bubble) bubble.classList.toggle('dm-bubble-tail', i === wraps.length - 1);
+    });
+    // iMessage/WhatsApp-style meta: only the LAST message in a consecutive
+    // run from the same sender shows its time/tick/edited row. Showing a
+    // full meta row under every single bubble was what made back-to-back
+    // messages from the same person look far more spaced out than they
+    // needed to be. Earlier messages in the run keep their meta element in
+    // the DOM (so delete/edit state stays wired up) but it's collapsed to
+    // zero height via CSS — see `.dm-meta-mid` in membersaccess.html.
+    const metas = group.querySelectorAll(':scope > .dm-meta');
+    metas.forEach((m, i) => {
+      m.classList.toggle('dm-meta-mid', i !== metas.length - 1);
     });
   });
 }
@@ -12223,3 +12330,168 @@ function dmRenderTopbarExtras() { /* no-op — actions live in the ⓘ info pane
 // ═══════════════════════════════════════════════════════════════════════════
 // END PATCH
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIRST-TIME FEATURE TOUR — spotlight walkthrough with a skip option
+// Runs once per member (tracked in localStorage), right after the existing
+// profile-setup nudge resolves. Replayable any time from Settings.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const KFS_TOUR_STEPS = [
+  {
+    selectors: null, // no target — centered welcome card
+    title: 'Quick tour of KFS',
+    body: "Here's a 30-second look at where everything lives. Tap Skip any time to jump straight in.",
+  },
+  {
+    selectors: ['#studio-feed', '.strand-feed-grid'],
+    title: 'Social Strand',
+    body: 'This is the feed — see what other members are posting, and react or comment on their work.',
+  },
+  {
+    selectors: ['#studio-new-post-btn', '.btb-post-item', '#studio-new-post-btn2'],
+    title: 'Share your work',
+    body: 'Tap here any time to post a project, photo, video, or update of your own to the Strand.',
+  },
+  {
+    selectors: ['[data-panel="network"]', '#btb-network'],
+    title: 'Network',
+    body: 'Find collaborators, browse open collab posts, and connect with other members here.',
+  },
+  {
+    selectors: ['#nav-dms', '[data-panel="dms"]'],
+    title: 'Messages',
+    body: 'Direct messages and group chats with other members live here.',
+  },
+  {
+    selectors: ['[data-panel="profile"]', '#btb-settings'],
+    title: "You're set",
+    body: 'Your profile, security, and app settings are always one tap away. Enjoy KFS!',
+  },
+];
+
+let _tourStep = 0;
+let _tourResizeHandler = null;
+
+function _tourFindTarget(selectors) {
+  if (!selectors) return null;
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el && el.offsetParent !== null) return el; // must be visible in current layout
+  }
+  return null;
+}
+
+function kfsStartTour(force = false) {
+  const memberId = (_member?.id || window._memberProfile?.id || 'unknown');
+  const tourKey = `kfs-tour-seen-${memberId}`;
+  if (!force && localStorage.getItem(tourKey)) return;
+  if ($id('app-screen')?.style.display === 'none') return; // not logged in / not on dashboard
+
+  _tourStep = 0;
+  _tourBuildDom();
+  _tourRenderStep();
+}
+
+function _tourBuildDom() {
+  if ($id('kfs-tour-root')) return;
+  const root = document.createElement('div');
+  root.id = 'kfs-tour-root';
+  root.innerHTML = `
+    <div id="kfs-tour-backdrop"></div>
+    <div id="kfs-tour-spot"></div>
+    <div id="kfs-tour-card" role="dialog" aria-modal="true">
+      <div class="kfs-tour-dots"></div>
+      <div class="kfs-tour-title"></div>
+      <div class="kfs-tour-body"></div>
+      <div class="kfs-tour-actions">
+        <button type="button" class="kfs-tour-skip">Skip</button>
+        <div style="flex:1"></div>
+        <button type="button" class="kfs-tour-back">Back</button>
+        <button type="button" class="kfs-tour-next">Next</button>
+      </div>
+    </div>`;
+  document.body.appendChild(root);
+  root.querySelector('.kfs-tour-skip').addEventListener('click', _tourEnd);
+  root.querySelector('.kfs-tour-back').addEventListener('click', () => { if (_tourStep > 0) { _tourStep--; _tourRenderStep(); } });
+  root.querySelector('.kfs-tour-next').addEventListener('click', () => {
+    if (_tourStep >= KFS_TOUR_STEPS.length - 1) { _tourEnd(); return; }
+    _tourStep++;
+    _tourRenderStep();
+  });
+  _tourResizeHandler = () => _tourPositionSpot();
+  window.addEventListener('resize', _tourResizeHandler);
+  window.addEventListener('scroll', _tourResizeHandler, true);
+}
+
+function _tourRenderStep() {
+  const step = KFS_TOUR_STEPS[_tourStep];
+  const root = $id('kfs-tour-root');
+  if (!root || !step) return;
+
+  root.querySelector('.kfs-tour-title').textContent = step.title;
+  root.querySelector('.kfs-tour-body').textContent = step.body;
+  root.querySelector('.kfs-tour-back').style.visibility = _tourStep === 0 ? 'hidden' : 'visible';
+  root.querySelector('.kfs-tour-next').textContent = _tourStep === KFS_TOUR_STEPS.length - 1 ? 'Get started' : 'Next';
+
+  const dots = root.querySelector('.kfs-tour-dots');
+  dots.innerHTML = KFS_TOUR_STEPS.map((_, i) => `<span class="kfs-tour-dot${i === _tourStep ? ' active' : ''}"></span>`).join('');
+
+  _tourPositionSpot();
+}
+
+function _tourPositionSpot() {
+  const step = KFS_TOUR_STEPS[_tourStep];
+  const spot = $id('kfs-tour-spot');
+  const card = $id('kfs-tour-card');
+  if (!spot || !card || !step) return;
+
+  const target = _tourFindTarget(step.selectors);
+  if (!target) {
+    // No visible target for this step (e.g. desktop-only or mobile-only nav
+    // element not present at this breakpoint) — skip straight past it rather
+    // than showing a spotlight pointing at nothing.
+    if (step.selectors) {
+      if (_tourStep < KFS_TOUR_STEPS.length - 1) { _tourStep++; _tourRenderStep(); }
+      else _tourEnd();
+      return;
+    }
+    // Welcome step — no spotlight, just center the card
+    spot.style.display = 'none';
+    card.style.top = '50%';
+    card.style.left = '50%';
+    card.style.transform = 'translate(-50%, -50%)';
+    return;
+  }
+
+  const r = target.getBoundingClientRect();
+  const pad = 8;
+  spot.style.display = 'block';
+  spot.style.top = `${r.top - pad}px`;
+  spot.style.left = `${r.left - pad}px`;
+  spot.style.width = `${r.width + pad * 2}px`;
+  spot.style.height = `${r.height + pad * 2}px`;
+
+  // Place the card below the target if there's room, otherwise above; clamp
+  // horizontally so it never runs off-screen on narrow viewports.
+  const cardW = Math.min(320, window.innerWidth - 32);
+  card.style.width = `${cardW}px`;
+  card.style.transform = 'none';
+  let left = Math.min(Math.max(r.left, 16), window.innerWidth - cardW - 16);
+  let top = r.bottom + pad + 14;
+  if (top + 160 > window.innerHeight) top = Math.max(16, r.top - pad - 14 - 160);
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+}
+
+function _tourEnd() {
+  const memberId = (_member?.id || window._memberProfile?.id || 'unknown');
+  localStorage.setItem(`kfs-tour-seen-${memberId}`, '1');
+  const root = $id('kfs-tour-root');
+  if (root) root.remove();
+  if (_tourResizeHandler) {
+    window.removeEventListener('resize', _tourResizeHandler);
+    window.removeEventListener('scroll', _tourResizeHandler, true);
+    _tourResizeHandler = null;
+  }
+}

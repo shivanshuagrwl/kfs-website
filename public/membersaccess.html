@@ -2443,6 +2443,47 @@
     </style>
   </head>
   <body>
+    <!-- ── Boot loader ──────────────────────────────────────────────────────────────
+         Covers the brief gap between first paint and the session check that
+         decides whether to show the login screen or the dashboard. Without
+         this, #auth-screen (visible by default) paints immediately, and if
+         the person turns out to already be logged in, the login card flashes
+         for a moment before loadDashboard() swaps it out — this hides that
+         flash by sitting on top of both until membersaccess.js knows which
+         one to show. Removed by _hideBootLoader() in membersaccess.js. -->
+    <div id="kfs-boot-loader">
+      <div class="kfs-boot-mark">KFS</div>
+    </div>
+    <style>
+      #kfs-boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg, #0a0a0a);
+        transition: opacity 0.22s ease;
+      }
+      #kfs-boot-loader.kfs-boot-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .kfs-boot-mark {
+        font-family: "Microsoft Sans Serif", "Segoe UI", Tahoma, sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text, #f5f5f5);
+        opacity: 0.5;
+        animation: kfsBootPulse 1.1s ease-in-out infinite;
+      }
+      @keyframes kfsBootPulse {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.7; }
+      }
+    </style>
+
     <!-- ── Back to Site ──────────────────────────────────────────────────────────── -->
     <a href="/" class="back-to-site-btn" id="back-to-site-btn">
       <svg
@@ -6235,6 +6276,94 @@
               padding: 24px 0;
               text-align: center;
             }
+            /* ── Feed skeleton — shown while the first page loads, instead of
+               a bare "Loading…" line, so the switch into Social Strand feels
+               instant rather than visibly stalling on a blank panel. ── */
+            .sw-skel-card {
+              width: 100%;
+              max-width: 680px;
+              margin: 0 auto 20px;
+              border: 1px solid rgba(255,255,255,0.07);
+              border-radius: 20px;
+              background: #0e0e0e;
+              overflow: hidden;
+            }
+            .sw-skel-header {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 12px 14px;
+            }
+            .sw-skel-avatar {
+              width: 38px;
+              height: 38px;
+              border-radius: 50%;
+              flex-shrink: 0;
+            }
+            .sw-skel-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+            .sw-skel-line { height: 9px; border-radius: 4px; }
+            .sw-skel-img {
+              width: 100%;
+              aspect-ratio: 4 / 3;
+            }
+            .sw-skel-actions { display: flex; gap: 14px; padding: 12px 14px 6px; }
+            .sw-skel-icon { width: 22px; height: 22px; border-radius: 50%; }
+            .sw-skel-avatar, .sw-skel-line, .sw-skel-img, .sw-skel-icon {
+              background: linear-gradient(100deg, #161616 30%, #232323 50%, #161616 70%);
+              background-size: 250% 100%;
+              animation: swSkelShimmer 1.4s ease-in-out infinite;
+            }
+            @keyframes swSkelShimmer {
+              0% { background-position: 200% 0; }
+              100% { background-position: -50% 0; }
+            }
+            /* ── First-time feature tour ────────────────────────────────── */
+            #kfs-tour-root { position: fixed; inset: 0; z-index: 100000; }
+            #kfs-tour-backdrop {
+              position: fixed;
+              inset: 0;
+              background: rgba(0,0,0,0.6);
+            }
+            #kfs-tour-spot {
+              position: fixed;
+              display: none;
+              border-radius: 16px;
+              box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+              border: 2px solid rgba(245,245,245,0.5);
+              pointer-events: none;
+              transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+            }
+            #kfs-tour-card {
+              position: fixed;
+              background: var(--surface, #111);
+              border: 1px solid var(--border, #262626);
+              border-radius: 16px;
+              padding: 18px 20px;
+              box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+              transition: top 0.25s ease, left 0.25s ease;
+            }
+            .kfs-tour-dots { display: flex; gap: 5px; margin-bottom: 10px; }
+            .kfs-tour-dot { width: 6px; height: 6px; border-radius: 50%; background: #333; }
+            .kfs-tour-dot.active { background: var(--text, #f5f5f5); }
+            .kfs-tour-title { font-size: 15px; font-weight: 700; color: var(--text, #f5f5f5); margin-bottom: 6px; }
+            .kfs-tour-body { font-size: 13px; line-height: 1.5; color: var(--muted, #999); margin-bottom: 16px; }
+            .kfs-tour-actions { display: flex; align-items: center; gap: 10px; }
+            .kfs-tour-actions button {
+              font-family: inherit;
+              font-size: 13px;
+              font-weight: 600;
+              border-radius: 20px;
+              cursor: pointer;
+              border: none;
+              padding: 8px 16px;
+            }
+            .kfs-tour-skip { background: none; color: var(--muted, #999); padding: 8px 4px !important; }
+            .kfs-tour-skip:hover { color: var(--text, #f5f5f5); }
+            .kfs-tour-back { background: none; color: var(--text, #f5f5f5); }
+            .kfs-tour-next { background: var(--accent, #f5f5f5); color: #0a0a0a; }
+            @media (max-width: 600px) {
+              #kfs-tour-card { padding: 16px 18px; }
+            }
             .sw-error {
               color: var(--danger);
               font-size: 13px;
@@ -7955,6 +8084,20 @@
               gap: 4px;
               padding: 0 2px;
               height: 16px;
+              transition: height 0.12s ease, opacity 0.12s ease;
+            }
+            /* Every message still gets a meta row in the DOM (so delete/edit
+               wiring keeps working), but only the last bubble in a run of
+               consecutive same-sender messages actually shows it. This is
+               what closes up the gap between grouped messages — tap-and-hold
+               a bubble to still reach delete/react via the context menu. */
+            .dm-meta.dm-meta-mid {
+              height: 0;
+              padding: 0;
+              margin: 0;
+              opacity: 0;
+              overflow: hidden;
+              pointer-events: none;
             }
             .dm-msg-time {
               font-size: 10px;
@@ -9094,6 +9237,36 @@
               <circle cx="11" cy="11" r="2" /></svg
           ></span>
           <span class="settings-sheet-label">Customization</span>
+          <svg
+            class="settings-sheet-chevron"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+        <div
+          class="settings-sheet-item"
+          onclick="closeSettingsSheet();setTimeout(()=>kfsStartTour(true),250)"
+        >
+          <span class="settings-sheet-icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" /></svg
+          ></span>
+          <span class="settings-sheet-label">Replay Tutorial</span>
           <svg
             class="settings-sheet-chevron"
             viewBox="0 0 24 24"
