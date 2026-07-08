@@ -13993,6 +13993,35 @@ const e2eeKeyLimit = rateLimit({
   keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
 });
 
+// ── SECURITY: server-side guard for reply-quote plaintext leakage ─────────────
+// The client is supposed to omit `replied_to_body` whenever the message being
+// quoted is E2EE (it resolves the preview locally instead — see
+// _resolveReplyPreviewText in membersaccess.js). That's a client-side
+// convention though, and a modified/malicious client could still send a
+// plaintext replied_to_body for an E2EE original. Since the whole point of
+// E2EE is that the server must not end up holding plaintext regardless of
+// what a client sends, re-check the *actual* original message's e2ee flag
+// here and drop replied_to_body if it's encrypted, no matter what was sent.
+// `table` is the table the original message lives in ("member_notifications"
+// for DMs, "dm_group_messages" for group chats).
+async function sanitizeReplyBody(table, repliedToId, repliedToBody) {
+  if (!repliedToBody) return null;
+  if (!repliedToId) return null;
+  try {
+    const { data: orig } = await supabase
+      .from(table)
+      .select("e2ee")
+      .eq("id", repliedToId)
+      .maybeSingle();
+    if (orig?.e2ee) return null; // original is encrypted — never store a plaintext quote of it
+  } catch {
+    // If we can't verify, fail closed rather than risk storing plaintext of
+    // a message we couldn't confirm was unencrypted.
+    return null;
+  }
+  return String(repliedToBody).slice(0, 300);
+}
+
 // ── POST /api/member/e2ee/publish-key ────────────────────────────────────────
 // Upsert caller's ECDH P-256 public key. Called on every login after key-gen.
 // Server validates structure but NEVER receives or stores private keys.
@@ -14581,6 +14610,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
 
     const key = dmConvKey(myId, to_member_id);
     const now = new Date().toISOString();
+    const safeReplyBody = await sanitizeReplyBody("member_notifications", replied_to_id, replied_to_body);
 
     const { data: msg, error: insertErr } = await supabase
       .from("member_notifications")
@@ -14597,7 +14627,7 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         link_id:               key,
         is_read:               false,
         replied_to_id:         replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
-        replied_to_body:       replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
+        replied_to_body:       safeReplyBody,
         replied_to_sender:     replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
         // E2EE columns (null for legacy plaintext messages)
         e2ee:                  e2ee ? true : false,
@@ -14765,6 +14795,7 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
 
       const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
       const key = dmConvKey(myId, to_member_id);
+      const safeReplyBody = await sanitizeReplyBody("member_notifications", replied_to_id, replied_to_body);
 
       const { data: msg, error: insertErr } = await supabase
         .from("member_notifications")
@@ -14780,7 +14811,7 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
           link_id:             key,
           is_read:             false,
           replied_to_id:       replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
-          replied_to_body:     replied_to_body  ? String(replied_to_body).slice(0, 300) : null,
+          replied_to_body:     safeReplyBody,
           replied_to_sender:   replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
           attachment_url:      uploadResult.secure_url,
           attachment_type:     "image",
@@ -16539,6 +16570,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
     if (!mem) return res.status(403).json({ error: "Not in this group" });
 
     const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
+    const safeReplyBody = await sanitizeReplyBody("dm_group_messages", replied_to_id, replied_to_body);
 
     const { data: msg, error } = await supabase
       .from("dm_group_messages")
@@ -16555,7 +16587,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         // never displays this field).
         body:              e2ee ? "\u200B" : body,
         replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
-        replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
+        replied_to_body:   safeReplyBody,
         replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
         // E2EE columns
         e2ee:              e2ee ? true : false,
@@ -16744,6 +16776,7 @@ app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteL
       });
 
       const { data: sender } = await supabase.from("members").select("id, name, photo").eq("id", myId).maybeSingle();
+      const safeReplyBody = await sanitizeReplyBody("dm_group_messages", replied_to_id, replied_to_body);
 
       const { data: msg, error } = await supabase
         .from("dm_group_messages")
@@ -16752,7 +16785,7 @@ app.post("/api/member/groups/:id/messages/image", memberAuthMiddleware, gcWriteL
           sender_id:         myId,
           body:              "📷 Photo",
           replied_to_id:     replied_to_id     ? String(replied_to_id).slice(0, 36)    : null,
-          replied_to_body:   replied_to_body   ? String(replied_to_body).slice(0, 300)  : null,
+          replied_to_body:   safeReplyBody,
           replied_to_sender: replied_to_sender ? String(replied_to_sender).slice(0, 100): null,
           attachment_url:    uploadResult.secure_url,
           attachment_type:   "image",

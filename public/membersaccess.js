@@ -5370,6 +5370,23 @@ function _attachStrandPreviewToBubble(bubble, bodyText, standalone) {
   });
 }
 
+// Resolve the text to show in a reply-quote strip without trusting any
+// plaintext the server might hand back for it. Server-stored
+// `replied_to_body` is now only ever plaintext for genuinely-unencrypted
+// (legacy/non-e2ee) messages — see SECURITY notes in dmSend/gcSend/
+// _dmSendImage/_gcSendImage. For E2EE originals we look the quoted message
+// up in the in-memory list we already decrypted client-side; if it isn't
+// loaded/decrypted yet locally we fall back to a generic placeholder rather
+// than ever displaying server-supplied plaintext for an E2EE message.
+function _resolveReplyPreviewText(m, msgArray) {
+  if (m.replied_to_body) return m.replied_to_body; // legacy/non-e2ee — safe as-is
+  if (!m.replied_to_id) return null;
+  const orig = (msgArray || []).find(x => x.id === m.replied_to_id);
+  if (orig && orig._plaintext != null) return orig._plaintext;
+  if (orig && !orig.e2ee) return orig.body || null;
+  return '🔒 Original message';
+}
+
 function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
   // Group consecutive messages from same sender.
   // lastSenderHint: pass the sender_id of the last message already in the DOM
@@ -5406,20 +5423,23 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     bubble.dataset.msgId = m.id;
 
     // Reply quote
-    if (m.replied_to_id && m.replied_to_body) {
-      const quote = document.createElement('div');
-      quote.className = 'dm-reply-quote';
-      quote.innerHTML = `<span class="dm-reply-sender">${swEsc(m.replied_to_sender || 'Member')}</span><span class="dm-reply-body">${swEsc((m.replied_to_body || '').slice(0, 120))}</span>`;
-      // Tap/click → scroll to the original message
-      quote.addEventListener('click', e => {
-        e.stopPropagation();
-        const target = document.querySelector(`[data-msg-id="${CSS.escape(m.replied_to_id)}"]`);
-        if (!target) return;
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        target.classList.add('dm-msg-highlight');
-        setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600);
-      });
-      bubble.appendChild(quote);
+    if (m.replied_to_id) {
+      const _replyText = _resolveReplyPreviewText(m, DM.msgs);
+      if (_replyText) {
+        const quote = document.createElement('div');
+        quote.className = 'dm-reply-quote';
+        quote.innerHTML = `<span class="dm-reply-sender">${swEsc(m.replied_to_sender || 'Member')}</span><span class="dm-reply-body">${swEsc(_replyText.slice(0, 120))}</span>`;
+        // Tap/click → scroll to the original message
+        quote.addEventListener('click', e => {
+          e.stopPropagation();
+          const target = document.querySelector(`[data-msg-id="${CSS.escape(m.replied_to_id)}"]`);
+          if (!target) return;
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('dm-msg-highlight');
+          setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600);
+        });
+        bubble.appendChild(quote);
+      }
     }
     // Attachment (image) — renders above/instead of the text caption
     const _isPhotoOnly = !isDeleted && _attachImageToBubble(bubble, m);
@@ -5657,6 +5677,13 @@ async function dmSend() {
       try {
         const enc = await E2EE.encryptDm(body, peerId);
         dmPayload = { ...dmPayload, body: '', ...enc }; // body sentinel = '' (server stores ciphertexts)
+        // SECURITY: replied_to_body above is the *decrypted plaintext* of the
+        // quoted message (see _bodyForActions/_dmGetReplyPayload) — sending it
+        // as-is would hand the server a cleartext preview of a message we just
+        // went to the trouble of encrypting. Strip it; the reply UI resolves
+        // the quoted text locally from DM.msgs (see _resolveReplyPreviewText),
+        // keyed off replied_to_id, which we do still send.
+        if (dmPayload.replied_to_body) dmPayload.replied_to_body = null;
       } catch (encErr) {
         console.warn('[E2EE] DM encrypt failed, sending plaintext:', encErr.message);
       }
@@ -5797,7 +5824,10 @@ async function _dmSendImage(file, opacity = 100) {
     fd.append('opacity', String(opacity));
     if (replyData.replied_to_id) {
       fd.append('replied_to_id', replyData.replied_to_id);
-      fd.append('replied_to_body', replyData.replied_to_body || '');
+      // SECURITY: replyData.replied_to_body is the decrypted plaintext of
+      // whatever message is being replied to — it may be an E2EE message.
+      // Don't forward it to the server; the client resolves the quoted
+      // preview locally (see _resolveReplyPreviewText).
       fd.append('replied_to_sender', replyData.replied_to_sender || '');
     }
     const res = await api('POST', '/api/member/dm/messages/image', fd, true);
@@ -8563,7 +8593,9 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
     bubble.dataset.msgId = m.id;
 
     // Reply quote (WhatsApp-style)
-    if (m.replied_to_id && m.replied_to_body) {
+    if (m.replied_to_id) {
+      const _replyText = _resolveReplyPreviewText(m, GC.msgs);
+      if (_replyText) {
       const quote = document.createElement('div');
       quote.className = 'dm-reply-quote';
       const qSender = document.createElement('span');
@@ -8571,7 +8603,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
       qSender.textContent = m.replied_to_sender || 'Member';
       const qBody = document.createElement('span');
       qBody.className = 'dm-reply-body';
-      qBody.textContent = (m.replied_to_body || '').slice(0, 120);
+      qBody.textContent = _replyText.slice(0, 120);
       quote.appendChild(qSender);
       quote.appendChild(qBody);
       // Tap/click → scroll to the original message (same as DM)
@@ -8584,6 +8616,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
         setTimeout(() => target.classList.remove('dm-msg-highlight'), 1600);
       });
       bubble.appendChild(quote);
+      }
     }
     // Attachment (image) — renders above/instead of the text caption
     const _isPhotoOnly = !isDeleted && !m.is_system && _attachImageToBubble(bubble, m);
@@ -8812,6 +8845,9 @@ async function gcSend() {
         const memberIds = GC.activeMembers.map(m => m.id || m.member_id).filter(Boolean);
         const enc = await E2EE.encryptGroup(body, memberIds);
         gcPayload = { ...gcPayload, body: '', ...enc };
+        // SECURITY: see matching note in dmSend — don't ship the decrypted
+        // reply-quote text to the server for an otherwise-encrypted message.
+        if (gcPayload.replied_to_body) gcPayload.replied_to_body = null;
       } catch (encErr) {
         console.warn('[E2EE] Group encrypt failed, sending plaintext:', encErr.message);
       }
@@ -8926,7 +8962,7 @@ async function _gcSendImage(file, opacity = 100) {
     fd.append('opacity', String(opacity));
     if (replyData.replied_to_id) {
       fd.append('replied_to_id', replyData.replied_to_id);
-      fd.append('replied_to_body', replyData.replied_to_body || '');
+      // SECURITY: see matching note in _dmSendImage.
       fd.append('replied_to_sender', replyData.replied_to_sender || '');
     }
     const res = await api('POST', `/api/member/groups/${GC.activeId}/messages/image`, fd, true);
