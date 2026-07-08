@@ -13984,10 +13984,25 @@ app.get("/scanner.js", (req, res) => {
 // join with ":", guaranteeing a stable unique ID for any pair of members.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── E2EE key-management rate limit ───────────────────────────────────────────
-const e2eeKeyLimit = rateLimit({
+// ── E2EE key-management rate limits ──────────────────────────────────────────
+// Split into two limiters instead of one shared bucket. publish-key only ever
+// runs once per login/device, so it can stay tight. The public-key GETs run
+// once per *new* peer/group-member per session (results are cached client-side
+// in _peerKeyCache) but that still means one busy session — a few DMs plus a
+// group chat — can rack up dozens of GETs. Sharing one 20-req/15min bucket
+// between all three meant a handful of reads could starve out publish-key,
+// which made E2EE.init() fail and showed every message in every conversation
+// as "encrypted before your keys were set up" (not just genuinely old ones).
+const e2eePublishLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 20, // generous for something called once per login
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
+});
+const e2eeReadLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // covers opening many DMs/groups in one session; results are cached client-side after first fetch
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => req.member?.memberId || ipKeyGenerator(req, res),
@@ -14025,7 +14040,7 @@ async function sanitizeReplyBody(table, repliedToId, repliedToBody) {
 // ── POST /api/member/e2ee/publish-key ────────────────────────────────────────
 // Upsert caller's ECDH P-256 public key. Called on every login after key-gen.
 // Server validates structure but NEVER receives or stores private keys.
-app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eePublishLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
     const { public_key_jwk } = req.body || {};
@@ -14061,7 +14076,7 @@ app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eeKeyLimit, asy
 // ── GET /api/member/e2ee/public-key/:memberId ─────────────────────────────────
 // Fetch a member's ECDH public key so the caller can encrypt to them.
 // Public keys are not secret — any authenticated member can fetch any other's.
-app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("member_e2ee_keys")
@@ -14079,7 +14094,7 @@ app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeKeyLi
 
 // ── GET /api/member/e2ee/public-keys?ids=a,b,c ───────────────────────────────
 // Batch-fetch public keys for all members in a group chat.
-app.get("/api/member/e2ee/public-keys", memberAuthMiddleware, e2eeKeyLimit, async (req, res) => {
+app.get("/api/member/e2ee/public-keys", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
   try {
     const ids = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 60);
     if (!ids.length) return res.json({});

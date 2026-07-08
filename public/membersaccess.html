@@ -5296,6 +5296,7 @@
 
               <!-- Post type picker (shown only for new posts) -->
               <div class="composer-type-row" id="composer-type-row">
+                <div class="composer-type-indicator" id="composer-type-indicator"></div>
                 <button
                   class="composer-type-btn active"
                   data-post-type="image"
@@ -10223,36 +10224,54 @@
 
       /* Type selector */
       .composer-type-row {
+        position: relative;
         display: flex;
-        gap: 6px;
+        gap: 0;
         padding: 10px 16px 6px;
         flex-shrink: 0;
         border-bottom: 1px solid #1c1c1e;
+        isolation: isolate;
+      }
+      .composer-type-indicator {
+        position: absolute;
+        top: 10px;
+        left: 16px;
+        height: calc(100% - 16px);
+        width: calc((100% - 32px) / 3);
+        background: var(--text);
+        border-radius: 20px;
+        z-index: 0;
+        transition: transform 0.45s var(--spring);
       }
       .composer-type-btn {
+        position: relative;
+        z-index: 1;
         display: flex;
         align-items: center;
         gap: 6px;
         padding: 7px 14px;
         border-radius: 20px;
-        border: 1px solid #2a2a2a;
+        border: none;
         background: transparent;
         color: var(--muted);
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.12s;
+        transition: color 0.25s;
         flex: 1;
         justify-content: center;
       }
-      .composer-type-btn:hover {
-        border-color: #444;
-        color: var(--text);
+      .composer-type-btn svg {
+        transition: transform 0.3s var(--spring);
+      }
+      .composer-type-btn.active svg {
+        transform: scale(1.08);
       }
       .composer-type-btn.active {
-        background: var(--text);
         color: var(--bg);
-        border-color: var(--text);
+      }
+      .composer-type-btn:not(.active):hover {
+        color: var(--text);
       }
 
       /* Scrollable body */

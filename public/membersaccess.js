@@ -212,30 +212,63 @@ const E2EE = (() => {
   let _readyPromise   = null;
   let _wasRotated     = false; // true only if the server already had a different key on file
 
+  // Callbacks to notify once init finally succeeds, even if it succeeds on a
+  // retry long after the first caller gave up waiting. Lets any screen that
+  // rendered messages while _ready was false ask to be re-rendered instead of
+  // being stuck showing placeholders for the rest of the session.
+  const _onReadyCallbacks = [];
+  function onReady(cb) {
+    if (_ready) { cb(); return; }
+    _onReadyCallbacks.push(cb);
+  }
+
   /**
    * Must be called once on login (after _member is set).
    * Generates key pair if needed, publishes public key to server.
+   *
+   * Retries on failure (e.g. a transient network error, or a 429 from the
+   * publish-key rate limit) instead of giving up for the rest of the session.
+   * Previously a single failed publish-key call left `_ready` false forever —
+   * every E2EE message in every conversation would then show "encrypted
+   * before your keys were set up" for the whole session, indistinguishable
+   * from a genuine old-message-can't-decrypt case, until a full page reload
+   * (which could immediately hit the same failure again, e.g. still rate
+   * limited) — see also the e2eePublishLimit/e2eeReadLimit split server-side.
    */
   async function init() {
     if (_readyPromise) return _readyPromise;
     _readyPromise = (async () => {
-      try {
-        const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair();
-        _myPrivateKey   = privateKey;
-        _myPublicKeyJwk = publicKeyJwk;
-        // Publish our public key so peers can encrypt messages to us.
-        // The server stores it — it's not secret. Idempotent upsert.
-        // rotated=true means the server already had a *different* key on
-        // file — i.e. this is genuinely a new device/browser or cleared
-        // storage, not a first-ever setup, so older messages may not
-        // decrypt here.
-        const resp = await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
-        _wasRotated = isFresh && !!resp?.rotated;
-        _ready = true;
-        console.log('[E2EE] Ready. Key fingerprint:', await fingerprint());
-      } catch (e) {
-        console.error('[E2EE] init failed:', e.message);
-        // Non-fatal: fall back to plaintext mode (E2EE.ready() returns false)
+      const maxAttempts = 5;
+      const backoffMs = [1000, 3000, 8000, 15000, 30000];
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair();
+          _myPrivateKey   = privateKey;
+          _myPublicKeyJwk = publicKeyJwk;
+          // Publish our public key so peers can encrypt messages to us.
+          // The server stores it — it's not secret. Idempotent upsert.
+          // rotated=true means the server already had a *different* key on
+          // file — i.e. this is genuinely a new device/browser or cleared
+          // storage, not a first-ever setup, so older messages may not
+          // decrypt here.
+          const resp = await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+          _wasRotated = isFresh && !!resp?.rotated;
+          _ready = true;
+          console.log('[E2EE] Ready. Key fingerprint:', await fingerprint());
+          _onReadyCallbacks.splice(0).forEach(cb => { try { cb(); } catch {} });
+          return;
+        } catch (e) {
+          const isLastAttempt = attempt === maxAttempts - 1;
+          console.error(`[E2EE] init failed (attempt ${attempt + 1}/${maxAttempts}):`, e.message);
+          if (isLastAttempt) {
+            // Give up for now, but let a later explicit init() call (e.g. the
+            // user reopening a chat) try again from scratch rather than
+            // staying stuck for the rest of the session.
+            _readyPromise = null;
+            return;
+          }
+          await new Promise(r => setTimeout(r, backoffMs[attempt]));
+        }
       }
     })();
     return _readyPromise;
@@ -443,6 +476,7 @@ const E2EE = (() => {
   return {
     init,
     ready,
+    onReady,
     wasFreshKey,
     fingerprint,
     encryptDm,
@@ -1124,7 +1158,15 @@ async function loadDashboard() {
   await loadProfile();
   // Initialise E2EE: generate or load ECDH key pair, publish public key to server.
   // Non-blocking — runs in background. Falls back to plaintext if crypto unavailable.
-  E2EE.init().then(() => {
+  E2EE.init();
+  // onReady fires once keys are actually ready, whether that's on the first
+  // try or after init() retries in the background (see E2EE.init — it now
+  // retries with backoff instead of giving up for the whole session on a
+  // single failed publish-key call, e.g. a transient 429). Using onReady
+  // instead of chaining off the init() promise directly means this still
+  // fires correctly even if the *first* attempt failed and a later retry
+  // succeeded a minute later.
+  E2EE.onReady(() => {
     if (E2EE.wasFreshKey()) {
       // Genuine rotation — server had a different key on file, so older
       // DMs/group messages encrypted under the previous key won't decrypt
@@ -1132,13 +1174,13 @@ async function loadDashboard() {
       // letting people discover it message-by-message.
       swShowToast("New device detected — some older encrypted messages may show as locked here.", 5000);
     }
-    // If a conversation was opened before init() finished, its messages were
+    // If a conversation was opened before keys were ready, its messages were
     // decrypted with _ready still false and are showing as blank/placeholder
     // bubbles (see decryptDm/decryptGroup). Re-render now that keys are
     // loaded so people don't have to reload the page to see them.
     if (typeof DM !== 'undefined' && DM.activeKey) dmLoadMsgs(false).catch(() => {});
     if (typeof GC !== 'undefined' && GC.activeId)  gcLoadMsgs(false).catch(() => {});
-  }).catch(e => console.warn('[E2EE] init error (non-fatal):', e.message));
+  });
   loadMovies();
   loadSecurity();
   loadActivity();
@@ -3762,6 +3804,7 @@ function swAttachLongPress() {
 
 
 let _composerPostType = 'image'; // 'image' | 'text' | 'video'
+const _composerTypeOrder = ['image', 'text', 'video'];
 
 function swSetPostType(type) {
   _composerPostType = type;
@@ -3769,6 +3812,12 @@ function swSetPostType(type) {
   document.querySelectorAll('.composer-type-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.postType === type);
   });
+  // Slide the pill indicator under the active button
+  const indicator = $id('composer-type-indicator');
+  if (indicator) {
+    const idx = _composerTypeOrder.indexOf(type);
+    if (idx !== -1) indicator.style.transform = `translateX(${idx * 100}%)`;
+  }
   // Show/hide sections
   ['image','text','video'].forEach(t => {
     const s = $id(`section-${t}`); if (s) s.style.display = t === type ? 'flex' : 'none';
