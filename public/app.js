@@ -4623,24 +4623,49 @@ async function checkRoute() {
 
   if (eventMatch) {
     // Events have no dedicated detail page — navigate to the events list.
-    // Then scroll to & highlight the matching event card.
     const slug = eventMatch[1];
     const id   = idFromSlug(slug);
+    // Shareable form links carry ?register=1 — open the registration form directly
+    // instead of just landing on the events page.
+    const wantsForm = new URLSearchParams(window.location.search).get('register') === '1';
     navigate('events', false);
+    if (id && wantsForm) {
+      (async () => {
+        try {
+          const events = await apiFetch('/api/events');
+          const ev = (events || []).find(x => String(x.id) === String(id));
+          if (ev) {
+            // Give the events page a moment to finish its own navigation/render first.
+            setTimeout(() => {
+              openEventForm(ev.id, ev.title, ev.event_date || '', ev.event_time || '', ev.location || '', ev.location_link || '');
+            }, 500);
+            return;
+          }
+        } catch (e) {}
+        // Fall back to highlighting the card if the form/event couldn't be loaded.
+        _highlightEventCard(id);
+      })();
+      return;
+    }
     if (id) {
-      setTimeout(() => {
-        const card = document.querySelector(`[data-event-id="${id}"]`);
-        if (card) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          card.classList.add('event-highlight');
-          setTimeout(() => card.classList.remove('event-highlight'), 2000);
-        }
-      }, 800);
+      // Plain event link (no ?register=1) — scroll to & highlight the matching card.
+      _highlightEventCard(id);
     }
     return;
   }
 
   navigate(path, false);
+}
+
+function _highlightEventCard(id) {
+  setTimeout(() => {
+    const card = document.querySelector(`[data-event-id="${id}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('event-highlight');
+      setTimeout(() => card.classList.remove('event-highlight'), 2000);
+    }
+  }, 800);
 }
 
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
@@ -7796,7 +7821,20 @@ function shareEventById(eventId) {
   const dateStr = e.event_date
     ? new Date(e.event_date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
-  shareEventCard(e.id, e.title, dateStr, e.venue || e.location || '');
+  // If this event has an open registration form (Register button showing), share a
+  // direct link straight to that form — like a Google Forms link — instead of just
+  // a link to the events page.
+  shareEventCard(e.id, e.title, dateStr, e.venue || e.location || '', !!e.is_upcoming);
+}
+
+// Share button living inside the registration form modal itself — always links
+// straight to the form currently being filled out (Google Forms-style share link).
+function shareCurrentRegForm() {
+  if (!_rfEventId) return;
+  const dateStr = _rfEventDate
+    ? new Date(_rfEventDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  shareEventCard(_rfEventId, _rfEventTitle, dateStr, _rfEventLocation, true);
 }
 
 async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', eventLocation='', eventLocationLink='') {
@@ -8450,12 +8488,15 @@ function shareBlogCard(id, title, excerpt, coverUrl) {
   }
 }
 
-function shareEventCard(id, title, date, venue) {
+function shareEventCard(id, title, date, venue, directRegister=false) {
   const slug    = (title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const pageUrl = `https://kiitfilmsociety.in/events/${slug}-${id}`;
+  // ?register=1 tells checkRoute() to open the registration form directly on load,
+  // instead of just landing on (and highlighting a card on) the events page —
+  // a shareable, Google-Forms-style link straight to the form.
+  const pageUrl = `https://kiitfilmsociety.in/events/${slug}-${id}` + (directRegister ? '?register=1' : '');
   // Server injects real OG tags at /events/:slug for crawlers — no JS meta mutation needed.
   // NOTE: do NOT include pageUrl in `text` — navigator.share appends `url` automatically.
-  const lines = [`"${title}" — KFS Event`];
+  const lines = [directRegister ? `Register for "${title}" — KFS Event` : `"${title}" — KFS Event`];
   if (date)  lines.push('\u{1F4C5} ' + date);
   if (venue) lines.push('\u{1F4CD} ' + venue);
   const text = lines.join('\n');

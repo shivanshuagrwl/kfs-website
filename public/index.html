@@ -463,6 +463,8 @@ body.light-mode .fb-add-section-btn:hover{border-color:rgba(0,0,0,.35);color:rgb
 .reg-form-desc{font-size:14px;color:var(--grey);margin-top:8px;line-height:1.6}
 .reg-form-close{position:absolute;top:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .reg-form-close:hover{color:var(--white);border-color:var(--grey)}
+.reg-form-share-btn{position:absolute;top:16px;right:56px;background:var(--card);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--grey);display:flex;align-items:center;justify-content:center;transition:all .2s}
+.reg-form-share-btn:hover{color:var(--white);border-color:var(--grey)}
 .reg-form-body{padding:24px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 .reg-form-body::-webkit-scrollbar{width:4px}
 .reg-form-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
@@ -6125,6 +6127,7 @@ KFS — KIIT Film Society"></textarea>
       <div class="reg-form-event-label" id="rf-event-label">KFS Event</div>
       <div class="reg-form-title" id="rf-title">Registration</div>
       <div class="reg-form-desc" id="rf-desc"></div>
+      <button class="reg-form-share-btn" onclick="event.stopPropagation();shareCurrentRegForm()" title="Share this form" aria-label="Share this form"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
       <button data-action="closeRegForm" class="reg-form-close">✕</button>
     </div>
     <div class="reg-progress" id="rf-progress" style="display:none"></div>
