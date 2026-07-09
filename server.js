@@ -12348,17 +12348,70 @@ app.get("/api/member/studio/feed", memberAuthMiddleware, studioFeedLimit, async 
         `)
         .is("deleted_at", null)
         .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .range(from, from + limit - 1);
+        .order("created_at", { ascending: false });
 
       if (tag) q = q.contains("tags", [tag]);
 
+      // Fetch enough rows from the top to cover every page up to and
+      // including this one, then merge with collab posts and slice below.
+      // Not as efficient as a true range() at high page numbers, but keeps
+      // the two sources (member_projects + collaborate_posts) interleaved
+      // by created_at correctly across pagination instead of only on page 1.
+      q = q.limit(from + limit);
       const { data: rows, error } = await q;
       if (error) throw error;
-      return rows || [];
+      const projectRows = (rows || []).map(r => ({ ...r, post_type: r.post_type || undefined }));
+
+      // Collab requests posted by members — shown as feed cards too, tagged
+      // post_type: 'collab' so the client renders them with an "I'm
+      // Interested" action instead of like/comment. Skipped when a tag
+      // filter is active since collab posts don't carry the same tags field.
+      let collabRows = [];
+      if (!tag) {
+        const today = new Date().toISOString().split("T")[0];
+        const { data: crows, error: cerr } = await supabasePublic
+          .from("collaborate_posts")
+          .select("id, title, role, domain, skills, timeline, description, fulfillment_date, created_at, member_id")
+          .not("member_id", "is", null)
+          .gte("fulfillment_date", today) // hide expired/past-deadline requests from the feed
+          .order("created_at", { ascending: false })
+          .limit(from + limit);
+        if (!cerr && crows?.length) {
+          const authorIds = [...new Set(crows.map(r => r.member_id))];
+          const { data: authors } = await supabasePublic
+            .from("members")
+            .select("id, name, photo, role, domain")
+            .in("id", authorIds);
+          const authorById = {};
+          (authors || []).forEach(a => { authorById[a.id] = a; });
+          collabRows = crows.map(r => ({
+            id: `collab-${r.id}`,
+            collab_id: r.id,
+            post_type: "collab",
+            title: r.title,
+            description: r.description,
+            domain: r.domain,
+            role: r.role,
+            skills: r.skills,
+            timeline: r.timeline,
+            fulfillment_date: r.fulfillment_date,
+            created_at: r.created_at,
+            member_id: r.member_id,
+            members: authorById[r.member_id] || null,
+            cover_image: null, video_url: null, video_provider: null,
+            tags: null, views_count: 0, reactions_count: 0, comments_count: 0,
+          }));
+        }
+      }
+
+      const merged = [...projectRows, ...collabRows]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return merged.slice(from, from + limit);
     });
 
     // Attach viewer's own reaction to each card (non-cached, member-specific)
+    // Collab cards' ids ("collab-<uuid>") never match a project_reactions
+    // row, so this is a safe no-op for them.
     let myReactions = {};
     if (data.length) {
       const ids = data.map(r => r.id);

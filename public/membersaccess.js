@@ -3086,7 +3086,96 @@ const SW_REACTIONS = [
 
 // ── Feed card ─────────────────────────────────────────────────────────────
 
+/** Jump to the Network panel's Collab sub-tab — used by the "Manage this
+ *  post" link on your own collab cards in the main feed. */
+function swGoToMyCollabs() {
+  const navEl = document.querySelector('[data-panel="network"]');
+  if (navEl) switchPanel(navEl);
+  const collabTab = document.querySelector('.nw-tab[data-network-tab="collab"]');
+  if (collabTab) nwSwitchTab('collab');
+}
+
+// ── Collab request feed card ─────────────────────────────────────────────
+// Collab requests (posted via the "New Collab" form) show up in the main
+// feed alongside photo/text/video posts, tagged post_type: 'collab' by the
+// server (see /api/member/studio/feed). Instead of like/comment, they get
+// an "I'm Interested" button that opens a DM to the poster with a pre-filled
+// message — the person can still edit it before sending, nothing goes out
+// automatically.
+function swCollabFeedCard(p) {
+  const author = p.members || {};
+  const isMine = p.member_id === (window._member?.id || window._memberProfile?.id);
+  const metaBits = [p.role, p.domain].filter(Boolean).join(' · ');
+  const untilLabel = p.fulfillment_date
+    ? new Date(p.fulfillment_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  const actionHtml = isMine
+    ? `<button class="ig-action-btn" style="width:auto;padding:0 12px;font-size:12px;font-weight:600;color:var(--muted);" onclick="event.stopPropagation();swGoToMyCollabs()">Manage this post</button>`
+    : `<button class="ig-action-btn" style="width:auto;padding:0 12px;font-size:12px;font-weight:700;color:#4ba3d4;" onclick="event.stopPropagation();swCollabExpressInterest('${swEsc(p.member_id)}','${swEsc(author.name||'Member')}','${swEsc(author.photo||'')}','${swEsc(author.role||'')}','${swEsc(p.domain||'')}','${swEsc(p.title||'')}')">I'm Interested</button>`;
+
+  return `<article class="ig-post" data-project-id="${swEsc(p.id)}" style="border:1.5px solid #4ba3d422;background:linear-gradient(180deg,rgba(75,163,212,.05),transparent)">
+    <div class="ig-post-header">
+      <div class="ig-post-avatar-wrap" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
+        <div class="ig-post-avatar-inner">${author.photo
+          ? `<img src="${swEsc(author.photo)}" alt="${swEsc(author.name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`
+          : `<div style="width:100%;height:100%;border-radius:50%;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#666;">${swEsc((author.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</div>`}
+        </div>
+      </div>
+      <div class="ig-post-author-block" onclick="event.stopPropagation();openMemberProfile('${swEsc(p.member_id)}')">
+        <div class="ig-post-author-name">${swEsc(author.name||'Member')}
+          <span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#1a3a5c,#2d6a9f);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;margin-left:6px;vertical-align:middle">Collab</span>
+        </div>
+        <div class="ig-post-time">${swRelTime(p.created_at)}</div>
+      </div>
+    </div>
+
+    <div style="padding:2px 14px 12px;">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">${swEsc(p.title||'Collab request')}</div>
+      ${metaBits ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${swEsc(metaBits)}</div>` : ''}
+      ${p.description ? `<div style="font-size:13px;color:var(--text);opacity:.85;line-height:1.5;margin-bottom:8px;">${swEsc(p.description)}</div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--muted);">
+        ${p.skills ? `<span>Skills: ${swEsc(p.skills)}</span>` : ''}
+        ${p.timeline ? `<span>Timeline: ${swEsc(p.timeline)}</span>` : ''}
+        ${untilLabel ? `<span>Needed by ${untilLabel}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="ig-post-actions" style="justify-content:flex-end;">
+      ${actionHtml}
+    </div>
+
+    <div class="ig-post-timestamp">${swRelTime(p.created_at)}</div>
+  </article>`;
+}
+
+/** "I'm Interested" on a collab feed card — opens (or jumps to) a DM with
+ *  the poster and pre-fills a message identifying the interested member and
+ *  their domain. Doesn't send automatically; the person reviews it first. */
+function swCollabExpressInterest(posterId, posterName, posterPhoto, posterRole, collabDomain, collabTitle) {
+  const me = window._memberProfile || window._member || {};
+  const myDomain = me.domain || me.role || 'a member';
+  const draft = `Hi! I'm ${me.name || 'a KFS member'}${myDomain ? `, ${myDomain}` : ''} — interested in your collab post${collabTitle ? ` "${collabTitle}"` : ''}. Would love to help out!`;
+
+  dmStartWith(posterId, { id: posterId, name: posterName, photo: posterPhoto || null, role: posterRole || null, domain: collabDomain || null });
+
+  // dmStartWith does its own UI setup synchronously for the "no existing
+  // conversation" path, but if a conversation already exists it calls
+  // dmOpenConv (async — fetches message history) before the input is ready.
+  // Give it a beat either way rather than trying to prefill mid-transition.
+  setTimeout(() => {
+    const input = $id('dm-input');
+    if (!input) return;
+    input.value = draft;
+    input.dispatchEvent(new Event('input')); // trigger auto-grow + typing ping
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, 250);
+}
+
 function swFeedCard(p) {
+  if (p.post_type === 'collab') return swCollabFeedCard(p);
+
   const author   = p.members || {};
   const myRxn    = SW.myReactions.get(p.id) || p.my_reaction || null;
   const isLiked  = !!myRxn;

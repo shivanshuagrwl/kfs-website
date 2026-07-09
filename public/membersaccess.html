@@ -230,7 +230,8 @@
           color: rgba(255, 255, 255, 0.32);
           transition:
             color 0.14s ease,
-            background 0.14s ease;
+            background 0.14s ease,
+            transform 0.3s var(--spring);
           position: relative;
         }
         .btb-item:active {
@@ -622,12 +623,15 @@
         font-weight: 500;
         color: var(--muted);
         cursor: pointer;
-        transition: all 0.12s;
+        transition: background 0.25s var(--spring-soft), color 0.2s var(--spring-soft), transform 0.15s var(--spring-soft);
         margin-bottom: 2px;
       }
       .nav-item:hover {
         background: var(--surface2);
         color: var(--text);
+      }
+      .nav-item:active {
+        transform: scale(0.97);
       }
       .nav-item.active {
         background: rgba(10, 132, 255, 0.16);
@@ -1086,6 +1090,28 @@
       }
       .panel.active {
         display: block;
+        /* Every nav click (Studio/Network/Messages/Settings/Activity) used to
+           snap instantly — this is the single most-clicked interaction in the
+           app, so it's the highest-impact place to add motion. Re-plays each
+           time a panel goes from display:none to visible, regardless of
+           whether that panel is freshly switched to. */
+        animation: kfsPanelIn 0.32s var(--spring-soft);
+      }
+      @keyframes kfsPanelIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      /* Shared fade-in for every modal/dialog overlay in the app. CSS
+         animations only (re-)play when an element goes from not-rendered
+         (display:none) to rendered, so this applies whether a given overlay
+         is shown via a class toggle (.open) or a direct style.display write
+         from JS — both trigger it the same way, no per-modal wiring needed. */
+      [id$="-overlay"] {
+        animation: kfsOverlayIn 0.28s var(--spring-soft);
+      }
+      @keyframes kfsOverlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
       }
       .panel-title {
         font-size: 22px;
@@ -9868,7 +9894,7 @@
         cursor: pointer;
         transition:
           opacity 0.12s,
-          transform 0.15s;
+          transform 0.2s var(--spring);
         position: relative;
       }
       .ig-action-btn:hover {
