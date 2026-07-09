@@ -86,6 +86,15 @@
 (function () {
   'use strict';
 
+  // Version marker — bump this string every time this file changes.
+  // Open DevTools Console after a hard refresh and look for this line.
+  // If you DON'T see it (or see an older version string), your browser
+  // is still running a cached copy of this file, not the one that was
+  // just uploaded — that's almost certainly why a fix "doesn't show up"
+  // even though the code itself is correct. Hard-refresh (Ctrl/Cmd+Shift+R)
+  // or clear cache for this site and reload.
+  console.log('[kfs-patch6] v3 loaded — input-gap padding: comment=22px, composer=16px/14px');
+
   const GROW_IDS = ['sw-caption', 'sw-text-body', 'sw-video-caption'];
 
   function autoGrow(el) {
@@ -142,10 +151,10 @@
          !important so the reply row's inline padding-left:30px (its
          indent under the parent comment) still wins over this base value. */
       .studio-comment-input-row {
-        padding-top: 4px !important;
-        padding-bottom: 4px !important;
-        padding-right: 8px !important;
-        padding-left: 18px;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        padding-right: 10px !important;
+        padding-left: 22px;
       }
 
       /* Composer title/tags/domain — turn the bottom-divider list rows into
@@ -155,7 +164,7 @@
       .composer-field-row {
         border: 1px solid #1c1c1e !important;
         border-radius: 10px !important;
-        padding: 4px 14px !important;
+        padding: 6px 16px !important;
         margin-bottom: 8px !important;
       }
       .composer-field-row:last-of-type {
@@ -171,7 +180,7 @@
       .composer-text-body {
         border: 1px solid #1c1c1e !important;
         border-radius: 10px !important;
-        padding: 5px 12px !important;
+        padding: 7px 14px !important;
         box-sizing: border-box !important;
       }
 
