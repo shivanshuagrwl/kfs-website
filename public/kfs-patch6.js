@@ -63,6 +63,15 @@
  * extra DOM node, since the box model already guarantees text can't
  * touch the border once padding > 0. IDs are untouched, so none of the
  * existing swSubmitPost/swPostComment/char-counter code needs to change.
+ *
+ * Side effect once the gap was added: with padding now this tight, the
+ * sitewide base rule `input:focus, textarea:focus { box-shadow: 0 0 0 3px
+ * rgba(10,132,255,.25) }` (membersaccess.html's global stylesheet) draws
+ * its blue glow flush against the element's own edge — which, at ~3px of
+ * padding, lands right on top of the leading character(s) of whatever's
+ * typed/placeholder. Fix: suppress that glow on these specific fields and
+ * move the focus indication to the wrapper's border-color instead, where
+ * there's room for it without touching the text.
  */
 
 (function () {
@@ -148,6 +157,31 @@
         border-radius: 10px !important;
         padding: 3px 8px !important;
         box-sizing: border-box !important;
+      }
+
+      /* The actual inputs/textareas have ~0 padding of their own — all the
+         spacing lives on the wrapper/box above. There's also a sitewide
+         base rule (input:focus/textarea:focus) that adds a blue
+         box-shadow glow (0 0 0 3px rgba(10,132,255,.25)) directly on the
+         focused element itself. With zero padding on the element, that
+         glow sits right on top of the text and clips the first
+         character(s) — that's the blue cutting into "Add a comment...".
+         Kill the glow/outline on the fields themselves and show focus on
+         the box instead, where there's room for it. */
+      .studio-comment-input:focus,
+      .composer-input:focus,
+      .composer-caption:focus,
+      .composer-text-body:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      .studio-comment-input-row:focus-within,
+      .composer-field-row:focus-within {
+        border-color: #0095f6 !important;
+      }
+      .composer-caption:focus,
+      .composer-text-body:focus {
+        border-color: #0095f6 !important;
       }
     `;
     document.head.appendChild(style);
