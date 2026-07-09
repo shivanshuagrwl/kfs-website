@@ -1,5 +1,5 @@
 /**
- * kfs-patch6.js — Instant Feed Refresh + Dynamic Composer Textareas
+ * kfs-patch6.js — Instant Feed Refresh + Dynamic Composer Textareas + Input Gap
  * =====================================================================
  * Load this AFTER membersaccess.js and AFTER kfs-patch5.js.
  * Add at the bottom of membersaccess.html:
@@ -43,6 +43,26 @@
  * their value is set programmatically (switching post type, opening the
  * edit modal with an existing long caption) since those don't fire an
  * `input` event on their own.
+ *
+ * -----------------------------------------------------------------------
+ * BUG #3 — "2-3px gap between the input border and the displayed text"
+ * -----------------------------------------------------------------------
+ * Applies to all post/comment input boxes:
+ *   - Comment + reply input pill (.studio-comment-input-row)
+ *   - Composer title/tags/domain rows (.composer-field-row)
+ *   - Composer caption/text/video-caption textareas
+ *
+ * The comment input pill already uses the "border lives on the outer
+ * wrapper, the actual <input> stays borderless inside it" structure —
+ * its padding is just bigger than 2-3px, so we tighten it. The composer
+ * field rows and caption textareas don't have that wrapper at all today
+ * (rows use a bottom divider, textareas have no border), so this gives
+ * them the same box: a bordered container with the real <input>/
+ * <textarea> borderless and padded ~3px inside it — same technique,
+ * done in CSS via padding/border on the row/field itself rather than an
+ * extra DOM node, since the box model already guarantees text can't
+ * touch the border once padding > 0. IDs are untouched, so none of the
+ * existing swSubmitPost/swPostComment/char-counter code needs to change.
  */
 
 (function () {
@@ -89,7 +109,51 @@
     window.api = wrapped;
   }
 
-  /* ── 2. Auto-grow textareas ───────────────────────────────────────────── */
+  /* ── 2. 2-3px border-to-text gap on post/comment input boxes ─────────── */
+
+  function injectTightGapCSS() {
+    if (document.getElementById('kfs-p6-tight-gap')) return;
+    const style = document.createElement('style');
+    style.id = 'kfs-p6-tight-gap';
+    style.textContent = `
+      /* Comment + reply input pill — already wrapper(border)+input(borderless);
+         just tighten the vertical padding to ~3px. */
+      .studio-comment-input-row {
+        padding: 3px 6px 3px 14px !important;
+      }
+
+      /* Composer title/tags/domain — turn the bottom-divider list rows into
+         individually boxed inputs, borderless <input> inside, ~3px gap. */
+      .composer-field-row {
+        border: 1px solid #1c1c1e !important;
+        border-bottom: 1px solid #1c1c1e !important;
+        border-radius: 10px !important;
+        padding: 3px 12px !important;
+        margin-bottom: 8px !important;
+      }
+      .composer-field-row:last-of-type {
+        border-bottom: 1px solid #1c1c1e !important;
+        margin-bottom: 8px !important;
+      }
+      .composer-field-row--collab {
+        padding-top: 8px !important;
+      }
+
+      /* Composer caption / text-body / video-caption — give them a border
+         box with a tight ~3px inset instead of sitting borderless flush
+         against the section edge. */
+      .composer-caption,
+      .composer-text-body {
+        border: 1px solid #1c1c1e !important;
+        border-radius: 10px !important;
+        padding: 3px 8px !important;
+        box-sizing: border-box !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /* ── 3. Auto-grow textareas ───────────────────────────────────────────── */
 
   function hookInputListeners() {
     // Delegated so it works even though these fields live inside a modal
@@ -143,6 +207,7 @@
   /* ── Boot ──────────────────────────────────────────────────────────────── */
 
   function init() {
+    injectTightGapCSS(); // pure CSS, doesn't need to wait on membersaccess.js globals
     let tries = 0;
     const tryHook = () => {
       tries++;
