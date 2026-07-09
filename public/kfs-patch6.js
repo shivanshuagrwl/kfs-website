@@ -152,7 +152,7 @@
          indent under the parent comment) still wins over this base value. */
       /* padding-left must be >= border-radius (24px). A rounded corner's
          horizontal inset is 0 at the box's vertical midline and grows to
-         exactly `radius` at the very top/bottom edge. 22px left a 2px gap
+         exactly 'radius' at the very top/bottom edge. 22px left a 2px gap
          against the 24px radius, which was too tight for tall ascenders
          (capital letters like "W" sit close to the box's actual top) even
          though lowercase text — which sits closer to the midline — cleared
