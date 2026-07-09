@@ -54,24 +54,33 @@
  *
  * The comment input pill already uses the "border lives on the outer
  * wrapper, the actual <input> stays borderless inside it" structure —
- * its padding is just bigger than 2-3px, so we tighten it. The composer
+ * its padding is just bigger than needed, so we tighten it. The composer
  * field rows and caption textareas don't have that wrapper at all today
  * (rows use a bottom divider, textareas have no border), so this gives
  * them the same box: a bordered container with the real <input>/
- * <textarea> borderless and padded ~3px inside it — same technique,
- * done in CSS via padding/border on the row/field itself rather than an
- * extra DOM node, since the box model already guarantees text can't
- * touch the border once padding > 0. IDs are untouched, so none of the
- * existing swSubmitPost/swPostComment/char-counter code needs to change.
+ * <textarea> borderless inside it — same technique, done in CSS via
+ * padding/border on the row/field itself rather than an extra DOM node.
+ * IDs are untouched, so none of the existing swSubmitPost/swPostComment/
+ * char-counter code needs to change.
  *
- * Side effect once the gap was added: with padding now this tight, the
- * sitewide base rule `input:focus, textarea:focus { box-shadow: 0 0 0 3px
- * rgba(10,132,255,.25) }` (membersaccess.html's global stylesheet) draws
- * its blue glow flush against the element's own edge — which, at ~3px of
- * padding, lands right on top of the leading character(s) of whatever's
- * typed/placeholder. Fix: suppress that glow on these specific fields and
- * move the focus indication to the wrapper's border-color instead, where
- * there's room for it without touching the text.
+ * Two follow-on issues showed up once the gap was actually this tight:
+ *
+ * 1) The sitewide base rule `input:focus, textarea:focus { box-shadow: 0
+ *    0 0 3px rgba(10,132,255,.25) }` (membersaccess.html's global
+ *    stylesheet) draws its blue glow flush against the element's own
+ *    edge — which, with ~0 padding on the input itself, lands right on
+ *    top of the leading character(s). Fixed by suppressing that glow on
+ *    these fields and moving the focus indication to the wrapper's
+ *    border-color instead, where there's room for it.
+ *
+ * 2) The comment pill's border-radius is 24px (a full pill). Shrinking
+ *    the box's height without a big enough left inset means the rounded
+ *    corner's own curve reaches past the padding into the text — not a
+ *    focus-state thing at all, just geometry, and it was there whether
+ *    focused or not. Fixed by giving the pill (and the other boxes, at
+ *    their own smaller radii) enough left padding to clear the curve.
+ *    The reply row's inline `padding-left:30px` indent is preserved by
+ *    leaving padding-left off the !important list here.
  */
 
 (function () {
@@ -125,37 +134,44 @@
     const style = document.createElement('style');
     style.id = 'kfs-p6-tight-gap';
     style.textContent = `
-      /* Comment + reply input pill — already wrapper(border)+input(borderless);
-         just tighten the vertical padding to ~3px. */
+      /* Comment + reply input pill — already wrapper(border)+input(borderless).
+         NOTE: border-radius here is 24px (full pill). Shrinking the box's
+         height without enough left inset makes the rounded corner's own
+         curve reach past the padding and into the text — which is exactly
+         what was still happening. Padding-left is deliberately NOT
+         !important so the reply row's inline padding-left:30px (its
+         indent under the parent comment) still wins over this base value. */
       .studio-comment-input-row {
-        padding: 3px 6px 3px 14px !important;
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+        padding-right: 8px !important;
+        padding-left: 18px;
       }
 
       /* Composer title/tags/domain — turn the bottom-divider list rows into
-         individually boxed inputs, borderless <input> inside, ~3px gap. */
+         individually boxed inputs, borderless <input> inside. Left padding
+         kept comfortably past the 10px corner radius so the curve can't
+         reach the text. */
       .composer-field-row {
         border: 1px solid #1c1c1e !important;
-        border-bottom: 1px solid #1c1c1e !important;
         border-radius: 10px !important;
-        padding: 3px 12px !important;
+        padding: 4px 14px !important;
         margin-bottom: 8px !important;
       }
       .composer-field-row:last-of-type {
-        border-bottom: 1px solid #1c1c1e !important;
         margin-bottom: 8px !important;
       }
       .composer-field-row--collab {
         padding-top: 8px !important;
       }
 
-      /* Composer caption / text-body / video-caption — give them a border
-         box with a tight ~3px inset instead of sitting borderless flush
-         against the section edge. */
+      /* Composer caption / text-body / video-caption — same logic: padding
+         kept clear of the 10px corner radius. */
       .composer-caption,
       .composer-text-body {
         border: 1px solid #1c1c1e !important;
         border-radius: 10px !important;
-        padding: 3px 8px !important;
+        padding: 5px 12px !important;
         box-sizing: border-box !important;
       }
 
