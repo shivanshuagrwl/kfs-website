@@ -93,7 +93,7 @@
   // just uploaded — that's almost certainly why a fix "doesn't show up"
   // even though the code itself is correct. Hard-refresh (Ctrl/Cmd+Shift+R)
   // or clear cache for this site and reload.
-  console.log('[kfs-patch6] v4 loaded (head→body style-injection fix included)');
+  console.log('[kfs-patch6] v5 loaded (comment-pill left padding fixed to clear 24px border-radius arc)');
 
   const GROW_IDS = ['sw-caption', 'sw-text-body', 'sw-video-caption'];
 
@@ -150,11 +150,18 @@
          what was still happening. Padding-left is deliberately NOT
          !important so the reply row's inline padding-left:30px (its
          indent under the parent comment) still wins over this base value. */
+      /* padding-left must be >= border-radius (24px). A rounded corner's
+         horizontal inset is 0 at the box's vertical midline and grows to
+         exactly `radius` at the very top/bottom edge. 22px left a 2px gap
+         against the 24px radius, which was too tight for tall ascenders
+         (capital letters like "W" sit close to the box's actual top) even
+         though lowercase text — which sits closer to the midline — cleared
+         it fine. 28px = radius + a small buffer for anti-aliasing. */
       .studio-comment-input-row {
         padding-top: 6px !important;
         padding-bottom: 6px !important;
         padding-right: 10px !important;
-        padding-left: 22px;
+        padding-left: 28px;
       }
 
       /* Composer title/tags/domain — turn the bottom-divider list rows into
@@ -231,7 +238,7 @@
   // directly, instead of us going back and forth guessing.
   function logComputedPaddingCheck() {
     const checks = [
-      { sel: '.studio-comment-input-row', expect: '22px' },
+      { sel: '.studio-comment-input-row', expect: '28px' },
       { sel: '.composer-field-row', expect: '16px' },
       { sel: '.composer-caption', expect: '14px' },
     ];
