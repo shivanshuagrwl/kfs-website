@@ -1248,11 +1248,19 @@ async function loadDashboard() {
   _wireBtb();
 }
 
-/** Switch directly to the Strand (Social Strand) feed panel. */
+/** Switch directly to the Strand (Social Strand) feed panel. Past/alumni
+ *  members don't get a Studio tab at all, so send them to Profile instead —
+ *  this used to be implicit (Profile was simply whichever panel the static
+ *  HTML marked "active" by default), but now that the static default matches
+ *  the Studio nav item (to stop it flashing before this function runs), that
+ *  fallback needs to be explicit here instead. */
 function _goToStrandFeed() {
   const studioNav = document.querySelector('[data-panel="studio"]');
   if (studioNav && window._memberProfile && !window._memberProfile.is_past) {
     switchPanel(studioNav);
+  } else {
+    const profileNav = document.querySelector('[data-panel="profile"]');
+    if (profileNav) switchPanel(profileNav);
   }
 }
 
