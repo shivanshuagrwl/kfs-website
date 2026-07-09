@@ -207,6 +207,25 @@
         outline: none !important;
         box-shadow: none !important;
       }
+
+      /* Pin line-height explicitly instead of relying on the UA default
+         ("normal") on <input>. Browsers reset line-height on <input> via
+         an internal font shorthand and it does NOT inherit the site's
+         line-height:1.5 the way <textarea> does — that's why the caption
+         box was never affected but every single-line input was. "normal"
+         is resolved from OS/browser font metrics, so it renders looser
+         on some systems and noticeably tighter on others (worse at
+         font-weight:600), pushing the glyph higher in the box and closer
+         to the corner curve even when padding/radius math is correct.
+         Pinning a fixed px value makes the vertical position identical
+         everywhere. */
+      .composer-input,
+      .studio-comment-input {
+        line-height: 20px;
+      }
+      .composer-input-title {
+        line-height: 22px; /* slightly taller for the 600-weight/15px title */
+      }
       .studio-comment-input-row:focus-within,
       .composer-field-row:focus-within {
         border-color: #0095f6 !important;
