@@ -93,7 +93,7 @@
   // just uploaded — that's almost certainly why a fix "doesn't show up"
   // even though the code itself is correct. Hard-refresh (Ctrl/Cmd+Shift+R)
   // or clear cache for this site and reload.
-  console.log('[kfs-patch6] v3 loaded — input-gap padding: comment=22px, composer=16px/14px');
+  console.log('[kfs-patch6] v4 loaded (head→body style-injection fix included)');
 
   const GROW_IDS = ['sw-caption', 'sw-text-body', 'sw-video-caption'];
 
@@ -219,7 +219,35 @@
     // override. Appending to the end of <body> guarantees this style is
     // last in source order and actually wins.
     document.body.appendChild(style);
+    logComputedPaddingCheck();
   }
+
+  // Reads back the REAL computed padding-left of the elements this patch
+  // targets, right after injecting the override — not what the CSS *says*,
+  // what the browser actually *resolved*. If some other rule (a device-
+  // specific media query, a later-loaded stylesheet, an inline style, an
+  // extension, etc.) is still winning the cascade on your exact device,
+  // this will show a value other than the expected one and prove it
+  // directly, instead of us going back and forth guessing.
+  function logComputedPaddingCheck() {
+    const checks = [
+      { sel: '.studio-comment-input-row', expect: '22px' },
+      { sel: '.composer-field-row', expect: '16px' },
+      { sel: '.composer-caption', expect: '14px' },
+    ];
+    const results = checks.map(({ sel, expect }) => {
+      const el = document.querySelector(sel);
+      if (!el) return `${sel}: (not in DOM yet — open the relevant modal, then run kfsCheckInputGap() again)`;
+      const actual = getComputedStyle(el).paddingLeft;
+      const ok = actual === expect ? 'OK' : 'MISMATCH — something else is overriding this';
+      return `${sel}: expected ${expect}, actual ${actual} → ${ok}`;
+    });
+    console.log('[kfs-patch6] computed padding-left check:\n' + results.join('\n'));
+  }
+  // Exposed so it can be re-run on demand from the console once the
+  // comment box / composer modal is actually open (they don't exist in
+  // the DOM until then, so the check at load time may say "not in DOM yet").
+  window.kfsCheckInputGap = logComputedPaddingCheck;
 
   /* ── 3. Auto-grow textareas ───────────────────────────────────────────── */
 
