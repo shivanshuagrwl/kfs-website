@@ -209,7 +209,16 @@
         border-color: #0095f6 !important;
       }
     `;
-    document.head.appendChild(style);
+    // IMPORTANT: appended to the END of <body>, not <head>. This file has
+    // several <style> blocks embedded inside <body> itself (not just the
+    // usual <head> stylesheet), and <head> always precedes <body> in the
+    // DOM regardless of when a script runs — so a style appended to <head>
+    // can never win a same-specificity, non-!important cascade tie against
+    // ANY of those body-embedded rules, including the base
+    // .studio-comment-input-row padding-left this patch is meant to
+    // override. Appending to the end of <body> guarantees this style is
+    // last in source order and actually wins.
+    document.body.appendChild(style);
   }
 
   /* ── 3. Auto-grow textareas ───────────────────────────────────────────── */
