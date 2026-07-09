@@ -208,6 +208,27 @@
         box-shadow: none !important;
       }
 
+      /* Kill the browser's native autofill background (white/yellow pill
+         behind typed text, seen on comment/search-like inputs). Chrome/
+         Safari apply this via an internal :-webkit-autofill UA style that
+         a plain 'background: transparent !important' cannot override —
+         it has to be beaten with the same weapon, a huge inset box-shadow
+         that paints over it, plus forcing the text color back to our own. */
+      .studio-comment-input:-webkit-autofill,
+      .composer-input:-webkit-autofill,
+      .composer-caption:-webkit-autofill,
+      .composer-text-body:-webkit-autofill,
+      .studio-comment-input:-webkit-autofill:hover,
+      .studio-comment-input:-webkit-autofill:focus,
+      .composer-input:-webkit-autofill:hover,
+      .composer-input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--text) !important;
+        -webkit-box-shadow: 0 0 0px 1000px #141414 inset !important;
+        box-shadow: 0 0 0px 1000px #141414 inset !important;
+        caret-color: var(--text);
+        transition: background-color 5000s ease-in-out 0s;
+      }
+
       /* Pin line-height explicitly instead of relying on the UA default
          ("normal") on <input>. Browsers reset line-height on <input> via
          an internal font shorthand and it does NOT inherit the site's
