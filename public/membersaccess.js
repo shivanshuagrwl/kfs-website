@@ -3583,7 +3583,7 @@ function swShowReplyInput(commentId, projectId) {
   const wrap = $id(`sw-reply-input-${commentId}`);
   if (!wrap) return;
   if (wrap.innerHTML) { wrap.innerHTML=''; return; }
-  wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px">
+  wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px !important">
     <input id="sw-reply-text-${swEsc(commentId)}" type="text" placeholder="Reply…" class="studio-comment-input" maxlength="1000"
       onkeydown="if(event.key==='Enter')swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">
     <button class="studio-comment-post-btn" onclick="swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">Reply</button>

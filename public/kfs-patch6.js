@@ -93,7 +93,7 @@
   // just uploaded — that's almost certainly why a fix "doesn't show up"
   // even though the code itself is correct. Hard-refresh (Ctrl/Cmd+Shift+R)
   // or clear cache for this site and reload.
-  console.log('[kfs-patch6] v5 loaded (comment-pill left padding fixed to clear 24px border-radius arc)');
+  console.log('[kfs-patch6] v6 loaded (comment-pill padding-left made !important — no longer relies on source-order to win)');
 
   const GROW_IDS = ['sw-caption', 'sw-text-body', 'sw-video-caption'];
 
@@ -147,9 +147,17 @@
          NOTE: border-radius here is 24px (full pill). Shrinking the box's
          height without enough left inset makes the rounded corner's own
          curve reach past the padding and into the text — which is exactly
-         what was still happening. Padding-left is deliberately NOT
-         !important so the reply row's inline padding-left:30px (its
-         indent under the parent comment) still wins over this base value. */
+         what was still happening.
+         padding-left is now !important. It previously wasn't, on the theory
+         that the reply row's inline padding-left:30px (its indent under the
+         parent comment) needed to win by NOT fighting an !important — but
+         that also meant this value only won by source-order against any
+         other stylesheet, which is fragile (a later-loaded patch touching
+         the same class at the same specificity would silently win instead).
+         Made !important for robustness; the reply row's inline style has
+         been upgraded to padding-left:30px !important to match (see
+         membersaccess.js, the sw-comment reply-row template) so it still
+         overrides this base value same as before. */
       /* padding-left must be >= border-radius (24px). A rounded corner's
          horizontal inset is 0 at the box's vertical midline and grows to
          exactly 'radius' at the very top/bottom edge. 22px left a 2px gap
@@ -161,7 +169,7 @@
         padding-top: 6px !important;
         padding-bottom: 6px !important;
         padding-right: 10px !important;
-        padding-left: 28px;
+        padding-left: 28px !important;
       }
 
       /* Composer title/tags/domain — turn the bottom-divider list rows into
