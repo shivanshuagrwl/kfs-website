@@ -1218,10 +1218,18 @@ async function loadDashboard() {
       if (goBtn) goBtn.addEventListener('click', () => {
         overlay.classList.remove('open');
         localStorage.setItem(firstTimeKey, '1');
-        // Switch to profile panel
+        // Switch to profile panel and WAIT for them to actually finish
+        // setting it up (i.e. a real saveProfile() success) before the tour
+        // starts — it used to fire on a flat 450ms timer regardless of
+        // whether the person had touched a single field, which meant "Set
+        // Up My Profile" and "Skip" behaved identically. window._kfsPendingProfileTour
+        // is consumed in saveProfile() on success, and as a fallback (they
+        // navigate away without saving) it's also consumed the moment they
+        // leave the profile panel, in switchPanel(), so nobody gets
+        // permanently stuck without ever seeing the tour.
+        window._kfsPendingProfileTour = true;
         const profileNav = document.querySelector('[data-panel="profile"]');
         if (profileNav) switchPanel(profileNav);
-        setTimeout(() => kfsStartTour(), 450);
       }, { once: true });
       if (skipBtn) skipBtn.addEventListener('click', () => {
         overlay.classList.remove('open');
@@ -1785,6 +1793,13 @@ function switchPanel(el) {
   const panel = el.dataset.panel;
   // Block studio access for alumni/past members
   if (panel === 'studio' && window._memberProfile?.is_past) return;
+  // First-time flow fallback: they chose "Set Up My Profile" but are now
+  // leaving the Profile panel without having saved — don't leave them
+  // stuck with a pending tour that never fires; start it now instead.
+  if (window._kfsPendingProfileTour && panel !== 'profile') {
+    window._kfsPendingProfileTour = false;
+    setTimeout(() => kfsStartTour(), 450);
+  }
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll(`.nav-item[data-panel="${panel}"]`).forEach(n => n.classList.add('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -2007,6 +2022,13 @@ async function saveProfile() {
     if (!r.ok) throw new Error(d.error || 'Failed to save');
     showMsg('profile-msg', d.pending ? 'Update submitted — pending admin review.' : 'Profile saved!');
     await loadProfile();
+    // First-time flow: they picked "Set Up My Profile" and just saved for
+    // real (whether it went through immediately or is pending admin
+    // review — either way they did the setup). Now start the tour.
+    if (window._kfsPendingProfileTour) {
+      window._kfsPendingProfileTour = false;
+      setTimeout(() => kfsStartTour(), 450);
+    }
   } catch (e) {
     showMsg('profile-err', e.message, false);
   } finally {
@@ -3583,7 +3605,7 @@ function swShowReplyInput(commentId, projectId) {
   const wrap = $id(`sw-reply-input-${commentId}`);
   if (!wrap) return;
   if (wrap.innerHTML) { wrap.innerHTML=''; return; }
-  wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px !important">
+  wrap.innerHTML = `<div class="studio-comment-input-row" style="margin-top:8px;padding-left:30px">
     <input id="sw-reply-text-${swEsc(commentId)}" type="text" placeholder="Reply…" class="studio-comment-input" maxlength="1000"
       onkeydown="if(event.key==='Enter')swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">
     <button class="studio-comment-post-btn" onclick="swPostComment('${swEsc(projectId)}','${swEsc(commentId)}')">Reply</button>
@@ -12646,16 +12668,37 @@ function dmRenderTopbarExtras() { /* no-op — actions live in the ⓘ info pane
 // profile-setup nudge resolves. Replayable any time from Settings.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Force the desktop sidebar's collapsible "Settings" submenu open (idempotent
+// — adds the 'open' class rather than toggling it, so it's safe to call even
+// if it's already open). Needed before tour steps that live inside it
+// (Movies / Customization / Grievance) so their nav items are actually
+// visible/clickable on desktop; on mobile this submenu doesn't exist at all,
+// so those steps instead target elements inside the panel itself (which
+// switchPanel() makes visible regardless of device).
+function _tourExpandSidebarSettings() {
+  $id('sidebar-settings-items')?.classList.add('open');
+  $id('sidebar-settings-chevron')?.classList.add('open');
+  $id('sidebar-settings-toggle')?.classList.add('open');
+}
+
+// Small wrapper so tour steps can jump straight to a panel the same way a
+// real nav click would (switchPanel expects an element with .dataset.panel).
+function _tourGoToPanel(panelName) {
+  switchPanel({ dataset: { panel: panelName } });
+}
+
 const KFS_TOUR_STEPS = [
   {
     selectors: null, // no target — centered welcome card
     title: 'Quick tour of KFS',
-    body: "Here's a 30-second look at where everything lives. Tap Skip any time to jump straight in.",
+    body: "Here's a full walkthrough of where everything lives — the feed, collaboration, movie submissions, customization, and how to send us feedback. Tap Skip any time to jump straight in, and you can always replay this from Settings.",
+    beforeShow: () => _tourGoToPanel('studio'),
   },
   {
     selectors: ['#studio-feed', '.strand-feed-grid'],
     title: 'Social Strand',
-    body: 'This is the feed — see what other members are posting, and react or comment on their work.',
+    body: 'This is the feed — see what other members are posting, react with an emoji, or leave a comment on their work.',
+    beforeShow: () => _tourGoToPanel('studio'),
   },
   {
     selectors: ['#studio-new-post-btn', '.btb-post-item', '#studio-new-post-btn2'],
@@ -12665,17 +12708,43 @@ const KFS_TOUR_STEPS = [
   {
     selectors: ['[data-panel="network"]', '#btb-network'],
     title: 'Network',
-    body: 'Find collaborators, browse open collab posts, and connect with other members here.',
+    body: 'Followers, who you follow, a member directory to discover people, and a leaderboard all live here. Next up — the tab that matters most.',
+    beforeShow: () => { _tourGoToPanel('network'); nwSwitchTab('followers'); },
+  },
+  {
+    selectors: ['#new-collab-btn', '[data-network-tab="collab"]'],
+    title: 'Collaborate — this is a big one',
+    body: 'The Collab tab is where projects actually come together. Post a "Collab Request" listing your project, the role(s) you need filled, and the skills required — it shows up here for every member to browse. See a request that fits you? Reach out directly through Messages. You can also mark your own profile "Open to collab" so people looking for teammates can find you first. If you\'re starting something, don\'t just post in the feed — post it here so it\'s actually discoverable.',
+    beforeShow: () => { _tourGoToPanel('network'); nwSwitchTab('collab'); },
+  },
+  {
+    selectors: ['#new-movie-btn', '#panel-movies'],
+    title: 'My Movies — submissions & change requests',
+    body: 'Submit a finished film here for admin review and publication on /films. Every submission gets a status: Pending (awaiting review), Approved, Rejected, or Changes Requested. If you see "Changes Requested," an admin left feedback under "Admin feedback" on the card — click Edit on that same submission to update it and resubmit; you don\'t need to start a new one.',
+    beforeShow: () => { _tourExpandSidebarSettings(); _tourGoToPanel('movies'); },
+  },
+  {
+    selectors: ['#panel-customization', '[data-panel="customization"]'],
+    title: 'Customization',
+    body: 'Make the app feel like yours — personalize your chat wallpaper and message bubble colors from here. Heads up: these preferences are saved locally to this device/browser only, so they won\'t follow you if you log in elsewhere.',
+    beforeShow: () => { _tourExpandSidebarSettings(); _tourGoToPanel('customization'); },
+  },
+  {
+    selectors: ['#grv-tab-suggestion', '#panel-grievance'],
+    title: 'Feedback & Grievances — please use this',
+    body: 'Seriously, use this one. There are two tabs: 💡 Suggestion for ideas on how to improve KFS, and 🚨 Grievance for reporting a problem or raising a concern. You can submit either anonymously if you\'d rather not attach your name. Every submission goes straight to the team for review — this is the direct line for anything you want changed or fixed, so don\'t sit on it.',
+    beforeShow: () => { _tourExpandSidebarSettings(); _tourGoToPanel('grievance'); },
   },
   {
     selectors: ['#nav-dms', '[data-panel="dms"]'],
     title: 'Messages',
-    body: 'Direct messages and group chats with other members live here.',
+    body: 'Direct messages and group chats with other members live here — including the collaborators you find on the Collab tab.',
   },
   {
     selectors: ['[data-panel="profile"]', '#btb-settings'],
     title: "You're set",
-    body: 'Your profile, security, and app settings are always one tap away. Enjoy KFS!',
+    body: 'Profile, My Movies, My Works, Security, and Customization are always one tap away under Settings. You can replay this tour any time from the same menu. Enjoy KFS!',
+    beforeShow: () => { _tourExpandSidebarSettings(); },
   },
 ];
 
@@ -12737,6 +12806,13 @@ function _tourRenderStep() {
   const step = KFS_TOUR_STEPS[_tourStep];
   const root = $id('kfs-tour-root');
   if (!root || !step) return;
+
+  // Navigate to whatever panel/tab this step is actually about, so the
+  // spotlight highlights real, live UI instead of a nav item pointing at
+  // content the person can't currently see.
+  if (typeof step.beforeShow === 'function') {
+    try { step.beforeShow(); } catch (e) { /* non-fatal — fall back to spotlight-search below */ }
+  }
 
   root.querySelector('.kfs-tour-title').textContent = step.title;
   root.querySelector('.kfs-tour-body').textContent = step.body;
@@ -12803,4 +12879,8 @@ function _tourEnd() {
     window.removeEventListener('scroll', _tourResizeHandler, true);
     _tourResizeHandler = null;
   }
+  // The tour now hops across several panels (Collab, Movies, Customization,
+  // Grievance) — leave the person somewhere sensible rather than wherever
+  // the last step happened to land them.
+  _goToStrandFeed();
 }

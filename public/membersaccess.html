@@ -9388,6 +9388,36 @@
         </div>
         <div
           class="settings-sheet-item"
+          onclick="settingsSheetGo('grievance')"
+        >
+          <span class="settings-sheet-icon"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+              /></svg
+          ></span>
+          <span class="settings-sheet-label">Feedback &amp; Grievances</span>
+          <svg
+            class="settings-sheet-chevron"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+        <div
+          class="settings-sheet-item"
           onclick="closeSettingsSheet();setTimeout(()=>kfsStartTour(true),250)"
         >
           <span class="settings-sheet-icon"
@@ -10517,7 +10547,7 @@
     <script src="/kfs-patch4.js" defer></script>
     <script src="/kfs-strand-live-patch.js" defer></script>
     <script src="/kfs-patch5.js" defer></script>
-    <script src="/kfs-patch6.js?v=6" defer></script>
+    <script src="/kfs-patch6.js?v=4" defer></script>
     <script src="/kfs-debug-trace.js" defer></script>
 
     <!-- ── KFS Patch v2.0 — Instagram-style improvements ──────────────────── -->
