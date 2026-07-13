@@ -5175,8 +5175,9 @@ const _DM_TICK_SINGLE = '<svg width="14" height="10" viewBox="0 0 16 11" fill="n
 const _DM_TICK_DOUBLE = '<svg width="17" height="10" viewBox="0 0 20 11" fill="none"><path d="M1 5.5L5 9.5L11 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 5.5L12 9.5L19 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function _dmTickSpanHTML(m) {
-  if (m.read_at)      return `<span class="dm-ticks dm-ticks-read" title="Seen">${_DM_TICK_DOUBLE}</span>`;
-  if (m.delivered_at) return `<span class="dm-ticks dm-ticks-delivered" title="Delivered">${_DM_TICK_DOUBLE}</span>`;
+  const receiptsOn = typeof window._kfsReadReceiptsEnabled === 'function' ? window._kfsReadReceiptsEnabled() : true;
+  if (m.read_at && receiptsOn) return `<span class="dm-ticks dm-ticks-read" title="Seen">${_DM_TICK_DOUBLE}</span>`;
+  if (m.delivered_at)          return `<span class="dm-ticks dm-ticks-delivered" title="Delivered">${_DM_TICK_DOUBLE}</span>`;
   return `<span class="dm-ticks dm-ticks-sent" title="Sent">${_DM_TICK_SINGLE}</span>`;
 }
 
@@ -12321,8 +12322,10 @@ if (document.readyState === "loading") {
 //     #cust-root placeholder that markup/CSS already had in place.
 // ═══════════════════════════════════════════════════════════════════════════
 (function () {
-  const WALL_KEY   = 'kfs-cust-wallpaper';
-  const BUBBLE_KEY = 'kfs-cust-bubble';
+  const WALL_KEY    = 'kfs-cust-wallpaper';
+  const BUBBLE_KEY  = 'kfs-cust-bubble';
+  const OPACITY_KEY = 'kfs-cust-bubble-opacity'; // { mine: 0-1, theirs: 0-1 }
+  const READ_RECEIPTS_KEY = 'kfs-cust-read-receipts'; // true/false, default true
 
   const WALLPAPER_SOLIDS = [
     '#0a0a0a', '#14141c', '#1a1a2e', '#16213e', '#1b262c',
@@ -12412,9 +12415,22 @@ if (document.readyState === "loading") {
     const bub = _custLoad(BUBBLE_KEY);
     root.setProperty('--bubble-mine-bg',   bub?.bg   || '#f0f0f0');
     root.setProperty('--bubble-mine-text', bub?.text || '#0a0a0a');
+
+    const op = _custLoad(OPACITY_KEY);
+    root.setProperty('--bubble-mine-opacity',   String(op?.mine   ?? 1));
+    root.setProperty('--bubble-theirs-opacity', String(op?.theirs ?? 1));
   }
   window.applyCustomization = applyCustomization;
   try { applyCustomization(); } catch { /* localStorage may be blocked — defaults already match */ }
+
+  // Read receipts on/off — device-local display preference. When off, your
+  // own sent messages never show the blue "Seen" double-tick in this
+  // browser (they cap out at "Delivered"). Default is on (current behavior).
+  function _readReceiptsEnabled() {
+    const v = _custLoad(READ_RECEIPTS_KEY);
+    return v === null ? true : !!v;
+  }
+  window._kfsReadReceiptsEnabled = _readReceiptsEnabled;
 
   let _custActiveSeg = 'solid';
 
@@ -12428,12 +12444,16 @@ if (document.readyState === "loading") {
   function _custUpdatePreview() {
     const prev = $id('cust-preview-chat');
     if (prev) prev.style.background = _custPreviewBg();
+    const op = _custLoad(OPACITY_KEY) || { mine: 1, theirs: 1 };
     const mine = $id('cust-preview-mine-bubble');
     if (mine) {
       const bub = _custLoad(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
       mine.style.background = bub.bg;
       mine.style.color = bub.text;
+      mine.style.opacity = String(op.mine ?? 1);
     }
+    const theirs = $id('cust-preview-chat')?.querySelector('.cust-preview-bubble.theirs');
+    if (theirs) theirs.style.opacity = String(op.theirs ?? 1);
   }
 
   function _custWallpaperSectionHtml(type) {
@@ -12565,6 +12585,76 @@ if (document.readyState === "loading") {
     }
   }
 
+  function _custRenderOpacitySection() {
+    const section = $id('cust-opacity-content');
+    if (!section) return;
+    const op = _custLoad(OPACITY_KEY) || { mine: 1, theirs: 1 };
+    const mineVal   = op.mine   ?? 1;
+    const theirsVal = op.theirs ?? 1;
+    section.innerHTML = `
+      <div class="cust-opacity-row">
+        <span class="cust-opacity-label">Your bubbles</span>
+        <input type="range" class="cust-slider" id="cust-opacity-mine" min="0.3" max="1" step="0.05" value="${mineVal}">
+        <span class="cust-opacity-value" id="cust-opacity-mine-val">${Math.round(mineVal * 100)}%</span>
+      </div>
+      <div class="cust-opacity-row">
+        <span class="cust-opacity-label">Received bubbles</span>
+        <input type="range" class="cust-slider" id="cust-opacity-theirs" min="0.3" max="1" step="0.05" value="${theirsVal}">
+        <span class="cust-opacity-value" id="cust-opacity-theirs-val">${Math.round(theirsVal * 100)}%</span>
+      </div>
+      <div class="cust-hint">Make chat bubbles more see-through. Applies to both DMs and group chats on this device.</div>`;
+
+    const mineInput   = $id('cust-opacity-mine');
+    const theirsInput = $id('cust-opacity-theirs');
+    const mineValEl   = $id('cust-opacity-mine-val');
+    const theirsValEl = $id('cust-opacity-theirs-val');
+
+    mineInput?.addEventListener('input', () => {
+      const cur = _custLoad(OPACITY_KEY) || { mine: 1, theirs: 1 };
+      cur.mine = parseFloat(mineInput.value);
+      _custSave(OPACITY_KEY, cur);
+      mineValEl.textContent = `${Math.round(cur.mine * 100)}%`;
+      applyCustomization(); _custUpdatePreview();
+    });
+    theirsInput?.addEventListener('input', () => {
+      const cur = _custLoad(OPACITY_KEY) || { mine: 1, theirs: 1 };
+      cur.theirs = parseFloat(theirsInput.value);
+      _custSave(OPACITY_KEY, cur);
+      theirsValEl.textContent = `${Math.round(cur.theirs * 100)}%`;
+      applyCustomization(); _custUpdatePreview();
+    });
+  }
+
+  function _custRenderReadReceiptsSection() {
+    const section = $id('cust-read-receipts-content');
+    if (!section) return;
+    const on = _readReceiptsEnabled();
+    section.innerHTML = `
+      <div class="cust-switch-row">
+        <div class="cust-switch-text">
+          <span class="cust-switch-title">Read Receipts</span>
+          <span class="cust-switch-desc">Show the blue "Seen" double-tick on messages you've sent, on this device.</span>
+        </div>
+        <label class="cust-switch">
+          <input type="checkbox" id="cust-read-receipts-toggle" ${on ? 'checked' : ''}>
+          <span class="cust-switch-track"></span>
+        </label>
+      </div>`;
+    $id('cust-read-receipts-toggle')?.addEventListener('change', (e) => {
+      _custSave(READ_RECEIPTS_KEY, !!e.target.checked);
+      // Re-render any ticks already on screen immediately, from data already
+      // held locally — no need to wait for the next server poll.
+      try {
+        const msgs = (typeof DM !== 'undefined' && DM?.msgs) ? DM.msgs : [];
+        msgs.forEach(msg => {
+          const metaRow = document.querySelector(`.dm-meta[data-meta-for="${msg.id}"]`);
+          const oldTick = metaRow?.querySelector('.dm-ticks');
+          if (oldTick && typeof _dmTickSpanHTML === 'function') oldTick.outerHTML = _dmTickSpanHTML(msg);
+        });
+      } catch { /* non-fatal */ }
+    });
+  }
+
   function _custSetSeg(seg) {
     _custActiveSeg = seg;
     document.querySelectorAll('.cust-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
@@ -12593,7 +12683,14 @@ if (document.readyState === "loading") {
 
       <div class="card-title" style="margin-bottom:10px">Message Color</div>
       <div id="cust-bubble-content"></div>
-      <button class="cust-upload-btn" id="cust-bubble-reset-btn" style="margin-top:12px">Reset message color to default</button>
+      <button class="cust-upload-btn" id="cust-bubble-reset-btn" style="margin-top:12px;margin-bottom:24px">Reset message color to default</button>
+
+      <div class="card-title" style="margin-bottom:10px">Bubble Opacity</div>
+      <div id="cust-opacity-content"></div>
+      <button class="cust-upload-btn" id="cust-opacity-reset-btn" style="margin-top:12px;margin-bottom:24px">Reset opacity to default</button>
+
+      <div class="card-title" style="margin-bottom:10px">Privacy</div>
+      <div id="cust-read-receipts-content"></div>
     `;
 
     document.querySelectorAll('.cust-seg-btn').forEach(btn => {
@@ -12607,9 +12704,15 @@ if (document.readyState === "loading") {
       _custSave(BUBBLE_KEY, null);
       applyCustomization(); _custRenderBubbleSection(); _custUpdatePreview();
     });
+    $id('cust-opacity-reset-btn')?.addEventListener('click', () => {
+      _custSave(OPACITY_KEY, null);
+      applyCustomization(); _custRenderOpacitySection(); _custUpdatePreview();
+    });
 
     _custSetSeg('solid');
     _custRenderBubbleSection();
+    _custRenderOpacitySection();
+    _custRenderReadReceiptsSection();
     _custUpdatePreview();
   };
 })();

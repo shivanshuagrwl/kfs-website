@@ -48,6 +48,9 @@
         --chat-wallpaper-bg: transparent;
         --bubble-mine-bg: #0a84ff;
         --bubble-mine-text: #ffffff;
+        /* Bubble opacity (Settings → Customization) — 1 = fully opaque */
+        --bubble-mine-opacity: 1;
+        --bubble-theirs-opacity: 1;
         /* Spring curve used across sheets, modals and tap feedback — a
            slight overshoot-then-settle instead of a linear/eased curve. */
         --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1547,6 +1550,126 @@
         font-weight: 700;
         color: #fff;
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Bubble opacity sliders ── */
+      .cust-opacity-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .cust-opacity-row:last-of-type {
+        margin-bottom: 0;
+      }
+      .cust-opacity-label {
+        flex-shrink: 0;
+        width: 108px;
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .cust-opacity-value {
+        flex-shrink: 0;
+        width: 38px;
+        text-align: right;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .cust-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--surface3);
+        outline: none;
+        cursor: pointer;
+      }
+      .cust-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+        transition: transform 0.12s var(--spring);
+      }
+      .cust-slider::-webkit-slider-thumb:active {
+        transform: scale(1.15);
+      }
+      .cust-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        border: none;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+      }
+
+      /* ── iOS-style toggle switch (Read Receipts, etc.) ── */
+      .cust-switch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .cust-switch-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .cust-switch-title {
+        font-size: 13.5px;
+        color: var(--text);
+        font-weight: 500;
+      }
+      .cust-switch-desc {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .cust-switch {
+        position: relative;
+        display: inline-block;
+        width: 46px;
+        height: 27px;
+        flex-shrink: 0;
+      }
+      .cust-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+      .cust-switch-track {
+        position: absolute;
+        inset: 0;
+        background: var(--surface3);
+        border-radius: 27px;
+        cursor: pointer;
+        transition: background 0.18s ease;
+      }
+      .cust-switch-track::before {
+        content: "";
+        position: absolute;
+        width: 23px;
+        height: 23px;
+        left: 2px;
+        top: 2px;
+        background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        transition: transform 0.18s var(--spring);
+      }
+      .cust-switch input:checked + .cust-switch-track {
+        background: var(--success);
+      }
+      .cust-switch input:checked + .cust-switch-track::before {
+        transform: translateX(19px);
       }
 
       /* Genre tag input */
@@ -7705,6 +7828,7 @@
               background: var(--surface3);
               color: var(--text);
               border-radius: 18px;
+              opacity: var(--bubble-theirs-opacity);
             }
             .dm-msg-group.theirs .dm-bubble.dm-bubble-tail {
               border-radius: 4px 18px 18px 18px;
@@ -7713,6 +7837,7 @@
               background: var(--bubble-mine-bg);
               color: var(--bubble-mine-text);
               border-radius: 18px;
+              opacity: var(--bubble-mine-opacity);
             }
             .dm-msg-group.mine .dm-bubble.dm-bubble-tail {
               border-radius: 18px 18px 4px 18px;
