@@ -115,9 +115,9 @@
   function _updatePreviewOpacity() {
     const op = _load(OPACITY_KEY) || { mine: 1, theirs: 1 };
     const mineBubble = document.getElementById('cust-preview-mine-bubble');
-    if (mineBubble) mineBubble.style.opacity = String(op.mine ?? 1);
+    if (mineBubble) mineBubble.style.setProperty('--preview-mine-opacity', String(op.mine ?? 1));
     const theirsBubble = document.querySelector('#cust-preview-chat .cust-preview-bubble.theirs');
-    if (theirsBubble) theirsBubble.style.opacity = String(op.theirs ?? 1);
+    if (theirsBubble) theirsBubble.style.setProperty('--preview-theirs-opacity', String(op.theirs ?? 1));
   }
 
   let _receiptsContentEl = null;

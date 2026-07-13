@@ -1458,16 +1458,32 @@
         border-radius: 16px;
         font-size: 12.5px;
         line-height: 1.4;
+        position: relative;
+        isolation: isolate;
+      }
+      .cust-preview-bubble::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        z-index: -1;
+        background: inherit;
       }
       .cust-preview-bubble.theirs {
         align-self: flex-start;
         background: rgba(255, 255, 255, 0.08);
         color: var(--text);
       }
+      .cust-preview-bubble.theirs::before {
+        opacity: var(--preview-theirs-opacity, 1);
+      }
       .cust-preview-bubble.mine {
         align-self: flex-end;
         background: var(--bubble-mine-bg);
         color: var(--bubble-mine-text);
+      }
+      .cust-preview-bubble.mine::before {
+        opacity: var(--preview-mine-opacity, 1);
       }
 
       .cust-photo-row {
@@ -7821,13 +7837,28 @@
               word-break: break-word;
               white-space: pre-wrap;
               border-radius: 20px;
-              transition: opacity 0.1s;
+              position: relative;
+              isolation: isolate;
+              transition: background-color 0.1s;
+            }
+            /* Background lives on a pseudo-element behind the content, so the
+               opacity slider fades only the bubble fill — never the text,
+               reactions, or images sitting on top of it. */
+            .dm-bubble::before {
+              content: "";
+              position: absolute;
+              inset: 0;
+              border-radius: inherit;
+              z-index: -1;
+              background: inherit;
             }
             /* First bubble in group gets the "tail" corner */
             .dm-msg-group.theirs .dm-bubble {
               background: var(--surface3);
               color: var(--text);
               border-radius: 18px;
+            }
+            .dm-msg-group.theirs .dm-bubble::before {
               opacity: var(--bubble-theirs-opacity);
             }
             .dm-msg-group.theirs .dm-bubble.dm-bubble-tail {
@@ -7837,10 +7868,19 @@
               background: var(--bubble-mine-bg);
               color: var(--bubble-mine-text);
               border-radius: 18px;
+            }
+            .dm-msg-group.mine .dm-bubble::before {
               opacity: var(--bubble-mine-opacity);
             }
             .dm-msg-group.mine .dm-bubble.dm-bubble-tail {
               border-radius: 18px 18px 4px 18px;
+            }
+            /* Image / shared-post bubbles render no fill at all — keep their
+               pseudo-element out of the way so it can't show a translucent
+               square behind the media. */
+            .dm-bubble.dm-bubble-image::before,
+            .dm-bubble.dm-bubble-strand-share::before {
+              display: none;
             }
             .dm-bubble.dm-deleted {
               color: #333;

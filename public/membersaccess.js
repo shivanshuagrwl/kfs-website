@@ -12450,10 +12450,10 @@ if (document.readyState === "loading") {
       const bub = _custLoad(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
       mine.style.background = bub.bg;
       mine.style.color = bub.text;
-      mine.style.opacity = String(op.mine ?? 1);
+      mine.style.setProperty('--preview-mine-opacity', String(op.mine ?? 1));
     }
     const theirs = $id('cust-preview-chat')?.querySelector('.cust-preview-bubble.theirs');
-    if (theirs) theirs.style.opacity = String(op.theirs ?? 1);
+    if (theirs) theirs.style.setProperty('--preview-theirs-opacity', String(op.theirs ?? 1));
   }
 
   function _custWallpaperSectionHtml(type) {
