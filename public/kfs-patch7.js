@@ -52,16 +52,34 @@
   }
   window._kfsReadReceiptsEnabled = _readReceiptsEnabled;
 
-  // ── Keep --bubble-mine-opacity / --bubble-theirs-opacity applied no
-  //    matter which patch currently owns window.applyCustomization ───────
+  // ── Apply --bubble-mine-opacity / --bubble-theirs-opacity directly ─────
+  // IMPORTANT: this does NOT go through window.applyCustomization. Earlier
+  // versions of this patch wrapped window.applyCustomization once and
+  // relied on that wrapper staying in place — but kfs-patch4.js can (and,
+  // in practice, does) reassign window.applyCustomization again later,
+  // silently dropping our wrapper and leaving the opacity CSS vars frozen
+  // even though the slider still saves the right value to localStorage.
+  // Setting the vars ourselves, independent of whatever applyCustomization
+  // currently is, means the slider works no matter what patch4 does or
+  // when it does it.
+  function _applyOpacityVars() {
+    const op = _load(OPACITY_KEY);
+    document.documentElement.style.setProperty('--bubble-mine-opacity', String(op?.mine ?? 1));
+    document.documentElement.style.setProperty('--bubble-theirs-opacity', String(op?.theirs ?? 1));
+  }
+
+  // Still nice to have: if window.applyCustomization exists, wrap it too so
+  // opacity stays correct through its own re-renders. But this is now a
+  // bonus, not the mechanism the slider depends on — and we re-check on
+  // every poll tick (not just once) so a later patch4 reassignment gets
+  // caught instead of silently winning.
   function wrapApplyCustomization() {
-    if (typeof window.applyCustomization !== 'function' || window.applyCustomization.__kfsOpacityWrapped) return false;
+    if (typeof window.applyCustomization !== 'function') return false;
+    if (window.applyCustomization.__kfsOpacityWrapped) return true;
     const orig = window.applyCustomization;
     const wrapped = function () {
       const ret = orig.apply(this, arguments);
-      const op = _load(OPACITY_KEY);
-      document.documentElement.style.setProperty('--bubble-mine-opacity', String(op?.mine ?? 1));
-      document.documentElement.style.setProperty('--bubble-theirs-opacity', String(op?.theirs ?? 1));
+      _applyOpacityVars();
       return ret;
     };
     wrapped.__kfsOpacityWrapped = true;
@@ -99,6 +117,7 @@
       cur.mine = parseFloat(mineInput.value);
       _save(OPACITY_KEY, cur);
       mineValEl.textContent = `${Math.round(cur.mine * 100)}%`;
+      _applyOpacityVars();
       window.applyCustomization?.();
       _updatePreviewOpacity();
     });
@@ -107,6 +126,7 @@
       cur.theirs = parseFloat(theirsInput.value);
       _save(OPACITY_KEY, cur);
       theirsValEl.textContent = `${Math.round(cur.theirs * 100)}%`;
+      _applyOpacityVars();
       window.applyCustomization?.();
       _updatePreviewOpacity();
     });
@@ -193,6 +213,7 @@
 
     opacityCard.querySelector('#cust-opacity-reset-btn')?.addEventListener('click', () => {
       _save(OPACITY_KEY, null);
+      _applyOpacityVars();
       window.applyCustomization?.();
       _renderOpacitySection();
       _updatePreviewOpacity();
@@ -204,6 +225,7 @@
       resetAllBtn.__kfsOpacityHooked = true;
       resetAllBtn.addEventListener('click', () => {
         _save(OPACITY_KEY, null);
+        _applyOpacityVars();
         window.applyCustomization?.();
         _renderOpacitySection();
         _updatePreviewOpacity();
@@ -212,7 +234,8 @@
   }
 
   function wrapLoadCustomization() {
-    if (typeof window.loadCustomization !== 'function' || window.loadCustomization.__kfsOpacityWrapped) return false;
+    if (typeof window.loadCustomization !== 'function') return false;
+    if (window.loadCustomization.__kfsOpacityWrapped) return true;
     const orig = window.loadCustomization;
     const wrapped = function () {
       const ret = orig.apply(this, arguments);
@@ -225,20 +248,30 @@
   }
 
   function init() {
-    // Poll briefly for readiness rather than assuming exact script order —
+    // Apply immediately so the vars exist even before any customization
+    // script has loaded/run, and again on every tick below — cheap, and it
+    // means the bubble opacity can never end up depending on winning a
+    // one-shot race against kfs-patch4.js.
+    _applyOpacityVars();
+
+    // Poll for readiness rather than assuming exact script order —
     // loadCustomization/applyCustomization are defined in membersaccess.js
-    // and then possibly re-defined by kfs-patch4.js; we want whichever
-    // version is FINAL by the time the panel actually opens.
+    // and then possibly re-defined by kfs-patch4.js. We keep polling
+    // indefinitely (not just until the first success) specifically because
+    // kfs-patch4.js has been observed to reassign window.applyCustomization
+    // again after our first wrap succeeds, which would otherwise silently
+    // undo it. Re-applying the vars ourselves every tick means that even if
+    // the wrap gets clobbered, the slider still visibly works.
     let tries = 0;
     const tryWrap = () => {
       tries++;
-      const gotApply = wrapApplyCustomization();
-      const gotLoad  = wrapLoadCustomization();
-      if (gotApply && gotLoad) {
-        try { window.applyCustomization(); } catch { /* localStorage may be blocked */ }
-        return;
-      }
-      if (tries < 40) setTimeout(tryWrap, 250); // up to ~10s
+      wrapApplyCustomization();
+      wrapLoadCustomization();
+      _applyOpacityVars();
+      // Fast polling for the first ~10s to catch initial script load order,
+      // then settle into a slow background check so a late/dynamic
+      // reassignment of applyCustomization still gets caught eventually.
+      setTimeout(tryWrap, tries < 40 ? 250 : 2000);
     };
     tryWrap();
   }
