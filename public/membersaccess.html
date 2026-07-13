@@ -1471,18 +1471,20 @@
       }
       .cust-preview-bubble.theirs {
         align-self: flex-start;
-        background: rgba(255, 255, 255, 0.08);
+        background: transparent;
         color: var(--text);
       }
       .cust-preview-bubble.theirs::before {
+        background: rgba(255, 255, 255, 0.08);
         opacity: var(--preview-theirs-opacity, 1);
       }
       .cust-preview-bubble.mine {
         align-self: flex-end;
-        background: var(--bubble-mine-bg);
+        background: transparent;
         color: var(--bubble-mine-text);
       }
       .cust-preview-bubble.mine::before {
+        background: var(--bubble-mine-bg);
         opacity: var(--preview-mine-opacity, 1);
       }
 
@@ -7854,22 +7856,24 @@
             }
             /* First bubble in group gets the "tail" corner */
             .dm-msg-group.theirs .dm-bubble {
-              background: var(--surface3);
+              background: transparent;
               color: var(--text);
               border-radius: 18px;
             }
             .dm-msg-group.theirs .dm-bubble::before {
+              background: var(--surface3);
               opacity: var(--bubble-theirs-opacity);
             }
             .dm-msg-group.theirs .dm-bubble.dm-bubble-tail {
               border-radius: 4px 18px 18px 18px;
             }
             .dm-msg-group.mine .dm-bubble {
-              background: var(--bubble-mine-bg);
+              background: transparent;
               color: var(--bubble-mine-text);
               border-radius: 18px;
             }
             .dm-msg-group.mine .dm-bubble::before {
+              background: var(--bubble-mine-bg);
               opacity: var(--bubble-mine-opacity);
             }
             .dm-msg-group.mine .dm-bubble.dm-bubble-tail {
