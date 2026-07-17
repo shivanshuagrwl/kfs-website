@@ -109,6 +109,7 @@
         const step = window.KFS_TOUR_STEPS[window._tourStep];
         const spot = document.getElementById('kfs-tour-spot');
         const card = document.getElementById('kfs-tour-card');
+        const backdrop = document.getElementById('kfs-tour-backdrop');
         if (!spot || !card || !step) return;
 
         const target = typeof window._tourFindTarget === 'function' ? window._tourFindTarget(step.selectors) : null;
@@ -118,12 +119,21 @@
             else if (typeof window._tourEnd === 'function') window._tourEnd();
             return;
           }
+          // No spotlight this step (a centered/intro-style card) — the
+          // backdrop is the only thing dimming the page, so keep its tint.
+          if (backdrop) backdrop.style.background = 'rgba(0,0,0,0.6)';
           spot.style.display = 'none';
           card.style.top = '50%';
           card.style.left = '50%';
           card.style.transform = 'translate(-50%, -50%)';
           return;
         }
+
+        // The spot's own box-shadow (0 0 0 9999px) already paints the dim
+        // everywhere outside the ring. Leaving the backdrop's tint on top
+        // stacked a second dark layer over the highlighted target itself,
+        // which is why it looked washed-out gray instead of its real color.
+        if (backdrop) backdrop.style.background = 'transparent';
 
         const r = target.getBoundingClientRect();
 
