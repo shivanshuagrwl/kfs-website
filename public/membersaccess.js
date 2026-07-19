@@ -2457,7 +2457,10 @@ var _kfsPoppingFromBack = false;
 
 function _kfsPushNavState(type) {
   _kfsNavStack.push(type);
-  try { history.pushState({ kfsLayer: type }, '', location.href); } catch (e) {}
+  try {
+    const base = location.href.split('#')[0];
+    history.pushState({ kfsLayer: type }, '', base + '#kfs-nav-' + _kfsNavStack.length);
+  } catch (e) {}
 }
 
 // Call when a layer is dismissed via a UI control (X button, backdrop tap,
@@ -16366,7 +16369,8 @@ function _tourEnd() {
           0 0 24px rgba(10,132,255,0.10),
           inset 0 1px 0 rgba(255,255,255,0.07) !important;
         transition: box-shadow 0.25s var(--spring-soft, ease), transform 0.25s var(--spring-soft, ease) !important;
-        z-index: 200 !important;
+        z-index: 999998 !important;
+        pointer-events: auto !important;
       }
 
       /* ── Items: icon-only, compact, evenly spaced ────────────────────── */
@@ -16401,8 +16405,12 @@ function _tourEnd() {
       .btb-item.active svg { stroke-width: 2.3 !important; }
 
       /* Tap feedback: GROW instead of shrink — the "otherwise it's smaller,
-         enlarges when touched" behaviour that was asked for. */
-      .btb-item:active {
+         enlarges when touched" behaviour that was asked for. Driven by the
+         .kfs-pressed class (added/removed via touchstart/touchend JS below)
+         rather than :active alone — :active is unreliable inside Android
+         WebViews and some mobile browsers without extra wiring. */
+      .btb-item:active,
+      .btb-item.kfs-pressed {
         transform: scale(1.14) !important;
         background: rgba(255,255,255,0.12) !important;
         transition: transform 0.12s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
@@ -16436,7 +16444,8 @@ function _tourEnd() {
         height: 18px !important;
         stroke: #fff !important;
       }
-      .btb-post-item:active .btb-post-btn {
+      .btb-post-item:active .btb-post-btn,
+      .btb-post-item.kfs-pressed .btb-post-btn {
         transform: scale(1.14) !important;
       }
 
@@ -16456,7 +16465,7 @@ function _tourEnd() {
         height: 40px;
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,0.10);
-        background: rgba(18,18,20,0.72);
+        background: rgba(18,18,20,0.85);
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         box-shadow: 0 6px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -16464,11 +16473,13 @@ function _tourEnd() {
         align-items: center;
         justify-content: center;
         color: rgba(255,255,255,0.85);
-        z-index: 199;
+        z-index: 999999;
+        pointer-events: auto;
         transition: transform 0.28s var(--spring, cubic-bezier(0.34,1.56,0.64,1)), background 0.15s ease;
       }
       .btb-notif-fab svg { width: 18px; height: 18px; }
-      .btb-notif-fab:active { transform: scale(1.14); }
+      .btb-notif-fab:active,
+      .btb-notif-fab.kfs-pressed { transform: scale(1.14); }
       .btb-notif-fab.active {
         background: rgba(10,132,255,0.22);
         color: #fff;
@@ -16494,4 +16505,25 @@ function _tourEnd() {
     }
   `;
   document.head.appendChild(style);
+})();
+
+// ── Reliable tap feedback for the mobile nav pill ───────────────────────────
+// Some Android WebViews / older mobile browsers apply :active flakily on
+// tap. Toggling a real class on touchstart/touchend guarantees the "grow on
+// tap" effect actually fires every time, everywhere this app runs.
+(function installKfsPressFeedback() {
+  const pressTargets = '.btb-item, .btb-post-item, .btb-notif-fab';
+  function addPressed(e) {
+    const el = e.target.closest && e.target.closest(pressTargets);
+    if (el) el.classList.add('kfs-pressed');
+  }
+  function removePressed() {
+    document.querySelectorAll('.kfs-pressed').forEach(el => el.classList.remove('kfs-pressed'));
+  }
+  document.addEventListener('touchstart', addPressed, { passive: true });
+  document.addEventListener('touchend', removePressed, { passive: true });
+  document.addEventListener('touchcancel', removePressed, { passive: true });
+  document.addEventListener('mousedown', addPressed);
+  document.addEventListener('mouseup', removePressed);
+  document.addEventListener('mouseleave', removePressed);
 })();
