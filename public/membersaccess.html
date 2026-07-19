@@ -205,7 +205,12 @@
           left: 50%;
           bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
           transform: translateX(-50%);
-          width: min(88vw, 340px);
+          /* Pill hugs its own content instead of stretching to a fixed
+             viewport-relative width — that stretching is what made the
+             edge padding and the inter-icon gaps drift apart on different
+             screens. max-width is just a safety net for very narrow phones. */
+          width: fit-content;
+          max-width: 94vw;
           z-index: 200;
           background: rgba(0, 0, 0, 0.88);
           backdrop-filter: blur(32px) saturate(200%);
@@ -216,19 +221,25 @@
             0 8px 32px rgba(0, 0, 0, 0.7),
             0 2px 8px rgba(0, 0, 0, 0.5),
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
-          padding: 8px 10px;
-          justify-content: space-around;
+          /* Side padding matches the gap between items exactly, so
+             edge → first icon, icon → icon, and last icon → edge are
+             the same distance — one uniform rhythm end to end. */
+          padding: 10px 18px;
+          justify-content: center;
           align-items: center;
-          gap: 0;
+          gap: 18px;
         }
         .btb-item {
           display: flex;
           align-items: center;
           justify-content: center;
-          flex: 1;
+          /* Fixed-size slots, not flex:1 — flex:1 was what let the post
+             button's larger box eat into its own neighboring gaps instead
+             of the uniform `gap` above doing all the spacing work. */
+          flex: 0 0 auto;
+          width: 40px;
+          height: 40px;
           cursor: pointer;
-          /* same total height as the plus button area so all items share one baseline */
-          min-height: 44px;
           padding: 0;
           border-radius: 100px;
           color: rgba(255, 255, 255, 0.55);
@@ -302,6 +313,7 @@
           display: none !important;
         }
       }
+
 
       /* ── Mini Settings Sheet (mobile bottom-sheet menu) ─────────────────── */
       .settings-sheet-backdrop {
@@ -9879,9 +9891,18 @@
 
     <style>
       /* ─── Bottom tab bar extra styles ───────────────────────────────────── */
+      /* Its own slot is a touch larger than the plain-icon items (44px vs
+         40px) so the button reads as the "active" center piece — but since
+         spacing between all items comes from the container's `gap`, not
+         from each item's own width, this larger slot never eats into the
+         rhythm on either side of it. */
+      .btb-post-item {
+        width: 44px;
+        height: 44px;
+      }
       .btb-post-btn {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
         border-radius: 13px;
         background: #ffffff;
         display: flex;
