@@ -16401,20 +16401,20 @@ function _tourEnd() {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 4px !important;
-        height: 54px !important;
-        padding: 0 10px !important;
+        gap: 10px !important;
+        height: 58px !important;
+        padding: 0 16px !important;
         margin: 0 !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
+        border: 1px solid rgba(255,255,255,0.16) !important;
         border-radius: 999px !important;
-        background: rgba(18,18,20,0.72) !important;
+        background: rgba(40,40,44,0.82) !important;
         backdrop-filter: blur(28px) saturate(180%) !important;
         -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
         box-shadow:
           0 10px 30px rgba(0,0,0,0.55),
           0 2px 10px rgba(0,0,0,0.4),
           0 0 24px rgba(10,132,255,0.10),
-          inset 0 1px 0 rgba(255,255,255,0.07) !important;
+          inset 0 1px 0 rgba(255,255,255,0.10) !important;
         transition: box-shadow 0.25s var(--spring-soft, ease), transform 0.25s var(--spring-soft, ease) !important;
         z-index: 999998 !important;
         pointer-events: auto !important;
@@ -16423,12 +16423,12 @@ function _tourEnd() {
       /* ── Items: icon-only, compact, evenly spaced ────────────────────── */
       .btb-item {
         flex: 0 0 auto !important;
-        width: 42px !important;
-        height: 42px !important;
+        width: 44px !important;
+        height: 44px !important;
         min-width: 0 !important;
         min-height: 0 !important;
         padding: 0 !important;
-        margin: 0 2px !important;
+        margin: 0 !important;
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
@@ -16439,8 +16439,8 @@ function _tourEnd() {
                     transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
       }
       .btb-item svg {
-        width: 21px !important;
-        height: 21px !important;
+        width: 22px !important;
+        height: 22px !important;
         stroke-width: 2 !important;
         flex-shrink: 0 !important;
         transition: transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
@@ -16485,12 +16485,12 @@ function _tourEnd() {
         width: auto !important;
         height: auto !important;
         background: none !important;
-        margin: 0 4px !important;
+        margin: 0 !important;
       }
       .btb-post-btn {
-        width: 38px !important;
-        height: 38px !important;
-        border-radius: 13px !important;
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 14px !important;
         background: #ffffff !important;
         display: flex !important;
         align-items: center !important;
