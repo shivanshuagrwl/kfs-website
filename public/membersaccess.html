@@ -205,7 +205,7 @@
           left: 50%;
           bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
           transform: translateX(-50%);
-          width: min(92vw, 360px);
+          width: min(88vw, 340px);
           z-index: 200;
           background: rgba(0, 0, 0, 0.88);
           backdrop-filter: blur(32px) saturate(200%);
@@ -216,24 +216,22 @@
             0 8px 32px rgba(0, 0, 0, 0.7),
             0 2px 8px rgba(0, 0, 0, 0.5),
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
-          padding: 6px 8px;
+          padding: 8px 10px;
           justify-content: space-around;
           align-items: center;
           gap: 0;
         }
         .btb-item {
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
           flex: 1;
           cursor: pointer;
           /* same total height as the plus button area so all items share one baseline */
-          min-height: 52px;
+          min-height: 44px;
           padding: 0;
           border-radius: 100px;
-          color: rgba(255, 255, 255, 0.32);
+          color: rgba(255, 255, 255, 0.55);
           transition:
             color 0.14s ease,
             background 0.14s ease,
@@ -245,20 +243,36 @@
           transition: transform 0.08s;
         }
         .btb-item.active {
-          color: rgba(255, 255, 255, 0.95);
+          color: #fff;
         }
 
         .btb-item svg {
-          width: 20px;
-          height: 20px;
+          width: 22px;
+          height: 22px;
           flex-shrink: 0;
         }
+        /* Icon-only nav — labels stay in the DOM for screen readers but
+           aren't shown, matching the reference design. */
         .btb-label {
-          font-size: 9px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
-          line-height: 1;
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+        }
+        /* Small dot beneath the active icon instead of a label/underline —
+           never shown on the post button, which isn't a nav destination. */
+        .btb-item.active:not(.btb-post-item)::after {
+          content: "";
+          position: absolute;
+          bottom: 3px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: #fff;
         }
         .btb-dot {
           position: absolute;
@@ -795,7 +809,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 300;
+        z-index: 999996;
       }
       .notif-panel-backdrop.open {
         display: block;
@@ -810,7 +824,7 @@
         border-right: 1px solid #2c2c2e;
         display: flex;
         flex-direction: column;
-        z-index: 301;
+        z-index: 999997;
         transform: translateX(calc(-100% - var(--sidebar-w)));
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
         will-change: transform;
@@ -4351,6 +4365,32 @@
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </button>
+                <!-- Mobile only — desktop already has the post button above
+                     plus the bell in the sidebar footer. On mobile there's
+                     a dedicated "+" in the bottom pill nav, so this slot
+                     becomes notifications instead, matching the Site / globe
+                     / bell layout of the reference design. -->
+                <button
+                  class="strand-notif-btn"
+                  id="strand-notif-btn"
+                  title="Notifications"
+                  onclick="toggleNotifPanel()"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  <span class="notif-badge" id="notif-badge-strand"></span>
+                </button>
               </div>
             </div>
 
@@ -4481,6 +4521,17 @@
               </button>
               <button class="nw-tab" data-network-tab="collab">Collab</button>
             </div>
+
+            <!-- Mobile-only: the 5-item tab strip above overflowed on narrow
+                 screens and cut "Collab" off entirely with no way to scroll
+                 to it. A dropdown can't run out of room. -->
+            <select class="nw-tabs-select" id="nw-tabs-select">
+              <option value="followers">Followers</option>
+              <option value="following">Following</option>
+              <option value="discover">Discover</option>
+              <option value="leaderboard">Leaderboard</option>
+              <option value="collab">Collab</option>
+            </select>
 
             <div class="nw-tab-panel active" id="network-tab-followers">
               <div id="network-followers-list" class="nw-list"></div>
@@ -5911,6 +5962,11 @@
               gap: 4px;
               margin-bottom: 24px;
               border-bottom: 1px solid var(--border);
+              overflow-x: auto;
+              scrollbar-width: none;
+            }
+            .nw-tabs::-webkit-scrollbar {
+              display: none;
             }
             .nw-tab {
               background: none;
@@ -5926,6 +5982,8 @@
                 color 0.12s,
                 border-color 0.12s;
               letter-spacing: 0.01em;
+              white-space: nowrap;
+              flex-shrink: 0;
             }
             .nw-tab:hover {
               color: var(--text);
@@ -5939,6 +5997,44 @@
             }
             .nw-tab-panel.active {
               display: block;
+            }
+            .nw-tabs-select {
+              display: none;
+            }
+            @media (max-width: 768px) {
+              .nw-tabs {
+                display: none;
+              }
+              .nw-tabs-select {
+                display: block;
+                width: 100%;
+                margin-bottom: 20px;
+                font-weight: 600;
+                font-size: 14px;
+                appearance: none;
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                background-color: var(--surface2);
+                border: 1px solid var(--border);
+                border-radius: 999px;
+                padding: 12px 40px 12px 18px;
+                color: var(--text);
+                letter-spacing: 0.01em;
+                background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2398989f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+                background-repeat: no-repeat;
+                background-position: right 16px center;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+                transition:
+                  border-color 0.15s,
+                  background-color 0.15s;
+              }
+              .nw-tabs-select:focus {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+              }
+              .nw-tabs-select:active {
+                background-color: var(--surface3);
+              }
             }
 
             .nw-list {
@@ -9423,7 +9519,7 @@
       <!-- Post (centre action button) -->
       <div
         class="btb-item btb-post-item"
-        onclick="document.getElementById('studio-new-post-btn')?.click()"
+        onclick="swOpenNewPostModal()"
       >
         <div class="btb-post-btn">
           <svg
@@ -9778,9 +9874,9 @@
     <style>
       /* ─── Bottom tab bar extra styles ───────────────────────────────────── */
       .btb-post-btn {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
         background: #ffffff;
         display: flex;
         align-items: center;
@@ -9887,6 +9983,39 @@
       .strand-post-fab:hover {
         opacity: 0.85;
         transform: scale(1.06);
+      }
+
+      /* Bell button — same circular treatment as the globe link. Hidden on
+         desktop by default (sidebar already has a bell + the post button
+         stays put); swaps in for the post button on mobile. */
+      .strand-notif-btn {
+        display: none;
+        position: relative;
+        color: var(--muted);
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: none;
+        cursor: pointer;
+        transition:
+          color 0.12s,
+          background 0.12s;
+      }
+      .strand-notif-btn:hover,
+      .strand-notif-btn.active {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      @media (max-width: 768px) {
+        .strand-post-fab {
+          display: none;
+        }
+        .strand-notif-btn {
+          display: flex;
+        }
       }
 
       /* Back-to-site link — only visible on mobile inside the strand topbar */

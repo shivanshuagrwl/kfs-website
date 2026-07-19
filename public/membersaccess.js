@@ -2676,10 +2676,12 @@ function openNotifPanel() {
   const backdrop = $id('notif-panel-backdrop');
   const btn      = $id('notif-bell-btn');
   const btnMobile = $id('btb-notif-fab');
+  const btnStrand = $id('strand-notif-btn');
   if (panel)    { panel.classList.add('open'); }
   if (backdrop) { backdrop.classList.add('open'); }
   if (btn)      { btn.classList.add('active'); }
   if (btnMobile){ btnMobile.classList.add('active'); }
+  if (btnStrand){ btnStrand.classList.add('active'); }
   loadNotifications();
   _kfsPushNavState('notif');
 }
@@ -2690,10 +2692,12 @@ function closeNotifPanel() {
   const backdrop = $id('notif-panel-backdrop');
   const btn      = $id('notif-bell-btn');
   const btnMobile = $id('btb-notif-fab');
+  const btnStrand = $id('strand-notif-btn');
   if (panel)    { panel.classList.remove('open'); }
   if (backdrop) { backdrop.classList.remove('open'); }
   if (btn)      { btn.classList.remove('active'); }
   if (btnMobile){ btnMobile.classList.remove('active'); }
+  if (btnStrand){ btnStrand.classList.remove('active'); }
   _kfsPopNavState('notif');
 }
 
@@ -4823,6 +4827,8 @@ function loadNetworkPanel() {
 function nwSwitchTab(tabName) {
   document.querySelectorAll('.nw-tab').forEach(t=>t.classList.toggle('active', t.dataset.networkTab===tabName));
   document.querySelectorAll('.nw-tab-panel').forEach(p=>p.classList.toggle('active', p.id===`network-tab-${tabName}`));
+  const sel = $id('nw-tabs-select');
+  if (sel && sel.value !== tabName) sel.value = tabName;
   if (tabName === 'discover')    loadDiscoverTab();
   if (tabName === 'leaderboard') loadLeaderboardTab();
   if (tabName === 'collab')      loadMyCollabs();
@@ -4896,6 +4902,7 @@ function initNetworkModule() {
   document.querySelectorAll('.nw-tab').forEach(btn => {
     btn.addEventListener('click', () => nwSwitchTab(btn.dataset.networkTab));
   });
+  $id('nw-tabs-select')?.addEventListener('change', e => nwSwitchTab(e.target.value));
   $id('network-followers-more-btn')?.addEventListener('click', () => nwLoadFollowers(false));
   $id('network-following-more-btn')?.addEventListener('click', () => nwLoadFollowing(false));
   $id('member-profile-modal-close')?.addEventListener('click', closeMemberProfileModal);
@@ -16440,9 +16447,21 @@ function _tourEnd() {
       }
       .btb-item.active {
         color: #ffffff !important;
-        background: rgba(255,255,255,0.08) !important;
       }
       .btb-item.active svg { stroke-width: 2.3 !important; }
+      /* Small dot beneath the active icon, matching the reference design —
+         no background pill, just the dot. Never on the post button. */
+      .btb-item.active:not(.btb-post-item)::after {
+        content: "" !important;
+        position: absolute !important;
+        bottom: 3px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 4px !important;
+        height: 4px !important;
+        border-radius: 50% !important;
+        background: #ffffff !important;
+      }
 
       /* Tap feedback: GROW instead of shrink — the "otherwise it's smaller,
          enlarges when touched" behaviour that was asked for. Driven by the
@@ -16471,18 +16490,18 @@ function _tourEnd() {
       .btb-post-btn {
         width: 38px !important;
         height: 38px !important;
-        border-radius: 999px !important;
-        background: var(--accent, #0a84ff) !important;
+        border-radius: 13px !important;
+        background: #ffffff !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        box-shadow: 0 4px 14px rgba(10,132,255,0.45) !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3) !important;
         transition: transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
       }
       .btb-post-btn svg {
         width: 18px !important;
         height: 18px !important;
-        stroke: #fff !important;
+        stroke: #000 !important;
       }
       .btb-post-item:active .btb-post-btn,
       .btb-post-item.kfs-pressed .btb-post-btn {
@@ -16531,10 +16550,14 @@ function _tourEnd() {
       }
 
       /* Hide the mobile FAB whenever a full-screen chat window has slid in,
-         or while the auth screen is showing — same rule the pill nav uses. */
+         or while the auth screen is showing — same rule the pill nav uses.
+         Also hide it on the Strand panel specifically — that panel has its
+         own bell built into its topbar (Site / globe / bell), so showing
+         the floating FAB there too would be a redundant second bell. */
       body.auth-active .btb-notif-fab { display: none !important; }
       body:has(#dm-window.dm-slide-in) .btb-notif-fab,
-      body:has(#gc-window.dm-slide-in) .btb-notif-fab {
+      body:has(#gc-window.dm-slide-in) .btb-notif-fab,
+      body:has(#panel-studio.active) .btb-notif-fab {
         display: none !important;
       }
     }
