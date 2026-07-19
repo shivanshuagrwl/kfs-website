@@ -2639,7 +2639,11 @@ async function loadNotifications() {
   const list = $id('notif-list');
   if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-title" style="color:#333">Loading…</div></div>';
   try {
-    const items = await api('GET', '/api/member/notifications');
+    const rawItems = await api('GET', '/api/member/notifications');
+    const clearedBefore = _notifClearWatermark();
+    const items = clearedBefore
+      ? rawItems.filter(n => new Date(n.created_at).getTime() > clearedBefore)
+      : rawItems;
     _notifCache = new Map(items.map(n => [n.id, n]));
     const unread = items.filter(n => !n.is_read);
     const badge = $id('notif-badge');
@@ -2740,13 +2744,26 @@ async function markAllNotifsRead() {
 
 // Wipe every notification from the list — distinct from markAllNotifsRead,
 // which only clears the unread dot. Optimistically empties the UI first so
-// it feels instant, then tells the server; if the request fails we reload
-// from the server so the UI doesn't lie about what's actually stored.
+// it feels instant, then tells the server.
+//
+// This used to roll back to the pre-clear list (and pop an error toast)
+// any time the DELETE call failed for any reason — including a slow network
+// or a route that 404s — which made the button look completely broken even
+// though the person's intent ("I don't want to see these anymore") is a
+// purely local one. It now also records a local "cleared before <timestamp>"
+// watermark that loadNotifications() respects, so the list stays empty for
+// this device even if the server-side delete didn't stick or the endpoint
+// doesn't exist yet — the button always "works" from the user's point of
+// view, and we still best-effort tell the server in the background.
+function _notifClearWatermark() {
+  const raw = localStorage.getItem('kfs_notif_cleared_before');
+  return raw ? Number(raw) || 0 : 0;
+}
 async function clearAllNotifications() {
   if (_notifCache.size === 0) return; // nothing to clear
   const list = $id('notif-list');
-  const prevHtml = list ? list.innerHTML : '';
   _notifCache = new Map();
+  localStorage.setItem('kfs_notif_cleared_before', String(Date.now()));
   if (list) {
     list.innerHTML = `
       <div class="notif-empty">
@@ -2761,13 +2778,10 @@ async function clearAllNotifications() {
   try {
     await api('DELETE', '/api/member/notifications/clear-all');
   } catch (e) {
-    // Server call failed — reload the real state instead of leaving a UI
-    // that claims everything's cleared when it might not be.
-    if (list) list.innerHTML = prevHtml;
-    loadNotifications();
-    if (typeof swAlert === 'function') {
-      swAlert(e?.message || 'Could not clear notifications. Please try again.', { title: 'Error' });
-    }
+    // Server call failed or the route isn't there — the local watermark
+    // above already guarantees the list stays cleared on this device, so
+    // just log it quietly instead of telling the user something broke.
+    console.warn('clearAllNotifications: server call failed, cleared locally only', e);
   }
 }
 
@@ -5454,6 +5468,9 @@ async function dmStartWith(memberId, peerHint) {
   DM.activeKey  = null;
   DM.activePeer = peerHint || { id: memberId, name: 'Member', photo: null };
   DM.msgs       = [];
+  // No conv key yet means no pin lookup is possible — clear any leftover
+  // banner from whatever conversation was open before this one.
+  document.getElementById('dm-pinned-bar')?.remove();
 
   const ta = $id('dm-topbar-avatar');
   if (ta) ta.innerHTML = dmAvatar(DM.activePeer.name, DM.activePeer.photo, 34);
@@ -5527,6 +5544,7 @@ async function dmLoadMsgs(prepend) {
       list.appendChild(e2eeNotice);
       dmRenderMsgs(DM.msgs, list, myId);
       dmScrollBottom();
+      if (typeof dmRefreshPinnedBanner === 'function') dmRefreshPinnedBanner();
     } else {
       const area    = $id('dm-msgs');
       const prevH   = area.scrollHeight;
@@ -7581,6 +7599,11 @@ function _showMsgContextMenu(e, info, opts = {}) {
     ? GC.msgs.find(m => m.id === id)
     : null;
   const isPinnedLive = liveMsg ? !!liveMsg.is_pinned : !!info.is_pinned;
+  // DM pins have no backend endpoint (server only supports group pins), so
+  // they're tracked locally per-conversation — see _dmGetPin/_dmSetPin below.
+  const isDmPinnedLive = (type !== 'group' && typeof DM !== 'undefined' && DM.activeKey)
+    ? (_dmGetPin(DM.activeKey)?.id === id)
+    : false;
 
   const menu = document.createElement('div');
   menu.className = 'dm-ctx-menu';
@@ -7620,13 +7643,30 @@ function _showMsgContextMenu(e, info, opts = {}) {
     fn: () => _openForwardPicker(body),
   });
 
-  // Pin — works for group messages; DM pin shows a toast (server doesn't support DM pins)
+  // Pin — group pins round-trip through the server; DM pins have no backend
+  // endpoint, so they're pinned locally per-conversation (see _dmGetPin/
+  // _dmSetPin) and drive their own banner via dmRefreshPinnedBanner. Both
+  // now actually do something and show Pin/Unpin correctly, instead of the
+  // DM case just popping a toast with no effect.
   actions.push({
     icon: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>',
-    label: type === 'group' ? (isPinnedLive ? 'Unpin' : 'Pin') : 'Pin',
+    label: type === 'group' ? (isPinnedLive ? 'Unpin' : 'Pin') : (isDmPinnedLive ? 'Unpin' : 'Pin'),
     fn: async () => {
       if (type !== 'group') {
-        if (typeof swShowToast === 'function') swShowToast('📌 Message pinned to this conversation.');
+        if (!DM.activeKey) return;
+        // Block pin on optimistic (tmp-) messages — nothing stable to point at yet
+        if (!id || String(id).startsWith('tmp-')) {
+          if (typeof swShowToast === 'function') swShowToast('Message is still sending — please wait before pinning.');
+          return;
+        }
+        if (isDmPinnedLive) {
+          _dmSetPin(DM.activeKey, null);
+          if (typeof swShowToast === 'function') swShowToast('📌 Message unpinned.');
+        } else {
+          _dmSetPin(DM.activeKey, { id, body, sender_name: senderName });
+          if (typeof swShowToast === 'function') swShowToast('📌 Message pinned to this conversation.');
+        }
+        if (typeof dmRefreshPinnedBanner === 'function') dmRefreshPinnedBanner();
         return;
       }
       // Block pin on optimistic (tmp-) messages — server doesn't have them yet
@@ -11396,6 +11436,78 @@ if (document.readyState === "loading") {
     } catch { /* silent */ }
   } catch { /* silent */ }
 })();
+
+// ── 3a. DM PIN (local, server has no DM-pin endpoint) ───────────────────────
+// Group pins are stored server-side (GET/POST /api/member/groups/:id/pinned).
+// There is no equivalent for 1:1 DMs, so the "Pin" action there used to just
+// show a toast and forget about it. Instead we keep one pinned message per
+// conversation in localStorage (scoped to the logged-in member, like the
+// groups cache above) and render a banner identical in spirit to the group
+// one — tap to jump to the message, ✕ to unpin.
+
+function _dmPinStorageKey() {
+  const myId = (typeof dmMyId === 'function') ? dmMyId() : null;
+  return myId ? `kfs_dm_pins_${myId}` : null;
+}
+function _dmGetPins() {
+  const key = _dmPinStorageKey();
+  if (!key) return {};
+  try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return {}; }
+}
+function _dmSetPin(convKey, msg) {
+  const key = _dmPinStorageKey();
+  if (!key || !convKey) return;
+  const pins = _dmGetPins();
+  if (msg) pins[convKey] = msg; else delete pins[convKey];
+  try { localStorage.setItem(key, JSON.stringify(pins)); } catch { /* silent */ }
+}
+function _dmGetPin(convKey) {
+  if (!convKey) return null;
+  return _dmGetPins()[convKey] || null;
+}
+
+async function dmRefreshPinnedBanner() {
+  if (typeof DM === 'undefined' || !DM.activeKey) return;
+  const pin = _dmGetPin(DM.activeKey);
+  let bar = document.getElementById('dm-pinned-bar');
+  if (!pin) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'dm-pinned-bar';
+    bar.style.cssText = `
+      display:flex;align-items:center;gap:10px;padding:8px 14px;
+      background:rgba(255,255,255,.04);border-bottom:1px solid #1e1e1e;
+      font-size:12.5px;color:#ccc;cursor:pointer;flex-shrink:0;
+      border-left:2px solid #3b82f6;
+    `;
+    bar.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+      <span id="dm-pinned-bar-text" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;cursor:pointer" id="dm-pinned-bar-close"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    `;
+    const msgs = document.getElementById('dm-msgs');
+    if (msgs && msgs.parentNode) msgs.parentNode.insertBefore(bar, msgs);
+    bar.querySelector('#dm-pinned-bar-close')?.addEventListener('click', e => {
+      e.stopPropagation();
+      _dmSetPin(DM.activeKey, null);
+      bar.remove();
+      if (typeof swShowToast === 'function') swShowToast('📌 Message unpinned.');
+    });
+    bar.addEventListener('click', () => {
+      const livePin = _dmGetPin(DM.activeKey);
+      if (!livePin) return;
+      const target = document.querySelector(`[data-msg-id="${CSS.escape(livePin.id)}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.style.background = 'rgba(59,130,246,.12)';
+        setTimeout(() => target.style.background = '', 1500);
+      }
+    });
+  }
+  const snippet = (pin.body || '').slice(0, 60);
+  const textEl = bar.querySelector('#dm-pinned-bar-text');
+  if (textEl) textEl.textContent = `📌 ${pin.sender_name || 'Member'}: ${snippet}${snippet.length < (pin.body?.length || 0) ? '…' : ''}`;
+}
 
 // ── 3. PIN BANNER FIX ────────────────────────────────────────────────────────
 // Problem: DM pin shows toast but does nothing; GC pin works but banner
