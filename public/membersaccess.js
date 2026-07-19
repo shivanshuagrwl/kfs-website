@@ -1842,6 +1842,7 @@ function openSettingsSheet() {
   $id('settings-sheet')?.classList.add('open');
   document.querySelectorAll('.btb-item').forEach(i => i.classList.remove('active'));
   $id('btb-settings')?.classList.add('active');
+  _kfsPushNavState('settings-sheet');
 }
 
 function closeSettingsSheet() {
@@ -1856,6 +1857,7 @@ function closeSettingsSheet() {
   } else {
     hide();
   }
+  _kfsPopNavState('settings-sheet');
 }
 
 // panel: 'profile' | 'analytics' | 'movies' | 'works' | 'security' | 'activity'
@@ -2442,6 +2444,62 @@ async function loadActivity() {
   }
 }
 
+// ── Mobile in-app back stack ───────────────────────────────────────────────
+// Problem: none of DM chat / group chat / settings sheet / notifications ever
+// touched browser history, so the phone's back gesture (or Android back
+// button) skipped straight past the app and left the site entirely. This
+// gives each "layer" of mobile UI its own history entry: opening one pushes
+// a state, the OS back action pops it and we close that layer instead of
+// navigating away. Only once nothing is open does back behave normally.
+var _kfsNavStack = [];
+var _kfsIgnoreNextPopstate = false;
+var _kfsPoppingFromBack = false;
+
+function _kfsPushNavState(type) {
+  _kfsNavStack.push(type);
+  try { history.pushState({ kfsLayer: type }, '', location.href); } catch (e) {}
+}
+
+// Call when a layer is dismissed via a UI control (X button, backdrop tap,
+// swipe-back) rather than the OS back action, so the matching history entry
+// gets consumed instead of piling up as dead state.
+function _kfsPopNavState(type) {
+  const idx = _kfsNavStack.lastIndexOf(type);
+  if (idx === -1) return;
+  _kfsNavStack.splice(idx, 1);
+  if (_kfsPoppingFromBack) return; // history already moved; nothing left to consume
+  _kfsIgnoreNextPopstate = true;
+  try { history.back(); } catch (e) {}
+}
+
+function _kfsCloseTopNavLayer(type) {
+  switch (type) {
+    case 'dm-chat':
+      if (typeof window.dmGoBack === 'function') window.dmGoBack();
+      break;
+    case 'gc-chat':
+      if (typeof window.gcGoBack === 'function') window.gcGoBack();
+      break;
+    case 'settings-sheet':
+      if (typeof window.closeSettingsSheet === 'function') window.closeSettingsSheet();
+      break;
+    case 'notif':
+      if (typeof window.closeNotifPanel === 'function') window.closeNotifPanel();
+      break;
+  }
+}
+
+window.addEventListener('popstate', function () {
+  if (_kfsIgnoreNextPopstate) { _kfsIgnoreNextPopstate = false; return; }
+  if (_kfsNavStack.length > 0) {
+    const type = _kfsNavStack[_kfsNavStack.length - 1];
+    _kfsPoppingFromBack = true;
+    _kfsCloseTopNavLayer(type);
+    _kfsPoppingFromBack = false;
+  }
+  // else: nothing tracked as open — let the normal back navigation proceed.
+});
+
 // ── Notifications (slide-in panel) ────────────────────────────────────────────
 
 let _notifOpen = false;
@@ -2455,10 +2513,12 @@ async function loadNotificationBadge() {
     const items  = await api('GET', '/api/member/notifications');
     const unread = items.filter(n => !n.is_read).length;
     const badge  = $id('notif-badge');
-    if (badge) {
-      badge.textContent = unread > 9 ? '9+' : unread;
-      badge.classList.toggle('visible', unread > 0);
-    }
+    const badgeMobile = $id('notif-badge-mobile');
+    [badge, badgeMobile].forEach(b => {
+      if (!b) return;
+      b.textContent = unread > 9 ? '9+' : unread;
+      b.classList.toggle('visible', unread > 0);
+    });
     // If the panel is already open, refresh its contents too
     if (_notifOpen) loadNotifications();
   } catch (e) { /* silent — badge stays as-is */ }
@@ -2602,10 +2662,13 @@ function openNotifPanel() {
   const panel    = $id('notif-panel');
   const backdrop = $id('notif-panel-backdrop');
   const btn      = $id('notif-bell-btn');
+  const btnMobile = $id('btb-notif-fab');
   if (panel)    { panel.classList.add('open'); }
   if (backdrop) { backdrop.classList.add('open'); }
   if (btn)      { btn.classList.add('active'); }
+  if (btnMobile){ btnMobile.classList.add('active'); }
   loadNotifications();
+  _kfsPushNavState('notif');
 }
 
 function closeNotifPanel() {
@@ -2613,9 +2676,12 @@ function closeNotifPanel() {
   const panel    = $id('notif-panel');
   const backdrop = $id('notif-panel-backdrop');
   const btn      = $id('notif-bell-btn');
+  const btnMobile = $id('btb-notif-fab');
   if (panel)    { panel.classList.remove('open'); }
   if (backdrop) { backdrop.classList.remove('open'); }
   if (btn)      { btn.classList.remove('active'); }
+  if (btnMobile){ btnMobile.classList.remove('active'); }
+  _kfsPopNavState('notif');
 }
 
 async function markNotifRead(id, el) {
@@ -5289,6 +5355,7 @@ async function dmOpenConv(conv) {
   if (window.innerWidth <= 768) {
     $id('dm-sidebar')?.classList.add('dm-slide-out');
     $id('dm-window')?.classList.add('dm-slide-in');
+    _kfsPushNavState('dm-chat');
   }
 
   await dmLoadMsgs(false);
@@ -5335,6 +5402,7 @@ async function dmStartWith(memberId, peerHint) {
   if (window.innerWidth <= 768) {
     $id('dm-sidebar')?.classList.add('dm-slide-out');
     $id('dm-window')?.classList.add('dm-slide-in');
+    _kfsPushNavState('dm-chat');
   }
   $id('dm-input')?.focus();
 }
@@ -6322,6 +6390,7 @@ function dmGoBack() {
   // user re-opens a conv or returns to the inbox the poll resumes immediately.
   // dmPollTick already no-ops when DM.activeKey is null.
   document.querySelectorAll('.dm-conv-row').forEach(el => el.classList.remove('dm-active-row'));
+  _kfsPopNavState('dm-chat');
 }
 
 // ─── Member picker ────────────────────────────────────────────────────────────
@@ -8373,6 +8442,7 @@ async function gcOpenGroup(group) {
   if (window.innerWidth <= 768) {
     $id('dm-sidebar')?.classList.add('dm-slide-out');
     $id('gc-window')?.classList.add('dm-slide-in');
+    _kfsPushNavState('gc-chat');
   }
 
   // Load nicknames
@@ -9318,6 +9388,7 @@ function gcGoBack() {
   $id('gc-window-empty') && ($id('gc-window-empty').style.display = '');
   GC.activeId    = null;
   GC.activeGroup = null;
+  _kfsPopNavState('gc-chat');
   // Do NOT pause polling — gcPollTick already no-ops when GC.activeId is null.
   // Keeping the interval alive means reactions stay fresh and the group list
   // can be refreshed by the background sidebar timer without needing a restart.
@@ -10278,6 +10349,7 @@ if (document.readyState === "loading") {
       $id('dm-sidebar')?.classList.remove('dm-slide-out');
       $id('gc-window')?.classList.remove('dm-slide-in');
     }
+    _kfsPopNavState('gc-chat');
 
     GC.activeId    = null;
     GC.activeGroup = null;
@@ -12987,3 +13059,3439 @@ function _tourEnd() {
   // the last step happened to land them.
   _goToStrandFeed();
 }
+
+//==============================================================================
+// PATCH STACK MERGED INTO CORE FILE — 2026-07-19
+//
+// Everything below this line used to live in separate files
+// (kfs-patch2.js through kfs-patch8.js, plus kfs-strand-live-patch.js),
+// loaded as individual <script defer> tags AFTER this file, in the exact
+// order they appear here. Each patch is a self-contained IIFE that
+// monkey-patches globals defined above (or by an earlier patch in this
+// same list) — merging them into one file changes nothing about how they
+// run, since classic <script> tags already shared one global `window`
+// scope. This merge only removes the file-boundary bookkeeping so the
+// whole patch history lives in one place instead of 8+ files that each
+// assumed a specific load order relative to the others.
+//
+// kfs-debug-trace.js (dev-only console instrumentation, zero behavior
+// change) was intentionally dropped rather than merged — it was never
+// meant for production and added nothing here.
+//==============================================================================
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch2.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch2.js  — KFS Social Hotfix, Part 2
+ * =====================================================================
+ * Load this AFTER kfs-social-hotfix.js and AFTER membersaccess.js.
+ * Add a <script src="/kfs-patch2.js" defer></script> tag at the
+ * bottom of membersaccess.html, just below the kfs-social-hotfix.js tag.
+ *
+ * What this fixes (all issues not already covered by kfs-social-hotfix.js):
+ *
+ *  1. Pin label — group messages GET doesn't return is_pinned, so the
+ *     context menu always shows "Pin" even for pinned messages, and the
+ *     pin action never updates the local is_pinned state correctly.
+ *     Fix: intercept gcRenderMsgs to tag bubbles with their server-side
+ *     pin state, then re-derive is_pinned when the context menu opens.
+ *
+ *  2. Profanity / moderation modal — the client already checks
+ *     ed.temp_banned, but the api() helper for /groups paths reads the
+ *     body as text and re-parses it, sometimes losing the error object.
+ *     Fix: ensure the _data payload always reaches the catch blocks.
+ *
+ *  3. Debug console noise — the api() helper logs every /groups and
+ *     /nicknames response to the console. This patch suppresses those
+ *     logs in production (keeps them if ?kfs_debug is in the URL).
+ *
+ *  4. KFS sentinel — block nickname attempts on the KFS account even
+ *     if the UI check in kfs-social-hotfix.js is somehow bypassed via
+ *     the API layer (belt-and-suspenders client guard).
+ *
+ *  5. Pin banner after toggle — after a successful pin/unpin, the
+ *     gcRefreshPinnedBanner call is already wired but only fires if the
+ *     function exists at that moment. This ensures it fires reliably.
+ *
+ * =====================================================================
+ */
+(function kfsPatch2() {
+  "use strict";
+
+  var DEBUG = location.search.indexOf("kfs_debug") !== -1;
+
+  // ─── 1. Pin state registry ──────────────────────────────────────────────────
+  // The server's GET /groups/:id/messages now returns is_pinned (after you apply
+  // server-patch.js). But until the server is deployed, we also maintain a
+  // client-side registry from successful pin/unpin API calls so the label is
+  // always correct even without a page refresh.
+
+  var _pinRegistry = {}; // msgId → true|false
+
+  function setPinState(msgId, isPinned) {
+    if (msgId) _pinRegistry[String(msgId)] = !!isPinned;
+  }
+
+  function getPinState(msgId, serverValue) {
+    var id = String(msgId || "");
+    if (id in _pinRegistry) return _pinRegistry[id];
+    return !!serverValue;
+  }
+
+  // ─── 2. Patch _showMsgContextMenu to use registry ──────────────────────────
+  // The context menu reads info.is_pinned at open time. We augment the info
+  // object with the registry value before the menu is built.
+
+  var _origShowCtx = typeof _showMsgContextMenu === "function" ? _showMsgContextMenu : null;
+
+  if (_origShowCtx) {
+    // eslint-disable-next-line no-global-assign
+    _showMsgContextMenu = function patchedShowMsgCtx(e, info) {
+      if (info && info.id && info.type === "group") {
+        info = Object.assign({}, info, {
+          is_pinned: getPinState(info.id, info.is_pinned),
+        });
+      }
+      return _origShowCtx.call(this, e, info);
+    };
+  } else {
+    // Function not defined yet — install after DOMContentLoaded
+    document.addEventListener("DOMContentLoaded", function () {
+      if (typeof _showMsgContextMenu === "function") {
+        var orig = _showMsgContextMenu;
+        _showMsgContextMenu = function patchedShowMsgCtxLate(e, info) {
+          if (info && info.id && info.type === "group") {
+            info = Object.assign({}, info, {
+              is_pinned: getPinState(info.id, info.is_pinned),
+            });
+          }
+          return orig.call(this, e, info);
+        };
+      }
+    });
+  }
+
+  // ─── 3. Intercept api() to capture pin results and strip debug noise ────────
+  // We wrap the global api() function to:
+  //   a) Record is_pinned values returned by the pin endpoint
+  //   b) Suppress verbose console.log for /groups and /nicknames in production
+
+  var _origApi = typeof api === "function" ? api : null;
+
+  if (_origApi) {
+    // eslint-disable-next-line no-global-assign
+    api = async function patchedApi(method, path, body, opts) {
+      // Suppress debug logs unless ?kfs_debug in URL — monkey-patch console
+      // only for the duration of this call to avoid touching global state.
+      var _origLog = console.log;
+      if (!DEBUG && (path.indexOf("/groups") !== -1 || path.indexOf("/nicknames") !== -1)) {
+        console.log = function () {}; // mute during this call
+      }
+      var result;
+      try {
+        result = await _origApi.call(this, method, path, body, opts);
+      } finally {
+        console.log = _origLog; // always restore
+      }
+
+      // Capture pin state from pin endpoint response
+      // Path pattern: /api/member/groups/:id/messages/:msgId/pin
+      if (
+        method === "POST" &&
+        path.indexOf("/groups/") !== -1 &&
+        path.indexOf("/messages/") !== -1 &&
+        path.endsWith("/pin") &&
+        result && typeof result.is_pinned === "boolean"
+      ) {
+        // Extract msgId from path: .../messages/{msgId}/pin
+        var parts = path.split("/messages/");
+        if (parts[1]) {
+          var msgId = parts[1].replace("/pin", "").split("?")[0];
+          setPinState(msgId, result.is_pinned);
+        }
+      }
+
+      return result;
+    };
+  }
+
+  // ─── 4. Intercept gcRenderMsgs to populate pin registry from server data ────
+  // When messages come back from the server (after the server patch adds
+  // is_pinned), we pre-populate the registry so labels are right from first
+  // render without needing a manual pin action first.
+
+  var _origGcRender = typeof gcRenderMsgs === "function" ? gcRenderMsgs : null;
+
+  function installGcRenderPatch() {
+    if (typeof gcRenderMsgs !== "function") return;
+    var orig = gcRenderMsgs;
+    gcRenderMsgs = function patchedGcRenderMsgs() {
+      var msgs = arguments[0];
+      if (Array.isArray(msgs)) {
+        msgs.forEach(function (m) {
+          if (m && m.id && typeof m.is_pinned === "boolean") {
+            setPinState(m.id, m.is_pinned);
+          }
+        });
+      }
+      // IMPORTANT: forward every argument the caller actually passed
+      // (msgs, container, myId, lastSenderHint) — the original two-param
+      // signature here silently dropped myId/lastSenderHint on every call,
+      // which broke "mine" detection and message grouping site-wide.
+      return orig.apply(this, arguments);
+    };
+  }
+
+  if (_origGcRender) {
+    installGcRenderPatch();
+  } else {
+    document.addEventListener("DOMContentLoaded", function () {
+      installGcRenderPatch();
+    });
+  }
+
+  // ─── 5. Ensure gcRefreshPinnedBanner fires reliably after pin toggle ────────
+  // The existing pin action in _showMsgContextMenu calls gcRefreshPinnedBanner()
+  // after a successful toggle. If that function isn't defined at call time the
+  // pin banner never updates. We install a safe wrapper that retries once.
+
+  function safeRefreshPinnedBanner() {
+    try {
+      if (typeof gcRefreshPinnedBanner === "function") {
+        gcRefreshPinnedBanner();
+      }
+    } catch (_) {}
+  }
+
+  // Expose so the existing code can call it even if the original fails
+  window._kfsRefreshPinnedBanner = safeRefreshPinnedBanner;
+
+  // ─── 6. KFS sentinel — block nickname API calls on KFS account ──────────────
+  // Belt-and-suspenders: kfs-social-hotfix.js already blocks the UI flow.
+  // Here we additionally intercept api() calls to the nickname endpoint.
+
+  // Re-wrap api() (which may already be the patched version from step 3).
+  var _apiAfterDebugPatch = typeof api === "function" ? api : null;
+  if (_apiAfterDebugPatch) {
+    // eslint-disable-next-line no-global-assign
+    api = async function patchedApiWithNickGuard(method, path, body, opts) {
+      // Block   PUT /api/member/nicknames/:targetId   if target is KFS sentinel
+      if (
+        (method === "PUT" || method === "POST" || method === "PATCH") &&
+        path.indexOf("/nicknames/") !== -1 &&
+        window.__KFS_SENTINEL_MEMBER_ID
+      ) {
+        var targetId = path.split("/nicknames/")[1]?.split("?")[0];
+        if (targetId && targetId === window.__KFS_SENTINEL_MEMBER_ID) {
+          if (typeof swShowToast === "function") swShowToast("KFS cannot be nicknamed.");
+          return {};
+        }
+      }
+      return _apiAfterDebugPatch.call(this, method, path, body, opts);
+    };
+  }
+
+  // ─── 7. Moderation modal — harden error data propagation ───────────────────
+  // The api() helper uses r.text() + manual JSON.parse() for /groups paths.
+  // If the HTTP error body is truncated or malformed, e._data ends up as {}.
+  // We patch the catch side: if e._data is empty but e.message looks like a
+  // violation message, reconstruct the _data flags from the message string.
+
+  function inferVioFlags(msg) {
+    if (!msg) return {};
+    var m = String(msg);
+    if (m.indexOf("temporarily banned") !== -1 || m.indexOf("temp") !== -1) {
+      return { temp_banned: true };
+    }
+    if (m.indexOf("disabled") !== -1) {
+      return { banned: true };
+    }
+    if (m.indexOf("muted") !== -1 || m.indexOf("Muted") !== -1) {
+      return { muted: true, warned: true };
+    }
+    if (m.indexOf("Warning") !== -1 || m.indexOf("warning") !== -1 || m.indexOf("blocked") !== -1) {
+      return { warned: true };
+    }
+    return {};
+  }
+
+  // Patch _vioShowClientNotice to be resilient against empty _data
+  var _origVio = typeof _vioShowClientNotice === "function" ? _vioShowClientNotice : null;
+
+  function installVioPatch() {
+    if (typeof _vioShowClientNotice !== "function") return;
+    var orig = _vioShowClientNotice;
+    _vioShowClientNotice = function patchedVioNotice(data, msg, inputId, sendBtnId) {
+      var resolved = (data && (data.warned || data.muted || data.banned || data.temp_banned))
+        ? data
+        : Object.assign({}, data, inferVioFlags(msg));
+      return orig.call(this, resolved, msg, inputId, sendBtnId);
+    };
+  }
+
+  if (_origVio) {
+    installVioPatch();
+  } else {
+    document.addEventListener("DOMContentLoaded", function () {
+      installVioPatch();
+    });
+  }
+
+  // Also patch the Social Strand post violation modal
+  var _origSwVio = typeof _swVioShowModal === "function" ? _swVioShowModal : null;
+
+  function installSwVioPatch() {
+    if (typeof _swVioShowModal !== "function") return;
+    var orig = _swVioShowModal;
+    _swVioShowModal = function patchedSwVioModal(data, msg) {
+      var resolved = (data && (data.warned || data.muted || data.banned || data.temp_banned))
+        ? data
+        : Object.assign({}, data, inferVioFlags(msg));
+      return orig.call(this, resolved, msg);
+    };
+  }
+
+  if (_origSwVio) {
+    installSwVioPatch();
+  } else {
+    document.addEventListener("DOMContentLoaded", function () {
+      installSwVioPatch();
+    });
+  }
+
+  // ─── 8. Expose pin registry for debugging ───────────────────────────────────
+  window.__kfsPinRegistry = _pinRegistry;
+  window.__kfsSetPinState = setPinState;
+
+  if (DEBUG) {
+    console.log("[kfs-patch2] loaded. Pin registry:", _pinRegistry);
+  }
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch3.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch3.js — KFS Social Hotfix, Part 3
+ * =====================================================================
+ * Load AFTER membersaccess.js, kfs-social-hotfix.js, kfs-patch2.js.
+ *
+ *   <script src="/kfs-patch3.js" defer></script>
+ *
+ * Fixes:
+ *   1. RACE CONDITION — FIXED IN SOURCE (membersaccess.js); wrappers removed.
+ *      window.dmPanelOpened now gates on _token before calling inboxLoad
+ *      (fixes the primary call path). blocksEnsureLoaded now waits for _token
+ *      and preserves BLOCKS.set on failure instead of wiping it.
+ *      The window._inboxLoad wrapper previously here targeted the wrong
+ *      binding — the real call path uses a closure-local inboxLoad reference
+ *      that the wrapper never intercepted. The nicksLoadGlobal wrapper was
+ *      redundant because nicksLoadGlobal already has its own internal
+ *      member-ID polling guard.
+ *   2. PROFANITY MODAL — server sends temp_banned but client checks
+ *      banned. Normalises the error object so the right overlay fires.
+ *   3. PIN — context menu label flips correctly on re-open after toggle.
+ *   4. 404 on broadcast DM — FIXED IN SOURCE (membersaccess.js); wrapper removed.
+ *   5. INSTAGRAM UI — Apple-clean mobile + desktop overhaul:
+ *      · Message rows: photo, name, preview, time — all IG-style
+ *      · Conversation header with avatar + online dot
+ *      · Bubble style: sender right (gradient), peer left (surface)
+ *      · Bottom tab bar: active icons filled, smooth transitions
+ *      · Story-ring avatar for unread conversations
+ *      · Swipe-to-reply gesture on mobile bubbles
+ *      · Input bar: pill-shaped, send only appears when text present
+ *      · Smooth slide transitions between sidebar and chat
+ * =====================================================================
+ */
+(function kfsPatch3() {
+  'use strict';
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+  var DEBUG = location.search.indexOf('kfs_debug') !== -1;
+  function log(...a) { if (DEBUG) console.log('[kfs-p3]', ...a); }
+
+  // ─── 1. RACE CONDITION FIX ──────────────────────────────────────────────────
+  // Problem: DOMContentLoaded fires initDMExtensions → inboxLoad → dmMyId()
+  // returns null because refreshToken() hasn't resolved yet.
+  //
+  // Fix: intercept loadDashboard (called after refreshToken sets _member)
+  // and only THEN allow inboxLoad / nicksLoadGlobal to proceed.
+  // We install a promise that resolves when _member is confirmed available.
+
+  var _memberReady = false;
+  var _memberReadyCallbacks = [];
+  function onMemberReady(fn) {
+    if (_memberReady) { fn(); return; }
+    _memberReadyCallbacks.push(fn);
+  }
+  function memberReadyFired() {
+    if (_memberReady) return;
+    _memberReady = true;
+    _memberReadyCallbacks.forEach(fn => { try { fn(); } catch(e) {} });
+    _memberReadyCallbacks = [];
+  }
+
+  // Patch loadDashboard — it's the single gate after refreshToken
+  var _loadDashboardOrig = null;
+  function patchLoadDashboard() {
+    if (typeof loadDashboard !== 'function') return false;
+    _loadDashboardOrig = loadDashboard;
+    loadDashboard = async function patchedLoadDashboard() {
+      const result = await _loadDashboardOrig.apply(this, arguments);
+      memberReadyFired();
+      return result;
+    };
+    return true;
+  }
+  if (!patchLoadDashboard()) {
+    document.addEventListener('DOMContentLoaded', () => patchLoadDashboard());
+  }
+
+  // Also resolve immediately if _member is already set (session already loaded)
+  function checkMemberAlreadySet() {
+    const m = window._memberProfile || window._member;
+    if (m && (m.id || m.member_id)) { memberReadyFired(); return true; }
+    return false;
+  }
+  if (!checkMemberAlreadySet()) {
+    // Poll as a fallback — catches cases where loadDashboard was called before
+    // our patch could install
+    var _memberPollTimer = setInterval(() => {
+      if (checkMemberAlreadySet()) clearInterval(_memberPollTimer);
+    }, 80);
+    // Give up after 10 s regardless
+    setTimeout(() => { clearInterval(_memberPollTimer); memberReadyFired(); }, 10000);
+  }
+
+  // NOTE (fixed in membersaccess.js — wrapper removed):
+  // The window._inboxLoad wrapper that previously lived here targeted the wrong
+  // binding. The primary call path is:
+  //   switchPanel('dms') → window.dmPanelOpened() → closure-local inboxLoad()
+  // window._inboxLoad is only an alias used by poll-tick callers, which only
+  // fire after loadDashboard completes and _token is already set, so they never
+  // needed guarding. The fix now lives in window.dmPanelOpened in
+  // membersaccess.js, which gates on _token before calling inboxLoad directly.
+  //
+  // NOTE (redundant wrapper removed):
+  // nicksLoadGlobal already contains its own internal "wait for member ID"
+  // polling loop (membersaccess.js lines 6430+). Stacking a second,
+  // uncoordinated onMemberReady gate on top created two sources of truth that
+  // could both resolve at different times and trigger double fetches.
+  // nicksLoadGlobal handles its own readiness — no wrapper needed here.
+  //
+  // Both of the wrapper functions that used to live in this spot
+  // (patchInboxLoad / patchNicksLoadGlobal) were confirmed dead no-ops and
+  // have been deleted outright during the 2026-07 patch consolidation —
+  // there is nothing left here for a future edit to accidentally depend on.
+
+  // ─── 2. PROFANITY MODAL — normalise temp_banned ─────────────────────────────
+  // Server sends { temp_banned: true, suspended_until: '...' }
+  // but the catch block checks ed.warned||ed.muted||ed.banned||ed.temp_banned.
+  // The check itself is correct — the problem was api() dropping the body.
+  // We patch the api() helper to *always* preserve _data even for /groups paths.
+
+  function patchApiErrorData() {
+    if (typeof api !== 'function') return false;
+    var _apiOrig = api;
+    api = async function patchedApiErrData(method, path, body, opts) {
+      try {
+        return await _apiOrig.call(this, method, path, body, opts);
+      } catch (e) {
+        // If _data is missing the violation flags but the message hints at one,
+        // synthesise the flags so _vioShowClientNotice fires the right overlay.
+        if (e && !e._data) e._data = {};
+        var d = e._data || {};
+        var msg = (e.message || '').toLowerCase();
+        if (!d.temp_banned && !d.banned && !d.muted && !d.warned) {
+          if (msg.includes('temp') || msg.includes('suspended') || msg.includes('temporarily')) {
+            e._data = Object.assign({}, d, { temp_banned: true });
+          } else if (msg.includes('disabled') || msg.includes('permanently')) {
+            e._data = Object.assign({}, d, { banned: true });
+          } else if (msg.includes('muted')) {
+            e._data = Object.assign({}, d, { muted: true, warned: true });
+          } else if (msg.includes('warning') || msg.includes('blocked') || msg.includes('violation')) {
+            e._data = Object.assign({}, d, { warned: true });
+          }
+        }
+        throw e;
+      }
+    };
+    log('api() patched for violation data normalisation');
+    return true;
+  }
+  if (!patchApiErrorData()) {
+    document.addEventListener('DOMContentLoaded', patchApiErrorData);
+  }
+
+  // ─── 3. PIN — ensure label flips after toggle ────────────────────────────────
+  // kfs-patch2.js already handles the registry. We add one more guard:
+  // after a successful pin API call, force a re-render of the context-menu
+  // toggle label if the menu is still open.
+
+  var _lastPinToggleAt = 0;
+  var _origGcContextPinHandler = null;
+
+  function patchPinAction() {
+    // The pin action lives inside _showMsgContextMenu as an inline closure.
+    // We cannot re-enter it, but we can observe the pin endpoint response via
+    // the already-patched api() from kfs-patch2 + our own overlay here.
+    // Strategy: after any POST to /pin, update the bubble's data attribute
+    // so the *next* context-menu open reads the correct is_pinned value.
+    if (typeof api !== 'function') return;
+    var _a = api;
+    api = async function patchedApiPin(method, path, body, opts) {
+      const r = await _a.call(this, method, path, body, opts);
+      if (
+        method === 'POST' &&
+        path.indexOf('/messages/') !== -1 &&
+        path.endsWith('/pin') &&
+        r && typeof r.is_pinned === 'boolean'
+      ) {
+        // Update bubble dataset so context menu next time reads fresh value
+        try {
+          const parts = path.split('/messages/');
+          const msgId = parts[1]?.replace('/pin','')?.split('?')[0];
+          if (msgId) {
+            const bubble = document.querySelector(`[data-msg-id="${CSS.escape(msgId)}"]`);
+            if (bubble) {
+              bubble.dataset.isPinned = String(r.is_pinned);
+              log('pin state updated on bubble', msgId, r.is_pinned);
+            }
+          }
+        } catch (_) {}
+        _lastPinToggleAt = Date.now();
+      }
+      return r;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', patchPinAction);
+
+  // ─── 4. BROADCAST 404 FIX — REMOVED ──────────────────────────────────────────
+  // This wrapper is no longer needed. Both wrong /api/member/dm/messages call
+  // sites have been corrected directly in membersaccess.js (share modal line
+  // 9244 and broadcast modal line 9659). The patchedApiBroadcast api() wrapper
+  // that lived here has been removed to reduce the api() call stack depth.
+
+  // ─── 5. INSTAGRAM / APPLE UI OVERHAUL ────────────────────────────────────────
+
+  function injectStyles() {
+    const existing = document.getElementById('kfs-ig-styles');
+    if (existing) existing.remove();
+
+    const css = `
+/* ════════════════════════════════════════════════════════════════════
+   KFS INSTAGRAM-STYLE UI — kfs-patch3.js
+   Design system: pure black (#000), surface (#111 / #1a1a1a),
+   border (#222), accent (#0095f6 / IG blue), text (#f5f5f7)
+   Transitions: cubic-bezier(.4,0,.2,1) 220ms
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS custom properties (override theme) ─── */
+:root {
+  --ig-bg:        #000000;
+  --ig-surface:   #111111;
+  --ig-surface2:  #1a1a1a;
+  --ig-border:    #262626;
+  --ig-text:      #f5f5f7;
+  --ig-muted:     #8e8e8e;
+  --ig-accent:    #0095f6;
+  --ig-bubble-me: linear-gradient(145deg, #0095f6, #0064d2);
+  --ig-bubble-rx: #262626;
+  --ig-radius:    22px;
+  --ig-ease:      cubic-bezier(.4,0,.2,1);
+  --ig-dur:       220ms;
+}
+
+/* ── SIDEBAR / INBOX ───────────────────────────────────────────────── */
+.dm-sidebar {
+  background: var(--ig-bg) !important;
+  border-right: 1px solid var(--ig-border) !important;
+}
+
+.dm-header {
+  padding: 14px 16px 10px !important;
+  border-bottom: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.dm-header-title {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.01em !important;
+  color: var(--ig-text) !important;
+}
+
+/* ── Search bar ── */
+.dm-search-wrap {
+  margin: 0 12px 8px !important;
+  position: relative !important;
+}
+.dm-search-input {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background: var(--ig-surface2) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 9px 14px 9px 36px !important;
+  font-size: 14px !important;
+  color: var(--ig-text) !important;
+  outline: none !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+}
+.dm-search-input:focus {
+  background: #222 !important;
+}
+.dm-search-icon {
+  color: var(--ig-muted) !important;
+  left: 12px !important;
+}
+
+/* ── Conversation rows ── */
+.dm-conv-list {
+  padding: 0 4px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+.dm-conv-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  cursor: pointer !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+  position: relative !important;
+  border: none !important;
+  background: transparent !important;
+  min-height: 68px !important;
+}
+.dm-conv-row:hover {
+  background: rgba(255,255,255,.05) !important;
+}
+.dm-conv-row.dm-active-row {
+  background: rgba(0,149,246,.08) !important;
+}
+
+/* Story-ring for unread */
+.dm-conv-row.kfs-has-unread .dm-av,
+.dm-conv-row.kfs-has-unread .dm-av-placeholder {
+  outline: 2px solid var(--ig-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* Conversation info */
+.dm-conv-info {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+.dm-conv-name {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--ig-text) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.3 !important;
+}
+.dm-conv-preview {
+  font-size: 13px !important;
+  color: var(--ig-muted) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.dm-conv-preview.dm-has-unread {
+  color: var(--ig-text) !important;
+  font-weight: 600 !important;
+}
+.dm-conv-right {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
+}
+.dm-conv-time {
+  font-size: 11px !important;
+  color: var(--ig-muted) !important;
+}
+.dm-unread-pill {
+  background: var(--ig-accent) !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  border-radius: 100px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  line-height: 18px !important;
+  text-align: center !important;
+  display: inline-block !important;
+}
+
+/* ── CHAT WINDOW ── */
+/* FIXED: display was previously "flex !important", which permanently
+   overrode the inline style="display:none" / JS toggle that switches
+   between the DM window and the group window — both ended up stuck open
+   at once. Dropping !important here lets gcGoBack()/inboxOpenDm()'s
+   inline style.display changes win again, like they did before this
+   stylesheet was wired in. background/flex-direction are unaffected and
+   stay forced. */
+.dm-window, #gc-window {
+  background: var(--ig-bg) !important;
+  display: flex;
+  flex-direction: column !important;
+}
+
+/* ── Topbar ── */
+.dm-topbar, #gc-topbar {
+  background: var(--ig-bg) !important;
+  border-bottom: 1px solid var(--ig-border) !important;
+  padding: 10px 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 58px !important;
+  flex-shrink: 0 !important;
+}
+.dm-topbar-name, #gc-topbar-name {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--ig-text) !important;
+  letter-spacing: -.01em !important;
+}
+.dm-topbar-sub, #gc-topbar-sub {
+  font-size: 12px !important;
+  color: var(--ig-muted) !important;
+}
+
+/* Topbar action buttons */
+.dm-topbar-actions, #gc-topbar-actions {
+  margin-left: auto !important;
+  display: flex !important;
+  gap: 4px !important;
+  align-items: center !important;
+}
+.dm-icon-btn, .gc-icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--ig-text) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+}
+.dm-icon-btn:hover, .gc-icon-btn:hover {
+  background: rgba(255,255,255,.08) !important;
+}
+
+/* ── Message list ── */
+.dm-msg-list, #gc-msg-list {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 16px 16px 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  scroll-behavior: smooth !important;
+}
+
+/* ── Message groups ── */
+.dm-msg-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  margin-bottom: 4px !important;
+}
+
+/* ── Bubbles ── */
+.dm-bubble-wrap {
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 6px !important;
+  max-width: 72% !important;
+}
+.dm-bubble-wrap.dm-me {
+  align-self: flex-end !important;
+  flex-direction: row-reverse !important;
+}
+.dm-bubble-wrap.dm-them {
+  align-self: flex-start !important;
+}
+
+.dm-bubble {
+  padding: 10px 14px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  border-radius: var(--ig-radius) !important;
+  max-width: 100% !important;
+  word-break: break-word !important;
+  transition: opacity var(--ig-dur) var(--ig-ease) !important;
+  position: relative !important;
+}
+
+/* Sender (me) — IG blue gradient */
+.dm-bubble.dm-bubble-me,
+.dm-bubble.dm-mine {
+  background: var(--ig-bubble-me) !important;
+  color: #fff !important;
+  border-bottom-right-radius: 6px !important;
+}
+
+/* Receiver — dark surface */
+.dm-bubble.dm-bubble-them,
+.dm-bubble.dm-theirs {
+  background: var(--ig-bubble-rx) !important;
+  color: var(--ig-text) !important;
+  border-bottom-left-radius: 6px !important;
+}
+
+.dm-bubble.dm-deleted {
+  opacity: .45 !important;
+  font-style: italic !important;
+  background: transparent !important;
+  border: 1px solid var(--ig-border) !important;
+  color: var(--ig-muted) !important;
+}
+
+/* Meta (timestamp + read receipt) */
+.dm-meta {
+  font-size: 11px !important;
+  color: var(--ig-muted) !important;
+  padding: 0 4px 2px !important;
+}
+
+/* ── INPUT BAR ── */
+.dm-input-area, #gc-input-area {
+  padding: 10px 12px !important;
+  border-top: 1px solid var(--ig-border) !important;
+  background: var(--ig-bg) !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+.dm-input, #gc-input {
+  flex: 1 !important;
+  background: var(--ig-surface2) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: 22px !important;
+  padding: 10px 16px !important;
+  font-size: 14px !important;
+  color: var(--ig-text) !important;
+  outline: none !important;
+  resize: none !important;
+  line-height: 1.45 !important;
+  max-height: 110px !important;
+  overflow-y: auto !important;
+  transition: border-color var(--ig-dur) var(--ig-ease) !important;
+  font-family: inherit !important;
+}
+.dm-input:focus, #gc-input:focus {
+  border-color: var(--ig-accent) !important;
+}
+.dm-input::placeholder, #gc-input::placeholder {
+  color: var(--ig-muted) !important;
+}
+
+/* Send button — IG blue, fades in when text present */
+.dm-send-btn, #gc-send-btn {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  background: var(--ig-accent) !important;
+  border: none !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  transition: opacity var(--ig-dur) var(--ig-ease),
+              transform var(--ig-dur) var(--ig-ease),
+              background var(--ig-dur) var(--ig-ease) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(.8) !important;
+}
+.dm-send-btn.kfs-can-send, #gc-send-btn.kfs-can-send {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: scale(1) !important;
+}
+.dm-send-btn:hover, #gc-send-btn:hover {
+  background: #0080d3 !important;
+}
+.dm-send-btn:active, #gc-send-btn:active {
+  transform: scale(.92) !important;
+}
+
+/* ── BOTTOM TAB BAR ── */
+.bottom-tab-bar {
+  background: rgba(0,0,0,.92) !important;
+  backdrop-filter: saturate(180%) blur(20px) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
+  border-top: 1px solid var(--ig-border) !important;
+  padding: 0 !important;
+  height: 52px !important;
+  display: flex !important;
+  align-items: stretch !important;
+}
+.btb-item {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  cursor: pointer !important;
+  color: var(--ig-muted) !important;
+  transition: color var(--ig-dur) var(--ig-ease) !important;
+  -webkit-tap-highlight-color: transparent !important;
+  position: relative !important;
+  padding: 8px 0 !important;
+}
+.btb-item svg {
+  width: 24px !important;
+  height: 24px !important;
+  stroke-width: 1.8 !important;
+  transition: transform var(--ig-dur) var(--ig-ease),
+              stroke var(--ig-dur) var(--ig-ease) !important;
+}
+.btb-item.active {
+  color: var(--ig-text) !important;
+}
+.btb-item.active svg {
+  stroke-width: 2.5 !important;
+}
+.btb-item:active svg {
+  transform: scale(.88) !important;
+}
+.btb-label {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: .01em !important;
+}
+
+/* Centre post button */
+.btb-post-btn {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  background: var(--ig-text) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: transform var(--ig-dur) var(--ig-ease),
+              opacity var(--ig-dur) var(--ig-ease) !important;
+}
+.btb-post-item:active .btb-post-btn {
+  transform: scale(.9) !important;
+  opacity: .8 !important;
+}
+.btb-post-btn svg {
+  color: #000 !important;
+  stroke: #000 !important;
+}
+
+/* ── MOBILE DM SLIDE ── */
+@media (max-width: 768px) {
+  .dm-sidebar {
+    transition: transform var(--ig-dur) var(--ig-ease) !important;
+  }
+  .dm-window, #gc-window {
+    transition: transform var(--ig-dur) var(--ig-ease) !important;
+  }
+  .dm-bubble-wrap { max-width: 82% !important; }
+}
+
+/* ── PINNED BANNER ── */
+#gc-pinned-bar {
+  background: rgba(0,0,0,.9) !important;
+  backdrop-filter: blur(8px) !important;
+  border-bottom: 1px solid var(--ig-border) !important;
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  color: var(--ig-muted) !important;
+  cursor: pointer !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+}
+#gc-pinned-bar:hover { background: rgba(255,255,255,.05) !important; }
+
+/* ── E2EE notice ── */
+.gc-e2ee-notice, .dm-e2ee-notice {
+  background: transparent !important;
+  border-color: var(--ig-border) !important;
+  color: var(--ig-muted) !important;
+  font-size: 11px !important;
+}
+
+/* ── Avatar helpers ── */
+.dm-av, .dm-av-placeholder, .gc-group-av {
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+  transition: outline-color var(--ig-dur) var(--ig-ease) !important;
+}
+
+/* ── Verified KFS badge ── */
+.kfs-verified-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  background: var(--ig-accent) !important;
+  margin-left: 3px !important;
+  vertical-align: middle !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── Broadcast button (admin) ── */
+#kfs-broadcast-btn {
+  margin: 6px 12px 4px !important;
+  width: calc(100% - 24px) !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  padding: 9px 14px !important;
+  background: linear-gradient(135deg, #0064d2, #0095f6) !important;
+}
+
+/* ── Context menu ── */
+.dm-ctx-menu, #dm-ctx-menu {
+  background: var(--ig-surface2) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6) !important;
+  overflow: hidden !important;
+  min-width: 180px !important;
+}
+.dm-ctx-item {
+  padding: 11px 16px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.dm-ctx-item:hover { background: rgba(255,255,255,.06) !important; }
+.dm-ctx-item.dm-ctx-danger { color: #ff3b30 !important; }
+.dm-ctx-sep { height: 1px !important; background: var(--ig-border) !important; }
+
+/* ── Reaction row ── */
+.dm-reactions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  margin-top: 4px !important;
+}
+.dm-reaction-pill {
+  background: var(--ig-surface2) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: 100px !important;
+  padding: 2px 8px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: background var(--ig-dur) var(--ig-ease) !important;
+}
+.dm-reaction-pill:hover { background: rgba(255,255,255,.1) !important; }
+.dm-reaction-pill.dm-reacted {
+  background: rgba(0,149,246,.18) !important;
+  border-color: rgba(0,149,246,.4) !important;
+}
+
+/* ── Emoji picker ── */
+.dm-emoji-picker {
+  background: var(--ig-surface2) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: 50px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5) !important;
+  display: flex !important;
+  gap: 4px !important;
+}
+
+/* ── Scrollbar (webkit) ── */
+.dm-msg-list::-webkit-scrollbar,
+#gc-msg-list::-webkit-scrollbar,
+.dm-conv-list::-webkit-scrollbar {
+  width: 4px !important;
+}
+.dm-msg-list::-webkit-scrollbar-track,
+#gc-msg-list::-webkit-scrollbar-track,
+.dm-conv-list::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.dm-msg-list::-webkit-scrollbar-thumb,
+#gc-msg-list::-webkit-scrollbar-thumb,
+.dm-conv-list::-webkit-scrollbar-thumb {
+  background: #333 !important;
+  border-radius: 2px !important;
+}
+
+/* ── Send button visibility driven by textarea content ── */
+.kfs-ig-input-wrap {
+  display: flex !important;
+  align-items: flex-end !important;
+  flex: 1 !important;
+  gap: 8px !important;
+}
+
+/* ── Nick modal ── */
+#nick-modal-overlay {
+  background: rgba(0,0,0,.7) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* ── Group creation modal ── */
+#gc-create-modal {
+  background: var(--ig-surface) !important;
+  border: 1px solid var(--ig-border) !important;
+  border-radius: 18px !important;
+}
+
+/* ── Detail panel ── */
+.dm-detail-panel {
+  background: var(--ig-surface) !important;
+  border-left: 1px solid var(--ig-border) !important;
+}
+
+/* ── Swipe hint for mobile message back gesture ── */
+@media (max-width: 768px) {
+  .dm-back {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 6px 10px 6px 6px !important;
+    border-radius: 20px !important;
+    background: transparent !important;
+    border: none !important;
+    color: var(--ig-accent) !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+}
+
+/* ── Story-ring indicator on unread conv avatars ── */
+@keyframes kfsRingPulse {
+  0%,100% { outline-color: var(--ig-accent); }
+  50%      { outline-color: rgba(0,149,246,.4); }
+}
+.dm-conv-row.kfs-has-unread .dm-av,
+.dm-conv-row.kfs-has-unread .dm-av-placeholder {
+  animation: kfsRingPulse 2.4s ease infinite !important;
+}
+
+/* ── Input area extra utilities ── */
+.dm-input-extra-btns {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+.dm-input-extra-btn {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--ig-muted) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: color var(--ig-dur) var(--ig-ease) !important;
+  flex-shrink: 0 !important;
+}
+.dm-input-extra-btn:hover { color: var(--ig-text) !important; }
+
+/* ── Reduce motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .dm-sidebar, .dm-window, #gc-window,
+  .dm-bubble, .dm-send-btn, #gc-send-btn,
+  .btb-item svg {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+`;
+
+    const el = document.createElement('style');
+    el.id = 'kfs-ig-styles';
+    el.textContent = css;
+    document.head.appendChild(el);
+    log('IG styles injected');
+  }
+
+  // ─── 5b. Send button visibility toggle ───────────────────────────────────────
+  function wireSendButtonVisibility() {
+    function wire(inputId, sendId) {
+      const inp = document.getElementById(inputId);
+      const btn = document.getElementById(sendId);
+      if (!inp || !btn) return;
+
+      function update() {
+        const hasText = inp.value.trim().length > 0;
+        btn.classList.toggle('kfs-can-send', hasText);
+      }
+      inp.addEventListener('input', update);
+      // Run once in case there's already content
+      update();
+    }
+
+    wire('dm-input', 'dm-send-btn');
+    wire('gc-input', 'gc-send-btn');
+  }
+
+  // ─── 5c. Story ring on unread rows ───────────────────────────────────────────
+  function applyStoryRings() {
+    document.querySelectorAll('.dm-conv-row').forEach(row => {
+      const pill = row.querySelector('.dm-unread-pill');
+      row.classList.toggle('kfs-has-unread', !!pill);
+    });
+  }
+
+  // Observe conv list changes so rings update when inboxRender fires
+  function observeConvList() {
+    const list = document.getElementById('dm-conv-list');
+    if (!list) return;
+    const obs = new MutationObserver(applyStoryRings);
+    obs.observe(list, { childList: true, subtree: true });
+  }
+
+  // ─── 5d. Patch inboxRender to inject unread class ────────────────────────────
+  // inboxRender builds rows inside the unified-inbox IIFE — we can't easily
+  // override it, but the MutationObserver above catches every re-render.
+
+  // ─── 5e. Mobile swipe-to-go-back ─────────────────────────────────────────────
+  function installSwipeBack() {
+    if (window.innerWidth > 768) return;
+
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    function onTouchStart(e) {
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      tracking = startX < 30; // only edge swipe
+    }
+
+    function onTouchEnd(e) {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = Math.abs(t.clientY - startY);
+      if (dx > 60 && dy < 50) {
+        // Right-swipe from left edge → go back to sidebar
+        const gcWin = document.getElementById('gc-window');
+        const dmWin = document.getElementById('dm-window');
+        if (gcWin && gcWin.classList.contains('dm-slide-in')) {
+          if (typeof window.gcGoBack === 'function') window.gcGoBack();
+        } else if (dmWin && dmWin.classList.contains('dm-slide-in')) {
+          if (typeof window.dmGoBack === 'function') window.dmGoBack();
+          else {
+            const sb = document.getElementById('dm-sidebar');
+            if (sb) sb.classList.remove('dm-slide-out');
+            dmWin.classList.remove('dm-slide-in');
+          }
+        }
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        document.removeEventListener('touchstart', onTouchStart);
+        document.removeEventListener('touchend', onTouchEnd);
+      }
+    });
+  }
+
+  // ─── 5f. KFS Verified account display in DM topbar ───────────────────────────
+  // When a broadcast message comes in from the KFS account, the sender's name
+  // in the DM/GC topbar gets a blue verified badge.
+  function injectVerifiedBadgeStyle() {
+    // Already in the main CSS block above — just ensure badge is inserted into topbars.
+    function addBadge(nameEl) {
+      if (!nameEl) return;
+      const text = nameEl.textContent || '';
+      if ((text.trim() === 'KFS' || text.trim().startsWith('KFS')) &&
+           !nameEl.querySelector('.kfs-verified-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'kfs-verified-badge';
+        badge.innerHTML = `<svg width="8" height="8" viewBox="0 0 24 24" fill="#fff"><polyline points="20 6 9 17 4 12" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+        nameEl.appendChild(badge);
+      }
+    }
+
+    // Observe topbar name changes
+    const obs = new MutationObserver(() => {
+      addBadge(document.getElementById('dm-topbar-name') || document.querySelector('.dm-topbar-name'));
+      addBadge(document.getElementById('gc-topbar-name') || document.querySelector('#gc-topbar-name'));
+    });
+    const topbar = document.getElementById('dm-window') || document.body;
+    obs.observe(topbar, { childList: true, subtree: true, characterData: true });
+  }
+
+  // ─── 5g. Persist GC sidebar after refresh ─────────────────────────────────────
+  // The gc-window sometimes loses display:'flex' on re-render. We observe
+  // GC.activeId being set and enforce the right display values.
+  function guardGcWindowVisibility() {
+    var lastActiveId = null;
+    setInterval(() => {
+      try {
+        if (typeof GC !== 'undefined' && GC.activeId && GC.activeId !== lastActiveId) {
+          lastActiveId = GC.activeId;
+          const gcWin = document.getElementById('gc-window');
+          const dmWin = document.getElementById('dm-window');
+          if (gcWin && gcWin.style.display === 'none') {
+            gcWin.style.display = 'flex';
+            log('gc-window display restored for active group', GC.activeId);
+          }
+          if (dmWin && dmWin.style.display !== 'none' && gcWin) {
+            // GC is active — ensure dm-window is hidden
+            dmWin.style.display = 'none';
+          }
+        }
+      } catch (_) {}
+    }, 400);
+  }
+
+  // ─── 5h. Announce member-ready to existing inboxLoad callers ──────────────────
+  // If the page already started inboxLoad before our patch landed (unlikely but
+  // possible if the browser had a fast token-refresh path), fire memberReady.
+  function checkAndFireIfMemberPresent() {
+    try {
+      const m = window._memberProfile || window._member;
+      if (m && m.id) memberReadyFired();
+    } catch (_) {}
+  }
+
+  // ─── Boot sequence ────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    injectStyles();
+    wireSendButtonVisibility();
+    observeConvList();
+    installSwipeBack();
+    injectVerifiedBadgeStyle();
+    guardGcWindowVisibility();
+    checkAndFireIfMemberPresent();
+
+    // Re-wire send buttons after 1s in case the DM panel initialised late
+    setTimeout(() => {
+      wireSendButtonVisibility();
+      applyStoryRings();
+    }, 1000);
+
+    log('kfs-patch3 boot complete');
+  });
+
+  // If DOM already ready
+  if (document.readyState !== 'loading') {
+    injectStyles();
+    wireSendButtonVisibility();
+    observeConvList();
+    installSwipeBack();
+    injectVerifiedBadgeStyle();
+    guardGcWindowVisibility();
+    checkAndFireIfMemberPresent();
+    setTimeout(() => { wireSendButtonVisibility(); applyStoryRings(); }, 1000);
+  }
+
+  // ─── Expose debug helpers ─────────────────────────────────────────────────────
+  window.__kfsPatch3 = {
+    memberReady: () => _memberReady,
+    fireReady:   memberReadyFired,
+    onReady:     onMemberReady,
+  };
+
+  log('kfs-patch3 loaded');
+
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch4.js ──
+//------------------------------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════════════════
+// KFS PATCH v4.0
+// 1. Fix bottom tab bar showing on PC (touchscreen laptops / narrow windows)
+// 2. Enhance Customization panel — more solid colors, more gradients,
+//    custom gradient builder, app background color option, reset all button
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function () {
+  'use strict';
+
+  // ── 1. BOTTOM BAR PC FIX ────────────────────────────────────────────────
+  // The CSS uses `@media (max-width:768px) and (pointer:coarse)` — but
+  // touchscreen laptops have pointer:coarse AND may be wide enough, or the
+  // window might be narrow. Add a hard override: force hide at ≥769px
+  // regardless of pointer type.
+  const _btbStyle = document.createElement('style');
+  _btbStyle.id = 'kfs-btb-pc-fix';
+  _btbStyle.textContent = `
+    @media (min-width: 769px) {
+      .bottom-tab-bar { display: none !important; }
+    }
+  `;
+  document.head.appendChild(_btbStyle);
+
+  // ── 2. ENHANCED CUSTOMIZATION PANEL ─────────────────────────────────────
+
+  const WALL_KEY        = 'kfs-cust-wallpaper';
+  const APP_BG_KEY      = 'kfs-cust-app-bg';
+  const BUBBLE_KEY      = 'kfs-cust-bubble';
+
+  // Expanded palette
+  const WALLPAPER_SOLIDS = [
+    '#0a0a0a', '#0d0d0d', '#111111', '#141414',
+    '#14141c', '#1a1a2e', '#16213e', '#1b262c',
+    '#2d2d2d', '#222831', '#264653', '#2a3d45',
+    '#3a2e39', '#1a1015', '#1c1c0f', '#0f1f0f',
+  ];
+  const WALLPAPER_GRADIENTS = [
+    'linear-gradient(135deg,#1a1a2e,#16213e)',
+    'linear-gradient(135deg,#0f2027,#203a43,#2c5364)',
+    'linear-gradient(135deg,#232526,#414345)',
+    'linear-gradient(135deg,#1d2671,#c33764)',
+    'linear-gradient(135deg,#134e5e,#71b280)',
+    'linear-gradient(135deg,#4b134f,#c94b4b)',
+    'linear-gradient(135deg,#0f0c29,#302b63,#24243e)',
+    'linear-gradient(135deg,#200122,#6f0000)',
+    'linear-gradient(135deg,#0a3d62,#1e3799)',
+    'linear-gradient(135deg,#1c1c1c,#2c2c54)',
+    'linear-gradient(160deg,#0d0d0d 0%,#1a2a1a 100%)',
+    'linear-gradient(160deg,#1a0a00 0%,#2d1b00 100%)',
+  ];
+
+  const APP_BG_SOLIDS = [
+    '#0a0a0a', '#080808', '#050505', '#0d0d10',
+    '#0a0a14', '#10050a', '#050a05', '#0a0808',
+    '#1a1a1a', '#141414',
+  ];
+
+  const BUBBLE_PRESETS = [
+    { bg: '#f0f0f0', text: '#0a0a0a' },
+    { bg: '#0a84ff', text: '#ffffff' },
+    { bg: '#34c759', text: '#ffffff' },
+    { bg: '#ff375f', text: '#ffffff' },
+    { bg: '#bf5af2', text: '#ffffff' },
+    { bg: '#ff9f0a', text: '#0a0a0a' },
+    { bg: '#30d158', text: '#0a0a0a' },
+    { bg: '#5ac8fa', text: '#0a0a0a' },
+  ];
+
+  function _load(key)     { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
+  function _save(key,val) {
+    try {
+      val===null ? localStorage.removeItem(key) : localStorage.setItem(key,JSON.stringify(val));
+      return true;
+    } catch {
+      // Storage full/blocked — most commonly an uncompressed photo wallpaper
+      // pushing past the ~5-10MB localStorage quota. Callers now check this
+      // instead of assuming the save always worked.
+      return false;
+    }
+  }
+  function _isDark(hex)   {
+    const c=(hex||'').replace('#','');
+    if(c.length!==6) return true;
+    return (0.299*parseInt(c.slice(0,2),16)+0.587*parseInt(c.slice(2,4),16)+0.114*parseInt(c.slice(4,6),16)) < 140;
+  }
+  function _esc(s) { return (s||'').replace(/"/g,'&quot;'); }
+  function _hexToRgb(hex) {
+    const c = (hex||'#0a0a0a').replace('#','');
+    if (c.length !== 6) return '10,10,10';
+    return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`;
+  }
+  // Builds the CSS `background` value for a photo wallpaper at a given opacity
+  // (0-100). We can't use the `opacity` CSS property directly on the chat
+  // container — that would fade the message bubbles too. Instead we layer a
+  // solid wash (matching the app's background color) over the photo at
+  // (1 - opacity) alpha, using two background layers. At opacity 100 the wash
+  // is fully transparent, i.e. the photo shows exactly as uploaded.
+  function _photoBg(dataUrl, opacity) {
+    const op  = Math.max(15, Math.min(100, Number(opacity) || 100)) / 100;
+    const rgb = _hexToRgb((_load(APP_BG_KEY)?.value) || '#0a0a0a');
+    return `linear-gradient(rgba(${rgb},${(1-op).toFixed(3)}),rgba(${rgb},${(1-op).toFixed(3)})), url("${dataUrl}")`;
+  }
+
+  // Downscales + re-encodes an uploaded photo as a compressed JPEG data URL
+  // before it goes anywhere near localStorage. A raw phone photo is often
+  // 4-8MB, and base64 inflates that ~33% on top — comfortably enough to blow
+  // through the origin's ~5-10MB localStorage quota on its own. When that
+  // happened, the quota error was swallowed silently and the wallpaper just
+  // never changed (with whatever was previously saved — a solid color, or
+  // nothing — staying in place). Capping the long edge at 1280px and
+  // re-encoding at quality 0.78 keeps this to a few hundred KB.
+  function _resizeImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          try { resolve(canvas.toDataURL('image/jpeg', quality)); }
+          catch (e) { reject(e); }
+        };
+        img.onerror = () => reject(new Error('Could not read that image.'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Apply saved customization to CSS vars
+  function applyCustomizationV2() {
+    const root = document.documentElement.style;
+    // Chat wallpaper
+    const wall = _load(WALL_KEY);
+    if (!wall || wall.type === 'default')  root.setProperty('--chat-wallpaper-bg','transparent');
+    else if (wall.type === 'solid')        root.setProperty('--chat-wallpaper-bg', wall.value);
+    else if (wall.type === 'gradient')     root.setProperty('--chat-wallpaper-bg', wall.value);
+    else if (wall.type === 'photo')        root.setProperty('--chat-wallpaper-bg', _photoBg(wall.value, wall.opacity));
+    // App background
+    const appBg = _load(APP_BG_KEY);
+    if (appBg && appBg.value) {
+      root.setProperty('--bg', appBg.value);
+      root.setProperty('--surface', _lighten(appBg.value, 10));
+    } else {
+      root.setProperty('--bg', '#0a0a0a');
+      root.setProperty('--surface', '#111111');
+    }
+    // Bubble
+    const bub = _load(BUBBLE_KEY);
+    root.setProperty('--bubble-mine-bg',   bub?.bg   || '#f0f0f0');
+    root.setProperty('--bubble-mine-text', bub?.text || '#0a0a0a');
+  }
+
+  // Lighten a hex color by N (0-255)
+  function _lighten(hex, n) {
+    const c = (hex||'#0a0a0a').replace('#','');
+    if (c.length !== 6) return '#111111';
+    const r = Math.min(255, parseInt(c.slice(0,2),16)+n);
+    const g = Math.min(255, parseInt(c.slice(2,4),16)+n);
+    const b = Math.min(255, parseInt(c.slice(4,6),16)+n);
+    return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+  }
+
+  // Override the global applyCustomization with our enhanced version
+  window.applyCustomization = applyCustomizationV2;
+  try { applyCustomizationV2(); } catch {}
+
+  // ── 3. OVERRIDE loadCustomization ───────────────────────────────────────
+  let _activeSeg = 'solid';
+  let _custInited = false;
+
+  function _previewBg() {
+    const wall = _load(WALL_KEY) || { type: 'default' };
+    if (wall.type === 'solid' || wall.type === 'gradient') return wall.value;
+    if (wall.type === 'photo') return `${_photoBg(wall.value, wall.opacity)} center/cover no-repeat`;
+    return 'var(--bg)';
+  }
+
+  function _updatePreview() {
+    const prev = document.getElementById('cust-preview-chat');
+    if (prev) prev.style.background = _previewBg();
+    const mine = document.getElementById('cust-preview-mine-bubble');
+    if (mine) {
+      const bub = _load(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
+      mine.style.background = bub.bg;
+      mine.style.color = bub.text;
+    }
+  }
+
+  function _swatchHtml(colors, loadedVal, loadedType, typeAttr) {
+    return colors.map(c => {
+      const active = loadedType === typeAttr.replace('data-','').replace('-solid','solid').replace('-gradient','gradient') && loadedVal === c;
+      const isGrad = typeAttr === 'data-wall-gradient';
+      const cls = isGrad ? 'cust-gradient-swatch' : 'cust-swatch';
+      return `<div class="${cls}${active ? ' active' : ''}" style="background:${c}" ${typeAttr}="${_esc(c)}" title="${c}"></div>`;
+    }).join('');
+  }
+
+  function _renderWall() {
+    const section = document.getElementById('cust-wall-content');
+    if (!section) return;
+    const wall = _load(WALL_KEY) || { type: 'default' };
+
+    if (_activeSeg === 'solid') {
+      const customActive = wall.type === 'solid' && !WALLPAPER_SOLIDS.includes(wall.value);
+      section.innerHTML = `
+        <div class="cust-swatch-row">
+          ${WALLPAPER_SOLIDS.map(c => `<div class="cust-swatch${wall.type==='solid'&&wall.value===c?' active':''}" style="background:${c}" data-wall-solid="${c}" title="${c}"></div>`).join('')}
+          <div class="cust-swatch-custom${customActive?' active':''}" title="Custom color">
+            ${customActive?`<span style="width:100%;height:100%;border-radius:50%;display:block;background:${_esc(wall.value)}"></span>`:'＋'}
+            <input type="color" id="cust-wall-color-input" value="${customActive?wall.value:'#222222'}">
+          </div>
+        </div>
+        <div class="cust-hint">Tap a color, or use the dashed swatch to pick any custom color.</div>`;
+      section.querySelectorAll('[data-wall-solid]').forEach(el => {
+        el.addEventListener('click', () => { _save(WALL_KEY,{type:'solid',value:el.dataset.wallSolid}); applyCustomizationV2(); _renderWall(); _updatePreview(); });
+      });
+      const ci = document.getElementById('cust-wall-color-input');
+      if (ci) {
+        ci.addEventListener('input', () => { _save(WALL_KEY,{type:'solid',value:ci.value}); applyCustomizationV2(); _updatePreview(); });
+        ci.addEventListener('change', () => _renderWall());
+      }
+
+    } else if (_activeSeg === 'gradient') {
+      const customActive = wall.type === 'gradient' && !WALLPAPER_GRADIENTS.includes(wall.value);
+      section.innerHTML = `
+        <div class="cust-swatch-row">
+          ${WALLPAPER_GRADIENTS.map(g => `<div class="cust-gradient-swatch${wall.type==='gradient'&&wall.value===g?' active':''}" style="background:${g}" data-wall-gradient="${_esc(g)}"></div>`).join('')}
+        </div>
+        <div class="cust-hint" style="margin-bottom:12px">Tap a gradient preset, or build a custom one below.</div>
+        <div style="background:#161616;border:1px solid #1e1e1e;border-radius:10px;padding:14px 16px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Custom Gradient</div>
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+              <div style="font-size:11px;color:#666">From</div>
+              <input type="color" id="cust-grad-from" value="${customActive ? wall.value.match(/#[0-9a-fA-F]{6}/g)?.[0] || '#1a1a2e' : '#1a1a2e'}" style="width:44px;height:44px;border-radius:8px;border:1px solid #2a2a2a;background:transparent;cursor:pointer;padding:2px">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+              <div style="font-size:11px;color:#666">To</div>
+              <input type="color" id="cust-grad-to" value="${customActive ? wall.value.match(/#[0-9a-fA-F]{6}/g)?.[1] || '#16213e' : '#16213e'}" style="width:44px;height:44px;border-radius:8px;border:1px solid #2a2a2a;background:transparent;cursor:pointer;padding:2px">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+              <div style="font-size:11px;color:#666">Angle</div>
+              <input type="range" id="cust-grad-angle" min="0" max="360" value="135" style="width:90px;accent-color:#fff">
+              <div id="cust-grad-angle-val" style="font-size:11px;color:#666">135°</div>
+            </div>
+            <div id="cust-grad-preview" style="flex:1;min-width:60px;height:44px;border-radius:8px;background:linear-gradient(135deg,#1a1a2e,#16213e);min-width:80px"></div>
+            <button id="cust-grad-apply" style="background:#fff;color:#000;border:none;border-radius:7px;font-size:12px;font-weight:700;padding:8px 14px;cursor:pointer;white-space:nowrap">Apply</button>
+          </div>
+        </div>`;
+
+      // Preset swatches
+      section.querySelectorAll('[data-wall-gradient]').forEach(el => {
+        el.addEventListener('click', () => { _save(WALL_KEY,{type:'gradient',value:el.dataset.wallGradient}); applyCustomizationV2(); _renderWall(); _updatePreview(); });
+      });
+
+      // Custom gradient builder
+      function _rebuildCustomGrad() {
+        const from  = (document.getElementById('cust-grad-from')?.value || '#1a1a2e');
+        const to    = (document.getElementById('cust-grad-to')?.value   || '#16213e');
+        const angle = (document.getElementById('cust-grad-angle')?.value || 135);
+        const grad  = `linear-gradient(${angle}deg,${from},${to})`;
+        const prev  = document.getElementById('cust-grad-preview');
+        const label = document.getElementById('cust-grad-angle-val');
+        if (prev)  prev.style.background = grad;
+        if (label) label.textContent = `${angle}°`;
+        return grad;
+      }
+      ['cust-grad-from','cust-grad-to','cust-grad-angle'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', _rebuildCustomGrad);
+      });
+      document.getElementById('cust-grad-apply')?.addEventListener('click', () => {
+        const grad = _rebuildCustomGrad();
+        _save(WALL_KEY,{type:'gradient',value:grad}); applyCustomizationV2(); _renderWall(); _updatePreview();
+      });
+
+    } else {
+      // Photo
+      const hasPhoto = wall.type === 'photo' && wall.value;
+      const curOpacity = hasPhoto ? Math.max(15, Math.min(100, Number(wall.opacity) || 100)) : 100;
+      section.innerHTML = `
+        <div class="cust-photo-row">
+          <div class="cust-photo-thumb">${hasPhoto?`<img src="${wall.value}">`:`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="cust-upload-btn" id="cust-photo-upload-btn">${hasPhoto?'Change Photo':'Upload Photo'}</button>
+            ${hasPhoto?`<button class="cust-photo-remove" id="cust-photo-remove-btn">Remove photo</button>`:''}
+          </div>
+          <input type="file" id="cust-photo-input" accept="image/*" style="display:none">
+        </div>
+        <div class="cust-hint">Best with a photo at least 800px wide. Stored only on this device.</div>
+        ${hasPhoto ? `
+        <div style="margin-top:14px;background:#161616;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:600;color:#ccc">Photo opacity</span>
+            <span id="cust-wall-opacity-val" style="font-size:12px;color:#888;width:36px;text-align:right">${curOpacity}%</span>
+          </div>
+          <input type="range" id="cust-wall-opacity-slider" min="15" max="100" value="${curOpacity}" style="width:100%;accent-color:#fff">
+          <div class="cust-hint" style="margin-top:6px">Lower this if the photo makes messages hard to read.</div>
+        </div>` : ''}`;
+      document.getElementById('cust-photo-upload-btn')?.addEventListener('click', () => document.getElementById('cust-photo-input')?.click());
+      document.getElementById('cust-photo-input')?.addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 8*1024*1024) { try { swShowToast('Please choose an image under 8MB.'); } catch {} e.target.value = ''; return; }
+        const btn = document.getElementById('cust-photo-upload-btn');
+        const prevLabel = btn ? btn.textContent : null;
+        if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+        _resizeImageFile(file, 1280, 0.78)
+          .then(dataUrl => {
+            // Keep whatever opacity the user already had dialed in when
+            // replacing a photo; default to fully opaque for a first upload.
+            const prevOpacity = (wall.type === 'photo' && wall.opacity) ? wall.opacity : 100;
+            const ok = _save(WALL_KEY,{type:'photo',value:dataUrl,opacity:prevOpacity});
+            if (!ok) {
+              try { swShowToast("Couldn't save that photo — try a smaller image."); } catch {}
+              if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+              return;
+            }
+            applyCustomizationV2(); _renderWall(); _updatePreview();
+          })
+          .catch(() => {
+            try { swShowToast('Could not process that image.'); } catch {}
+            if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+          })
+          .finally(() => { e.target.value = ''; });
+      });
+      section.querySelector('#cust-photo-remove-btn')?.addEventListener('click', () => {
+        _save(WALL_KEY,{type:'default'}); applyCustomizationV2(); _renderWall(); _updatePreview();
+      });
+      const opSlider = document.getElementById('cust-wall-opacity-slider');
+      if (opSlider) {
+        opSlider.addEventListener('input', () => {
+          const val = parseInt(opSlider.value, 10) || 100;
+          const valLbl = document.getElementById('cust-wall-opacity-val');
+          if (valLbl) valLbl.textContent = `${val}%`;
+          // Live-preview without hitting storage on every tick of the slider
+          document.documentElement.style.setProperty('--chat-wallpaper-bg', _photoBg(wall.value, val));
+          _updatePreview();
+        });
+        opSlider.addEventListener('change', () => {
+          const val = parseInt(opSlider.value, 10) || 100;
+          _save(WALL_KEY, { type: 'photo', value: wall.value, opacity: val });
+          applyCustomizationV2(); _updatePreview();
+        });
+      }
+    }
+  }
+
+  function _renderAppBg() {
+    const section = document.getElementById('cust-app-bg-content');
+    if (!section) return;
+    const appBg = _load(APP_BG_KEY);
+    const cur = appBg?.value || '#0a0a0a';
+    const customActive = appBg && !APP_BG_SOLIDS.includes(cur);
+    section.innerHTML = `
+      <div class="cust-swatch-row">
+        ${APP_BG_SOLIDS.map(c=>`<div class="cust-swatch${cur===c?' active':''}" style="background:${c};box-shadow:inset 0 0 0 1px rgba(255,255,255,${c==='#0a0a0a'?.12:.06})" data-appbg="${c}" title="${c}"></div>`).join('')}
+        <div class="cust-swatch-custom${customActive?' active':''}" title="Custom color">
+          ${customActive?`<span style="width:100%;height:100%;border-radius:50%;display:block;background:${_esc(cur)}"></span>`:'＋'}
+          <input type="color" id="cust-appbg-color-input" value="${customActive?cur:'#0a0a0a'}">
+        </div>
+      </div>
+      <div class="cust-hint">Changes the app background and sidebar tone. Darker is recommended for the film aesthetic.</div>`;
+    section.querySelectorAll('[data-appbg]').forEach(el => {
+      el.addEventListener('click', () => { _save(APP_BG_KEY,{value:el.dataset.appbg}); applyCustomizationV2(); _renderAppBg(); });
+    });
+    const ci = document.getElementById('cust-appbg-color-input');
+    if (ci) {
+      ci.addEventListener('input', () => { _save(APP_BG_KEY,{value:ci.value}); applyCustomizationV2(); });
+      ci.addEventListener('change', () => _renderAppBg());
+    }
+  }
+
+  function _renderBubble() {
+    const section = document.getElementById('cust-bubble-content');
+    if (!section) return;
+    const bub = _load(BUBBLE_KEY) || { bg: '#f0f0f0', text: '#0a0a0a' };
+    const customActive = !BUBBLE_PRESETS.some(p => p.bg === bub.bg);
+    section.innerHTML = `
+      <div class="cust-swatch-row">
+        ${BUBBLE_PRESETS.map(p=>`<div class="cust-swatch${bub.bg===p.bg?' active':''}" style="background:${p.bg}" data-bubble-bg="${p.bg}" data-bubble-text="${p.text}" title="${p.bg}"></div>`).join('')}
+        <div class="cust-swatch-custom${customActive?' active':''}" title="Custom color">
+          ${customActive?`<span style="width:100%;height:100%;border-radius:50%;display:block;background:${_esc(bub.bg)}"></span>`:'＋'}
+          <input type="color" id="cust-bubble-color-input" value="${customActive?bub.bg:'#f0f0f0'}">
+        </div>
+      </div>
+      <div class="cust-hint">Color of your own message bubbles — visible to whoever you're chatting with.</div>`;
+    section.querySelectorAll('[data-bubble-bg]').forEach(el => {
+      el.addEventListener('click', () => { _save(BUBBLE_KEY,{bg:el.dataset.bubbleBg,text:el.dataset.bubbleText}); applyCustomizationV2(); _renderBubble(); _updatePreview(); });
+    });
+    const ci = document.getElementById('cust-bubble-color-input');
+    if (ci) {
+      ci.addEventListener('input', () => { const t=_isDark(ci.value)?'#ffffff':'#0a0a0a'; _save(BUBBLE_KEY,{bg:ci.value,text:t}); applyCustomizationV2(); _updatePreview(); });
+      ci.addEventListener('change', () => _renderBubble());
+    }
+  }
+
+  function _setSeg(seg) {
+    _activeSeg = seg;
+    document.querySelectorAll('.cust-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
+    _renderWall();
+  }
+
+  // Override the global loadCustomization
+  window.loadCustomization = function loadCustomization() {
+    const root = document.getElementById('cust-root');
+    if (!root) return;
+
+    root.innerHTML = `
+      <!-- Live preview -->
+      <div class="cust-preview">
+        <div class="cust-preview-chat" id="cust-preview-chat">
+          <div class="cust-preview-bubble theirs">hey, you around tonight?</div>
+          <div class="cust-preview-bubble mine" id="cust-preview-mine-bubble">yeah I'm down 👍</div>
+        </div>
+      </div>
+
+      <!-- Section: App Background -->
+      <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:#f5f5f5;letter-spacing:-.01em">App Background</div>
+          <button id="cust-appbg-reset-btn" style="background:transparent;border:none;font-size:11px;font-weight:600;color:#666;cursor:pointer;padding:0">Reset</button>
+        </div>
+        <div id="cust-app-bg-content"></div>
+      </div>
+
+      <!-- Section: Chat Wallpaper -->
+      <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:#f5f5f5;letter-spacing:-.01em">Chat Wallpaper</div>
+          <button id="cust-wall-reset-btn" style="background:transparent;border:none;font-size:11px;font-weight:600;color:#666;cursor:pointer;padding:0">Reset</button>
+        </div>
+        <div class="cust-seg" style="margin-bottom:14px">
+          <div class="cust-seg-btn active" data-seg="solid">Solid</div>
+          <div class="cust-seg-btn" data-seg="gradient">Gradient</div>
+          <div class="cust-seg-btn" data-seg="photo">Photo</div>
+        </div>
+        <div id="cust-wall-content"></div>
+      </div>
+
+      <!-- Section: Message Bubble Color -->
+      <div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;color:#f5f5f5;letter-spacing:-.01em">Message Bubble Color</div>
+          <button id="cust-bubble-reset-btn" style="background:transparent;border:none;font-size:11px;font-weight:600;color:#666;cursor:pointer;padding:0">Reset</button>
+        </div>
+        <div id="cust-bubble-content"></div>
+      </div>
+
+      <!-- Reset All -->
+      <button id="cust-reset-all-btn" style="width:100%;background:transparent;border:1px solid #2a2a2a;color:#888;font-size:13px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;transition:all .12s">
+        Reset All to Default
+      </button>
+    `;
+
+    // Segment switcher
+    document.querySelectorAll('.cust-seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => _setSeg(btn.dataset.seg));
+    });
+
+    // Reset buttons
+    document.getElementById('cust-wall-reset-btn')?.addEventListener('click', () => {
+      _save(WALL_KEY,{type:'default'}); applyCustomizationV2(); _renderWall(); _updatePreview();
+    });
+    document.getElementById('cust-appbg-reset-btn')?.addEventListener('click', () => {
+      _save(APP_BG_KEY,null); applyCustomizationV2(); _renderAppBg();
+    });
+    document.getElementById('cust-bubble-reset-btn')?.addEventListener('click', () => {
+      _save(BUBBLE_KEY,null); applyCustomizationV2(); _renderBubble(); _updatePreview();
+    });
+    document.getElementById('cust-reset-all-btn')?.addEventListener('click', () => {
+      _save(WALL_KEY,{type:'default'}); _save(APP_BG_KEY,null); _save(BUBBLE_KEY,null);
+      applyCustomizationV2(); _renderWall(); _renderAppBg(); _renderBubble(); _updatePreview();
+      try { swShowToast('All customization reset to default.'); } catch {}
+    });
+    document.getElementById('cust-reset-all-btn')?.addEventListener('mouseenter', function(){ this.style.background='#1a1a1a'; this.style.color='#f5f5f5'; });
+    document.getElementById('cust-reset-all-btn')?.addEventListener('mouseleave', function(){ this.style.background='transparent'; this.style.color='#888'; });
+
+    // Initial render
+    _setSeg('solid');
+    _renderAppBg();
+    _renderBubble();
+    _updatePreview();
+
+    _custInited = true;
+  };
+
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-strand-live-patch.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-strand-live-patch.js — Social Strand Live Updates v1.0
+ * =========================================================
+ * Problem: your own posts/reactions already update instantly (swLoadFeed /
+ * swToggleReaction handle that), but content from OTHER members — new posts
+ * to the feed, new comments on a post you have open — only appeared after
+ * leaving and re-entering the page (a hard refresh).
+ *
+ * This patch adds, without modifying membersaccess.js:
+ *   1. Feed: polls quietly every 25s. If there's a newer post than what's
+ *      currently on screen, shows a small "New posts" pill above the feed —
+ *      tapping it does a normal swLoadFeed(true) reset. (We show a pill
+ *      rather than silently inserting posts so we never yank the feed out
+ *      from under someone mid-scroll or mid-read.)
+ *   2. Comments: while a post's detail/comments modal is open, polls every
+ *      6s and refreshes the comment list in place if new comments have
+ *      arrived. Skipped for a cycle (not cancelled — just retried next
+ *      tick) if you're actively typing a reply, so nothing you're writing
+ *      gets wiped.
+ *
+ * Both use the same authenticated `api()` helper and existing endpoints
+ * already used by the page — no new endpoints, no new auth surface.
+ *
+ * HOW TO DEPLOY:
+ *   Add this line in membersaccess.html (before </body>), AFTER kfs-patch4.js:
+ *     <script src="/kfs-patch4.js" defer></script>
+ *     <script src="/kfs-strand-live-patch.js" defer></script>
+ */
+
+(function () {
+  'use strict';
+
+  const FEED_POLL_MS    = 25000;
+  const COMMENTS_POLL_MS = 6000;
+
+  function ready(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     1. FEED — "New posts" pill
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  let _feedTopId = null;
+  let _feedPollTimer = null;
+  let _pillEl = null;
+
+  function feedGridVisible() {
+    const grid = document.getElementById('studio-feed');
+    return !!grid && !!grid.offsetParent;
+  }
+
+  function currentTopIdOnScreen() {
+    const grid = document.getElementById('studio-feed');
+    const first = grid?.querySelector('[data-project-id]');
+    return first?.dataset.projectId || null;
+  }
+
+  function ensurePill() {
+    if (_pillEl) return _pillEl;
+    const grid = document.getElementById('studio-feed');
+    if (!grid || !grid.parentNode) return null;
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.id = 'kfs-strand-newposts-pill';
+    pill.style.cssText = `
+      display:none;position:sticky;top:8px;z-index:5;margin:0 auto 12px;padding:9px 18px;
+      background:#0a84ff;color:#fff;border:none;border-radius:999px;font-size:13px;font-weight:600;
+      cursor:pointer;box-shadow:0 4px 14px rgba(10,132,255,.35);
+    `;
+    pill.textContent = '↑ New posts';
+    pill.addEventListener('click', () => {
+      pill.style.display = 'none';
+      if (typeof window.swLoadFeed === 'function') window.swLoadFeed(true);
+    });
+    grid.parentNode.insertBefore(pill, grid);
+    _pillEl = pill;
+    return pill;
+  }
+
+  function showPill() {
+    const pill = ensurePill();
+    if (pill) pill.style.display = '';
+  }
+
+  async function feedPollTick() {
+    if (!feedGridVisible()) return;
+    if (window.SW && window.SW.feedLoading) return;
+    if (_pillEl && _pillEl.style.display !== 'none') return; // already showing, don't re-check
+    try {
+      let url = `/api/member/studio/feed?page=1`;
+      if (window.SW?.feedTag) url += `&tag=${encodeURIComponent(window.SW.feedTag)}`;
+      if (window.SW?.feedSort === 'foryou') url += `&sort=foryou`;
+      const resp = await window.api('GET', url);
+      const data = resp.feed || resp || [];
+      if (!data.length) return;
+      const latestId = String(data[0].id);
+      const onScreenTop = currentTopIdOnScreen();
+      if (!_feedTopId) _feedTopId = onScreenTop; // first tick baseline
+      if (latestId !== _feedTopId && latestId !== onScreenTop) {
+        showPill();
+      }
+    } catch {
+      // Silent — this is a background nicety, not a user-initiated action.
+    }
+  }
+
+  function startFeedPoll() {
+    stopFeedPoll();
+    _feedTopId = currentTopIdOnScreen();
+    _feedPollTimer = setInterval(feedPollTick, FEED_POLL_MS);
+  }
+  function stopFeedPoll() {
+    if (_feedPollTimer) { clearInterval(_feedPollTimer); _feedPollTimer = null; }
+  }
+
+  function hookSwLoadFeed() {
+    if (typeof window.swLoadFeed !== 'function' || window.swLoadFeed.__kfsLiveWrapped) return;
+    const orig = window.swLoadFeed;
+    const wrapped = async function (reset) {
+      const ret = await orig.apply(this, arguments);
+      // Any successful load (own post, manual refresh, pill tap, pagination)
+      // re-baselines what "top of feed" means and clears the pill.
+      _feedTopId = currentTopIdOnScreen();
+      if (_pillEl) _pillEl.style.display = 'none';
+      if (!_feedPollTimer) startFeedPoll();
+      return ret;
+    };
+    wrapped.__kfsLiveWrapped = true;
+    window.swLoadFeed = wrapped;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2. COMMENTS — live refresh while a post's detail modal is open
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  let _commentsPollTimer = null;
+  let _lastCommentsSig = null;
+
+  function commentsListFocused() {
+    const list = document.getElementById('sw-comments-list');
+    return !!(list && document.activeElement && list.contains(document.activeElement));
+  }
+
+  function commentsSignature(comments) {
+    // Cheap, order-sensitive fingerprint — id + reply count is enough to
+    // detect "something changed" without a deep diff.
+    const walk = (c) => `${c.id}:${(c.replies || []).map(walk).join(',')}`;
+    return (comments || []).map(walk).join('|');
+  }
+
+  async function commentsPollTick() {
+    const projectId = window.SW?.detailProjectId;
+    const overlay = document.getElementById('studio-detail-modal-overlay');
+    if (!projectId || !overlay || overlay.style.display !== 'flex') { stopCommentsPoll(); return; }
+    if (commentsListFocused()) return; // user is typing a reply — try again next tick
+    try {
+      const cResp = await window.api('GET', `/api/member/studio/projects/${projectId}/comments`);
+      const comments = cResp.comments || cResp || [];
+      const sig = commentsSignature(comments);
+      if (sig === _lastCommentsSig) return; // nothing new
+      _lastCommentsSig = sig;
+      const list = document.getElementById('sw-comments-list');
+      if (list && typeof window.swRenderComments === 'function') {
+        list.innerHTML = window.swRenderComments(comments, projectId);
+      }
+      // Keep the visible comment count in the meta row in sync too.
+      const countEl = overlay.querySelector('.studio-detail-stat:last-child');
+      if (countEl) {
+        const flat = (arr) => arr.reduce((n, c) => n + 1 + flat(c.replies || []), 0);
+        countEl.innerHTML = countEl.innerHTML.replace(/[\d.,km]+$/i, String(flat(comments)));
+      }
+    } catch {
+      // Silent — background nicety.
+    }
+  }
+
+  function startCommentsPoll() {
+    stopCommentsPoll();
+    _lastCommentsSig = null;
+    _commentsPollTimer = setInterval(commentsPollTick, COMMENTS_POLL_MS);
+  }
+  function stopCommentsPoll() {
+    if (_commentsPollTimer) { clearInterval(_commentsPollTimer); _commentsPollTimer = null; }
+  }
+
+  function hookDetailModal() {
+    if (typeof window.swOpenDetail === 'function' && !window.swOpenDetail.__kfsLiveWrapped) {
+      const orig = window.swOpenDetail;
+      const wrapped = async function (projectId) {
+        const ret = await orig.apply(this, arguments);
+        _lastCommentsSig = null; // force first comparison to pass on next tick
+        startCommentsPoll();
+        return ret;
+      };
+      wrapped.__kfsLiveWrapped = true;
+      window.swOpenDetail = wrapped;
+    }
+    if (typeof window.swCloseDetailModal === 'function' && !window.swCloseDetailModal.__kfsLiveWrapped) {
+      const orig = window.swCloseDetailModal;
+      const wrapped = function () {
+        stopCommentsPoll();
+        return orig.apply(this, arguments);
+      };
+      wrapped.__kfsLiveWrapped = true;
+      window.swCloseDetailModal = wrapped;
+    }
+  }
+
+  /* ── Boot ──────────────────────────────────────────────────────────────── */
+
+  function init() {
+    // These globals (swLoadFeed, swOpenDetail, swCloseDetailModal, api, SW)
+    // are all defined in membersaccess.js. Poll briefly for readiness rather
+    // than assuming exact script execution order.
+    let tries = 0;
+    const tryHook = () => {
+      tries++;
+      const haveCore = typeof window.api === 'function' && typeof window.swLoadFeed === 'function';
+      if (haveCore) {
+        hookSwLoadFeed();
+        hookDetailModal();
+        if (feedGridVisible()) startFeedPoll();
+        document.addEventListener('visibilitychange', () => {
+          // Timers already no-op appropriately via their own visibility/open
+          // checks each tick; nothing extra needed here.
+        });
+        return;
+      }
+      if (tries < 40) setTimeout(tryHook, 250); // give membersaccess.js up to ~10s to finish defining globals
+    };
+    tryHook();
+  }
+
+  ready(init);
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch5.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch5.js  — Social Strand Patch v5
+ * =========================================
+ * Loaded by membersaccess.html (add alongside kfs-patch4.js).
+ *
+ * This patch has NO Social Strand UI changes.
+ * It exists as the correct place for any future member-side
+ * additions without touching membersaccess.html.
+ *
+ * Mobile nav architecture note (answers your question):
+ * ──────────────────────────────────────────────────────
+ * The "Network bar" (bottom pill nav) and the "site bar" (desktop sidebar)
+ * serve DIFFERENT contexts and are BOTH needed:
+ *
+ *   • Desktop sidebar  — always visible on ≥769 px; provides full text labels,
+ *     nested settings, and the member chip. Cannot exist on mobile because
+ *     it eats the full left column.
+ *
+ *   • Bottom pill nav (btb)  — shown ONLY on mobile/touch (≤768 px + pointer:coarse).
+ *     It floats over content, is gesture-friendly, and follows iOS/Android
+ *     tap-target guidelines (44 px minimum). The desktop sidebar is hidden on
+ *     these viewports.
+ *
+ * So they're NOT duplicates — they're the same navigation adapted for two
+ * different form factors via a responsive media query.  Removing either one
+ * would break usability on that viewport class.
+ *
+ * The only items that could be trimmed from the bottom nav are the ones that
+ * are already accessible from the Settings bottom-sheet (Profile, Security,
+ * My Movies, etc.) — and they already are excluded; the nav only exposes the
+ * 4 primary destinations + post + settings-sheet trigger, which is the
+ * recommended pattern for Instagram-style apps.
+ */
+
+(function () {
+  'use strict';
+  // Reserved for future Social Strand member-side additions.
+  // All current changes are server-side (API) or in kfs-admin-patch.js.
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch6.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch6.js — Instant Feed Refresh + Dynamic Composer Textareas + Input Gap
+ * =====================================================================
+ * Load this AFTER membersaccess.js and AFTER kfs-patch5.js.
+ * Add at the bottom of membersaccess.html:
+ *     <script src="/kfs-patch6.js" defer></script>
+ *
+ * -----------------------------------------------------------------------
+ * BUG #1 — "I post, but it doesn't show up in the feed right away"
+ * -----------------------------------------------------------------------
+ * Root cause (found in server.js):
+ *   GET /api/member/studio/feed sends `Cache-Control: public, max-age=30,
+ *   stale-while-revalidate=60` (via cacheFor(res,30)), overriding the
+ *   blanket `no-store` the rest of /api gets.
+ *
+ *   swSubmitPost() already does the right thing client-side — it calls
+ *   `await swLoadFeed(true)` immediately after a successful post, and the
+ *   server already busts its OWN in-memory cache on write
+ *   (memInvalidate("studio:feed:")). Both of those are correct.
+ *
+ *   The problem is a third layer neither of those touches: the browser's
+ *   own HTTP cache. Because the response is marked `public, max-age=30`,
+ *   the very next GET to the exact same URL (?page=1) within 30s is
+ *   answered straight from the browser cache and never reaches the
+ *   network at all — so the poster's own client renders the pre-post
+ *   snapshot. This is the same class of bug already fixed for
+ *   /groups and /nicknames in the api() helper (see the comment there);
+ *   /studio/feed just wasn't included in that fix.
+ *
+ * Fix: cache-bust GET requests to /studio/feed the same way, by wrapping
+ * window.api so every feed fetch gets a unique query string. No server
+ * change needed, and pagination/"foryou" behavior is untouched since the
+ * server-side memCache (60s, keyed by page+tag) still does the real work
+ * of keeping DB load down — this only defeats the browser-level cache.
+ *
+ * -----------------------------------------------------------------------
+ * BUG #2 — "input textboxes need to be dynamic"
+ * -----------------------------------------------------------------------
+ * The composer textareas (#sw-caption, #sw-text-body, #sw-video-caption)
+ * are fixed-height (`rows="3"`/`"4"`, `resize:none`) — typing past that
+ * just scrolls inside a tiny box instead of the box growing. This patch
+ * makes them auto-grow to fit content, and re-measures them whenever
+ * their value is set programmatically (switching post type, opening the
+ * edit modal with an existing long caption) since those don't fire an
+ * `input` event on their own.
+ *
+ * -----------------------------------------------------------------------
+ * BUG #3 — "2-3px gap between the input border and the displayed text"
+ * -----------------------------------------------------------------------
+ * Applies to all post/comment input boxes:
+ *   - Comment + reply input pill (.studio-comment-input-row)
+ *   - Composer title/tags/domain rows (.composer-field-row)
+ *   - Composer caption/text/video-caption textareas
+ *
+ * The comment input pill already uses the "border lives on the outer
+ * wrapper, the actual <input> stays borderless inside it" structure —
+ * its padding is just bigger than needed, so we tighten it. The composer
+ * field rows and caption textareas don't have that wrapper at all today
+ * (rows use a bottom divider, textareas have no border), so this gives
+ * them the same box: a bordered container with the real <input>/
+ * <textarea> borderless inside it — same technique, done in CSS via
+ * padding/border on the row/field itself rather than an extra DOM node.
+ * IDs are untouched, so none of the existing swSubmitPost/swPostComment/
+ * char-counter code needs to change.
+ *
+ * Two follow-on issues showed up once the gap was actually this tight:
+ *
+ * 1) The sitewide base rule `input:focus, textarea:focus { box-shadow: 0
+ *    0 0 3px rgba(10,132,255,.25) }` (membersaccess.html's global
+ *    stylesheet) draws its blue glow flush against the element's own
+ *    edge — which, with ~0 padding on the input itself, lands right on
+ *    top of the leading character(s). Fixed by suppressing that glow on
+ *    these fields and moving the focus indication to the wrapper's
+ *    border-color instead, where there's room for it.
+ *
+ * 2) The comment pill's border-radius is 24px (a full pill). Shrinking
+ *    the box's height without a big enough left inset means the rounded
+ *    corner's own curve reaches past the padding into the text — not a
+ *    focus-state thing at all, just geometry, and it was there whether
+ *    focused or not. Fixed by giving the pill (and the other boxes, at
+ *    their own smaller radii) enough left padding to clear the curve.
+ *    The reply row's inline `padding-left:30px` indent is preserved by
+ *    leaving padding-left off the !important list here.
+ */
+
+(function () {
+  'use strict';
+
+  // Version marker — bump this string every time this file changes.
+  // Open DevTools Console after a hard refresh and look for this line.
+  // If you DON'T see it (or see an older version string), your browser
+  // is still running a cached copy of this file, not the one that was
+  // just uploaded — that's almost certainly why a fix "doesn't show up"
+  // even though the code itself is correct. Hard-refresh (Ctrl/Cmd+Shift+R)
+  // or clear cache for this site and reload.
+  console.log('[kfs-patch6] v6 loaded (comment-pill padding-left made !important — no longer relies on source-order to win)');
+
+  const GROW_IDS = ['sw-caption', 'sw-text-body', 'sw-video-caption'];
+
+  function autoGrow(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
+  function autoGrowById(id) {
+    autoGrow(document.getElementById(id));
+  }
+
+  function growAll() {
+    GROW_IDS.forEach(autoGrowById);
+  }
+
+  function ready(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  /* ── 1. Feed cache-busting ────────────────────────────────────────────── */
+
+  function hookApiCacheBust() {
+    if (typeof window.api !== 'function' || window.api.__kfsFeedCacheBustWrapped) return;
+    const orig = window.api;
+    const wrapped = function (method, path, body, isForm) {
+      if (
+        typeof path === 'string' &&
+        String(method).toUpperCase() === 'GET' &&
+        path.includes('/studio/feed') &&
+        !path.includes('_cb=')
+      ) {
+        path += (path.includes('?') ? '&' : '?') + '_cb=' + Date.now() + Math.random().toString(36).slice(2);
+      }
+      return orig.call(this, method, path, body, isForm);
+    };
+    wrapped.__kfsFeedCacheBustWrapped = true;
+    window.api = wrapped;
+  }
+
+  /* ── 2. 2-3px border-to-text gap on post/comment input boxes ─────────── */
+
+  function injectTightGapCSS() {
+    if (document.getElementById('kfs-p6-tight-gap')) return;
+    const style = document.createElement('style');
+    style.id = 'kfs-p6-tight-gap';
+    style.textContent = `
+      /* Comment + reply input pill — already wrapper(border)+input(borderless).
+         NOTE: border-radius here is 24px (full pill). Shrinking the box's
+         height without enough left inset makes the rounded corner's own
+         curve reach past the padding and into the text — which is exactly
+         what was still happening.
+         padding-left is now !important. It previously wasn't, on the theory
+         that the reply row's inline padding-left:30px (its indent under the
+         parent comment) needed to win by NOT fighting an !important — but
+         that also meant this value only won by source-order against any
+         other stylesheet, which is fragile (a later-loaded patch touching
+         the same class at the same specificity would silently win instead).
+         Made !important for robustness; the reply row's inline style has
+         been upgraded to padding-left:30px !important to match (see
+         membersaccess.js, the sw-comment reply-row template) so it still
+         overrides this base value same as before. */
+      /* padding-left must be >= border-radius (24px). A rounded corner's
+         horizontal inset is 0 at the box's vertical midline and grows to
+         exactly 'radius' at the very top/bottom edge. 22px left a 2px gap
+         against the 24px radius, which was too tight for tall ascenders
+         (capital letters like "W" sit close to the box's actual top) even
+         though lowercase text — which sits closer to the midline — cleared
+         it fine. 28px = radius + a small buffer for anti-aliasing. */
+      .studio-comment-input-row {
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        padding-right: 10px !important;
+        padding-left: 28px !important;
+      }
+
+      /* Composer title/tags/domain — turn the bottom-divider list rows into
+         individually boxed inputs, borderless <input> inside. Left padding
+         kept comfortably past the 10px corner radius so the curve can't
+         reach the text. */
+      .composer-field-row {
+        border: 1px solid #1c1c1e !important;
+        border-radius: 10px !important;
+        padding: 6px 16px !important;
+        margin-bottom: 8px !important;
+      }
+      .composer-field-row:last-of-type {
+        margin-bottom: 8px !important;
+      }
+      .composer-field-row--collab {
+        padding-top: 8px !important;
+      }
+
+      /* Composer caption / text-body / video-caption — same logic: padding
+         kept clear of the 10px corner radius. */
+      .composer-caption,
+      .composer-text-body {
+        border: 1px solid #1c1c1e !important;
+        border-radius: 10px !important;
+        padding: 7px 14px !important;
+        box-sizing: border-box !important;
+      }
+
+      /* The actual inputs/textareas have ~0 padding of their own — all the
+         spacing lives on the wrapper/box above. There's also a sitewide
+         base rule (input:focus/textarea:focus) that adds a blue
+         box-shadow glow (0 0 0 3px rgba(10,132,255,.25)) directly on the
+         focused element itself. With zero padding on the element, that
+         glow sits right on top of the text and clips the first
+         character(s) — that's the blue cutting into "Add a comment...".
+         Kill the glow/outline on the fields themselves and show focus on
+         the box instead, where there's room for it. */
+      .studio-comment-input:focus,
+      .composer-input:focus,
+      .composer-caption:focus,
+      .composer-text-body:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+
+      /* Kill the browser's native autofill background (white/yellow pill
+         behind typed text, seen on comment/search-like inputs). Chrome/
+         Safari apply this via an internal :-webkit-autofill UA style that
+         a plain 'background: transparent !important' cannot override —
+         it has to be beaten with the same weapon, a huge inset box-shadow
+         that paints over it, plus forcing the text color back to our own. */
+      .studio-comment-input:-webkit-autofill,
+      .composer-input:-webkit-autofill,
+      .composer-caption:-webkit-autofill,
+      .composer-text-body:-webkit-autofill,
+      .studio-comment-input:-webkit-autofill:hover,
+      .studio-comment-input:-webkit-autofill:focus,
+      .composer-input:-webkit-autofill:hover,
+      .composer-input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--text) !important;
+        -webkit-box-shadow: 0 0 0px 1000px #141414 inset !important;
+        box-shadow: 0 0 0px 1000px #141414 inset !important;
+        caret-color: var(--text);
+        transition: background-color 5000s ease-in-out 0s;
+      }
+
+      /* Pin line-height explicitly instead of relying on the UA default
+         ("normal") on <input>. Browsers reset line-height on <input> via
+         an internal font shorthand and it does NOT inherit the site's
+         line-height:1.5 the way <textarea> does — that's why the caption
+         box was never affected but every single-line input was. "normal"
+         is resolved from OS/browser font metrics, so it renders looser
+         on some systems and noticeably tighter on others (worse at
+         font-weight:600), pushing the glyph higher in the box and closer
+         to the corner curve even when padding/radius math is correct.
+         Pinning a fixed px value makes the vertical position identical
+         everywhere. */
+      .composer-input,
+      .studio-comment-input {
+        line-height: 20px;
+      }
+      .composer-input-title {
+        line-height: 22px; /* slightly taller for the 600-weight/15px title */
+      }
+      .studio-comment-input-row:focus-within,
+      .composer-field-row:focus-within {
+        border-color: #0095f6 !important;
+      }
+      .composer-caption:focus,
+      .composer-text-body:focus {
+        border-color: #0095f6 !important;
+      }
+    `;
+    // IMPORTANT: appended to the END of <body>, not <head>. This file has
+    // several <style> blocks embedded inside <body> itself (not just the
+    // usual <head> stylesheet), and <head> always precedes <body> in the
+    // DOM regardless of when a script runs — so a style appended to <head>
+    // can never win a same-specificity, non-!important cascade tie against
+    // ANY of those body-embedded rules, including the base
+    // .studio-comment-input-row padding-left this patch is meant to
+    // override. Appending to the end of <body> guarantees this style is
+    // last in source order and actually wins.
+    document.body.appendChild(style);
+    logComputedPaddingCheck();
+  }
+
+  // Reads back the REAL computed padding-left of the elements this patch
+  // targets, right after injecting the override — not what the CSS *says*,
+  // what the browser actually *resolved*. If some other rule (a device-
+  // specific media query, a later-loaded stylesheet, an inline style, an
+  // extension, etc.) is still winning the cascade on your exact device,
+  // this will show a value other than the expected one and prove it
+  // directly, instead of us going back and forth guessing.
+  function logComputedPaddingCheck() {
+    const checks = [
+      { sel: '.studio-comment-input-row', expect: '28px' },
+      { sel: '.composer-field-row', expect: '16px' },
+      { sel: '.composer-caption', expect: '14px' },
+    ];
+    const results = checks.map(({ sel, expect }) => {
+      const el = document.querySelector(sel);
+      if (!el) return `${sel}: (not in DOM yet — open the relevant modal, then run kfsCheckInputGap() again)`;
+      const actual = getComputedStyle(el).paddingLeft;
+      const ok = actual === expect ? 'OK' : 'MISMATCH — something else is overriding this';
+      return `${sel}: expected ${expect}, actual ${actual} → ${ok}`;
+    });
+    console.log('[kfs-patch6] computed padding-left check:\n' + results.join('\n'));
+  }
+  // Exposed so it can be re-run on demand from the console once the
+  // comment box / composer modal is actually open (they don't exist in
+  // the DOM until then, so the check at load time may say "not in DOM yet").
+  window.kfsCheckInputGap = logComputedPaddingCheck;
+
+  /* ── 3. Auto-grow textareas ───────────────────────────────────────────── */
+
+  function hookInputListeners() {
+    // Delegated so it works even though these fields live inside a modal
+    // that may be re-rendered/hidden rather than always present.
+    document.addEventListener('input', (e) => {
+      if (e.target && GROW_IDS.includes(e.target.id)) autoGrow(e.target);
+    });
+  }
+
+  function hookProgrammaticFills() {
+    // swSetPostType shows/hides sections — resize on every switch so a
+    // section that was hidden (and therefore had scrollHeight 0) is
+    // measured correctly once visible.
+    if (typeof window.swSetPostType === 'function' && !window.swSetPostType.__kfsGrowWrapped) {
+      const orig = window.swSetPostType;
+      const wrapped = function (type) {
+        const ret = orig.apply(this, arguments);
+        setTimeout(growAll, 0);
+        return ret;
+      };
+      wrapped.__kfsGrowWrapped = true;
+      window.swSetPostType = wrapped;
+    }
+    // swOpenEditModal sets .value directly (pre-filling an existing long
+    // caption/description) — no input event fires, so resize explicitly
+    // once the fields are populated.
+    if (typeof window.swOpenEditModal === 'function' && !window.swOpenEditModal.__kfsGrowWrapped) {
+      const orig = window.swOpenEditModal;
+      const wrapped = async function (projectId) {
+        const ret = await orig.apply(this, arguments);
+        setTimeout(growAll, 0);
+        return ret;
+      };
+      wrapped.__kfsGrowWrapped = true;
+      window.swOpenEditModal = wrapped;
+    }
+    // swResetPostModal clears fields back to empty — collapse back down
+    // to the natural min-height instead of staying stretched out.
+    if (typeof window.swResetPostModal === 'function' && !window.swResetPostModal.__kfsGrowWrapped) {
+      const orig = window.swResetPostModal;
+      const wrapped = function () {
+        const ret = orig.apply(this, arguments);
+        setTimeout(growAll, 0);
+        return ret;
+      };
+      wrapped.__kfsGrowWrapped = true;
+      window.swResetPostModal = wrapped;
+    }
+  }
+
+  /* ── Boot ──────────────────────────────────────────────────────────────── */
+
+  function init() {
+    injectTightGapCSS(); // pure CSS, doesn't need to wait on membersaccess.js globals
+    let tries = 0;
+    const tryHook = () => {
+      tries++;
+      const haveCore = typeof window.api === 'function';
+      if (haveCore) {
+        hookApiCacheBust();
+        hookInputListeners();
+        hookProgrammaticFills();
+        return;
+      }
+      if (tries < 40) setTimeout(tryHook, 250);
+    };
+    tryHook();
+  }
+
+  ready(init);
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch7.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch7.js — Restore Bubble Opacity + Read Receipts in Customization
+ * =====================================================================
+ * Load this LAST, after kfs-patch6.js:
+ *   <script src="/kfs-patch7.js" defer></script>
+ *
+ * PROBLEM
+ * -------
+ * membersaccess.js originally defines window.loadCustomization /
+ * window.applyCustomization with FOUR sections: Chat Wallpaper, Message
+ * Color, Bubble Opacity (sliders for "your" / "received" bubbles), and
+ * Privacy (Read Receipts on/off toggle).
+ *
+ * kfs-patch4.js (loaded after membersaccess.js) REPLACES both of those
+ * globals wholesale to add an "App Background" section and a nicer
+ * gradient builder. Its replacement only re-implements Chat Wallpaper,
+ * App Background, and Message Bubble Color — Bubble Opacity and Read
+ * Receipts were dropped in that rewrite, which is why they're missing
+ * from the live panel even though the base file still has all the CSS
+ * (.cust-opacity-row, .cust-slider, .cust-switch, etc.) for them.
+ *
+ * FIX
+ * ---
+ * Rather than re-editing kfs-patch4.js (and risking another silent
+ * regression next time someone patches the panel again), this file wraps
+ * whatever loadCustomization/applyCustomization currently exist at the
+ * time it runs and appends the two missing sections after them. It reuses
+ * the exact same localStorage keys and markup/classes the original
+ * membersaccess.js used, so nothing about existing saved preferences
+ * changes for people who already had this working before patch4.
+ */
+
+(function () {
+  'use strict';
+
+  const OPACITY_KEY       = 'kfs-cust-bubble-opacity';   // { mine: 0-1, theirs: 0-1 }
+  const READ_RECEIPTS_KEY = 'kfs-cust-read-receipts';    // true/false, default true
+
+  function _load(key) {
+    try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+  }
+  function _save(key, val) {
+    try {
+      val === null ? localStorage.removeItem(key) : localStorage.setItem(key, JSON.stringify(val));
+      return true;
+    } catch { return false; }
+  }
+
+  function _readReceiptsEnabled() {
+    const v = _load(READ_RECEIPTS_KEY);
+    return v === null ? true : !!v;
+  }
+  window._kfsReadReceiptsEnabled = _readReceiptsEnabled;
+
+  // ── Apply --bubble-mine-opacity / --bubble-theirs-opacity directly ─────
+  // IMPORTANT: this does NOT go through window.applyCustomization. Earlier
+  // versions of this patch wrapped window.applyCustomization once and
+  // relied on that wrapper staying in place — but kfs-patch4.js can (and,
+  // in practice, does) reassign window.applyCustomization again later,
+  // silently dropping our wrapper and leaving the opacity CSS vars frozen
+  // even though the slider still saves the right value to localStorage.
+  // Setting the vars ourselves, independent of whatever applyCustomization
+  // currently is, means the slider works no matter what patch4 does or
+  // when it does it.
+  function _applyOpacityVars() {
+    const op = _load(OPACITY_KEY);
+    document.documentElement.style.setProperty('--bubble-mine-opacity', String(op?.mine ?? 1));
+    document.documentElement.style.setProperty('--bubble-theirs-opacity', String(op?.theirs ?? 1));
+  }
+
+  // Still nice to have: if window.applyCustomization exists, wrap it too so
+  // opacity stays correct through its own re-renders. But this is now a
+  // bonus, not the mechanism the slider depends on — and we re-check on
+  // every poll tick (not just once) so a later patch4 reassignment gets
+  // caught instead of silently winning.
+  function wrapApplyCustomization() {
+    if (typeof window.applyCustomization !== 'function') return false;
+    if (window.applyCustomization.__kfsOpacityWrapped) return true;
+    const orig = window.applyCustomization;
+    const wrapped = function () {
+      const ret = orig.apply(this, arguments);
+      _applyOpacityVars();
+      return ret;
+    };
+    wrapped.__kfsOpacityWrapped = true;
+    window.applyCustomization = wrapped;
+    return true;
+  }
+
+  let _opacityContentEl = null;
+
+  function _renderOpacitySection() {
+    const section = _opacityContentEl;
+    if (!section) return;
+    const op = _load(OPACITY_KEY) || { mine: 1, theirs: 1 };
+    const mineVal = op.mine ?? 1, theirsVal = op.theirs ?? 1;
+    section.innerHTML = `
+      <div class="cust-opacity-row">
+        <span class="cust-opacity-label">Your bubbles</span>
+        <input type="range" class="cust-slider" id="cust-opacity-mine" min="0.3" max="1" step="0.05" value="${mineVal}">
+        <span class="cust-opacity-value" id="cust-opacity-mine-val">${Math.round(mineVal * 100)}%</span>
+      </div>
+      <div class="cust-opacity-row">
+        <span class="cust-opacity-label">Received bubbles</span>
+        <input type="range" class="cust-slider" id="cust-opacity-theirs" min="0.3" max="1" step="0.05" value="${theirsVal}">
+        <span class="cust-opacity-value" id="cust-opacity-theirs-val">${Math.round(theirsVal * 100)}%</span>
+      </div>
+      <div class="cust-hint">Make chat bubbles more see-through. Applies to both DMs and group chats on this device.</div>`;
+
+    const mineInput   = section.querySelector('#cust-opacity-mine');
+    const theirsInput = section.querySelector('#cust-opacity-theirs');
+    const mineValEl   = section.querySelector('#cust-opacity-mine-val');
+    const theirsValEl = section.querySelector('#cust-opacity-theirs-val');
+
+    mineInput?.addEventListener('input', () => {
+      const cur = _load(OPACITY_KEY) || { mine: 1, theirs: 1 };
+      cur.mine = parseFloat(mineInput.value);
+      _save(OPACITY_KEY, cur);
+      mineValEl.textContent = `${Math.round(cur.mine * 100)}%`;
+      _applyOpacityVars();
+      window.applyCustomization?.();
+      _updatePreviewOpacity();
+    });
+    theirsInput?.addEventListener('input', () => {
+      const cur = _load(OPACITY_KEY) || { mine: 1, theirs: 1 };
+      cur.theirs = parseFloat(theirsInput.value);
+      _save(OPACITY_KEY, cur);
+      theirsValEl.textContent = `${Math.round(cur.theirs * 100)}%`;
+      _applyOpacityVars();
+      window.applyCustomization?.();
+      _updatePreviewOpacity();
+    });
+  }
+
+  function _updatePreviewOpacity() {
+    const op = _load(OPACITY_KEY) || { mine: 1, theirs: 1 };
+    const mineBubble = document.getElementById('cust-preview-mine-bubble');
+    if (mineBubble) mineBubble.style.setProperty('--preview-mine-opacity', String(op.mine ?? 1));
+    const theirsBubble = document.querySelector('#cust-preview-chat .cust-preview-bubble.theirs');
+    if (theirsBubble) theirsBubble.style.setProperty('--preview-theirs-opacity', String(op.theirs ?? 1));
+  }
+
+  let _receiptsContentEl = null;
+
+  function _renderReadReceiptsSection() {
+    const section = _receiptsContentEl;
+    if (!section) return;
+    const on = _readReceiptsEnabled();
+    section.innerHTML = `
+      <div class="cust-switch-row">
+        <div class="cust-switch-text">
+          <span class="cust-switch-title">Read Receipts</span>
+          <span class="cust-switch-desc">Show the blue "Seen" double-tick on messages you've sent, on this device.</span>
+        </div>
+        <label class="cust-switch">
+          <input type="checkbox" id="cust-read-receipts-toggle" ${on ? 'checked' : ''}>
+          <span class="cust-switch-track"></span>
+        </label>
+      </div>`;
+    section.querySelector('#cust-read-receipts-toggle')?.addEventListener('change', (e) => {
+      _save(READ_RECEIPTS_KEY, !!e.target.checked);
+      // Re-render any ticks already on screen immediately, from data already
+      // held locally — no need to wait for the next server poll.
+      try {
+        const msgs = (typeof DM !== 'undefined' && DM?.msgs) ? DM.msgs : [];
+        msgs.forEach(msg => {
+          const metaRow = document.querySelector(`.dm-meta[data-meta-for="${msg.id}"]`);
+          const oldTick = metaRow?.querySelector('.dm-ticks');
+          if (oldTick && typeof _dmTickSpanHTML === 'function') oldTick.outerHTML = _dmTickSpanHTML(msg);
+        });
+      } catch { /* non-fatal */ }
+    });
+  }
+
+  // Injects the two missing cards into #cust-root, matching the visual
+  // style of the cards kfs-patch4.js already builds (dark card, 12px
+  // radius, small "Reset" link top-right for the opacity one).
+  function _injectSections() {
+    const root = document.getElementById('cust-root');
+    if (!root) return;
+
+    const resetAllBtn = document.getElementById('cust-reset-all-btn');
+
+    const opacityCard = document.createElement('div');
+    opacityCard.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 18px;margin-bottom:16px';
+    opacityCard.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#f5f5f5;letter-spacing:-.01em">Bubble Opacity</div>
+        <button id="cust-opacity-reset-btn" style="background:transparent;border:none;font-size:11px;font-weight:600;color:#666;cursor:pointer;padding:0">Reset</button>
+      </div>
+      <div id="cust-opacity-content"></div>`;
+
+    const privacyCard = document.createElement('div');
+    privacyCard.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 18px;margin-bottom:16px';
+    privacyCard.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:#f5f5f5;letter-spacing:-.01em;margin-bottom:12px">Privacy</div>
+      <div id="cust-read-receipts-content"></div>`;
+
+    if (resetAllBtn) {
+      root.insertBefore(opacityCard, resetAllBtn);
+      root.insertBefore(privacyCard, resetAllBtn);
+    } else {
+      root.appendChild(opacityCard);
+      root.appendChild(privacyCard);
+    }
+
+    _opacityContentEl  = opacityCard.querySelector('#cust-opacity-content');
+    _receiptsContentEl = privacyCard.querySelector('#cust-read-receipts-content');
+
+    _renderOpacitySection();
+    _renderReadReceiptsSection();
+    _updatePreviewOpacity();
+
+    opacityCard.querySelector('#cust-opacity-reset-btn')?.addEventListener('click', () => {
+      _save(OPACITY_KEY, null);
+      _applyOpacityVars();
+      window.applyCustomization?.();
+      _renderOpacitySection();
+      _updatePreviewOpacity();
+    });
+
+    // If a "Reset All" button exists (added by kfs-patch4.js), make it also
+    // reset opacity back to 100/100 so it really does reset everything.
+    if (resetAllBtn && !resetAllBtn.__kfsOpacityHooked) {
+      resetAllBtn.__kfsOpacityHooked = true;
+      resetAllBtn.addEventListener('click', () => {
+        _save(OPACITY_KEY, null);
+        _applyOpacityVars();
+        window.applyCustomization?.();
+        _renderOpacitySection();
+        _updatePreviewOpacity();
+      });
+    }
+  }
+
+  function wrapLoadCustomization() {
+    if (typeof window.loadCustomization !== 'function') return false;
+    if (window.loadCustomization.__kfsOpacityWrapped) return true;
+    const orig = window.loadCustomization;
+    const wrapped = function () {
+      const ret = orig.apply(this, arguments);
+      _injectSections();
+      return ret;
+    };
+    wrapped.__kfsOpacityWrapped = true;
+    window.loadCustomization = wrapped;
+    return true;
+  }
+
+  function init() {
+    // Apply immediately so the vars exist even before any customization
+    // script has loaded/run, and again on every tick below — cheap, and it
+    // means the bubble opacity can never end up depending on winning a
+    // one-shot race against kfs-patch4.js.
+    _applyOpacityVars();
+
+    // Poll for readiness rather than assuming exact script order —
+    // loadCustomization/applyCustomization are defined in membersaccess.js
+    // and then possibly re-defined by kfs-patch4.js. We keep polling
+    // indefinitely (not just until the first success) specifically because
+    // kfs-patch4.js has been observed to reassign window.applyCustomization
+    // again after our first wrap succeeds, which would otherwise silently
+    // undo it. Re-applying the vars ourselves every tick means that even if
+    // the wrap gets clobbered, the slider still visibly works.
+    let tries = 0;
+    const tryWrap = () => {
+      tries++;
+      wrapApplyCustomization();
+      wrapLoadCustomization();
+      _applyOpacityVars();
+      // Fast polling for the first ~10s to catch initial script load order,
+      // then settle into a slow background check so a late/dynamic
+      // reassignment of applyCustomization still gets caught eventually.
+      setTimeout(tryWrap, tries < 40 ? 250 : 2000);
+    };
+    tryWrap();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+//------------------------------------------------------------------------------
+// ── formerly kfs-patch8.js ──
+//------------------------------------------------------------------------------
+/**
+ * kfs-patch8.js — Tour polish, emoji → SVG cleanup, dedup timestamps,
+ *                 merge My Movies + My Works, fix broken "Request Edit"
+ * =====================================================================
+ * Load this LAST, after kfs-patch7.js:
+ *   <script src="/kfs-patch7.js" defer></script>
+ *   <script src="/kfs-patch8.js" defer></script>
+ *
+ * Fixes five separate things, each in its own IIFE below so they can be
+ * lifted out independently later if needed:
+ *
+ *   1. #work-edit-modal-overlay never actually appeared. The element has
+ *      an inline `style="display:none"` in the HTML, and openWorkEditModal()
+ *      only ever did `overlay.classList.add('open')`. Inline styles beat
+ *      stylesheet rules regardless of selector specificity, so the
+ *      `#work-edit-modal-overlay.open { display:flex }` rule never won —
+ *      the "Request Edit" button on My Works looked completely dead. Fix:
+ *      drive it with the same direct style.display toggle every other
+ *      modal in this app already uses (see openCollabEditModal).
+ *
+ *   2. Tour spotlight/card alignment. The highlight ring used a fixed
+ *      16px border-radius and fixed 8px padding regardless of what it was
+ *      actually wrapping, so pill buttons (Submit Movie, Suggestion tab)
+ *      got a spotlight that didn't match their real shape, and the card
+ *      sat close enough to visually collide with it. Fix: read the
+ *      target's own computed border-radius so the ring hugs its actual
+ *      shape, and widen/clean up the clearance so the card never overlaps
+ *      the ring.
+ *
+ *   3. Emoji cleanup. Swaps decorative/system emoji (🔒 📷 🎬 🤝 💡 🚨 💬 👋
+ *      🔗 🗑 📌) for small inline Apple-style line-icon SVGs, sitewide,
+ *      via a text-node sweep with a MutationObserver for anything rendered
+ *      later. Scoped to a whitelist of exact/known system strings — it
+ *      does NOT touch the reaction emoji picker (❤ 😂 😮 😢 😡 👏 🔥 😍 👍
+ *      🙂 😊), since those are the actual reaction choices, not chrome.
+ *      Also strips emoji out of the tour copy itself (KFS_TOUR_STEPS is
+ *      rendered via textContent, so it needs a plain-text fix rather than
+ *      an icon swap).
+ *
+ *   4. Duplicate "time ago" on feed posts. Both regular and collab post
+ *      cards render swRelTime(p.created_at) twice — once in the header
+ *      next to the author name, once again at the very bottom of the
+ *      card. Fix: hide the redundant bottom one.
+ *
+ *   5. Merge My Movies + My Works into one panel with an in-panel tab
+ *      switcher ("Submissions" / "My Works"), since they're two flavors
+ *      of the same "manage your film credits with KFS" task. Removes the
+ *      separate "My Works" sidebar/settings-sheet entry, keeps the "My
+ *      Movies" entry pointing at both.
+ */
+
+(function () {
+  'use strict';
+
+  function ready(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  function pollFor(check, run, { tries = 40, delay = 250 } = {}) {
+    let n = 0;
+    (function tick() {
+      n++;
+      if (check()) { run(); return; }
+      if (n < tries) setTimeout(tick, delay);
+    })();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     1. FIX: "Request Edit" modal never opened
+     ═══════════════════════════════════════════════════════════════════ */
+  (function fixWorkEditModal() {
+    function patch() {
+      if (typeof window.openWorkEditModal !== 'function' || window.openWorkEditModal.__kfsPatched) return false;
+
+      const origOpen = window.openWorkEditModal;
+      window.openWorkEditModal = function (movieId, movieTitle) {
+        const ret = origOpen(movieId, movieTitle);
+        const overlay = document.getElementById('work-edit-modal-overlay');
+        if (overlay) overlay.style.display = 'flex'; // the fix — classList alone never worked
+        return ret;
+      };
+      window.openWorkEditModal.__kfsPatched = true;
+
+      const origClose = window.closeWorkEditModal;
+      if (typeof origClose === 'function' && !origClose.__kfsPatched) {
+        window.closeWorkEditModal = function () {
+          const ret = origClose();
+          const overlay = document.getElementById('work-edit-modal-overlay');
+          if (overlay) overlay.style.display = 'none';
+          return ret;
+        };
+        window.closeWorkEditModal.__kfsPatched = true;
+      }
+      return true;
+    }
+    pollFor(() => typeof window.openWorkEditModal === 'function', patch);
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     2. FIX: tour spotlight/card alignment
+     ═══════════════════════════════════════════════════════════════════ */
+  (function fixTourAlignment() {
+    function patch() {
+      if (typeof window._tourPositionSpot !== 'function' || window._tourPositionSpot.__kfsPatched) return false;
+      if (typeof window.KFS_TOUR_STEPS === 'undefined' || typeof window._tourStep === 'undefined') return false;
+
+      window._tourPositionSpot = function () {
+        const step = window.KFS_TOUR_STEPS[window._tourStep];
+        const spot = document.getElementById('kfs-tour-spot');
+        const card = document.getElementById('kfs-tour-card');
+        const backdrop = document.getElementById('kfs-tour-backdrop');
+        if (!spot || !card || !step) return;
+
+        const target = typeof window._tourFindTarget === 'function' ? window._tourFindTarget(step.selectors) : null;
+        if (!target) {
+          if (step.selectors) {
+            if (window._tourStep < window.KFS_TOUR_STEPS.length - 1) { window._tourStep++; window._tourRenderStep(); }
+            else if (typeof window._tourEnd === 'function') window._tourEnd();
+            return;
+          }
+          // No spotlight this step (a centered/intro-style card) — the
+          // backdrop is the only thing dimming the page, so keep its tint.
+          if (backdrop) backdrop.style.background = 'rgba(0,0,0,0.6)';
+          spot.style.display = 'none';
+          card.style.top = '50%';
+          card.style.left = '50%';
+          card.style.transform = 'translate(-50%, -50%)';
+          return;
+        }
+
+        // The spot's own box-shadow (0 0 0 9999px) already paints the dim
+        // everywhere outside the ring. Leaving the backdrop's tint on top
+        // stacked a second dark layer over the highlighted target itself,
+        // which is why it looked washed-out gray instead of its real color.
+        if (backdrop) backdrop.style.background = 'transparent';
+
+        const r = target.getBoundingClientRect();
+
+        // Hug the target's real shape instead of a fixed 16px ring, so a
+        // pill button (Submit Movie, the Suggestion tab) gets a pill
+        // highlight and a rectangular panel gets a rectangular one.
+        const targetRadius = parseFloat(getComputedStyle(target).borderRadius) || 0;
+        const pad = 6;
+        const isPill = targetRadius >= r.height / 2 - 1;
+        const spotRadius = isPill ? (r.height / 2 + pad) : Math.max(targetRadius + pad, 10);
+
+        spot.style.display = 'block';
+        spot.style.borderRadius = `${spotRadius}px`;
+        spot.style.top = `${r.top - pad}px`;
+        spot.style.left = `${r.left - pad}px`;
+        spot.style.width = `${r.width + pad * 2}px`;
+        spot.style.height = `${r.height + pad * 2}px`;
+
+        // Card sizing/placement — clamped so it can never overlap the ring
+        // and never run off any edge of the viewport.
+        const GAP = 20;
+        const cardW = Math.min(320, window.innerWidth - 32);
+        card.style.width = `${cardW}px`;
+        card.style.transform = 'none';
+
+        const spotTop    = r.top - pad;
+        const spotBottom = r.bottom + pad;
+        const roomBelow = window.innerHeight - spotBottom;
+        const roomAbove = spotTop;
+
+        // Rough card height estimate for placement decisions (measured
+        // after layout below, but we need a first guess to pick a side).
+        const estH = card.offsetHeight || 180;
+
+        let top;
+        if (roomBelow >= estH + GAP) {
+          top = spotBottom + GAP;
+        } else if (roomAbove >= estH + GAP) {
+          top = spotTop - GAP - estH;
+        } else {
+          // Neither side has room (small viewport / big target) — pin to
+          // whichever side has more space and let it clip the padding
+          // rather than overlap the spotlight ring.
+          top = roomBelow >= roomAbove
+            ? Math.max(spotBottom + GAP, window.innerHeight - estH - 16)
+            : Math.min(spotTop - GAP - estH, 16);
+        }
+        top = Math.max(16, Math.min(top, window.innerHeight - 16 - estH));
+
+        let left = Math.min(Math.max(r.left, 16), window.innerWidth - cardW - 16);
+
+        card.style.left = `${left}px`;
+        card.style.top = `${top}px`;
+      };
+      window._tourPositionSpot.__kfsPatched = true;
+      return true;
+    }
+    pollFor(() => typeof window._tourPositionSpot === 'function', patch);
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     3. Emoji → clean SVG icons
+     ═══════════════════════════════════════════════════════════════════ */
+  (function emojiCleanup() {
+    const ICONS = {
+      lock: '<path d="M6 11V7a6 6 0 0 1 12 0v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="4" y="11" width="16" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="2"/>',
+      camera: '<path d="M22 18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3.2l1.6-2.2h6.4L16.8 7H20a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+      film: '<rect x="2.5" y="3.5" width="19" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="7.5" y1="3.5" x2="7.5" y2="20.5" stroke="currentColor" stroke-width="1.8"/><line x1="16.5" y1="3.5" x2="16.5" y2="20.5" stroke="currentColor" stroke-width="1.8"/><line x1="2.5" y1="8.5" x2="7.5" y2="8.5" stroke="currentColor" stroke-width="1.8"/><line x1="2.5" y1="15.5" x2="7.5" y2="15.5" stroke="currentColor" stroke-width="1.8"/><line x1="16.5" y1="8.5" x2="21.5" y2="8.5" stroke="currentColor" stroke-width="1.8"/><line x1="16.5" y1="15.5" x2="21.5" y2="15.5" stroke="currentColor" stroke-width="1.8"/>',
+      people: '<circle cx="8.5" cy="7.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2 20c0-3.6 2.9-6.3 6.5-6.3S15 16.4 15 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="8.5" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.3 13.9c2.7.4 4.7 2.7 4.7 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+      lightbulb: '<path d="M9 18.5h6M10 21.5h4M12 2.5a6.7 6.7 0 0 0-3.8 12.2c.6.45.9 1.1.9 1.9v.4h5.8v-.4c0-.8.3-1.45.9-1.9A6.7 6.7 0 0 0 12 2.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+      alert: '<path d="M10.3 4.1L2.1 18.3a1.9 1.9 0 0 0 1.7 2.9h16.4a1.9 1.9 0 0 0 1.7-2.9L13.7 4.1a1.9 1.9 0 0 0-3.4 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9.5" x2="12" y2="13.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.7" r="0.9" fill="currentColor" stroke="none"/>',
+      message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+      wave: '<path d="M7 12.3V6.2a1.8 1.8 0 0 1 3.6 0V11M10.6 10.6V4.8a1.8 1.8 0 0 1 3.6 0v6M14.2 11V6.4a1.8 1.8 0 0 1 3.6 0v8.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.4 13.6v-1.9a1.8 1.8 0 0 1 3.6 0v2.4a7.3 7.3 0 0 0 7.3 7.3h.6a7.3 7.3 0 0 0 7.3-7.3v-3.6a1.8 1.8 0 0 0-3.6 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+      link: '<path d="M9.5 12.8a4.3 4.3 0 0 0 6.5.5l2.6-2.6a4.3 4.3 0 0 0-6.1-6.1L11 6.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14.5 11.2a4.3 4.3 0 0 0-6.5-.5L5.4 13.3a4.3 4.3 0 0 0 6.1 6.1L13 17.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+      trash: '<polyline points="3.5 6 5.5 6 20.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.3 6l-.9 13a2 2 0 0 1-2 1.9H8.6a2 2 0 0 1-2-1.9L5.7 6m3.5 0V3.8a1.8 1.8 0 0 1 1.8-1.8h2a1.8 1.8 0 0 1 1.8 1.8V6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+      pin: '<path d="M12 2.3a5.3 5.3 0 0 0-5.3 5.3c0 3.9 5.3 11.1 5.3 11.1s5.3-7.2 5.3-11.1A5.3 5.3 0 0 0 12 2.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="7.6" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    };
+
+    function iconSpan(name, size = 14) {
+      const span = document.createElement('span');
+      span.className = 'kfs-icon-swap';
+      span.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;vertical-align:-2px;flex:none;`;
+      span.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24">${ICONS[name]}</svg>`;
+      return span;
+    }
+
+    // Curated whitelist only — never touches the reaction-emoji picker
+    // (❤ 😂 😮 😢 😡 👏 🔥 😍 👍 🙂 😊), which isn't in this list at all.
+    const RULES = [
+      { test: t => t.startsWith('🔒'), icon: 'lock', stripLen: 2 },
+      { test: t => t === '📷 Photo', icon: 'camera', stripLen: 2 },
+      { test: t => t === '🎬', icon: 'film', stripLen: 2 },
+      { test: t => t === '🤝', icon: 'people', stripLen: 2 },
+      { test: t => t === '💡 Suggestion', icon: 'lightbulb', stripLen: 2 },
+      { test: t => t === '🚨 Grievance', icon: 'alert', stripLen: 2 },
+      { test: t => t === '💬 General', icon: 'message', stripLen: 2 },
+      { test: t => t === '💬', icon: 'message', stripLen: 2 },
+      { test: t => t === '👋', icon: 'wave', stripLen: 2 },
+      { test: t => t.startsWith('🔗 Copy link'), icon: 'link', stripLen: 2 },
+      { test: t => t.startsWith('🗑 Delete post'), icon: 'trash', stripLen: 2 },
+      { test: t => t.startsWith('📌'), icon: 'pin', stripLen: 2 },
+    ];
+
+    const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT']);
+
+    function shouldSkipContainer(el) {
+      while (el) {
+        if (SKIP_TAGS.has(el.tagName)) return true;
+        if (el.isContentEditable) return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+
+    function processTextNode(node) {
+      const raw = node.nodeValue;
+      if (!raw || raw.indexOf('\u200b') !== -1) return; // already processed marker
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+      const rule = RULES.find(r => r.test(trimmed));
+      if (!rule) return;
+      const parent = node.parentNode;
+      if (!parent || shouldSkipContainer(parent)) return;
+
+      const leadWs = raw.match(/^\s*/)[0];
+      const trailWs = raw.match(/\s*$/)[0];
+      const rest = trimmed.slice(rule.stripLen).replace(/^\s+/, '');
+
+      const frag = document.createDocumentFragment();
+      if (leadWs) frag.appendChild(document.createTextNode(leadWs));
+      frag.appendChild(iconSpan(rule.icon));
+      frag.appendChild(document.createTextNode((rest ? ' ' + rest : '') + trailWs || '\u200b'));
+      parent.replaceChild(frag, node);
+    }
+
+    function sweep(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(n) {
+          if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+          return shouldSkipContainer(n.parentNode) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      const nodes = [];
+      let n;
+      while ((n = walker.nextNode())) nodes.push(n);
+      nodes.forEach(processTextNode);
+    }
+
+    let pending = false;
+    function scheduleSweep(root) {
+      if (pending) return;
+      pending = true;
+      setTimeout(() => { pending = false; sweep(root); }, 150);
+    }
+
+    function stripEmojiFromTourCopy() {
+      if (typeof window.KFS_TOUR_STEPS === 'undefined' || !Array.isArray(window.KFS_TOUR_STEPS)) return false;
+      const EMOJI_RE = /\s?[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]\s?/gu;
+      window.KFS_TOUR_STEPS.forEach(step => {
+        if (step.title) step.title = step.title.replace(EMOJI_RE, ' ').replace(/\s+/g, ' ').trim();
+        if (step.body)  step.body  = step.body.replace(EMOJI_RE, ' ').replace(/\s+/g, ' ').trim();
+      });
+      return true;
+    }
+
+    ready(() => {
+      sweep(document.body);
+      const mo = new MutationObserver(() => scheduleSweep(document.body));
+      mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+      pollFor(() => typeof window.KFS_TOUR_STEPS !== 'undefined', stripEmojiFromTourCopy);
+    });
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     4. Hide the duplicate "time ago" at the bottom of feed post cards
+     ═══════════════════════════════════════════════════════════════════ */
+  (function dedupTimestamps() {
+    const style = document.createElement('style');
+    style.textContent = `.ig-post-timestamp { display: none !important; }`;
+    document.head.appendChild(style);
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     5. Merge "My Movies" + "My Works" into one panel with tabs
+     ═══════════════════════════════════════════════════════════════════ */
+  (function mergeMoviesAndWorks() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .nav-item[data-panel="works"],
+      .settings-sheet-item[onclick="settingsSheetGo('works')"] { display: none !important; }
+      .kfs-mw-tabs { display:flex; gap:6px; margin: 2px 0 20px; }
+    `;
+    document.head.appendChild(style);
+
+    function setTrailingText(el, oldText, newText) {
+      if (!el) return;
+      for (const node of el.childNodes) {
+        if (node.nodeType === 3 && node.nodeValue.trim() === oldText) {
+          node.nodeValue = newText;
+          return;
+        }
+      }
+    }
+
+    function patch() {
+      const moviesPanel = document.getElementById('panel-movies');
+      const worksPanel = document.getElementById('panel-works');
+      if (!moviesPanel || !worksPanel || moviesPanel.dataset.kfsMerged) return false;
+      moviesPanel.dataset.kfsMerged = '1';
+
+      const titleEl = moviesPanel.querySelector('.panel-title');
+      const subEl = moviesPanel.querySelector('.panel-sub');
+      if (titleEl) titleEl.textContent = 'My Movies & Works';
+      if (subEl) subEl.textContent = 'Submit films for admin review, or request an edit to your existing credits.';
+
+      // Everything in #panel-movies besides the title/sub becomes the
+      // "Submissions" tab content.
+      const submissionsTab = document.createElement('div');
+      submissionsTab.id = 'kfs-mw-submissions-tab';
+      Array.from(moviesPanel.children).forEach(child => {
+        if (child !== titleEl && child !== subEl) submissionsTab.appendChild(child);
+      });
+      moviesPanel.appendChild(submissionsTab);
+
+      // #panel-works's content (minus its own title/sub) becomes the
+      // "My Works" tab content, hidden by default.
+      const worksTab = document.createElement('div');
+      worksTab.id = 'kfs-mw-works-tab';
+      worksTab.style.display = 'none';
+      Array.from(worksPanel.children).forEach(child => {
+        if (!child.classList.contains('panel-title') && !child.classList.contains('panel-sub')) {
+          worksTab.appendChild(child);
+        }
+      });
+      worksPanel.remove();
+      moviesPanel.appendChild(worksTab);
+
+      // Tab switcher — reuses the app's existing pill-tab visual style.
+      const tabs = document.createElement('div');
+      tabs.className = 'kfs-mw-tabs';
+      tabs.innerHTML = `
+        <button type="button" class="strand-sort-pill kfs-mw-tab active" data-tab="submissions">Submissions</button>
+        <button type="button" class="strand-sort-pill kfs-mw-tab" data-tab="works">My Works</button>`;
+      subEl ? subEl.insertAdjacentElement('afterend', tabs) : moviesPanel.insertBefore(tabs, submissionsTab);
+
+      tabs.querySelectorAll('.kfs-mw-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          tabs.querySelectorAll('.kfs-mw-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const showWorks = btn.dataset.tab === 'works';
+          submissionsTab.style.display = showWorks ? 'none' : '';
+          worksTab.style.display = showWorks ? '' : 'none';
+          if (showWorks && typeof window.loadMyWorks === 'function') window.loadMyWorks();
+          else if (typeof window.loadMovies === 'function') window.loadMovies();
+        });
+      });
+
+      // Rename the remaining sidebar/settings-sheet "My Movies" entries.
+      setTrailingText(document.querySelector('.nav-item[data-panel="movies"]'), 'My Movies', 'My Movies & Works');
+      const sheetLabel = document.querySelector(".settings-sheet-item[onclick=\"settingsSheetGo('movies')\"] .settings-sheet-label");
+      if (sheetLabel) sheetLabel.textContent = 'My Movies & Works';
+
+      // Old deep links / the tour still ask for panel "works" — send them
+      // to the merged panel with the My Works tab pre-selected instead of
+      // silently landing on nothing.
+      if (typeof window.switchPanel === 'function' && !window.switchPanel.__kfsMergePatched) {
+        const origSwitchPanel = window.switchPanel;
+        window.switchPanel = function (el) {
+          if (el && el.dataset && el.dataset.panel === 'works') {
+            const moviesNav = document.querySelector('.nav-item[data-panel="movies"]') || { dataset: { panel: 'movies' } };
+            const ret = origSwitchPanel(moviesNav);
+            tabs.querySelector('.kfs-mw-tab[data-tab="works"]')?.click();
+            return ret;
+          }
+          return origSwitchPanel(el);
+        };
+        window.switchPanel.__kfsMergePatched = true;
+      }
+
+      // Keep the tour's "My Movies" step and closing summary accurate now
+      // that My Works lives in the same place.
+      if (Array.isArray(window.KFS_TOUR_STEPS)) {
+        window.KFS_TOUR_STEPS.forEach(step => {
+          if (step.title === 'My Movies — submissions & change requests') {
+            step.title = 'My Movies & Works';
+            step.body = "Submit a finished film here for admin review and publication on /films, or switch to the My Works tab to request an edit to a credit you already have. Every submission gets a status: Pending, Approved, Rejected, or Changes Requested — if you see Changes Requested, click Edit on that same submission to update and resubmit.";
+          }
+          if (step.body && step.body.includes('My Movies, My Works')) {
+            step.body = step.body.replace('My Movies, My Works,', 'My Movies & Works,');
+          }
+        });
+      }
+      return true;
+    }
+
+    ready(() => pollFor(() => document.getElementById('panel-movies') && document.getElementById('panel-works'), patch));
+  })();
+
+})();
+
+
+// ── 8. MOBILE NAV PILL — FINAL DESIGN PASS ──────────────────────────────────
+// Earlier patches (section 7 above, and the "kfs-patch3" Instagram overhaul
+// merged in further down) both touch .bottom-tab-bar/.btb-item with
+// !important and fight each other — one wants a flat 52px Instagram-style
+// bar, the original HTML wants a floating pill. This block is injected last
+// (last <style> tag wins ties at equal specificity) and is the single
+// source of truth for the mobile nav from here on: compact by default,
+// icon-only, a soft glow so it lifts off the page, and a spring "grow"
+// bounce on tap instead of the old shrink — closer to how iOS/Instagram's
+// own tab bar feels.
+(function injectFinalMobileNavStyles() {
+  const style = document.createElement('style');
+  style.id = 'kfs-final-mobile-nav';
+  style.textContent = `
+    @media (max-width: 768px) and (pointer: coarse) {
+      /* ── The pill itself: compact, centered, glowing ─────────────────── */
+      .bottom-tab-bar {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: max(14px, calc(env(safe-area-inset-bottom) + 8px)) !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        min-width: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        height: 54px !important;
+        padding: 0 10px !important;
+        margin: 0 !important;
+        border: 1px solid rgba(255,255,255,0.10) !important;
+        border-radius: 999px !important;
+        background: rgba(18,18,20,0.72) !important;
+        backdrop-filter: blur(28px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+        box-shadow:
+          0 10px 30px rgba(0,0,0,0.55),
+          0 2px 10px rgba(0,0,0,0.4),
+          0 0 24px rgba(10,132,255,0.10),
+          inset 0 1px 0 rgba(255,255,255,0.07) !important;
+        transition: box-shadow 0.25s var(--spring-soft, ease), transform 0.25s var(--spring-soft, ease) !important;
+        z-index: 200 !important;
+      }
+
+      /* ── Items: icon-only, compact, evenly spaced ────────────────────── */
+      .btb-item {
+        flex: 0 0 auto !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 2px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        color: rgba(255,255,255,0.42) !important;
+        transition: color 0.15s ease, background 0.15s ease,
+                    transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
+      }
+      .btb-item svg {
+        width: 21px !important;
+        height: 21px !important;
+        stroke-width: 2 !important;
+        flex-shrink: 0 !important;
+        transition: transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
+      }
+      .btb-item.active {
+        color: #ffffff !important;
+        background: rgba(255,255,255,0.08) !important;
+      }
+      .btb-item.active svg { stroke-width: 2.3 !important; }
+
+      /* Tap feedback: GROW instead of shrink — the "otherwise it's smaller,
+         enlarges when touched" behaviour that was asked for. */
+      .btb-item:active {
+        transform: scale(1.14) !important;
+        background: rgba(255,255,255,0.12) !important;
+        transition: transform 0.12s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
+      }
+
+      /* Text labels removed — icon-only nav */
+      .bottom-tab-bar .btb-label {
+        display: none !important;
+      }
+
+      /* ── Centre post button — its own accent circle, same rhythm ─────── */
+      .btb-post-item {
+        width: auto !important;
+        height: auto !important;
+        background: none !important;
+        margin: 0 4px !important;
+      }
+      .btb-post-btn {
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 999px !important;
+        background: var(--accent, #0a84ff) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 14px rgba(10,132,255,0.45) !important;
+        transition: transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
+      }
+      .btb-post-btn svg {
+        width: 18px !important;
+        height: 18px !important;
+        stroke: #fff !important;
+      }
+      .btb-post-item:active .btb-post-btn {
+        transform: scale(1.14) !important;
+      }
+
+      /* ── Unread badge: sit tight on the icon, not floating in space ──── */
+      #dm-btb-badge {
+        top: 2px !important;
+        right: 2px !important;
+      }
+
+      /* ── Mobile notification FAB, docked top-right near the composer/+
+             button so it reads as part of the same top action row ──────── */
+      .btb-notif-fab {
+        position: fixed;
+        top: max(14px, env(safe-area-inset-top));
+        right: 16px;
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(18,18,20,0.72);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255,255,255,0.85);
+        z-index: 199;
+        transition: transform 0.28s var(--spring, cubic-bezier(0.34,1.56,0.64,1)), background 0.15s ease;
+      }
+      .btb-notif-fab svg { width: 18px; height: 18px; }
+      .btb-notif-fab:active { transform: scale(1.14); }
+      .btb-notif-fab.active {
+        background: rgba(10,132,255,0.22);
+        color: #fff;
+      }
+      .btb-notif-fab .notif-badge {
+        top: -2px !important;
+        left: auto !important;
+        right: -2px !important;
+      }
+
+      /* Hide the mobile FAB whenever a full-screen chat window has slid in,
+         or while the auth screen is showing — same rule the pill nav uses. */
+      body.auth-active .btb-notif-fab { display: none !important; }
+      body:has(#dm-window.dm-slide-in) .btb-notif-fab,
+      body:has(#gc-window.dm-slide-in) .btb-notif-fab {
+        display: none !important;
+      }
+    }
+
+    /* Never show the notif FAB on desktop */
+    @media (min-width: 769px) {
+      .btb-notif-fab { display: none !important; }
+    }
+  `;
+  document.head.appendChild(style);
+})();

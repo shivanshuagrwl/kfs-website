@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Social Strand — KFS</title>
     <meta name="robots" content="noindex,nofollow" />
     <style>
@@ -9288,6 +9291,32 @@
       </div>
     </div>
 
+    <!-- ── Mobile top-right notification button ───────────────────────────
+         Desktop keeps the bell inside the sidebar footer; on mobile that
+         sidebar is hidden, so this floating twin gives mobile the same
+         access, docked near the top of the screen. Shares the same
+         open/close/read logic — see toggleNotifPanel() — with its own
+         badge id kept in sync from loadNotificationBadge(). -->
+    <button
+      class="btb-notif-fab"
+      id="btb-notif-fab"
+      aria-label="Notifications"
+      onclick="toggleNotifPanel()"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+      <span class="notif-badge" id="notif-badge-mobile"></span>
+    </button>
+
     <!-- ── Bottom Tab Bar (mobile Instagram-style) ───────────────────────── -->
     <nav
       class="bottom-tab-bar"
@@ -10709,17 +10738,12 @@
     </style>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Twemoji removed: Apple emoji images loaded via _emojify() in membersaccess.js -->
-    <script src="/membersaccess.js" defer></script>
-
-    <script src="/kfs-patch2.js" defer></script>
-    <script src="/kfs-patch3.js" defer></script>
-    <script src="/kfs-patch4.js" defer></script>
-    <script src="/kfs-strand-live-patch.js" defer></script>
-    <script src="/kfs-patch5.js" defer></script>
-    <script src="/kfs-patch6.js?v=4" defer></script>
-    <script src="/kfs-patch7.js" defer></script>
-    <script src="/kfs-patch8.js" defer></script>
-    <script src="/kfs-debug-trace.js" defer></script>
+    <!-- kfs-patch2.js through kfs-patch8.js and kfs-strand-live-patch.js are
+         merged into membersaccess.js as of 2026-07 (see the "PATCH STACK
+         MERGED INTO CORE FILE" banner near the end of that file). Load order
+         is preserved inside the single file. kfs-debug-trace.js was dev-only
+         console instrumentation and was dropped, not merged. -->
+    <script src="/membersaccess.js?v=merge1" defer></script>
 
     <!-- ── KFS Patch v2.0 — Instagram-style improvements ──────────────────── -->
     <style>
