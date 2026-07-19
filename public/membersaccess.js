@@ -2499,6 +2499,14 @@ function _kfsCloseTopNavLayer(type) {
     case 'notif':
       if (typeof window.closeNotifPanel === 'function') window.closeNotifPanel();
       break;
+    case 'panel-away': {
+      // Back button while on a non-Feed panel (Network, Messages, Settings…)
+      // returns to Feed instead of leaving the site entirely — matches the
+      // usual "home tab first" back behaviour of mobile apps.
+      const studioNav = document.querySelector('[data-panel="studio"]');
+      if (studioNav && typeof window.switchPanel === 'function') window.switchPanel(studioNav);
+      break;
+    }
   }
 }
 
@@ -16402,8 +16410,8 @@ function _tourEnd() {
         align-items: center !important;
         justify-content: center !important;
         gap: 10px !important;
-        height: 58px !important;
-        padding: 0 16px !important;
+        height: 61px !important;
+        padding: 0 20px !important;
         margin: 0 !important;
         border: 1px solid rgba(255,255,255,0.16) !important;
         border-radius: 999px !important;
@@ -16589,4 +16597,38 @@ function _tourEnd() {
   document.addEventListener('mousedown', addPressed);
   document.addEventListener('mouseup', removePressed);
   document.addEventListener('mouseleave', removePressed);
+})();
+
+// ── Mobile back button: don't skip straight out to the original site ──────
+// Tapping into Network / Messages / Settings etc. from the Feed home panel
+// used to leave zero history trace, so the very next hardware/browser back
+// press exited the app entirely instead of returning to Feed first — the
+// same "back leaves the whole page" problem _kfsPushNavState already solves
+// for chats/settings-sheet/notifications, just not yet for panel switches.
+(function installPanelBackNav() {
+  const HOME_PANEL = 'studio';
+  let awayPushed = false;
+
+  function currentPanelName() {
+    const active = document.querySelector('.panel.active');
+    return active ? active.id.replace(/^panel-/, '') : null;
+  }
+
+  const _prevSwitchPanel = window.switchPanel;
+  if (typeof _prevSwitchPanel !== 'function' || _prevSwitchPanel.__kfsBackNavPatched) return;
+
+  window.switchPanel = function (el) {
+    const prevPanel = currentPanelName();
+    const nextPanel = el && el.dataset ? el.dataset.panel : null;
+    _prevSwitchPanel(el);
+    if (!nextPanel) return;
+    if (nextPanel !== HOME_PANEL && !awayPushed && (prevPanel === HOME_PANEL || prevPanel === null)) {
+      awayPushed = true;
+      _kfsPushNavState('panel-away');
+    } else if (nextPanel === HOME_PANEL && awayPushed) {
+      awayPushed = false;
+      _kfsPopNavState('panel-away');
+    }
+  };
+  window.switchPanel.__kfsBackNavPatched = true;
 })();
