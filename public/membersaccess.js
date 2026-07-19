@@ -1804,6 +1804,16 @@ function switchPanel(el) {
   document.querySelectorAll(`.nav-item[data-panel="${panel}"]`).forEach(n => n.classList.add('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $id('panel-' + panel)?.classList.add('active');
+  // Any navigation away means the person is done with the settings menu —
+  // collapse the desktop dropdown and close the mobile bottom sheet so they
+  // don't stay stuck open over whatever's now on screen. Safe to call even
+  // when already closed (both are no-ops in that case).
+  if ($id('sidebar-settings-items')?.classList.contains('open')) {
+    toggleSidebarSettings();
+  }
+  if ($id('settings-sheet')?.classList.contains('open')) {
+    closeSettingsSheet();
+  }
   if (panel === 'security') loadSecurity();
   if (panel === 'activity') loadActivity();
   if (panel === 'movies')   loadMovies();
@@ -2707,6 +2717,36 @@ async function markAllNotifsRead() {
   const badge = $id('notif-badge');
   if (badge) { badge.textContent = ''; badge.classList.remove('visible'); }
   try { await api('POST', '/api/member/notifications/read-all'); } catch(e) {}
+}
+
+// Wipe every notification from the list — distinct from markAllNotifsRead,
+// which only clears the unread dot. Optimistically empties the UI first so
+// it feels instant, then tells the server; if the request fails we reload
+// from the server so the UI doesn't lie about what's actually stored.
+async function clearAllNotifications() {
+  if (_notifCache.size === 0) return; // nothing to clear
+  const list = $id('notif-list');
+  const prevHtml = list ? list.innerHTML : '';
+  _notifCache = new Map();
+  if (list) {
+    list.innerHTML = `
+      <div class="notif-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div class="notif-empty-title">All caught up</div>
+        <div class="notif-empty-sub">No new notifications</div>
+      </div>`;
+  }
+  const badge = $id('notif-badge');
+  const badgeMobile = $id('notif-badge-mobile');
+  [badge, badgeMobile].forEach(b => { if (b) { b.textContent = ''; b.classList.remove('visible'); } });
+  try {
+    await api('DELETE', '/api/member/notifications/clear-all');
+  } catch (e) {
+    // Server call failed — reload the real state instead of leaving a UI
+    // that claims everything's cleared when it might not be.
+    if (list) list.innerHTML = prevHtml;
+    loadNotifications();
+  }
 }
 
 // Close panel on Escape
