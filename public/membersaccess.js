@@ -2502,9 +2502,16 @@ function _kfsCloseTopNavLayer(type) {
     case 'panel-away': {
       // Back button while on a non-Feed panel (Network, Messages, Settings…)
       // returns to Feed instead of leaving the site entirely — matches the
-      // usual "home tab first" back behaviour of mobile apps.
-      const studioNav = document.querySelector('[data-panel="studio"]');
-      if (studioNav && typeof window.switchPanel === 'function') window.switchPanel(studioNav);
+      // usual "home tab first" back behaviour of mobile apps. Goes through
+      // btbSwitch (not switchPanel directly) so the bottom pill's active
+      // dot moves back to the Feed icon too, not just the panel content.
+      const studioBtb = document.querySelector('.btb-item[data-panel="studio"]');
+      if (studioBtb && typeof window.btbSwitch === 'function') {
+        window.btbSwitch(studioBtb);
+      } else {
+        const studioNav = document.querySelector('[data-panel="studio"]');
+        if (studioNav && typeof window.switchPanel === 'function') window.switchPanel(studioNav);
+      }
       break;
     }
   }
@@ -2758,6 +2765,9 @@ async function clearAllNotifications() {
     // that claims everything's cleared when it might not be.
     if (list) list.innerHTML = prevHtml;
     loadNotifications();
+    if (typeof swAlert === 'function') {
+      swAlert(e?.message || 'Could not clear notifications. Please try again.', { title: 'Error' });
+    }
   }
 }
 
@@ -16409,9 +16419,9 @@ function _tourEnd() {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 10px !important;
+        gap: 13px !important;
         height: 61px !important;
-        padding: 0 20px !important;
+        padding: 0 24px !important;
         margin: 0 !important;
         border: 1px solid rgba(255,255,255,0.16) !important;
         border-radius: 999px !important;
