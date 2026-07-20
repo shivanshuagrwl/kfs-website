@@ -3202,20 +3202,239 @@ function swRelTime(ts) {
   return new Date(ts).toLocaleDateString('en-GB', { month:'short', year:'numeric' });
 }
 
+// ── VideoLinkPreview ─────────────────────────────────────────────────────
+// Single reusable "paste a video URL → rich preview" component, used in
+// three places: the post composer (instant preview while typing), the main
+// feed (published post), and shared-post cards inside DMs. It:
+//   - detects the provider (YouTube/Vimeo) and validates the URL
+//   - fetches oEmbed metadata (title, thumbnail, provider name, aspect
+//     ratio) from the provider's own public oEmbed endpoint
+//   - renders a thumbnail-first card and only builds the actual (heavy)
+//     iframe once the user clicks play — never eagerly on load
+//   - lazy-loads even the metadata fetch, via IntersectionObserver, so a
+//     feed full of video posts doesn't fire a wall of requests on load
+//
+// Nothing here touches uploads/storage — this only ever points at a URL
+// the provider already hosts.
+const VideoLinkPreview = (function () {
+  const PROVIDERS = {
+    youtube: {
+      label: 'YouTube',
+      test: /(?:youtube\.com|youtu\.be)/i,
+      idRe: /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i,
+      oembed: url => `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      thumb: id => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      embed: id => `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&autoplay=1`,
+    },
+    vimeo: {
+      label: 'Vimeo',
+      test: /vimeo\.com/i,
+      idRe: /vimeo\.com\/(?:.*\/)?(\d+)/i,
+      oembed: url => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`,
+      thumb: () => null, // no predictable pattern — oEmbed is the only source
+      embed: id => `https://player.vimeo.com/video/${id}?title=0&byline=0&portrait=0&autoplay=1`,
+    },
+  };
+
+  function _looksLikeUrl(str) {
+    try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; }
+    catch { return false; }
+  }
+
+  /** Detect provider + video id from a URL. Returns null if unsupported. */
+  function parse(url, forcedProvider) {
+    if (!url || !_looksLikeUrl(url)) return null;
+    const keys = Object.keys(PROVIDERS);
+    const order = (forcedProvider && PROVIDERS[forcedProvider])
+      ? [forcedProvider, ...keys.filter(k => k !== forcedProvider)]
+      : keys;
+    for (const key of order) {
+      const p = PROVIDERS[key];
+      if (!p.test.test(url)) continue;
+      const m = url.match(p.idRe);
+      if (!m || !m[1]) continue;
+      return { provider: key, providerLabel: p.label, id: m[1], url };
+    }
+    return null;
+  }
+
+  /** Validate a pasted URL for the composer. Returns {ok, error, ...hit}. */
+  function validate(url) {
+    const trimmed = (url || '').trim();
+    if (!trimmed) return { ok: false, error: null }; // empty field — no error shown yet
+    if (!_looksLikeUrl(trimmed)) return { ok: false, error: "That doesn't look like a valid URL." };
+    const hit = parse(trimmed);
+    if (!hit) return { ok: false, error: 'Only YouTube and Vimeo links are supported right now.' };
+    return { ok: true, ...hit };
+  }
+
+  const _metaCache = new Map();
+  /** Fetch oEmbed metadata (title/thumbnail/aspect ratio). Cached per URL. */
+  function fetchMeta(hit) {
+    if (!hit) return Promise.resolve(null);
+    if (_metaCache.has(hit.url)) return _metaCache.get(hit.url);
+    const p = PROVIDERS[hit.provider];
+    const req = fetch(p.oembed(hit.url))
+      .then(r => { if (!r.ok) throw new Error('oembed failed'); return r.json(); })
+      .then(data => ({
+        title: data.title || 'Video',
+        thumbnail: data.thumbnail_url || p.thumb(hit.id) || null,
+        providerLabel: data.provider_name || p.label,
+        aspect: (data.width && data.height) ? (data.height / data.width) * 100 : 56.25,
+        embeddable: true,
+      }))
+      .catch(() => ({
+        title: 'Video',
+        thumbnail: p.thumb(hit.id) || null,
+        providerLabel: p.label,
+        aspect: 56.25,
+        // Metadata fetch failing doesn't mean the embed itself is broken —
+        // still let the user try to play it inline.
+        embeddable: true,
+      }));
+    _metaCache.set(hit.url, req);
+    return req;
+  }
+
+  const _icon = {
+    play: `<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M8 5v14l11-7z"/></svg>`,
+    external: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+  };
+  const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /**
+   * Static placeholder markup for a video URL — safe to drop into an
+   * innerHTML template string (feed cards, DM cards). `hydrate()` scans the
+   * DOM afterwards and turns each one into the real interactive card.
+   */
+  function placeholder(url, provider) {
+    if (!url) return '';
+    return `<div class="video-link-preview" data-vlp-url="${_esc(url)}" data-vlp-provider="${_esc(provider || '')}" data-vlp-pending="1"></div>`;
+  }
+
+  function _renderInvalid(el) {
+    el.classList.add('vlp-invalid');
+    el.innerHTML = `
+      <div class="vlp-media vlp-media-fallback">${_icon.external}</div>
+      <div class="vlp-info">
+        <div class="vlp-title">Video unavailable</div>
+        <div class="vlp-sub">This link couldn't be loaded</div>
+      </div>`;
+  }
+
+  function _buildCard(el, hit, meta) {
+    el.classList.add('vlp-ready');
+    el.style.setProperty('--vlp-aspect', `${meta.aspect}%`);
+    const thumbHtml = meta.thumbnail
+      ? `<img class="vlp-thumb" src="${_esc(meta.thumbnail)}" alt="" loading="lazy">`
+      : `<div class="vlp-thumb vlp-thumb-fallback">${_icon.external}</div>`;
+    el.innerHTML = `
+      <div class="vlp-media">
+        ${thumbHtml}
+        ${meta.embeddable ? `<button type="button" class="vlp-play-btn" aria-label="Play video">${_icon.play}</button>` : ''}
+        <span class="vlp-provider-badge">${_esc(meta.providerLabel)}</span>
+      </div>
+      <div class="vlp-info">
+        <div class="vlp-title">${_esc(meta.title)}</div>
+        <div class="vlp-sub">${_esc(meta.providerLabel)}</div>
+      </div>`;
+
+    const media = el.querySelector('.vlp-media');
+    const openOriginal = () => window.open(hit.url, '_blank', 'noopener,noreferrer');
+    if (meta.embeddable) {
+      media.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const embedUrl = PROVIDERS[hit.provider].embed(hit.id);
+        media.innerHTML = `<iframe src="${_esc(embedUrl)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+        el.classList.add('vlp-playing');
+      });
+    } else {
+      el.addEventListener('click', (e) => { e.stopPropagation(); openOriginal(); });
+    }
+  }
+
+  function _hydrateOne(el) {
+    if (!el || el.dataset.vlpInit) return;
+    el.dataset.vlpInit = '1';
+    delete el.dataset.vlpPending;
+    const hit = parse(el.dataset.vlpUrl, el.dataset.vlpProvider || undefined);
+    if (!hit) { _renderInvalid(el); return; }
+    el.classList.add('vlp-loading');
+    fetchMeta(hit).then(meta => {
+      el.classList.remove('vlp-loading');
+      if (!meta) { _renderInvalid(el); return; }
+      _buildCard(el, hit, meta);
+    });
+  }
+
+  let _io = null;
+  function _observer() {
+    if (_io || !('IntersectionObserver' in window)) return _io;
+    _io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        _hydrateOne(entry.target);
+        _io.unobserve(entry.target);
+      });
+    }, { rootMargin: '200px' });
+    return _io;
+  }
+
+  function _wire(el) {
+    const io = _observer();
+    if (io) io.observe(el);
+    else _hydrateOne(el); // no IO support — hydrate immediately rather than never
+  }
+
+  /** Scan `root` (element or document) for pending placeholders and wire
+   *  them up for lazy hydration. Safe to call repeatedly / on any subtree. */
+  function hydrate(root) {
+    const scope = root || document;
+    if (scope.nodeType === 1 && scope.matches?.('.video-link-preview[data-vlp-pending]')) _wire(scope);
+    scope.querySelectorAll?.('.video-link-preview[data-vlp-pending]').forEach(_wire);
+  }
+
+  /** Hydrate a specific element right away, bypassing the IntersectionObserver —
+   *  used by the composer's instant preview, which is already on-screen. */
+  function mountNow(el, url, provider) {
+    if (!el) return;
+    el.dataset.vlpUrl = url;
+    el.dataset.vlpProvider = provider || '';
+    delete el.dataset.vlpInit;
+    el.className = el.className.replace(/\bvlp-(ready|invalid|playing|loading)\b/g, '').trim();
+    _hydrateOne(el);
+  }
+
+  return { parse, validate, fetchMeta, placeholder, hydrate, mountNow, PROVIDERS };
+})();
+
+// Keep older call sites working — delegates to the shared provider table
+// above instead of duplicating the YouTube/Vimeo regex logic.
 function swVideoEmbedUrl(url, provider) {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (provider === 'youtube' || u.hostname.includes('youtube') || u.hostname.includes('youtu.be')) {
-      const vid = u.searchParams.get('v') || u.pathname.split('/').pop();
-      return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1`;
-    }
-    if (provider === 'vimeo' || u.hostname.includes('vimeo')) {
-      return `https://player.vimeo.com/video/${u.pathname.split('/').pop()}?title=0&byline=0&portrait=0`;
-    }
-  } catch {}
-  return null;
+  const hit = VideoLinkPreview.parse(url, provider);
+  return hit ? VideoLinkPreview.PROVIDERS[hit.provider].embed(hit.id) : null;
 }
+
+// Auto-hydrate any video-link-preview placeholders inserted anywhere in the
+// document (feed pagination/likes re-render, DM history load, composer
+// preview) — same MutationObserver-retrofit pattern used elsewhere in this
+// file for content that's injected via innerHTML template strings.
+(function watchVideoLinkPreviews() {
+  function _start() {
+    VideoLinkPreview.hydrate(document);
+    const mo = new MutationObserver(muts => {
+      for (const m of muts) {
+        m.addedNodes && m.addedNodes.forEach(node => {
+          if (node.nodeType !== 1) return;
+          VideoLinkPreview.hydrate(node);
+        });
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _start);
+  else _start();
+})();
 
 function swAvatar(name, photo, size = 32) {
   // server stores field as `photo`, not `photo_url`
@@ -3360,12 +3579,13 @@ function swFeedCard(p) {
   if (hasImage) {
     mediaHtml = `<div class="ig-post-img-wrap"><img src="${swEsc(p.cover_image)}" alt="" class="ig-post-img" loading="lazy"></div>`;
   } else if (hasVideo) {
-    const embedUrl = swVideoEmbedUrl(p.video_url, p.video_provider);
-    if (embedUrl) {
-      mediaHtml = `<div class="ig-post-img-wrap" style="position:relative;padding-bottom:56.25%;background:#000;"><iframe src="${swEsc(embedUrl)}" allowfullscreen loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe></div>`;
-    } else {
-      mediaHtml = `<div class="ig-post-img-wrap" style="aspect-ratio:16/9;background:#111;display:flex;align-items:center;justify-content:center;">${SW_ICONS.play}</div>`;
-    }
+    // Placeholder only — VideoLinkPreview.hydrate() (wired via a
+    // document-level MutationObserver) lazy-loads the thumbnail/title once
+    // this card actually scrolls into view, and only builds the iframe on
+    // click. `ig-post-img-wrap` gives it the exact same frame/corners as an
+    // image post; `vlp-compact` hides the title/provider text block here
+    // since the post's own caption line (below) already carries that.
+    mediaHtml = `<div class="ig-post-img-wrap video-link-preview vlp-compact" data-vlp-url="${swEsc(p.video_url)}" data-vlp-provider="${swEsc(p.video_provider || '')}" data-vlp-pending="1"></div>`;
   } else if (postType === 'text' && p.description) {
     // Text-only post — X/Twitter style: just inline text, no dark box
     mediaHtml = `<div class="ig-post-text-bg"><div class="ig-post-text-content">${swEsc(p.description)}</div></div>`;
@@ -3669,15 +3889,15 @@ async function swOpenDetail(projectId) {
     const collabs  = (p.project_collaborators||[]).map(c=>c.members).filter(Boolean);
     const myRxn    = SW.myReactions.get(p.id) || p.my_reaction || null;
     SW.myReactions.set(p.id, myRxn);
-    const embedUrl = swVideoEmbedUrl(p.video_url, p.video_provider);
+    const hasVideoDetail = !!p.video_url;
 
     // Fetch comments
     const cResp = await api('GET', `/api/member/studio/projects/${projectId}/comments`);
     const comments = cResp.comments || cResp || [];
 
     body.innerHTML = `
-      ${p.cover_image && !embedUrl ? `<img src="${swEsc(p.cover_image)}" alt="${swEsc(p.title)}" class="studio-detail-cover">` : ''}
-      ${embedUrl ? `<div class="studio-detail-video-wrap"><iframe src="${swEsc(embedUrl)}" allowfullscreen loading="lazy"></iframe></div>` : ''}
+      ${p.cover_image && !hasVideoDetail ? `<img src="${swEsc(p.cover_image)}" alt="${swEsc(p.title)}" class="studio-detail-cover">` : ''}
+      ${hasVideoDetail ? `<div class="studio-detail-video-wrap">${VideoLinkPreview.placeholder(p.video_url, p.video_provider)}</div>` : ''}
       <div class="studio-detail-content">
         <div class="studio-detail-author-row">
           <span style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openMemberProfile('${swEsc(p.member_id)}')">
@@ -4086,6 +4306,63 @@ function swSetPostType(type) {
   ['image','text','video'].forEach(t => {
     const s = $id(`section-${t}`); if (s) s.style.display = t === type ? 'flex' : 'none';
   });
+  if (type === 'video') _swWireVideoUrlPreview();
+}
+
+// Live "paste a video URL → instant preview" behavior for the composer.
+// Detects the provider, validates the link, and renders the same
+// VideoLinkPreview card used in the feed/DMs — debounced so we're not
+// hammering the oEmbed endpoint on every keystroke.
+let _swVideoPreviewTimer = null;
+function _swWireVideoUrlPreview() {
+  const input = $id('sw-video-url');
+  if (!input || input.dataset.vlpWired) return;
+  input.dataset.vlpWired = '1';
+
+  const wrap = $id('sw-video-preview-wrap');
+  const previewEl = $id('sw-video-preview');
+  const errEl = $id('sw-video-url-error');
+  const providerField = $id('sw-video-provider');
+  const removeBtn = $id('sw-video-remove-btn');
+
+  const runCheck = () => {
+    const url = input.value.trim();
+    if (!url) {
+      wrap.style.display = 'none';
+      errEl.style.display = 'none';
+      if (providerField) providerField.value = '';
+      return;
+    }
+    const result = VideoLinkPreview.validate(url);
+    if (!result.ok) {
+      wrap.style.display = 'none';
+      if (providerField) providerField.value = '';
+      if (result.error) { errEl.textContent = result.error; errEl.style.display = ''; }
+      else errEl.style.display = 'none';
+      return;
+    }
+    errEl.style.display = 'none';
+    wrap.style.display = '';
+    if (providerField) providerField.value = result.provider;
+    VideoLinkPreview.mountNow(previewEl, url, result.provider);
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(_swVideoPreviewTimer);
+    _swVideoPreviewTimer = setTimeout(runCheck, 350);
+  });
+
+  removeBtn?.addEventListener('click', () => {
+    input.value = '';
+    if (providerField) providerField.value = '';
+    wrap.style.display = 'none';
+    errEl.style.display = 'none';
+    input.focus();
+  });
+
+  // If a URL is already filled in (editing an existing video post), show
+  // its preview immediately rather than waiting for the next keystroke.
+  if (input.value.trim()) runCheck();
 }
 
 function _fillComposerAuthor() {
@@ -4148,6 +4425,7 @@ async function swOpenEditModal(projectId) {
     if (f('sw-video-caption')) { f('sw-video-caption').value = captionVal; $id('sw-video-caption-count').textContent = captionVal.length; }
     if (f('sw-video-url'))     f('sw-video-url').value = p.video_url || '';
     if (f('sw-video-provider')) f('sw-video-provider').value = p.video_provider || '';
+    if (hasVideo && f('sw-video-url')) f('sw-video-url').dispatchEvent(new Event('input'));
     // Cover image preview
     if (p.cover_image) {
       const img = $id('sw-cover-img'); if (img) { img.src = p.cover_image; img.style.display = ''; }
@@ -4171,6 +4449,8 @@ function swResetPostModal() {
     const el = $id(id); if (el) el.textContent = '0';
   });
   const p = $id('sw-video-provider'); if (p) p.value = '';
+  const vwrap = $id('sw-video-preview-wrap'); if (vwrap) vwrap.style.display = 'none';
+  const verr = $id('sw-video-url-error'); if (verr) verr.style.display = 'none';
   const cv = $id('sw-cover'); if (cv) cv.value = '';
   const img = $id('sw-cover-img'); if (img) { img.src = ''; img.style.display = 'none'; }
   const ph = $id('composer-img-placeholder'); if (ph) ph.style.display = '';
@@ -4190,7 +4470,10 @@ async function swSubmitPost() {
   else desc = ($id('sw-caption')?.value || '').trim();
 
   const videoUrl = ($id('sw-video-url')?.value || '').trim();
-  const provider = $id('sw-video-provider')?.value || '';
+  let provider = $id('sw-video-provider')?.value || '';
+  if (type === 'video' && videoUrl && !provider) {
+    provider = VideoLinkPreview.parse(videoUrl)?.provider || '';
+  }
   const domain   = ($id('sw-domain')?.value || '').trim();
   const tagsRaw  = ($id('sw-tags')?.value || '').trim();
   const coverFile = $id('sw-cover')?.files?.[0] || null;
@@ -4201,6 +4484,10 @@ async function swSubmitPost() {
   // Validation: at least something must be present
   if (type === 'text' && !desc) { showErr('Write something to post.'); return; }
   if (type === 'video' && !videoUrl) { showErr('Add a YouTube or Vimeo URL.'); return; }
+  if (type === 'video' && videoUrl) {
+    const check = VideoLinkPreview.validate(videoUrl);
+    if (!check.ok) { showErr(check.error || 'Enter a valid YouTube or Vimeo URL.'); return; }
+  }
   if (type === 'image' && !coverFile && !$id('sw-cover-img')?.src) { showErr('Pick a photo to post.'); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = SW.editingProjectId ? 'Saving…' : 'Posting…'; }
@@ -5679,6 +5966,21 @@ function _attachStrandPreviewToBubble(bubble, bodyText, standalone) {
           <div class="strand-preview-sub">It may have been removed</div>
         </div>
       `;
+      return;
+    }
+    if (data.video_url) {
+      // Same VideoLinkPreview component as the feed — thumbnail, title,
+      // provider, inline playback if embeddable, otherwise opens the
+      // original video. Rendered as its own vertical card (see
+      // .strand-preview-card-video) rather than the small row layout used
+      // for image/text posts, since a 16:9 thumbnail needs the width.
+      card.classList.add('strand-preview-card-video');
+      card.innerHTML = VideoLinkPreview.placeholder(data.video_url, data.video_provider);
+      VideoLinkPreview.hydrate(card);
+      const meta = document.createElement('div');
+      meta.className = 'strand-preview-video-meta';
+      meta.textContent = `Shared by ${data.author_name || 'a KFS member'}${data.domain ? ` · ${data.domain}` : ''}`;
+      card.appendChild(meta);
       return;
     }
     card.innerHTML = `

@@ -213,7 +213,7 @@
           /* Measured from the reference screenshot: on a black page the
              pill fill reads as flat ~rgb(25,25,25) and the top edge shows
              a barely-there brighter rim fading toward the bottom. */
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.07);
           backdrop-filter: blur(32px) saturate(180%);
           -webkit-backdrop-filter: blur(32px) saturate(180%);
           /* Border pulled way down — reference shows only the faintest
@@ -232,10 +232,10 @@
           /* Equal-rhythm spacing: left/right padding matches the gap
              between items exactly, so edge→icon spacing reads identical
              to icon→icon spacing (no per-item margin hacks needed). */
-          padding: 0 18px;
+          padding: 0 27px;
           justify-content: center;
           align-items: center;
-          gap: 18px;
+          gap: 27px;
           box-sizing: border-box;
         }
         .btb-item {
@@ -5740,6 +5740,44 @@
                     placeholder="YouTube or Vimeo URL"
                     class="composer-input"
                   />
+                  <!-- Inline validation message — shown only when the pasted
+                       link isn't empty but isn't a supported/valid URL. -->
+                  <div
+                    class="composer-video-error"
+                    id="sw-video-url-error"
+                    style="display: none"
+                  ></div>
+                  <!-- Instant rich preview (thumbnail/title/provider), built
+                       by the shared VideoLinkPreview component. Wrapped so a
+                       remove/replace control can float over it without the
+                       component needing to know about the composer. -->
+                  <div
+                    class="composer-video-preview-wrap"
+                    id="sw-video-preview-wrap"
+                    style="display: none"
+                  >
+                    <button
+                      type="button"
+                      class="composer-video-remove-btn"
+                      id="sw-video-remove-btn"
+                      title="Remove link"
+                      aria-label="Remove link"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                    <div class="video-link-preview" id="sw-video-preview"></div>
+                  </div>
                   <textarea
                     id="sw-video-caption"
                     class="composer-caption"
@@ -6948,15 +6986,7 @@
             }
             .studio-detail-video-wrap {
               position: relative;
-              padding-bottom: 56.25%;
               background: #000;
-            }
-            .studio-detail-video-wrap iframe {
-              position: absolute;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              border: none;
             }
             .studio-detail-content {
               padding: 24px 28px 28px;
@@ -9092,6 +9122,32 @@
               margin-top: 5px;
             }
 
+            /* Shared post in DMs whose Social Strand post is a video —
+               reuses the exact same VideoLinkPreview component as the feed,
+               just laid out as a vertical card like the other shared-post
+               cards above (see strand-preview-standalone) instead of the
+               small inline row used for image/text posts. */
+            .strand-preview-card.strand-preview-card-video {
+              flex-direction: column;
+              align-items: stretch;
+              gap: 0;
+              margin-top: 6px;
+              padding: 0;
+              width: 240px;
+              max-width: 240px;
+              border-radius: 16px;
+              overflow: hidden;
+            }
+            .strand-preview-card-video .video-link-preview {
+              border-radius: 0;
+            }
+            .strand-preview-video-meta {
+              padding: 8px 12px 10px;
+              font-size: 11px;
+              color: rgba(255, 255, 255, 0.45);
+              border-top: 1px solid rgba(255, 255, 255, 0.06);
+            }
+
             /* ── Typing indicator ── */
             .dm-typing-indicator {
               display: none;
@@ -10928,6 +10984,164 @@
         text-align: right;
         margin-top: 4px;
         margin-bottom: 6px;
+      }
+
+      /* ── VideoLinkPreview — reusable card used in the composer, the feed,
+         and shared-post cards in DMs (see VideoLinkPreview in
+         membersaccess.js). Keep this the single source of styling for all
+         three so they can never visually drift apart. ─────────────────── */
+      .video-link-preview {
+        position: relative;
+        width: 100%;
+        background: #121214;
+        cursor: pointer;
+      }
+      .video-link-preview .vlp-media {
+        position: relative;
+        width: 100%;
+        padding-bottom: var(--vlp-aspect, 56.25%);
+        background: #000;
+        overflow: hidden;
+      }
+      .video-link-preview .vlp-thumb,
+      .video-link-preview .vlp-media iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border: none;
+        display: block;
+      }
+      .video-link-preview .vlp-thumb-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        background: linear-gradient(135deg, #1c1c1e, #2c2c2e);
+      }
+      .video-link-preview .vlp-play-btn {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1.5px solid rgba(255, 255, 255, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+        transition:
+          transform 0.15s var(--spring, ease),
+          background 0.15s;
+      }
+      .video-link-preview .vlp-play-btn:hover {
+        background: rgba(0, 0, 0, 0.72);
+        transform: translate(-50%, -50%) scale(1.06);
+      }
+      .video-link-preview .vlp-provider-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 20px;
+        letter-spacing: 0.02em;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+      }
+      .video-link-preview.vlp-playing .vlp-play-btn,
+      .video-link-preview.vlp-playing .vlp-provider-badge {
+        display: none;
+      }
+      .video-link-preview .vlp-info {
+        padding: 10px 12px;
+      }
+      .video-link-preview .vlp-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .video-link-preview .vlp-sub {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      /* Compact modifier (feed cards) — thumbnail only, no title/provider
+         text block, since the post's own caption line already covers it. */
+      .video-link-preview.vlp-compact .vlp-info {
+        display: none;
+      }
+      /* Loading shimmer while metadata is being fetched */
+      .video-link-preview.vlp-loading .vlp-media {
+        background: linear-gradient(90deg, #141414, #1e1e1e, #141414);
+        background-size: 200% 100%;
+        animation: vlp-shimmer 1.4s ease-in-out infinite;
+      }
+      @keyframes vlp-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      /* Unsupported/broken link state */
+      .video-link-preview.vlp-invalid {
+        cursor: default;
+      }
+      .video-link-preview.vlp-invalid .vlp-media-fallback {
+        padding-bottom: 0;
+        height: 90px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        background: #161616;
+      }
+
+      /* ── Composer: video URL error + instant preview ─────────────────── */
+      .composer-video-error {
+        margin-top: 8px;
+        font-size: 12.5px;
+        color: var(--danger);
+      }
+      .composer-video-preview-wrap {
+        position: relative;
+        margin-top: 12px;
+      }
+      .composer-video-preview-wrap .video-link-preview {
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      .composer-video-remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.65);
+        border: none;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .composer-video-remove-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
       }
 
       /* Divider */
