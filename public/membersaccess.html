@@ -210,15 +210,21 @@
           max-width: 94vw;
           height: 64px;
           z-index: 200;
-          background: rgba(0, 0, 0, 0.88);
-          backdrop-filter: blur(32px) saturate(200%);
-          -webkit-backdrop-filter: blur(32px) saturate(200%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          /* Measured from the reference screenshot: on a black page the
+             pill fill reads as flat ~rgb(24,24,24) and the top edge shows
+             a visibly brighter rim (~rgb(37,37,37)) fading toward the
+             bottom. The old rgba(0,0,0,0.88) fill was invisible against
+             a black page — this uses a light overlay instead so the pill
+             actually shows up the way the reference does. */
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(32px) saturate(180%);
+          -webkit-backdrop-filter: blur(32px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 32px;
           box-shadow:
             0 8px 32px rgba(0, 0, 0, 0.7),
             0 2px 8px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            inset 0 1px 0 rgba(255, 255, 255, 0.16);
           /* Horizontal padding only — the fixed height above does the
              vertical centering, so there's no vertical padding fighting it.
              Left/right padding pulled in so the first/last icons sit close
@@ -257,7 +263,9 @@
           cursor: pointer;
           padding: 0;
           border-radius: 100px;
-          color: rgba(255, 255, 255, 0.55);
+          /* Reference measurement: inactive icon strokes peak around
+             rgb(230,230,230), not a dim gray — brightened from 0.55. */
+          color: rgba(255, 255, 255, 0.85);
           transition:
             color 0.14s ease,
             background 0.14s ease,
