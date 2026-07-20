@@ -3203,16 +3203,25 @@ function swRelTime(ts) {
 }
 
 // ── VideoLinkPreview ─────────────────────────────────────────────────────
-// Single reusable "paste a video URL → rich preview" component, used in
-// three places: the post composer (instant preview while typing), the main
-// feed (published post), and shared-post cards inside DMs. It:
-//   - detects the provider (YouTube/Vimeo) and validates the URL
+// Single reusable "paste a video URL → rich preview" component, used
+// site-wide (mobile + desktop) everywhere a video link can appear: the post
+// composer (instant preview while typing), the main feed, the Social
+// Strand, and shared-post cards inside DMs. It:
+//   - detects the platform (YouTube/Vimeo/Instagram) and validates the URL
 //   - fetches oEmbed metadata (title, thumbnail, provider name, aspect
-//     ratio) from the provider's own public oEmbed endpoint
-//   - renders a thumbnail-first card and only builds the actual (heavy)
-//     iframe once the user clicks play — never eagerly on load
-//   - lazy-loads even the metadata fetch, via IntersectionObserver, so a
-//     feed full of video posts doesn't fire a wall of requests on load
+//     ratio) from the provider's own public oEmbed endpoint, where one
+//     exists, to build a rich preview card
+//   - renders a thumbnail-first card with a centered play button and a
+//     small platform badge
+//   - NEVER embeds a player. There is no iframe anywhere in this component.
+//     Clicking anywhere on the card (thumbnail, play button, title — the
+//     whole card) opens the original video in a new tab on its native
+//     platform. This sidesteps embedding issues entirely (e.g. YouTube's
+//     "Error 153" from restricted embeds) and matches the lightweight
+//     link-preview pattern used by Discord, Reddit, X, Threads, and
+//     LinkedIn.
+//   - lazy-loads the metadata fetch via IntersectionObserver, so a feed
+//     full of video posts doesn't fire a wall of requests on load
 //
 // Nothing here touches uploads/storage — this only ever points at a URL
 // the provider already hosts.
@@ -3223,16 +3232,38 @@ const VideoLinkPreview = (function () {
       test: /(?:youtube\.com|youtu\.be)/i,
       idRe: /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i,
       oembed: url => `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-      thumb: id => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-      embed: id => `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&autoplay=1`,
+      // Highest-quality-first fallback chain. maxresdefault (1280x720) only
+      // exists for videos the uploader provided an HD thumbnail for; when it
+      // 404s the <img> onerror handler in _buildCard steps down this list
+      // automatically, so we always end up with the best thumbnail that
+      // actually exists rather than guessing one resolution and living with
+      // a blurry image.
+      thumbLadder: id => [
+        `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
+        `https://i.ytimg.com/vi/${id}/sddefault.jpg`,
+        `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+      ],
     },
     vimeo: {
       label: 'Vimeo',
       test: /vimeo\.com/i,
       idRe: /vimeo\.com\/(?:.*\/)?(\d+)/i,
-      oembed: url => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`,
-      thumb: () => null, // no predictable pattern — oEmbed is the only source
-      embed: id => `https://player.vimeo.com/video/${id}?title=0&byline=0&portrait=0&autoplay=1`,
+      // width=1280 asks Vimeo's oEmbed for a larger thumbnail_url than the
+      // ~640px default it returns otherwise.
+      oembed: url => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}&width=1280`,
+      thumbLadder: () => null, // no predictable pattern — oEmbed is the only source
+    },
+    instagram: {
+      label: 'Instagram',
+      test: /instagram\.com\/(?:reel|p|tv)\//i,
+      idRe: /instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i,
+      // Instagram's public oEmbed endpoint requires an authenticated Meta
+      // app token and can't be called client-side, so there's no `oembed`
+      // fn here — fetchMeta() below falls back straight to the generic
+      // card (badge + "View on Instagram") instead of a real thumbnail.
+      oembed: null,
+      thumbLadder: () => null,
     },
   };
 
@@ -3264,34 +3295,116 @@ const VideoLinkPreview = (function () {
     if (!trimmed) return { ok: false, error: null }; // empty field — no error shown yet
     if (!_looksLikeUrl(trimmed)) return { ok: false, error: "That doesn't look like a valid URL." };
     const hit = parse(trimmed);
-    if (!hit) return { ok: false, error: 'Only YouTube and Vimeo links are supported right now.' };
+    if (!hit) return { ok: false, error: 'Only YouTube, Vimeo, and Instagram links are supported right now.' };
     return { ok: true, ...hit };
   }
 
+  // ── Metadata caching ──────────────────────────────────────────────────
+  // Two layers: an in-memory Map (instant, covers the current page session
+  // — e.g. scrolling a video out of view and back) and a localStorage-backed
+  // layer with a TTL (covers leaving the feed and coming back later, e.g.
+  // feed → post detail → back, or a fresh page load) so a given video's
+  // metadata/thumbnail is fetched from the provider at most once per TTL
+  // window, not once per visit.
   const _metaCache = new Map();
-  /** Fetch oEmbed metadata (title/thumbnail/aspect ratio). Cached per URL. */
+  const _LS_KEY = 'vlp_meta_cache_v1';
+  const _LS_TTL = 6 * 60 * 60 * 1000; // 6h — long enough to matter, short enough that stale titles/thumbnails self-heal
+  const _LS_MAX_ENTRIES = 300;
+
+  function _lsRead() {
+    try { return JSON.parse(localStorage.getItem(_LS_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function _lsGet(url) {
+    const store = _lsRead();
+    const entry = store[url];
+    if (!entry || (Date.now() - entry.t) > _LS_TTL) return null;
+    return entry.v;
+  }
+  function _lsSet(url, meta) {
+    try {
+      const store = _lsRead();
+      store[url] = { v: meta, t: Date.now() };
+      const keys = Object.keys(store);
+      if (keys.length > _LS_MAX_ENTRIES) {
+        keys.sort((a, b) => store[a].t - store[b].t)
+          .slice(0, keys.length - _LS_MAX_ENTRIES)
+          .forEach(k => delete store[k]);
+      }
+      localStorage.setItem(_LS_KEY, JSON.stringify(store));
+    } catch { /* storage disabled/full — in-memory cache still covers this session */ }
+  }
+
+  function _fmtDuration(totalSeconds) {
+    if (!totalSeconds || totalSeconds <= 0) return null;
+    const s = Math.round(totalSeconds);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const mm = h ? String(m).padStart(2, '0') : String(m);
+    const ss = String(sec).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+
+  function _fallbackMeta(p, hit) {
+    const ladder = p.thumbLadder(hit.id);
+    return {
+      title: p.label === 'Instagram' ? `View on ${p.label}` : 'Video',
+      creator: null,
+      duration: null,
+      thumbnail: ladder ? ladder[0] : null,
+      thumbLadder: ladder,
+      providerLabel: p.label,
+      aspect: 56.25,
+      // "Playable" in the sense that clicking the card opens the video on
+      // its native platform — never means an inline embed.
+      playable: true,
+    };
+  }
+
+  /** Fetch oEmbed metadata (title/creator/thumbnail/duration/aspect ratio).
+   *  Cached in-memory then in localStorage, so a video's metadata is only
+   *  ever actually fetched from the provider once per TTL window. */
   function fetchMeta(hit) {
     if (!hit) return Promise.resolve(null);
     if (_metaCache.has(hit.url)) return _metaCache.get(hit.url);
+
+    const cached = _lsGet(hit.url);
+    if (cached) {
+      const req = Promise.resolve(cached);
+      _metaCache.set(hit.url, req);
+      return req;
+    }
+
     const p = PROVIDERS[hit.provider];
+    const ladder = p.thumbLadder(hit.id);
+    // No public oEmbed for this provider (e.g. Instagram) — skip straight
+    // to the fallback card instead of firing a request we know will fail.
+    if (!p.oembed) {
+      const meta = _fallbackMeta(p, hit);
+      const req = Promise.resolve(meta);
+      _metaCache.set(hit.url, req);
+      _lsSet(hit.url, meta);
+      return req;
+    }
     const req = fetch(p.oembed(hit.url))
       .then(r => { if (!r.ok) throw new Error('oembed failed'); return r.json(); })
-      .then(data => ({
-        title: data.title || 'Video',
-        thumbnail: data.thumbnail_url || p.thumb(hit.id) || null,
-        providerLabel: data.provider_name || p.label,
-        aspect: (data.width && data.height) ? (data.height / data.width) * 100 : 56.25,
-        embeddable: true,
-      }))
-      .catch(() => ({
-        title: 'Video',
-        thumbnail: p.thumb(hit.id) || null,
-        providerLabel: p.label,
-        aspect: 56.25,
-        // Metadata fetch failing doesn't mean the embed itself is broken —
-        // still let the user try to play it inline.
-        embeddable: true,
-      }));
+      .then(data => {
+        const meta = {
+          title: data.title || 'Video',
+          creator: data.author_name || null,
+          duration: _fmtDuration(data.duration),
+          // Prefer our own high-res ladder over oEmbed's (often ~480p)
+          // thumbnail_url when we have one (YouTube); otherwise use
+          // whatever the provider's oEmbed response gives us (Vimeo).
+          thumbnail: ladder ? ladder[0] : (data.thumbnail_url || null),
+          thumbLadder: ladder,
+          providerLabel: data.provider_name || p.label,
+          aspect: (data.width && data.height) ? (data.height / data.width) * 100 : 56.25,
+          playable: true,
+        };
+        _lsSet(hit.url, meta);
+        return meta;
+      })
+      .catch(() => _fallbackMeta(p, hit));
     _metaCache.set(hit.url, req);
     return req;
   }
@@ -3312,6 +3425,23 @@ const VideoLinkPreview = (function () {
     return `<div class="video-link-preview" data-vlp-url="${_esc(url)}" data-vlp-provider="${_esc(provider || '')}" data-vlp-pending="1"></div>`;
   }
 
+  // OS-based (not viewport-based) mobile detection — a narrow desktop
+  // browser window still has no native YouTube/Instagram/Vimeo app to hand
+  // off to, so this deliberately checks the platform, not the screen size.
+  function _isMobileOS() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  }
+
+  /** Open the original video. On Android/iOS this navigates the current tab
+   *  so the OS can intercept the URL and hand off to the installed native
+   *  app (YouTube/Instagram/Vimeo/TikTok); if no app is installed the
+   *  browser just loads the page as normal. On desktop there's no app to
+   *  hand off to, so it opens a new tab instead of navigating away. */
+  function _openOriginal(url) {
+    if (_isMobileOS()) window.location.href = url;
+    else window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   function _renderInvalid(el) {
     el.classList.add('vlp-invalid');
     el.innerHTML = `
@@ -3322,35 +3452,58 @@ const VideoLinkPreview = (function () {
       </div>`;
   }
 
+  /** Wires an <img> to fall through a list of candidate URLs on load
+   *  failure, so we always land on the best-quality thumbnail that
+   *  actually exists instead of gambling on one resolution. */
+  function _wireThumbFallback(img, ladder) {
+    if (!ladder || ladder.length < 2) return;
+    let i = 0;
+    img.addEventListener('error', function onErr() {
+      i += 1;
+      if (i < ladder.length) { img.src = ladder[i]; }
+      else {
+        img.removeEventListener('error', onErr);
+        const fallback = document.createElement('div');
+        fallback.className = 'vlp-thumb vlp-thumb-fallback';
+        fallback.innerHTML = _icon.external;
+        img.replaceWith(fallback);
+      }
+    });
+  }
+
   function _buildCard(el, hit, meta) {
     el.classList.add('vlp-ready');
     el.style.setProperty('--vlp-aspect', `${meta.aspect}%`);
     const thumbHtml = meta.thumbnail
       ? `<img class="vlp-thumb" src="${_esc(meta.thumbnail)}" alt="" loading="lazy">`
       : `<div class="vlp-thumb vlp-thumb-fallback">${_icon.external}</div>`;
+    const subParts = [meta.creator, meta.providerLabel].filter(Boolean);
     el.innerHTML = `
       <div class="vlp-media">
         ${thumbHtml}
-        ${meta.embeddable ? `<button type="button" class="vlp-play-btn" aria-label="Play video">${_icon.play}</button>` : ''}
+        ${meta.playable ? `<div class="vlp-play-btn" aria-hidden="true">${_icon.play}</div>` : ''}
         <span class="vlp-provider-badge">${_esc(meta.providerLabel)}</span>
+        ${meta.duration ? `<span class="vlp-duration-badge">${_esc(meta.duration)}</span>` : ''}
+        <span class="vlp-external-badge" aria-hidden="true">${_icon.external}</span>
       </div>
       <div class="vlp-info">
         <div class="vlp-title">${_esc(meta.title)}</div>
-        <div class="vlp-sub">${_esc(meta.providerLabel)}</div>
+        <div class="vlp-sub">${_esc(subParts.join(' · '))}</div>
       </div>`;
 
-    const media = el.querySelector('.vlp-media');
-    const openOriginal = () => window.open(hit.url, '_blank', 'noopener,noreferrer');
-    if (meta.embeddable) {
-      media.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const embedUrl = PROVIDERS[hit.provider].embed(hit.id);
-        media.innerHTML = `<iframe src="${_esc(embedUrl)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
-        el.classList.add('vlp-playing');
-      });
-    } else {
-      el.addEventListener('click', (e) => { e.stopPropagation(); openOriginal(); });
-    }
+    const img = el.querySelector('.vlp-thumb');
+    if (img && img.tagName === 'IMG') _wireThumbFallback(img, meta.thumbLadder);
+
+    // This is only ever a preview — it never plays inline. Clicking or
+    // tapping anywhere on the card (thumbnail, play button, title,
+    // metadata, badges, empty space) opens the original video.
+    el.setAttribute('role', 'link');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-label', `${meta.title} — opens on ${meta.providerLabel}`);
+    el.addEventListener('click', (e) => { e.stopPropagation(); _openOriginal(hit.url); });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); _openOriginal(hit.url); }
+    });
   }
 
   function _hydrateOne(el) {
@@ -3408,11 +3561,12 @@ const VideoLinkPreview = (function () {
   return { parse, validate, fetchMeta, placeholder, hydrate, mountNow, PROVIDERS };
 })();
 
-// Keep older call sites working — delegates to the shared provider table
-// above instead of duplicating the YouTube/Vimeo regex logic.
+// Keep older call sites working. We no longer embed players anywhere (see
+// VideoLinkPreview above), so this just resolves to the original URL to
+// open on the native platform rather than an iframe embed URL.
 function swVideoEmbedUrl(url, provider) {
   const hit = VideoLinkPreview.parse(url, provider);
-  return hit ? VideoLinkPreview.PROVIDERS[hit.provider].embed(hit.id) : null;
+  return hit ? hit.url : null;
 }
 
 // Auto-hydrate any video-link-preview placeholders inserted anywhere in the
@@ -3581,10 +3735,11 @@ function swFeedCard(p) {
   } else if (hasVideo) {
     // Placeholder only — VideoLinkPreview.hydrate() (wired via a
     // document-level MutationObserver) lazy-loads the thumbnail/title once
-    // this card actually scrolls into view, and only builds the iframe on
-    // click. `ig-post-img-wrap` gives it the exact same frame/corners as an
-    // image post; `vlp-compact` hides the title/provider text block here
-    // since the post's own caption line (below) already carries that.
+    // this card actually scrolls into view. It never embeds a player;
+    // clicking it opens the video on its native platform in a new tab.
+    // `ig-post-img-wrap` gives it the exact same frame/corners as an image
+    // post; `vlp-compact` hides the title/provider text block here since
+    // the post's own caption line (below) already carries that.
     mediaHtml = `<div class="ig-post-img-wrap video-link-preview vlp-compact" data-vlp-url="${swEsc(p.video_url)}" data-vlp-provider="${swEsc(p.video_provider || '')}" data-vlp-pending="1"></div>`;
   } else if (postType === 'text' && p.description) {
     // Text-only post — X/Twitter style: just inline text, no dark box
@@ -4483,10 +4638,10 @@ async function swSubmitPost() {
 
   // Validation: at least something must be present
   if (type === 'text' && !desc) { showErr('Write something to post.'); return; }
-  if (type === 'video' && !videoUrl) { showErr('Add a YouTube or Vimeo URL.'); return; }
+  if (type === 'video' && !videoUrl) { showErr('Add a YouTube, Vimeo, or Instagram URL.'); return; }
   if (type === 'video' && videoUrl) {
     const check = VideoLinkPreview.validate(videoUrl);
-    if (!check.ok) { showErr(check.error || 'Enter a valid YouTube or Vimeo URL.'); return; }
+    if (!check.ok) { showErr(check.error || 'Enter a valid YouTube, Vimeo, or Instagram URL.'); return; }
   }
   if (type === 'image' && !coverFile && !$id('sw-cover-img')?.src) { showErr('Pick a photo to post.'); return; }
 
@@ -5970,10 +6125,11 @@ function _attachStrandPreviewToBubble(bubble, bodyText, standalone) {
     }
     if (data.video_url) {
       // Same VideoLinkPreview component as the feed — thumbnail, title,
-      // provider, inline playback if embeddable, otherwise opens the
-      // original video. Rendered as its own vertical card (see
-      // .strand-preview-card-video) rather than the small row layout used
-      // for image/text posts, since a 16:9 thumbnail needs the width.
+      // provider badge, and a click that opens the original video on its
+      // native platform (never an inline embed). Rendered as its own
+      // vertical card (see .strand-preview-card-video) rather than the
+      // small row layout used for image/text posts, since a 16:9
+      // thumbnail needs the width.
       card.classList.add('strand-preview-card-video');
       card.innerHTML = VideoLinkPreview.placeholder(data.video_url, data.video_provider);
       VideoLinkPreview.hydrate(card);

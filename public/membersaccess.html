@@ -5789,7 +5789,7 @@
                   <input
                     id="sw-video-url"
                     type="url"
-                    placeholder="YouTube or Vimeo URL"
+                    placeholder="YouTube, Vimeo, or Instagram URL"
                     class="composer-input"
                   />
                   <!-- Inline validation message — shown only when the pasted
@@ -10359,6 +10359,23 @@
         }
       }
 
+      /* ── Mobile-only: wider, more immersive feed ──────────────────────────
+         Below 601px the post card loses its border/radius/shadow (see the
+         min-width:601px block above) and becomes a full-bleed row — that's
+         the same cutoff this override uses, so it never touches the
+         tablet/desktop card layout. The only thing that changes here is the
+         feed grid's own horizontal padding: everything inside an .ig-post
+         (avatar, name, timestamp, actions, caption, hashtags, comments,
+         media) keeps its existing internal spacing and stays aligned to
+         each other exactly as before — the post container itself just gets
+         wider, so images/video previews land almost edge-to-edge with a
+         small, consistent safe margin instead of the wide desktop gutter. */
+      @media (max-width: 600px) {
+        .strand-feed-grid {
+          padding: 12px 8px 32px;
+        }
+      }
+
       /* Post header: avatar + name + time + options */
       .ig-post-header {
         display: flex;
@@ -10421,7 +10438,19 @@
         color: var(--text);
       }
 
-      /* Post image */
+      /* Post media — shared width contract for ALL media types (image,
+         video preview, and any future media type like polls or generic
+         link cards). `.ig-post-img-wrap` is `width: 100%` of `.ig-post`
+         with no side margin/padding of its own — that's the only thing
+         that needs to be true for a media block to align identically with
+         every other post type. The video-link-preview card reuses this
+         exact class (see swFeedCard in membersaccess.js) rather than
+         defining its own width, which is what keeps it pixel-identical to
+         an image post. Any new media component should do the same: render
+         inside `.ig-post-img-wrap` (or another block that is `width: 100%`
+         with zero horizontal margin/padding) instead of introducing its
+         own width/inset — that's what keeps every post type's left/right
+         alignment identical after the mobile feed-width override below. */
       .ig-post-img-wrap {
         width: 100%;
         position: relative;
@@ -11042,14 +11071,22 @@
       }
 
       /* ── VideoLinkPreview — reusable card used in the composer, the feed,
-         and shared-post cards in DMs (see VideoLinkPreview in
-         membersaccess.js). Keep this the single source of styling for all
-         three so they can never visually drift apart. ─────────────────── */
+         the Social Strand, and shared-post cards in DMs (see
+         VideoLinkPreview in membersaccess.js). Keep this the single source
+         of styling for all of them so they can never visually drift apart.
+         This is a link-out preview card ONLY — no player is ever embedded
+         here, so there is deliberately no iframe rule in this block.
+         Clicking anywhere on the card opens the video on its native
+         platform in a new tab. ─────────────────────────────────────────── */
       .video-link-preview {
         position: relative;
         width: 100%;
         background: #121214;
         cursor: pointer;
+      }
+      .video-link-preview:hover .vlp-play-btn {
+        background: rgba(0, 0, 0, 0.72);
+        transform: translate(-50%, -50%) scale(1.06);
       }
       .video-link-preview .vlp-media {
         position: relative;
@@ -11058,8 +11095,7 @@
         background: #000;
         overflow: hidden;
       }
-      .video-link-preview .vlp-thumb,
-      .video-link-preview .vlp-media iframe {
+      .video-link-preview .vlp-thumb {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -11075,6 +11111,8 @@
         color: var(--muted);
         background: linear-gradient(135deg, #1c1c1e, #2c2c2e);
       }
+      /* Purely decorative — signals "this plays elsewhere", not a real
+         button. The whole card (not just this) is the click target. */
       .video-link-preview .vlp-play-btn {
         position: absolute;
         top: 50%;
@@ -11088,15 +11126,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer;
-        padding: 0;
+        pointer-events: none;
         transition:
           transform 0.15s var(--spring, ease),
           background 0.15s;
-      }
-      .video-link-preview .vlp-play-btn:hover {
-        background: rgba(0, 0, 0, 0.72);
-        transform: translate(-50%, -50%) scale(1.06);
       }
       .video-link-preview .vlp-provider-badge {
         position: absolute;
@@ -11112,9 +11145,38 @@
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
       }
-      .video-link-preview.vlp-playing .vlp-play-btn,
-      .video-link-preview.vlp-playing .vlp-provider-badge {
-        display: none;
+      /* Duration pill, bottom-right of the thumbnail — only rendered when
+         the provider's metadata exposes a duration (currently Vimeo;
+         YouTube's public oEmbed doesn't return one). */
+      .video-link-preview .vlp-duration-badge {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.75);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        letter-spacing: 0.02em;
+      }
+      /* Small "opens elsewhere" glyph, top-right — same convention as
+         Reddit/X link-preview cards, reinforcing that this is a preview
+         and the tap destination is an external app/site. */
+      .video-link-preview .vlp-external-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
       }
       .video-link-preview .vlp-info {
         padding: 10px 12px;
