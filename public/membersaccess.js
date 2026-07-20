@@ -14421,52 +14421,12 @@ function _tourEnd() {
   transform: scale(.92) !important;
 }
 
-/* ── BOTTOM TAB BAR ── */
-.bottom-tab-bar {
-  background: rgba(0,0,0,.92) !important;
-  backdrop-filter: saturate(180%) blur(20px) !important;
-  -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
-  border-top: 1px solid var(--ig-border) !important;
-  padding: 0 !important;
-  height: 52px !important;
-  display: flex !important;
-  align-items: stretch !important;
-}
-.btb-item {
-  flex: 1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 3px !important;
-  cursor: pointer !important;
-  color: var(--ig-muted) !important;
-  transition: color var(--ig-dur) var(--ig-ease) !important;
-  -webkit-tap-highlight-color: transparent !important;
-  position: relative !important;
-  padding: 8px 0 !important;
-}
-.btb-item svg {
-  width: 24px !important;
-  height: 24px !important;
-  stroke-width: 1.8 !important;
-  transition: transform var(--ig-dur) var(--ig-ease),
-              stroke var(--ig-dur) var(--ig-ease) !important;
-}
-.btb-item.active {
-  color: var(--ig-text) !important;
-}
-.btb-item.active svg {
-  stroke-width: 2.5 !important;
-}
-.btb-item:active svg {
-  transform: scale(.88) !important;
-}
-.btb-label {
-  font-size: 10px !important;
-  font-weight: 500 !important;
-  letter-spacing: .01em !important;
-}
+/* ── BOTTOM TAB BAR ──
+   Legacy Instagram-style override removed. The floating capsule pill is now
+   styled entirely by the tuned .bottom-tab-bar / .btb-item rules in
+   membersaccess.html (see "Floating nav pill safe area" section there) —
+   this block used to inject after those with !important, on a taller
+   52px bar, which always won the cascade and undid every pill adjustment. */
 
 /* Centre post button */
 .btb-post-btn {
@@ -16826,27 +16786,27 @@ function _tourEnd() {
         position: fixed !important;
         left: 50% !important;
         right: auto !important;
-        bottom: max(14px, calc(env(safe-area-inset-bottom) + 8px)) !important;
+        bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px)) !important;
         transform: translateX(-50%) !important;
-        width: auto !important;
+        width: fit-content !important;
+        max-width: 94vw !important;
         min-width: 0 !important;
-        display: inline-flex !important;
+        display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 13px !important;
-        height: 61px !important;
+        gap: 27px !important;
+        height: 56px !important;
         padding: 0 24px !important;
         margin: 0 !important;
-        border: 1px solid rgba(255,255,255,0.16) !important;
-        border-radius: 999px !important;
-        background: rgba(40,40,44,0.82) !important;
-        backdrop-filter: blur(28px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 28px !important;
+        background: rgba(255,255,255,0.07) !important;
+        backdrop-filter: blur(32px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
         box-shadow:
-          0 10px 30px rgba(0,0,0,0.55),
-          0 2px 10px rgba(0,0,0,0.4),
-          0 0 24px rgba(10,132,255,0.10),
-          inset 0 1px 0 rgba(255,255,255,0.10) !important;
+          0 12px 36px rgba(0,0,0,0.35),
+          0 2px 10px rgba(0,0,0,0.2),
+          inset 0 1px 0 rgba(255,255,255,0.08) !important;
         transition: box-shadow 0.25s var(--spring-soft, ease), transform 0.25s var(--spring-soft, ease) !important;
         z-index: 999998 !important;
         pointer-events: auto !important;
@@ -16855,8 +16815,8 @@ function _tourEnd() {
       /* ── Items: icon-only, compact, evenly spaced ────────────────────── */
       .btb-item {
         flex: 0 0 auto !important;
-        width: 44px !important;
-        height: 44px !important;
+        width: 17px !important;
+        height: 17px !important;
         min-width: 0 !important;
         min-height: 0 !important;
         padding: 0 !important;
@@ -16866,13 +16826,13 @@ function _tourEnd() {
         align-items: center !important;
         justify-content: center !important;
         border-radius: 999px !important;
-        color: rgba(255,255,255,0.42) !important;
+        color: rgba(255,255,255,0.95) !important;
         transition: color 0.15s ease, background 0.15s ease,
                     transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
       }
       .btb-item svg {
-        width: 22px !important;
-        height: 22px !important;
+        width: 19px !important;
+        height: 19px !important;
         stroke-width: 2 !important;
         flex-shrink: 0 !important;
         transition: transform 0.32s var(--spring, cubic-bezier(0.34,1.56,0.64,1)) !important;
@@ -16880,13 +16840,13 @@ function _tourEnd() {
       .btb-item.active {
         color: #ffffff !important;
       }
-      .btb-item.active svg { stroke-width: 2.3 !important; }
+      .btb-item.active svg { stroke-width: 2.5 !important; }
       /* Small dot beneath the active icon, matching the reference design —
          no background pill, just the dot. Never on the post button. */
       .btb-item.active:not(.btb-post-item)::after {
         content: "" !important;
         position: absolute !important;
-        bottom: 3px !important;
+        bottom: -7px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: 4px !important;

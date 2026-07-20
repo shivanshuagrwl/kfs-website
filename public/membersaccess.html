@@ -39,6 +39,20 @@
         --radius: 14px;
         --sidebar-w: 220px;
         --dm-reserve: 0px; /* overridden on mobile to dodge the floating bottom nav */
+        /* ── Floating nav pill safe area (global) ─────────────────────────
+           Every bottom sheet / modal reserves this much space above its
+           lowest edge so its content never ends up behind the pill.
+           Kept as separate pieces (height / offset / margin) so any one
+           of them can change later without hunting down every consumer —
+           consumers should only ever reference --kfs-nav-safe-area. */
+        --kfs-pill-height: 56px;
+        --kfs-pill-offset: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+        --kfs-pill-comfort-margin: 12px;
+        /* Total reserve. Defaults to 0 (desktop / pointer:fine, where the
+           pill never renders); the mobile media query below turns it on,
+           and it's zeroed again wherever the pill itself is hidden
+           (auth screen, inside an open DM/GC chat window). */
+        --kfs-nav-safe-area: 0px;
         /* System font stack — San Francisco where available, sane fallbacks
            elsewhere. Every hardcoded "Helvetica Neue" below was intentionally
            left as a fallback in this same stack, not replaced, so nothing
@@ -198,7 +212,20 @@
       body.auth-active .bottom-tab-bar {
         display: none !important;
       }
+      /* No pill on screen → nothing for bottom sheets to dodge */
+      body.auth-active {
+        --kfs-nav-safe-area: 0px;
+      }
       @media (max-width: 768px) and (pointer: coarse) {
+        /* Pill is visible in this environment → every bottom sheet/modal
+           (see "Floating nav pill safe area" rules further down) reserves
+           this much space so it never ends up hidden underneath it. */
+        :root {
+          --kfs-nav-safe-area: calc(
+            var(--kfs-pill-height) + var(--kfs-pill-offset) +
+              var(--kfs-pill-comfort-margin)
+          );
+        }
         .bottom-tab-bar {
           display: flex;
           position: fixed;
@@ -213,7 +240,10 @@
           /* Measured from the reference screenshot: on a black page the
              pill fill reads as flat ~rgb(25,25,25) and the top edge shows
              a barely-there brighter rim fading toward the bottom. */
-          background: rgba(255, 255, 255, 0.07);
+          /* Measured directly off the reference: interior fill reads flat
+             rgb(24,24,24) on a black page. 0.07 alpha rendered rgb(18,18,18)
+             — too dark; 0.094 lands on the measured value. */
+          background: rgba(255, 255, 255, 0.094);
           backdrop-filter: blur(32px) saturate(180%);
           -webkit-backdrop-filter: blur(32px) saturate(180%);
           /* Border pulled way down — reference shows only the faintest
@@ -228,15 +258,33 @@
           box-shadow:
             0 12px 36px rgba(0, 0, 0, 0.35),
             0 2px 10px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.08);
-          /* Pulled tighter on both axes — the previous pass widened the
-             pill instead of compacting it. Edge padding stays visibly
-             smaller than the icon-to-icon gap (optical, not equal). */
-          padding: 0 15px;
+            inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          /* Measured directly off the reference screenshot (pill height
+             92px in-image = this element's 56px real height, giving a
+             1.643 screenshot-px : real-px scale):
+               edge padding  41px/40px → 24.6px  → 24px
+               icon↔plus gap 44px/45px → 27.1px  → 27px (base gap below)
+               icon↔icon gap 54px both → 32.9px  → handled as base gap
+                                                     + 6px outer compensation
+                                                     on the two end items,
+                                                     since flex `gap` can't
+                                                     vary per-pair itself. */
+          padding: 0 25px;
           justify-content: center;
           align-items: center;
-          gap: 21px;
+          gap: 27px;
           box-sizing: border-box;
+        }
+        /* The two outer icon↔icon gaps (grid↔share, message↔settings) read
+           ~6px wider than the icon↔plus gaps in the reference — the plus
+           button's own size already does some of the separating work, so
+           the icons flanking it can sit closer. Compensate on the end
+           items only, leaving the base 27px gap everywhere else untouched. */
+        #btb-strand {
+          margin-right: 6px;
+        }
+        .bottom-tab-bar > .btb-item:last-child {
+          margin-left: 6px;
         }
         .btb-item {
           display: flex;
@@ -246,15 +294,18 @@
           /* The visual footprint is just the icon itself — no oversized
              invisible box inflating the gaps between icons. Tap-target
              size is restored separately via ::before below, using
-             absolute positioning so it doesn't affect layout/gap. */
-          width: 19px;
-          height: 19px;
+             absolute positioning so it doesn't affect layout/gap.
+             Reference glyph measures ~28px screenshot (both grid & share
+             icons) → 17px real, down from 19px. */
+          width: 17px;
+          height: 17px;
           cursor: pointer;
           padding: 0;
           border-radius: 100px;
-          /* Reference measurement: inactive icon strokes peak around
-             rgb(230,230,230), not a dim gray — brightened from 0.55. */
-          color: rgba(255, 255, 255, 0.85);
+          /* Reference measurement: inactive icon strokes peak at lum≈248
+             against a lum≈25 pill fill, which back-solves to ~0.97 alpha,
+             not 0.85 — brightened again. */
+          color: rgba(255, 255, 255, 0.95);
           transition:
             color 0.14s ease,
             background 0.14s ease,
@@ -365,7 +416,8 @@
         border: 1px solid var(--border);
         border-bottom: none;
         border-radius: 22px 22px 0 0;
-        padding: 10px 14px max(16px, env(safe-area-inset-bottom));
+        padding: 10px 14px
+          calc(max(16px, env(safe-area-inset-bottom)) + var(--kfs-nav-safe-area));
         transition: transform 0.3s var(--spring-soft, cubic-bezier(0.32, 1.1, 0.5, 1));
         box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
       }
@@ -9973,18 +10025,21 @@
       /* ─── Bottom tab bar extra styles ───────────────────────────────────── */
       /* Sized to match the reference nav's proportions: the plus button
          reads as sitting naturally inside the icon group rather than a
-         dramatically oversized button splitting the bar in two. */
+         dramatically oversized button splitting the bar in two.
+         Direct pixel measurement of the reference (button bbox ~59-60px
+         against a 92px-tall pill, scale 1.643) puts the button at ~36px
+         real, not 42px — the previous value was ~14% oversized. */
       .btb-post-item {
-        width: 42px;
-        height: 42px;
+        width: 36px;
+        height: 36px;
       }
       .btb-post-btn {
-        width: 42px;
-        height: 42px;
+        width: 36px;
+        height: 36px;
         /* Reference measurement: corner radius ≈ 21% of the button's own
            size (a tight squircle, not the rounder ~31% ratio this used
            to have) — a touch squarer than the surrounding pill shape. */
-        border-radius: 9px;
+        border-radius: 8px;
         /* Light off-white rather than pure white, matching the reference
            (~rgb(245,245,245), not #fff). */
         background: #f5f5f5;
@@ -10007,8 +10062,8 @@
       }
       .btb-post-btn svg {
         color: #000;
-        width: 17px;
-        height: 17px;
+        width: 15px;
+        height: 15px;
         flex-shrink: 0;
       }
       .btb-post-item {
@@ -10869,7 +10924,7 @@
       .composer-body {
         flex: 1;
         overflow-y: auto;
-        padding: 14px 16px 24px;
+        padding: 14px 16px calc(24px + var(--kfs-nav-safe-area));
         display: flex;
         flex-direction: column;
         gap: 0;
@@ -11311,6 +11366,41 @@
         body:has(#gc-window.dm-slide-in) .bottom-tab-bar {
           display: none !important;
         }
+        /* Pill is hidden in-chat too → matching zero for any sheet opened
+           from within a chat (e.g. the emoji reaction popup's host). */
+        body:has(#dm-window.dm-slide-in),
+        body:has(#gc-window.dm-slide-in) {
+          --kfs-nav-safe-area: 0px;
+        }
+      }
+
+      /* ── Floating nav pill safe area: bottom sheets & modals ───────────────
+         The pill is a persistent floating element, so every bottom-aligned
+         sheet/modal must reserve --kfs-nav-safe-area (defined in :root,
+         computed above) below its lowest content so nothing — no button,
+         list row, search bar, or input — ever ends up hidden behind it,
+         and scrollable lists can reach their true last item without it
+         disappearing under the pill.
+
+         This block is additive: components below already carry their own
+         bottom padding/safe-area-inset handling for the notch/home-indicator;
+         --kfs-nav-safe-area is layered on top of that, not a replacement.
+
+         Reusable for anything new: add class="kfs-nav-safe-pb" to a sheet's
+         *scrollable/innermost* content container (not the fixed overlay
+         itself) and it picks up the same reserve automatically. */
+      .kfs-nav-safe-pb {
+        padding-bottom: calc(16px + var(--kfs-nav-safe-area)) !important;
+      }
+
+      /* Share sheet (built in JS — see installShareModal in membersaccess.js).
+         Overrides the inline `padding:0 0 env(safe-area-inset-bottom)` so the
+         Send button / last conversation row clears the pill, not just the
+         home indicator. */
+      #kfs-share-sheet {
+        padding-bottom: calc(
+          env(safe-area-inset-bottom) + var(--kfs-nav-safe-area)
+        ) !important;
       }
     </style>
   </body>
