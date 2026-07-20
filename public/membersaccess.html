@@ -208,46 +208,35 @@
           /* Pill hugs its own content — never stretched to the viewport. */
           width: fit-content;
           max-width: 94vw;
-          height: 64px;
+          height: 56px;
           z-index: 200;
           /* Measured from the reference screenshot: on a black page the
-             pill fill reads as flat ~rgb(24,24,24) and the top edge shows
-             a visibly brighter rim (~rgb(37,37,37)) fading toward the
-             bottom. The old rgba(0,0,0,0.88) fill was invisible against
-             a black page — this uses a light overlay instead so the pill
-             actually shows up the way the reference does. */
+             pill fill reads as flat ~rgb(25,25,25) and the top edge shows
+             a barely-there brighter rim fading toward the bottom. */
           background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(32px) saturate(180%);
           -webkit-backdrop-filter: blur(32px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 32px;
+          /* Border pulled way down — reference shows only the faintest
+             separation from the background, not an outlined pill. */
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          /* Reference pill is a true capsule: corner radius = height / 2,
+             not a partial rounded-rect. Height dropped from 64px → 56px,
+             so this radius (28px) is smaller in absolute terms too. */
+          border-radius: 28px;
+          /* Soft ambient shadow — wide, low-opacity, no hard edge — so the
+             pill reads as gently floating rather than stamped down. */
           box-shadow:
-            0 8px 32px rgba(0, 0, 0, 0.7),
-            0 2px 8px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.16);
-          /* Horizontal padding only — the fixed height above does the
-             vertical centering, so there's no vertical padding fighting it.
-             Left/right padding pulled in so the first/last icons sit close
-             to the rounded ends, matching the reference. */
-          padding: 0 15px;
+            0 12px 36px rgba(0, 0, 0, 0.35),
+            0 2px 10px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          /* Equal-rhythm spacing: left/right padding matches the gap
+             between items exactly, so edge→icon spacing reads identical
+             to icon→icon spacing (no per-item margin hacks needed). */
+          padding: 0 18px;
           justify-content: center;
           align-items: center;
-          /* Base (inner) gap — tighter around the plus button so it reads
-             as part of the group rather than splitting the bar in half.
-             The outer two gaps get extra room via margin on the first/last
-             item below, giving an "optically balanced" (non-uniform) rhythm
-             instead of one fixed number repeated five times. */
-          gap: 30px;
+          gap: 18px;
           box-sizing: border-box;
-        }
-        /* Extra breathing room only on the two outer gaps (Strand↔Network,
-           Messages↔Settings) — pushes those two gaps to ~37px while the
-           two gaps flanking the plus button stay at the base 30px. */
-        #btb-strand {
-          margin-right: 7px;
-        }
-        #btb-settings {
-          margin-left: 7px;
         }
         .btb-item {
           display: flex;
@@ -258,8 +247,8 @@
              invisible box inflating the gaps between icons. Tap-target
              size is restored separately via ::before below, using
              absolute positioning so it doesn't affect layout/gap. */
-          width: 19px;
-          height: 19px;
+          width: 17px;
+          height: 17px;
           cursor: pointer;
           padding: 0;
           border-radius: 100px;
@@ -292,8 +281,8 @@
         }
 
         .btb-item svg {
-          width: 19px;
-          height: 19px;
+          width: 17px;
+          height: 17px;
           flex-shrink: 0;
         }
         /* Icon-only nav — labels stay in the DOM for screen readers but
@@ -9930,20 +9919,27 @@
          reads as sitting naturally inside the icon group rather than a
          dramatically oversized button splitting the bar in two. */
       .btb-post-item {
-        width: 42px;
-        height: 42px;
+        width: 38px;
+        height: 38px;
       }
       .btb-post-btn {
-        width: 42px;
-        height: 42px;
-        border-radius: 13px;
-        background: #ffffff;
+        width: 38px;
+        height: 38px;
+        /* Reference measurement: corner radius ≈ 21% of the button's own
+           size (a tight squircle, not the rounder ~31% ratio this used
+           to have) — a touch squarer than the surrounding pill shape. */
+        border-radius: 8px;
+        /* Light off-white rather than pure white, matching the reference
+           (~rgb(245,245,245), not #fff). */
+        background: #f5f5f5;
         display: flex;
         align-items: center;
         justify-content: center;
+        /* Softer, tighter shadow — this button floats a little above the
+           pill, but shouldn't cast a heavy dropshadow. */
         box-shadow:
-          0 2px 12px rgba(0, 0, 0, 0.5),
-          0 1px 3px rgba(0, 0, 0, 0.3);
+          0 2px 8px rgba(0, 0, 0, 0.3),
+          0 1px 2px rgba(0, 0, 0, 0.2);
         transition:
           transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
           box-shadow 0.15s;
@@ -9951,12 +9947,12 @@
       }
       .btb-post-btn:active {
         transform: scale(0.9);
-        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
       }
       .btb-post-btn svg {
         color: #000;
-        width: 16px;
-        height: 16px;
+        width: 15px;
+        height: 15px;
         flex-shrink: 0;
       }
       .btb-post-item {
