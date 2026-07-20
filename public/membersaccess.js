@@ -49,6 +49,14 @@ const E2EE = (() => {
   function _myKeyRowId(memberId) {
     return `my-identity-keypair:${memberId}`;
   }
+  // Pre-migration fixed slot every existing session's real private key is
+  // still sitting under. MUST be checked and migrated forward — without
+  // this, every already-logged-in member would silently look "brand new"
+  // under the per-member key name, get handed a freshly generated keypair,
+  // and permanently lose the ability to decrypt anything sent/received
+  // before that moment (indistinguishable from a real key rotation, but
+  // entirely avoidable).
+  const _LEGACY_KEY_ROW_ID = 'my-identity-keypair';
 
   // ── IndexedDB helpers ────────────────────────────────────────────────────────
 
@@ -180,7 +188,10 @@ const E2EE = (() => {
 
   /**
    * Load our identity key pair from IndexedDB, scoped to `memberId`.
-   * Creates a new one if none exists yet for this member on this device.
+   * Migrates a pre-existing key from the old fixed slot on first run after
+   * the per-member scoping change (see _LEGACY_KEY_ROW_ID) so an existing
+   * member doesn't lose the ability to decrypt anything they already have.
+   * Creates a brand new key pair only if truly nothing is found either place.
    * Returns { publicKeyJwk, privateKey (CryptoKey), isFresh }.
    */
   async function _loadMyKeyPair(memberId) {
@@ -193,6 +204,25 @@ const E2EE = (() => {
       );
       return { publicKeyJwk: stored.publicKeyJwk, privateKey, isFresh: false };
     }
+
+    // Nothing under the new per-member slot yet — check the old fixed slot
+    // before assuming this device has never had a key. One-time migration:
+    // adopt it into the per-member slot so it's found directly next time,
+    // and clear the legacy slot so it can't be misread as belonging to a
+    // different member later.
+    const legacy = await _dbGet(_LEGACY_KEY_ROW_ID);
+    if (legacy) {
+      await _dbPut(_myKeyRowId(memberId), legacy);
+      try { await _dbPut(_LEGACY_KEY_ROW_ID, undefined); } catch {}
+      console.log('[E2EE] Migrated pre-existing identity key into per-member storage.');
+      const privateKey = await crypto.subtle.importKey(
+        'jwk', legacy.privateKeyJwk,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false, ['deriveKey', 'deriveBits']
+      );
+      return { publicKeyJwk: legacy.publicKeyJwk, privateKey, isFresh: false };
+    }
+
     const fresh = await _generateKeyPair(memberId);
     return { ...fresh, isFresh: true };
   }
