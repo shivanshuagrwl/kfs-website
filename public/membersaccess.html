@@ -9193,11 +9193,21 @@
             .strand-preview-card-video .video-link-preview {
               border-radius: 0;
             }
+            /* The card's own appended "Shared by" line below covers
+               attribution, so hide VideoLinkPreview's built-in creator/
+               provider sub-line here — otherwise the card stacks two
+               near-duplicate text rows and reads as oversized. Title +
+               provider badge (already on the thumbnail) are enough. */
+            .strand-preview-card-video .vlp-info {
+              padding: 8px 12px 2px;
+            }
+            .strand-preview-card-video .vlp-sub {
+              display: none;
+            }
             .strand-preview-video-meta {
-              padding: 8px 12px 10px;
+              padding: 0 12px 10px;
               font-size: 11px;
               color: rgba(255, 255, 255, 0.45);
-              border-top: 1px solid rgba(255, 255, 255, 0.06);
             }
 
             /* ── Typing indicator ── */
@@ -10372,7 +10382,7 @@
          small, consistent safe margin instead of the wide desktop gutter. */
       @media (max-width: 600px) {
         .strand-feed-grid {
-          padding: 12px 8px 32px;
+          padding: 10px 4px 32px;
         }
       }
 
@@ -11212,31 +11222,25 @@
         0% { background-position: 200% 0; }
         100% { background-position: -200% 0; }
       }
-      /* ── Live inline preview (muted autoplay-while-visible) ───────────────
-         The iframe sits on top of the thumbnail but starts invisible
-         (opacity:0) so there's never a flash of a loading/blank player —
-         the poster thumbnail stays what's shown until the embed actually
-         starts playing, then it cross-fades in. pointer-events:none is
-         load-bearing: it's what guarantees every tap still lands on the
-         card's own click handler (open original video) instead of the
-         provider's controls, even though a live player now sits there. */
-      .video-link-preview .vlp-live-frame {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        border: none;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.35s ease;
+      /* ── "Alive" preview animation (NOT an embedded player) ────────────
+         Purely cosmetic: a slow pan/zoom on the thumbnail <img> itself
+         while VideoLinkPreview's IntersectionObserver has marked this
+         card `.vlp-active` (~60% on screen, one card at a time — see
+         membersaccess.js). No iframe, no provider UI, nothing playable —
+         tapping the card always opens the original video. Animation
+         direction alternates so it reads as gentle motion, not a jump-cut
+         loop; it restarts from frame 0 every time the card re-activates. */
+      .video-link-preview .vlp-media.vlp-active .vlp-thumb {
+        animation: vlp-alive-pan 6s ease-in-out infinite alternate;
       }
-      .video-link-preview .vlp-media.vlp-live-active .vlp-live-frame {
-        opacity: 1;
+      @keyframes vlp-alive-pan {
+        0%   { transform: scale(1) translate(0, 0); }
+        100% { transform: scale(1.06) translate(-1.5%, -1.5%); }
       }
-      /* Hide the static "play" affordance once the muted preview is
-         actually rolling — it reads as playing, same as Instagram/X. */
-      .video-link-preview .vlp-media.vlp-live-active .vlp-play-btn {
-        opacity: 0;
+      @media (prefers-reduced-motion: reduce) {
+        .video-link-preview .vlp-media.vlp-active .vlp-thumb {
+          animation: none;
+        }
       }
 
       /* Unsupported/broken link state */
@@ -11509,7 +11513,7 @@
         }
         .dm-textarea {
           padding: 6px 12px !important;
-          border-radius: 20px !important;
+          border-radius: 16px !important;
           line-height: 1.3 !important;
           min-height: 30px !important;
         }
@@ -11525,6 +11529,77 @@
           width: 14px !important;
           height: 14px !important;
         }
+      }
+
+      /* ── Reusable shimmer skeleton primitives ──────────────────────────
+         General-purpose building blocks for loading states that match the
+         final layout instead of a generic gray box. See kfsSkeleton() in
+         membersaccess.js for the JS side that builds these into feed-card/
+         list-row shapes and cross-fades them into real content once it
+         arrives. Wired into Feed, My Posts, and the DM/GC conversation
+         lists in this pass — rolling the same primitive out to every other
+         async screen (profile, notifications, search, admin, etc.) is a
+         larger follow-up, not yet done. */
+      .kfs-skel-block {
+        position: relative;
+        overflow: hidden;
+        background: #1a1a1c;
+        border-radius: 8px;
+      }
+      .kfs-skel-block::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.06),
+          transparent
+        );
+        animation: kfs-skel-shimmer 1.5s ease-in-out infinite;
+      }
+      @keyframes kfs-skel-shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .kfs-skel-circle { border-radius: 50%; }
+      .kfs-skel-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+      }
+      .kfs-skel-lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+      /* Feed-card-shaped skeleton: mirrors .ig-post's header → media →
+         action-row structure so the layout doesn't jump when real posts
+         swap in. */
+      .kfs-skel-post {
+        width: 100%;
+        max-width: 680px;
+        margin: 0 auto 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      @media (min-width: 601px) {
+        .kfs-skel-post {
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-radius: 20px;
+          overflow: hidden;
+        }
+      }
+      .kfs-skel-post-media {
+        width: 100%;
+        padding-bottom: 56.25%;
+        border-radius: 0;
+      }
+      /* Cross-fade utility: apply right before swapping a container's
+         innerHTML from skeleton markup to real content, so it doesn't
+         just pop in. */
+      @keyframes kfs-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .kfs-content-fade-in {
+        animation: kfs-fade-in 0.25s ease;
       }
     </style>
   </body>

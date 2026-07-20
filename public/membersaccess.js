@@ -3213,19 +3213,18 @@ function swRelTime(ts) {
 //     exists, to build a rich preview card
 //   - renders a thumbnail-first card with a centered play button and a
 //     small platform badge
-//   - for providers whose embed supports it (YouTube, Vimeo), swaps in a
-//     muted/inline/no-controls autoplay preview once the card is actually
-//     in the viewport (Instagram/X-style "feels alive" feed), and swaps
-//     back to the static thumbnail the instant it leaves — see the "Live
-//     inline preview" section below. Instagram has no such embed, so its
-//     card stays thumbnail-only, same as before.
-//   - Tapping/clicking anywhere on the card (thumbnail, play button,
-//     title — the whole card), including while the live preview is
-//     playing, ALWAYS opens the original video in a new tab on its native
-//     platform. The live preview is a silent teaser only — it never
-//     becomes a real, controllable, in-app player. This is enforced by
-//     giving the embedded iframe `pointer-events:none`, so every tap lands
-//     on the card's own click handler instead of the provider's UI.
+//   - NEVER embeds a player. There is no iframe anywhere in this component,
+//     for any provider. What makes a card "feel alive" like an Instagram/
+//     X/Reddit feed is purely cosmetic: while the card is on screen, its
+//     thumbnail image runs a subtle CSS pan/zoom loop (see "Alive preview
+//     animation" below). The real video is never touched, never buffered,
+//     never rendered inline — clicking anywhere on the card (thumbnail,
+//     play button, title — the whole card), including mid-animation,
+//     opens the original video in a new tab on its native platform. This
+//     sidesteps embedding issues entirely (e.g. YouTube's "Error 153" from
+//     restricted embeds, Vimeo privacy settings, provider branding/API
+//     complexity) and matches the lightweight link-preview pattern used
+//     by Discord, Reddit, X, Threads, and LinkedIn.
 //   - lazy-loads the metadata fetch via IntersectionObserver, so a feed
 //     full of video posts doesn't fire a wall of requests on load
 //
@@ -3250,18 +3249,6 @@ const VideoLinkPreview = (function () {
         `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
         `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
       ],
-      // Live inline preview: youtube-nocookie.com (privacy-enhanced, less
-      // branding chrome around the player) + every param YouTube exposes to
-      // strip UI: no controls, no keyboard, minimal logo, no related-videos
-      // grid, no annotations. loop=1 needs playlist=<same id> to loop a
-      // single video (YouTube quirk). enablejsapi=1 lets us send
-      // play/pause/seek postMessage commands without loading any extra SDK.
-      // rel/branding params are best-effort — YouTube doesn't contractually
-      // guarantee zero UI, but this is as clean as their embed gets.
-      live: true,
-      embedSrc: id =>
-        `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}` +
-        `&controls=0&disablekb=1&modestbranding=1&rel=0&iv_load_policy=3&fs=0&playsinline=1&enablejsapi=1`,
     },
     vimeo: {
       label: 'Vimeo',
@@ -3271,15 +3258,6 @@ const VideoLinkPreview = (function () {
       // ~640px default it returns otherwise.
       oembed: url => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}&width=1280`,
       thumbLadder: () => null, // no predictable pattern — oEmbed is the only source
-      // Vimeo's official "background mode" is built for exactly this: it
-      // force-mutes, force-loops, and strips every control/title/byline —
-      // no postMessage config needed to hide UI, only to drive play/pause
-      // on visibility (handled via the Vimeo Player SDK, loaded lazily —
-      // see _ensureVimeoApi below).
-      live: true,
-      embedSrc: id =>
-        `https://player.vimeo.com/video/${id}?autoplay=1&muted=1&loop=1&background=1` +
-        `&controls=0&title=0&byline=0&portrait=0`,
     },
     instagram: {
       label: 'Instagram',
@@ -3291,10 +3269,6 @@ const VideoLinkPreview = (function () {
       // card (badge + "View on Instagram") instead of a real thumbnail.
       oembed: null,
       thumbLadder: () => null,
-      // No official Instagram embed supports muted/silent background
-      // autoplay without their branded widget + JS SDK, so this card stays
-      // thumbnail-only and opens the app/site on tap, same as before.
-      live: false,
     },
   };
 
@@ -3503,7 +3477,6 @@ const VideoLinkPreview = (function () {
   }
 
   function _buildCard(el, hit, meta) {
-    const p = PROVIDERS[hit.provider];
     el.classList.add('vlp-ready');
     el.dataset.vlpResolvedProvider = hit.provider;
     el.style.setProperty('--vlp-aspect', `${meta.aspect}%`);
@@ -3527,10 +3500,10 @@ const VideoLinkPreview = (function () {
     const img = el.querySelector('.vlp-thumb');
     if (img && img.tagName === 'IMG') _wireThumbFallback(img, meta.thumbLadder);
 
-    // This is only ever a preview — even with the live autoplay embed
-    // below, it never becomes a real player. Clicking or tapping anywhere
-    // on the card (thumbnail, play button, title, metadata, badges, empty
-    // space, or the muted live preview itself) opens the original video.
+    // This is only ever a preview — it never becomes a real player.
+    // Clicking or tapping anywhere on the card (thumbnail, play button,
+    // title, metadata, badges, empty space, even mid pan/zoom animation)
+    // opens the original video.
     el.setAttribute('role', 'link');
     el.setAttribute('tabindex', '0');
     el.setAttribute('aria-label', `${meta.title} — opens on ${meta.providerLabel}`);
@@ -3539,15 +3512,11 @@ const VideoLinkPreview = (function () {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); _openOriginal(hit.url); }
     });
 
-    // Wire the muted autoplay-on-visible live preview for providers that
-    // support it (YouTube, Vimeo). No-op for Instagram or if the browser
-    // has no IntersectionObserver — the card just stays the static
-    // thumbnail built above in that case.
-    if (p && p.live && meta.playable) {
-      const media = el.querySelector('.vlp-media');
-      if (media) media.classList.add('vlp-can-live');
-      _wireLive(el, hit);
-    }
+    // Wire the "feels alive" pan/zoom animation for the on-screen thumbnail.
+    // Purely cosmetic CSS — no embed, no player, no provider network call
+    // beyond the thumbnail image already loading. Works the same for every
+    // provider (including Instagram), since it never touches real video.
+    if (meta.playable) _wireActivity(el);
   }
 
   function _hydrateOne(el) {
@@ -3564,144 +3533,69 @@ const VideoLinkPreview = (function () {
     });
   }
 
-  // ── Live inline preview ─────────────────────────────────────────────
-  // Two separate IntersectionObservers, deliberately not one:
-  //   - _preloadObserver: wide rootMargin, fires well before the card is
-  //     actually on screen. Creates the iframe (lazy-load) when the card
-  //     gets close, and destroys it — removing the iframe entirely, so
-  //     there's nothing left to buffer — once it's scrolled well away.
-  //   - _visibleObserver: no margin, fires only on real on-screen
-  //     visibility. Drives play/pause (and restart-from-0 on Vimeo) so a
-  //     card that's merely "close" per the preload margin, but not
-  //     actually visible, never autoplays.
-  // This mirrors how Instagram/Twitter-style feeds keep autoplay cheap:
-  // create ahead of time, play only when truly visible, tear down when far.
-  function _ytCommand(iframe, func, args) {
-    if (!iframe || !iframe.contentWindow) return;
-    try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), '*'); }
-    catch { /* iframe not ready yet — harmless no-op */ }
-  }
+  // ── "Alive" preview animation (NOT an embedded player) ───────────────
+  // Deliberately does not touch the real YouTube/Vimeo video at all —
+  // there is still no iframe anywhere in this component. What makes the
+  // card "feel alive" like an Instagram/X/Reddit feed is a subtle,
+  // CSS-only pan/zoom loop on the *thumbnail image itself* while the card
+  // is on screen. It's a feed, not a video player: tapping the card
+  // always opens the original video on its native platform (see the
+  // click/keydown handlers in _buildCard above) — nothing here ever
+  // becomes interactive or embeds provider UI/branding.
+  //
+  // Single IntersectionObserver, single active card at a time:
+  //   - threshold 0.6 → "visible" the moment ~60% of the card is on
+  //     screen, matching Instagram's own autoplay threshold.
+  //   - only one card ever carries the `.vlp-active` class. If a second
+  //     card crosses the threshold while another is still active, the
+  //     previous one is deactivated first (CSS animation resets to its
+  //     starting frame, i.e. "starts from the beginning" the next time
+  //     it becomes active again).
+  //   - leaving the viewport (or losing the "active" slot to a newer
+  //     card) simply removes the class — no player object, nothing to
+  //     destroy, nothing left buffering. This is what keeps a 100+ post
+  //     feed cheap: at most one lightweight CSS animation running.
+  let _activeVlpEl = null;
 
-  let _vimeoApiPromise = null;
-  function _ensureVimeoApi() {
-    if (window.Vimeo && window.Vimeo.Player) return Promise.resolve();
-    if (_vimeoApiPromise) return _vimeoApiPromise;
-    _vimeoApiPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://player.vimeo.com/api/player.js';
-      s.async = true;
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    return _vimeoApiPromise;
-  }
-
-  function _createLiveMedia(el, hit) {
-    if (el.dataset.vlpLiveInit) return;
-    const p = PROVIDERS[hit.provider];
-    if (!p || !p.live) return;
+  function _deactivateVlp(el) {
+    if (!el) return;
     const media = el.querySelector('.vlp-media');
     if (!media) return;
-    el.dataset.vlpLiveInit = '1';
-
-    const iframe = document.createElement('iframe');
-    iframe.className = 'vlp-live-frame';
-    iframe.setAttribute('tabindex', '-1');
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
-    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    // No `allowfullscreen` attribute — combined with pointer-events:none
-    // in CSS, there's no way in or out of this iframe except our own
-    // click handler on the card, which always opens the original video.
-    iframe.src = p.embedSrc(hit.id);
-    media.insertBefore(iframe, media.firstChild);
-    el._vlpFrame = iframe;
-
-    if (hit.provider === 'vimeo') {
-      _ensureVimeoApi().then(() => {
-        if (!el._vlpFrame) return; // destroyed while the SDK script was loading
-        try { el._vlpPlayer = new Vimeo.Player(iframe); }
-        catch { /* provider disabled embedding for this video — thumbnail stays as-is */ }
-      }).catch(() => { /* player.js failed to load (offline/blocked) — thumbnail stays as-is */ });
-    }
+    // Force the pan/zoom animation to restart from frame 0 next time this
+    // card becomes active again, rather than resuming mid-cycle.
+    media.classList.remove('vlp-active');
+    void media.offsetWidth; // reflow — restarts the CSS animation on next add
+    if (_activeVlpEl === el) _activeVlpEl = null;
   }
 
-  function _destroyLiveMedia(el) {
-    if (!el.dataset.vlpLiveInit) return;
-    delete el.dataset.vlpLiveInit;
+  function _activateVlp(el) {
+    if (_activeVlpEl === el) return;
+    if (_activeVlpEl) _deactivateVlp(_activeVlpEl); // only one preview animates at once
     const media = el.querySelector('.vlp-media');
-    if (media) media.classList.remove('vlp-live-active');
-    if (el._vlpPlayer) { try { el._vlpPlayer.unload(); } catch { /* already gone */ } el._vlpPlayer = null; }
-    if (el._vlpFrame) { el._vlpFrame.remove(); el._vlpFrame = null; }
+    if (!media) return;
+    media.classList.add('vlp-active');
+    _activeVlpEl = el;
   }
 
-  function _playLiveMedia(el) {
-    if (!el.dataset.vlpLiveInit) return; // not created yet — preload observer hasn't fired
-    const media = el.querySelector('.vlp-media');
-    if (media) media.classList.add('vlp-live-active');
-    if (el._vlpPlayer) {
-      // Vimeo: restart from 0 every time it (re)becomes visible, per spec.
-      try { el._vlpPlayer.setCurrentTime(0).catch(() => {}).finally(() => { try { el._vlpPlayer.play().catch(() => {}); } catch {} }); }
-      catch { /* player torn down mid-flight */ }
-    } else if (el._vlpFrame && el.dataset.vlpResolvedProvider === 'youtube') {
-      // Restart from 0 every time it (re)becomes visible, per spec.
-      _ytCommand(el._vlpFrame, 'seekTo', [0, true]);
-      _ytCommand(el._vlpFrame, 'playVideo');
-    }
-  }
-
-  function _pauseLiveMedia(el) {
-    const media = el.querySelector('.vlp-media');
-    if (media) media.classList.remove('vlp-live-active');
-    if (el._vlpPlayer) { try { el._vlpPlayer.pause().catch(() => {}); } catch { /* player torn down mid-flight */ } }
-    else if (el._vlpFrame && el.dataset.vlpResolvedProvider === 'youtube') _ytCommand(el._vlpFrame, 'pauseVideo');
-  }
-
-  let _preloadIO = null;
-  function _preloadObserver() {
-    if (_preloadIO || !('IntersectionObserver' in window)) return _preloadIO;
-    _preloadIO = new IntersectionObserver((entries) => {
+  let _activityIO = null;
+  function _activityObserver() {
+    if (_activityIO || !('IntersectionObserver' in window)) return _activityIO;
+    _activityIO = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         const el = entry.target;
-        if (!el.isConnected) { _preloadIO.unobserve(el); return; }
-        if (entry.isIntersecting) {
-          const hit = parse(el.dataset.vlpUrl, el.dataset.vlpResolvedProvider);
-          if (hit) _createLiveMedia(el, hit);
-        } else {
-          _destroyLiveMedia(el);
-        }
-      });
-      // rootMargin below is generous on purpose: the goal is "close to
-      // entering the viewport", not "already visible" — actual visibility
-      // (and therefore whether it's actually playing) is _visibleObserver's job.
-    }, { rootMargin: '600px 0px' });
-    return _preloadIO;
-  }
-
-  let _visibleIO = null;
-  function _visibleObserver() {
-    if (_visibleIO || !('IntersectionObserver' in window)) return _visibleIO;
-    _visibleIO = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const el = entry.target;
-        if (!el.isConnected) { _visibleIO.unobserve(el); return; }
-        if (entry.isIntersecting) _playLiveMedia(el);
-        else _pauseLiveMedia(el);
+        if (!el.isConnected) { _activityIO.unobserve(el); if (_activeVlpEl === el) _deactivateVlp(el); return; }
+        if (entry.isIntersecting) _activateVlp(el);
+        else _deactivateVlp(el);
       });
     }, { rootMargin: '0px', threshold: 0.6 });
-    return _visibleIO;
+    return _activityIO;
   }
 
-  /** Registers a freshly-built, live-capable card with both observers.
-   *  If the browser has no IntersectionObserver at all, the card simply
-   *  stays the static thumbnail — we never autoplay unconditionally. */
-  function _wireLive(el, hit) {
-    const pre = _preloadObserver();
-    const vis = _visibleObserver();
-    if (!pre || !vis) return;
-    pre.observe(el);
-    vis.observe(el);
+  /** Registers a freshly-built, animatable card. No-op (stays a plain
+   *  static thumbnail) if the browser has no IntersectionObserver. */
+  function _wireActivity(el) {
+    const io = _activityObserver();
+    if (io) io.observe(el);
   }
 
   let _io = null;
@@ -3742,7 +3636,21 @@ const VideoLinkPreview = (function () {
     _hydrateOne(el);
   }
 
-  return { parse, validate, fetchMeta, placeholder, hydrate, mountNow, PROVIDERS };
+  /** Synchronous best-guess thumbnail URL for a video link — no network
+   *  request, no metadata fetch. Used by compact management rows (e.g. My
+   *  Posts) that just want a real image instead of a full VideoLinkPreview
+   *  card. Returns null for providers with no predictable thumbnail
+   *  pattern (Vimeo, Instagram) — callers should keep their existing
+   *  icon fallback for those. */
+  function quickThumb(url, provider) {
+    const hit = parse(url, provider);
+    if (!hit) return null;
+    const p = PROVIDERS[hit.provider];
+    const ladder = p && p.thumbLadder(hit.id);
+    return ladder ? ladder[0] : null;
+  }
+
+  return { parse, validate, fetchMeta, placeholder, hydrate, mountNow, quickThumb, PROVIDERS };
 })();
 
 // Keep older call sites working. We no longer embed players anywhere (see
@@ -4132,10 +4040,23 @@ async function swLoadMyPosts() {
       list.innerHTML = `<div class="sw-empty"><div class="sw-empty-icon">${SW_ICONS.postsLg}</div><div class="sw-empty-title">No posts yet</div><div class="sw-empty-sub">Post your first project to the Social Strand.</div></div>`;
       return;
     }
-    list.innerHTML = data.map(p => `
+    list.innerHTML = data.map(p => {
+      // Real thumbnail for video posts where the provider makes one
+      // predictable (YouTube) — same source of truth as the feed/DM/detail
+      // cards, just without the full interactive VideoLinkPreview card,
+      // which doesn't fit this compact management-row layout. Falls back
+      // to the plain icon tile for image-less providers (Vimeo, Instagram)
+      // or non-video posts, same as before.
+      const videoThumb = p.video_url ? VideoLinkPreview.quickThumb(p.video_url, p.video_provider) : null;
+      const thumbHtml = p.cover_image
+        ? `<img src="${swEsc(p.cover_image)}" alt="" class="sw-my-post-thumb">`
+        : videoThumb
+          ? `<img src="${swEsc(videoThumb)}" alt="" class="sw-my-post-thumb">`
+          : `<div class="sw-my-post-thumb sw-my-post-thumb-blank">${SW_ICONS.play}</div>`;
+      return `
       <div class="sw-my-post-row">
         <div class="sw-my-post-info">
-          ${p.cover_image ? `<img src="${swEsc(p.cover_image)}" alt="" class="sw-my-post-thumb">` : `<div class="sw-my-post-thumb sw-my-post-thumb-blank">${SW_ICONS.play}</div>`}
+          ${thumbHtml}
           <div class="sw-my-post-text">
             <div class="sw-my-post-title">${swEsc(p.title)}</div>
             <div class="sw-my-post-meta">
@@ -4150,7 +4071,8 @@ async function swLoadMyPosts() {
           <button class="sw-action-btn" title="Edit" onclick="swOpenEditModal('${swEsc(p.id)}')">${SW_ICONS.edit}</button>
           <button class="sw-action-btn sw-action-btn-danger" title="Delete" onclick="swDeletePost('${swEsc(p.id)}','${swEsc(p.title)}')">${SW_ICONS.trash}</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch (e) {
     list.innerHTML = `<span style="color:var(--danger);font-size:13px">${swEsc(e.message)}</span>`;
   }
