@@ -85,6 +85,71 @@ const E2EE = (() => {
     return arr.buffer;
   }
 
+  // ── Device identity ──────────────────────────────────────────────────────────
+  // ROOT CAUSE of the multi-device decrypt bug: this module previously had no
+  // concept of "device" at all. Every browser/device generated its own private
+  // key in IndexedDB (correct — private keys must never leave a device), but
+  // published it to a single `/api/member/e2ee/public-key` slot PER MEMBER on
+  // the server (not per device). Logging into a second device silently
+  // overwrote the first device's public key on the server. From that moment:
+  //   - Anyone encrypting a NEW message "to" this member (including the first
+  //     device encrypting a "for me" copy of its own sent messages) used the
+  //     second device's public key.
+  //   - The first device still holds only its OWN original private key, which
+  //     no longer matches anything being encrypted for this member — every
+  //     ECDH shared-secret it derives is wrong, so AES-GCM decryption fails
+  //     its integrity check and throws, which every call site here catches
+  //     and renders as "Message encrypted before your keys were set up".
+  // This is fully deterministic, not a race — it reproduces on literally every
+  // second-device login, in either direction, for both DMs and groups.
+  //
+  // The fix: give every device its own stable device_id, store MULTIPLE public
+  // keys per member on the server (keyed by device_id, never overwritten), and
+  // fan out encryption so a message is encrypted once per *device* that needs
+  // to read it (every recipient device, plus every one of the sender's OWN
+  // other devices — exactly how Signal/WhatsApp do multi-device).
+  //
+  // REQUIRED BACKEND CHANGES (consolidated — client code below assumes these):
+  //   1. POST /api/member/e2ee/publish-key now sends { device_id, public_key_jwk }.
+  //      UPSERT a row keyed by (member_id, device_id) in a devices table —
+  //      never overwrite/replace another device's row.
+  //   2. NEW: GET /api/member/e2ee/public-keys/:memberId
+  //      → { devices: [{ device_id, public_key_jwk }, ...] } — all active
+  //      devices for that member. (Legacy GET .../public-key/:memberId, singular,
+  //      can stay as a fallback during rollout — the client already handles it.)
+  //   3. DM messages: replace cipher_for_recipient/cipher_for_self columns with
+  //      a `ciphers` JSON map { [device_id]: cipherStr } plus a `sender_device_id`
+  //      column. NEW: PATCH /api/member/dm/messages/:id/ciphers accepting
+  //      { ciphers: { [device_id]: cipherStr } } that MERGES into the existing
+  //      map (used by the auto-repair pass to backfill just the missing devices).
+  //   4. Group messages: `wrapped_keys` JSON keys change from `memberId` to
+  //      `"${memberId}:${deviceId}"`, plus a `sender_device_id` column. The
+  //      existing PATCH .../messages/:id/wrapped-key now also takes device_id
+  //      in its body ({ member_id, device_id, wrapped_key }).
+  //   5. Any endpoint returning DM/group messages should include the new
+  //      `ciphers`/`wrapped_keys`/`sender_device_id` fields (and may keep the
+  //      old fields alongside them for already-sent legacy messages — this
+  //      client reads old-shape messages as a fallback, it does not require
+  //      a data migration).
+  const DEVICE_ID_KEY = 'kfs-e2ee-device-id';
+
+  function _getOrCreateDeviceId() {
+    try {
+      let id = localStorage.getItem(DEVICE_ID_KEY);
+      if (id) return id;
+      id = 'dev_' + crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+      return id;
+    } catch {
+      // localStorage unavailable (private browsing edge cases) — fall back to
+      // an in-memory id. Multi-device sync still works for this session; it
+      // just won't survive a reload, same degraded behavior as private mode
+      // gives every other "remember this browser" feature in the app.
+      return _volatileDeviceId || (_volatileDeviceId = 'dev_' + crypto.randomUUID());
+    }
+  }
+  let _volatileDeviceId = null;
+
   // ── Key pair management ───────────────────────────────────────────────────────
 
   /**
@@ -192,25 +257,56 @@ const E2EE = (() => {
   }
 
   // ── Public-key cache (avoid re-fetching) ─────────────────────────────────────
+  // Cached per MEMBER, holding that member's full list of active devices —
+  // this is the piece that was missing entirely before: there was no way to
+  // even ask the server "what are all of this member's devices?", only
+  // "what is THE key for this member" (singular, last-writer-wins).
 
-  const _peerKeyCache = new Map(); // memberId → CryptoKey (public)
+  const _peerDeviceCache = new Map(); // memberId → [{ device_id, publicKey (CryptoKey) }]
 
-  async function _getPeerPublicKey(memberId) {
-    if (_peerKeyCache.has(memberId)) return _peerKeyCache.get(memberId);
-    const data = await api('GET', `/api/member/e2ee/public-key/${memberId}`);
-    if (!data?.public_key_jwk) throw new Error(`No E2EE key for member ${memberId}`);
-    const key = await _importPeerPublicKey(data.public_key_jwk);
-    _peerKeyCache.set(memberId, key);
-    return key;
+  /**
+   * Fetch every active device's public key for a member.
+   * REQUIRED BACKEND CHANGE: GET /api/member/e2ee/public-keys/:memberId
+   *   → { devices: [{ device_id, public_key_jwk }, ...] }
+   * Falls back to the legacy GET /api/member/e2ee/public-key/:memberId
+   * (single key) if the new route 404s, so this keeps working (in its old,
+   * buggy, single-device way) until the backend is upgraded — it does NOT
+   * fix the bug by itself, it just avoids a hard failure during rollout.
+   */
+  async function _getPeerDevices(memberId) {
+    if (_peerDeviceCache.has(memberId)) return _peerDeviceCache.get(memberId);
+    let entries;
+    try {
+      const data = await api('GET', `/api/member/e2ee/public-keys/${memberId}`);
+      const list = data?.devices || [];
+      if (!list.length) throw new Error(`No E2EE devices for member ${memberId}`);
+      entries = await Promise.all(list.map(async d => ({
+        deviceId: d.device_id,
+        publicKey: await _importPeerPublicKey(d.public_key_jwk),
+      })));
+    } catch (e) {
+      // Legacy single-key fallback (pre-upgrade backend).
+      const data = await api('GET', `/api/member/e2ee/public-key/${memberId}`);
+      if (!data?.public_key_jwk) throw new Error(`No E2EE key for member ${memberId}`);
+      entries = [{ deviceId: 'legacy', publicKey: await _importPeerPublicKey(data.public_key_jwk) }];
+    }
+    _peerDeviceCache.set(memberId, entries);
+    return entries;
+  }
+
+  function _invalidatePeerCache(memberId) {
+    if (memberId) _peerDeviceCache.delete(memberId);
+    else _peerDeviceCache.clear();
   }
 
   // ── Initialise: load/generate key pair, publish public key to server ──────────
 
   let _myPrivateKey   = null;
   let _myPublicKeyJwk = null;
+  let _myDeviceId     = null;
   let _ready          = false;
   let _readyPromise   = null;
-  let _wasRotated     = false; // true only if the server already had a different key on file
+  let _wasRotated     = false; // true only if THIS device_id already had a different key on file (e.g. local storage was cleared and regenerated) — no longer true just because another device logged in, since devices no longer share one slot.
 
   // Callbacks to notify once init finally succeeds, even if it succeeds on a
   // retry long after the first caller gave up waiting. Lets any screen that
@@ -224,7 +320,14 @@ const E2EE = (() => {
 
   /**
    * Must be called once on login (after _member is set).
-   * Generates key pair if needed, publishes public key to server.
+   * Generates key pair if needed, registers THIS DEVICE's public key with
+   * the server (does not touch any other device's registration).
+   *
+   * REQUIRED BACKEND CHANGE: POST /api/member/e2ee/publish-key now sends
+   * { device_id, public_key_jwk } and must UPSERT a row keyed by
+   * (member_id, device_id) in a devices table — never overwrite/replace
+   * other devices' rows. This is the actual fix for the multi-device bug;
+   * everything else in this module exists to make use of it.
    *
    * Retries on failure (e.g. a transient network error, or a 429 from the
    * publish-key rate limit) instead of giving up for the rest of the session.
@@ -245,17 +348,24 @@ const E2EE = (() => {
           const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair();
           _myPrivateKey   = privateKey;
           _myPublicKeyJwk = publicKeyJwk;
-          // Publish our public key so peers can encrypt messages to us.
-          // The server stores it — it's not secret. Idempotent upsert.
-          // rotated=true means the server already had a *different* key on
-          // file — i.e. this is genuinely a new device/browser or cleared
-          // storage, not a first-ever setup, so older messages may not
-          // decrypt here.
-          const resp = await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+          _myDeviceId     = _getOrCreateDeviceId();
+          // Publish THIS DEVICE's public key. Server stores it — it's not
+          // secret. Upsert keyed by (member_id, device_id): idempotent for
+          // this device, and never touches any other device's row.
+          const resp = await api('POST', '/api/member/e2ee/publish-key', {
+            device_id: _myDeviceId,
+            public_key_jwk: publicKeyJwk,
+          });
           _wasRotated = isFresh && !!resp?.rotated;
           _ready = true;
-          console.log('[E2EE] Ready. Key fingerprint:', await fingerprint());
+          console.log('[E2EE] Ready. Device', _myDeviceId, 'key fingerprint:', await fingerprint());
           _onReadyCallbacks.splice(0).forEach(cb => { try { cb(); } catch {} });
+          // Best-effort background repair: if this is a newly-registered
+          // device, any conversation the user opens should self-heal via
+          // dmAutoRewrapMissingKeys/gcAutoRewrapMissingKeys (called from the
+          // conversation-open code paths), but we don't wait on that here —
+          // this init() call must resolve promptly so the rest of the app
+          // isn't blocked on it.
           return;
         } catch (e) {
           const isLastAttempt = attempt === maxAttempts - 1;
@@ -275,9 +385,11 @@ const E2EE = (() => {
   }
 
   function ready() { return _ready; }
-  // True only when this device's key was freshly generated AND the server
-  // already had a prior key on file for this member — a real rotation
-  // (new device/browser, or local site data cleared), not first-time setup.
+  function myDeviceId() { return _myDeviceId; }
+  // True only when this device's key was freshly generated AND this same
+  // device_id already had a prior key on file — i.e. this device's local
+  // storage was cleared and regenerated, not "another device logged in"
+  // (which is now a normal, expected event, not a rotation).
   function wasFreshKey() { return _wasRotated; }
 
   // ── Fingerprint (for out-of-band verification) ───────────────────────────────
@@ -302,36 +414,89 @@ const E2EE = (() => {
 
   // ── DM encrypt / decrypt ─────────────────────────────────────────────────────
   //
-  // Per-message ephemeral AES key: derive shared ECDH key → use it to encrypt.
-  // This means every message gets a fresh IV and the ciphertext is stored on server.
+  // Fan-out per device: the sender's device holds ONE private key (its own).
+  // It derives a DIFFERENT ECDH shared secret per target device (my_private +
+  // that device's public key) and encrypts the plaintext once per target,
+  // storing the result in `ciphers: { [device_id]: cipherStr }`. `sender_device_id`
+  // records which of the sender's devices produced the ciphers, so a reader
+  // knows whose public key to pair with its OWN private key to reproduce the
+  // same shared secret (ECDH is only symmetric across the same two keypairs).
+  // Targets = every device the recipient has registered, plus every OTHER
+  // device the sender has registered, plus the sender's current device
+  // (encrypted directly against the local key so reading your own just-sent
+  // message never depends on a round-trip to the server).
 
   /**
-   * Encrypt a DM body for `recipientMemberId`.
-   * Returns the encrypted string to store as `body` on the server.
-   * Also encrypts for SELF so we can read our sent messages in the same conv.
-   * Returns { cipher_for_recipient, cipher_for_self }
+   * Collect { deviceId → publicKey (CryptoKey) } for every device that should
+   * be able to read a message between `myId` and `peerId` (both sides' devices).
+   * Always includes the current device, using the local key directly rather
+   * than whatever the server has cached for it (avoids a race right after
+   * publish-key where the GET hasn't caught up yet).
+   */
+  async function _collectDeviceTargets(myId, peerId) {
+    const targets = new Map(); // deviceId → publicKey (CryptoKey)
+    const [mine, theirs] = await Promise.allSettled([
+      _getPeerDevices(myId),
+      _getPeerDevices(peerId),
+    ]);
+    if (mine.status === 'fulfilled') mine.value.forEach(d => targets.set(d.deviceId, d.publicKey));
+    if (theirs.status === 'fulfilled') theirs.value.forEach(d => targets.set(d.deviceId, d.publicKey));
+    // Current device always included, always using the local key directly.
+    targets.set(_myDeviceId, await _importPeerPublicKey(_myPublicKeyJwk));
+    return targets;
+  }
+
+  /**
+   * Encrypt `plaintext` once per entry in `deviceTargets` (Map deviceId→publicKey).
+   */
+  async function _encryptForDeviceTargets(plaintext, deviceTargets) {
+    const ciphers = {};
+    await Promise.all([...deviceTargets.entries()].map(async ([deviceId, publicKey]) => {
+      try {
+        const sharedKey = await _deriveSharedKey(_myPrivateKey, publicKey);
+        ciphers[deviceId] = await _aesEncrypt(sharedKey, plaintext);
+      } catch (e) {
+        console.warn('[E2EE] Could not encrypt for device', deviceId, e.message);
+      }
+    }));
+    return ciphers;
+  }
+
+  /**
+   * Encrypt a DM body for `recipientMemberId`, fanned out to every device
+   * of the recipient AND every device of the sender (so any logged-in device
+   * on either side can read it — this is the actual multi-device fix).
+   * Returns { ciphers, sender_device_id, e2ee: true }.
    */
   async function encryptDm(plaintext, recipientMemberId) {
     if (!_ready) return { plaintext }; // fallback (shouldn't happen in prod)
     const myId = window._memberProfile?.id || _member?.id;
+    const targets = await _collectDeviceTargets(myId, recipientMemberId);
+    const ciphers = await _encryptForDeviceTargets(plaintext, targets);
+    return { ciphers, sender_device_id: _myDeviceId, e2ee: true };
+  }
 
-    // Derive shared key with recipient
-    const recipientPublicKey = await _getPeerPublicKey(recipientMemberId);
-    const sharedKeyForRecipient = await _deriveSharedKey(_myPrivateKey, recipientPublicKey);
-    const cipher_for_recipient  = await _aesEncrypt(sharedKeyForRecipient, plaintext);
-
-    // Also encrypt for self (ECDH with our own public key, so we can read sent msgs)
-    const myPublicKey    = await _importPeerPublicKey(_myPublicKeyJwk);
-    const sharedKeyForMe = await _deriveSharedKey(_myPrivateKey, myPublicKey);
-    const cipher_for_self = await _aesEncrypt(sharedKeyForMe, plaintext);
-
-    return { cipher_for_recipient, cipher_for_self, e2ee: true };
+  /**
+   * Encrypt `plaintext` for an explicit list of device ids belonging to
+   * `myId` and/or `peerId` — used by the auto-repair pass to backfill just
+   * the devices that are missing a cipher on an existing message, without
+   * re-encrypting (and re-uploading) the devices that already have one.
+   */
+  async function encryptForDevices(plaintext, peerId, deviceIds) {
+    if (!_ready || !deviceIds?.length) return {};
+    const myId = window._memberProfile?.id || _member?.id;
+    const all = await _collectDeviceTargets(myId, peerId);
+    const wanted = new Map([...all.entries()].filter(([id]) => deviceIds.includes(id)));
+    return _encryptForDeviceTargets(plaintext, wanted);
   }
 
   /**
    * Decrypt a DM message.
-   * `msg` from server has either `cipher_for_recipient` (received) or `cipher_for_self` (sent).
-   * Falls back to `msg.body` for legacy plaintext messages.
+   * `msg` from server has `ciphers: { [device_id]: cipherStr }` plus
+   * `sender_device_id` identifying which of the sender's devices produced
+   * them. Falls back to the legacy single `cipher_for_recipient`/
+   * `cipher_for_self` fields for messages sent before this device-fan-out
+   * migration. Falls back to `msg.body` for legacy plaintext messages.
    */
   async function decryptDm(msg, myId) {
     // Legacy plaintext message (pre-E2EE)
@@ -342,11 +507,33 @@ const E2EE = (() => {
     if (!_ready) return '🔒 Message encrypted before your keys were set up';
     try {
       const isMine = msg.sender_id === myId;
-      const cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
+      let cipherStr = msg.ciphers?.[_myDeviceId];
+      if (!cipherStr) {
+        // Pre-migration message: only had one cipher for "the recipient" and
+        // one for "self", with no concept of device.
+        cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
+      }
+      // Genuinely missing for this device (e.g. a device that logged in
+      // after this message was sent, and the auto-repair pass hasn't caught
+      // up to it yet) — same behavior as Signal/WhatsApp: can't retroactively
+      // decrypt without the sender re-wrapping for this device.
       if (!cipherStr) return '[message unavailable]';
-      // Derive the same shared key
-      const peerId = isMine ? myId : msg.sender_id;
-      const peerPublicKey = await _getPeerPublicKey(peerId);
+
+      // Derive the same shared secret the sender used for THIS device: our
+      // own private key + the specific sender device's public key.
+      const senderDeviceId = msg.sender_device_id;
+      let peerPublicKey;
+      if (isMine && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
+        // Self-authored on this exact device (or a legacy self-cipher) —
+        // use the local key directly, no network dependency.
+        peerPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
+      } else {
+        const peerId = isMine ? myId : msg.sender_id;
+        const devices = await _getPeerDevices(peerId);
+        const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
+        peerPublicKey = (match || devices[0])?.publicKey;
+        if (!peerPublicKey) throw new Error('no matching sender device key');
+      }
       const sharedKey = await _deriveSharedKey(_myPrivateKey, peerPublicKey);
       return await _aesDecrypt(sharedKey, cipherStr);
     } catch (e) {
@@ -362,23 +549,43 @@ const E2EE = (() => {
 
   /**
    * Encrypt a group message for all `memberIds` (including self).
-   * Returns { ciphertext, wrapped_keys, e2ee: true }
+   * Wraps the per-message AES key once per DEVICE (not per member) — every
+   * device belonging to every member gets its own wrapped-key entry, keyed
+   * `"${memberId}:${deviceId}"`. This is the multi-device fix for groups:
+   * previously a member's ONE slot got silently overwritten by whichever
+   * device last published a key, so a member's other devices (including the
+   * sender's own other devices) could never unwrap the message key.
+   * Returns { ciphertext, wrapped_keys, sender_device_id, e2ee: true }
    */
   async function encryptGroup(plaintext, memberIds) {
     if (!_ready) return { plaintext };
+    const myId = window._memberProfile?.id || _member?.id;
     // Generate a random per-message AES key
     const msgKey = await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
     );
     const ciphertext = await _aesEncrypt(msgKey, plaintext);
 
-    // Wrap the message key for each member
+    // Wrap the message key for every device of every member.
     const wrapped_keys = {};
     await Promise.allSettled(memberIds.map(async memberId => {
       try {
-        const memberPublicKey = await _getPeerPublicKey(memberId);
-        const sharedKey = await _deriveSharedKey(_myPrivateKey, memberPublicKey);
-        wrapped_keys[memberId] = await _wrapAesKey(msgKey, sharedKey);
+        let devices;
+        if (memberId === myId) {
+          // Own devices: always include the current device via the local key
+          // directly (no network round-trip needed to read our own message),
+          // plus whatever other devices the server knows about for us.
+          const others = await _getPeerDevices(myId).catch(() => []);
+          const map = new Map(others.map(d => [d.deviceId, d.publicKey]));
+          map.set(_myDeviceId, await _importPeerPublicKey(_myPublicKeyJwk));
+          devices = [...map.entries()].map(([deviceId, publicKey]) => ({ deviceId, publicKey }));
+        } else {
+          devices = await _getPeerDevices(memberId);
+        }
+        await Promise.all(devices.map(async ({ deviceId, publicKey }) => {
+          const sharedKey = await _deriveSharedKey(_myPrivateKey, publicKey);
+          wrapped_keys[`${memberId}:${deviceId}`] = await _wrapAesKey(msgKey, sharedKey);
+        }));
       } catch (e) {
         console.warn('[E2EE] Could not wrap key for member', memberId, e.message);
         // Skip — that member won't be able to read this message
@@ -386,12 +593,14 @@ const E2EE = (() => {
       }
     }));
 
-    return { ciphertext, wrapped_keys, e2ee: true };
+    return { ciphertext, wrapped_keys, sender_device_id: _myDeviceId, e2ee: true };
   }
 
   /**
-   * Decrypt a group message for the current user.
-   * `msg` has `ciphertext` + `wrapped_keys: { [myId]: wrappedKey }`.
+   * Decrypt a group message for the current user's current device.
+   * `msg` has `ciphertext` + `wrapped_keys: { "${memberId}:${deviceId}": wrappedKey }`
+   * plus `sender_device_id`. Falls back to the legacy `wrapped_keys[myId]`
+   * (no device) shape for messages sent before this migration.
    */
   async function decryptGroup(msg, myId) {
     if (!msg.e2ee) return msg.body || ''; // legacy plaintext
@@ -399,10 +608,21 @@ const E2EE = (() => {
     // don't fall through to msg.body here (it's just the empty sentinel).
     if (!_ready) return '🔒 Message encrypted before your keys were set up';
     try {
-      const myWrappedKey = msg.wrapped_keys?.[myId];
-      if (!myWrappedKey) return '🔒 Message encrypted before your keys were set up';
-      // Unwrap the message key using our ECDH shared key with the sender
-      const senderPublicKey = await _getPeerPublicKey(msg.sender_id);
+      const myWrappedKey = msg.wrapped_keys?.[`${myId}:${_myDeviceId}`] ?? msg.wrapped_keys?.[myId];
+      // Genuinely missing for this device — e.g. a device that logged in
+      // after this message was sent, and auto-repair hasn't caught up yet.
+      if (!myWrappedKey) return '[message unavailable]';
+
+      const senderDeviceId = msg.sender_device_id;
+      let senderPublicKey;
+      if (msg.sender_id === myId && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
+        senderPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
+      } else {
+        const devices = await _getPeerDevices(msg.sender_id);
+        const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
+        senderPublicKey = (match || devices[0])?.publicKey;
+        if (!senderPublicKey) throw new Error('no matching sender device key');
+      }
       const sharedKey = await _deriveSharedKey(_myPrivateKey, senderPublicKey);
       const msgKey = await _unwrapAesKey(myWrappedKey, sharedKey);
       return await _aesDecrypt(msgKey, msg.ciphertext);
@@ -440,36 +660,56 @@ const E2EE = (() => {
   // async function reEncryptForNewMember(msg, newMemberId) { ... } // future
 
   // ── Key regeneration (after suspected compromise) ─────────────────────────────
+  // Regenerates THIS device's keypair only. Other devices on the account are
+  // untouched — each device manages its own identity now.
   async function regenerateKeyPair() {
     const { publicKeyJwk } = await _generateKeyPair();
     _myPublicKeyJwk = publicKeyJwk;
     const { privateKey } = await _loadMyKeyPair();
     _myPrivateKey = privateKey;
-    _peerKeyCache.clear(); // clear cached peer keys too (they may have rotated)
-    await api('POST', '/api/member/e2ee/publish-key', { public_key_jwk: publicKeyJwk });
+    _peerDeviceCache.clear(); // clear cached peer devices too (keys may have rotated)
+    await api('POST', '/api/member/e2ee/publish-key', {
+      device_id: _myDeviceId,
+      public_key_jwk: publicKeyJwk,
+    });
     return fingerprint();
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
 
   /**
-   * Unwrap a message AES key that was wrapped for the current user (as sender),
-   * then re-wrap it for a different member. Used by gcAutoRewrapMissingKeys so
-   * that function doesn't need access to any private (_-prefixed) internals.
-   *
-   * @param {string} myWrappedKey  - The wrapped key entry from wrapped_keys[myId]
-   * @param {string} targetMemberId - The member who is missing a wrapped key
-   * @returns {Promise<string>} The new wrapped key string for targetMemberId
+   * All active device ids currently registered for `memberId` — used by the
+   * auto-repair passes (dmAutoRewrapMissingKeys / gcAutoRewrapMissingKeys) to
+   * know the full set of (member, device) pairs that SHOULD have a key/cipher
+   * on a message, without those callers needing any private internals.
    */
-  async function rewrapMsgKey(myWrappedKey, targetMemberId) {
-    // Unwrap using our ECDH shared key with ourselves (sender wraps for self
-    // the same way encryptGroup does: deriveSharedKey(myPrivate, myPublic))
+  async function getDeviceIdsForMember(memberId) {
+    const devices = await _getPeerDevices(memberId);
+    return devices.map(d => d.deviceId);
+  }
+
+  /**
+   * Unwrap a group message AES key that was wrapped for the current user's
+   * current device (as original sender), then re-wrap it for one specific
+   * missing (member, device) pair. Used by gcAutoRewrapMissingKeys so that
+   * function doesn't need access to any private (_-prefixed) internals.
+   *
+   * @param {string} myWrappedKey    - wrapped_keys["${myId}:${myDeviceId}"] (or legacy wrapped_keys[myId])
+   * @param {string} targetMemberId  - the member who is missing a wrapped key
+   * @param {string} targetDeviceId  - the specific device of that member that is missing one
+   * @returns {Promise<string>} the new wrapped key string for that device
+   */
+  async function rewrapMsgKey(myWrappedKey, targetMemberId, targetDeviceId) {
+    // Unwrap using our ECDH shared key with ourselves (sender wraps its own
+    // current device the same way encryptGroup does: deriveSharedKey(myPrivate, myPublic))
     const myPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
     const mySharedKey = await _deriveSharedKey(_myPrivateKey, myPublicKey);
     const msgKey      = await _unwrapAesKey(myWrappedKey, mySharedKey);
-    // Re-wrap for the target member using our ECDH shared key with them
-    const peerKey   = await _getPeerPublicKey(targetMemberId);
-    const sharedKey = await _deriveSharedKey(_myPrivateKey, peerKey);
+    // Re-wrap for the specific target device using our ECDH shared key with it
+    const devices = await _getPeerDevices(targetMemberId);
+    const target  = devices.find(d => d.deviceId === targetDeviceId);
+    if (!target) throw new Error(`No public key for ${targetMemberId}:${targetDeviceId}`);
+    const sharedKey = await _deriveSharedKey(_myPrivateKey, target.publicKey);
     return _wrapAesKey(msgKey, sharedKey);
   }
 
@@ -479,13 +719,17 @@ const E2EE = (() => {
     onReady,
     wasFreshKey,
     fingerprint,
+    myDeviceId,
     encryptDm,
     decryptDm,
+    encryptForDevices,
     encryptGroup,
     decryptGroup,
     decryptForReport,
     regenerateKeyPair,
     rewrapMsgKey,
+    getDeviceIdsForMember,
+    invalidatePeerCache: _invalidatePeerCache,
     getMyPublicKeyJwk: () => _myPublicKeyJwk,
   };
 
@@ -2052,9 +2296,10 @@ async function saveProfile() {
 // ── Movies ────────────────────────────────────────────────────────────────────
 
 async function loadMovies() {
+  const list = $id('movies-list');
+  if (list) list.innerHTML = swSkelRows(2);
   try {
     const subs = await api('GET', '/api/member/movies');
-    const list = $id('movies-list');
     if (!subs.length) {
       list.innerHTML = '<div style="color:var(--muted);font-size:13px">No submissions yet. Click "Submit Movie" to get started.</div>';
       return;
@@ -2312,6 +2557,7 @@ async function confirmInline2FA() {
 
 async function loadSessions() {
   const list = $id('sessions-list');
+  list.innerHTML = swSkelRows(3);
   try {
     const sessions = await api('GET', '/api/member/sessions');
     if (!sessions.length) {
@@ -2422,6 +2668,7 @@ async function submitWorkEditRequest() {
 
 async function loadActivity() {
   const list = $id('activity-list');
+  if (list) list.innerHTML = swSkelRows(5);
   try {
     const items = await api('GET', '/api/member/activity?limit=30');
     if (!items.length) {
@@ -2637,7 +2884,7 @@ async function loadNotifications() {
   if (!_token || _notifLoading) return;
   _notifLoading = true;
   const list = $id('notif-list');
-  if (list) list.innerHTML = '<div class="notif-empty"><div class="notif-empty-title" style="color:#333">Loading…</div></div>';
+  if (list) list.innerHTML = swSkelRows(5);
   try {
     const rawItems = await api('GET', '/api/member/notifications');
     const clearedBefore = _notifClearWatermark();
@@ -2893,7 +3140,7 @@ async function submitCollab() {
 async function loadMyCollabs() {
   const list = $id('collab-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  list.innerHTML = swSkelRows(3);
   try {
     const mine = await api('GET', '/api/collaborate/mine');
     if (!mine.length) {
@@ -3129,7 +3376,7 @@ function _grvTypeLabel(type) {
 async function loadMyGrievances() {
   const list = $id('grv-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  list.innerHTML = swSkelRows(3);
   try {
     const items = await api('GET', '/api/member/grievances');
     if (!items.length) {
@@ -3960,6 +4207,27 @@ function swSkelTiles(n = 4) {
   return tile.repeat(n);
 }
 
+/** Modal-detail skeleton — header row + large media block + a couple of
+ *  text lines. Used by the studio post-detail modal and the member
+ *  mini-profile modal, which previously just showed a bare "Loading…"
+ *  line while their content fetched. */
+function swSkelDetail() {
+  return `<div class="sw-skel-card" style="max-width:520px;margin:0 auto;border:none;background:transparent">
+    <div class="sw-skel-header">
+      <div class="sw-skel-avatar"></div>
+      <div class="sw-skel-lines">
+        <div class="sw-skel-line" style="width:40%"></div>
+        <div class="sw-skel-line" style="width:22%;height:7px"></div>
+      </div>
+    </div>
+    <div class="sw-skel-img" style="border-radius:14px"></div>
+    <div class="sw-skel-lines" style="padding:14px 4px 4px;gap:8px">
+      <div class="sw-skel-line" style="width:90%"></div>
+      <div class="sw-skel-line" style="width:60%"></div>
+    </div>
+  </div>`;
+}
+
 function swSkeletonCards(n = 3) {
   const card = `<div class="sw-skel-card">
     <div class="sw-skel-header">
@@ -4033,7 +4301,7 @@ async function swLoadFeed(reset = false) {
 async function swLoadMyPosts() {
   const list = $id('studio-my-posts-list');
   if (!list) return;
-  list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  list.innerHTML = swSkelRows(3);
   try {
     const data = await api('GET', '/api/member/studio/mine');
     if (!data.length) {
@@ -4083,7 +4351,7 @@ async function swLoadMyPosts() {
 async function swLoadAnalytics() {
   const wrap = $id('studio-analytics-list');
   if (!wrap) return;
-  wrap.innerHTML = '<div class="sw-loading">Loading…</div>';
+  wrap.innerHTML = swSkelRows(4);
   try {
     const data = await api('GET', '/api/member/studio/my-analytics');
     if (!data.length) {
@@ -4141,7 +4409,7 @@ async function swOpenDetail(projectId) {
   const overlay = $id('studio-detail-modal-overlay');
   const body    = $id('studio-detail-body');
   if (!overlay||!body) return;
-  body.innerHTML = '<div class="sw-loading" style="padding:60px 0;text-align:center">Loading…</div>';
+  body.innerHTML = swSkelDetail();
   overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   try {
@@ -5347,7 +5615,7 @@ async function nwLoadFollowers(reset = false) {
   if (reset) { NW.followersPage = 1; NW.followersExhausted = false; }
   const list = $id('network-followers-list');
   if (!list) return;
-  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  if (reset) list.innerHTML = swSkelRows(5);
   NW.followersLoading = true;
   try {
     const resp = await api('GET', `/api/member/network/followers/${myId}?page=${NW.followersPage}`);
@@ -5377,7 +5645,7 @@ async function nwLoadFollowing(reset = false) {
   if (reset) { NW.followingPage = 1; NW.followingExhausted = false; }
   const list = $id('network-following-list');
   if (!list) return;
-  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  if (reset) list.innerHTML = swSkelRows(5);
   NW.followingLoading = true;
   try {
     const resp = await api('GET', `/api/member/network/following/${myId}?page=${NW.followingPage}`);
@@ -5444,7 +5712,7 @@ async function openMemberProfile(memberId) {
   const overlay = $id('member-profile-modal-overlay');
   const body    = $id('member-profile-modal-body');
   if (!overlay || !body) return;
-  body.innerHTML = '<div class="sw-loading" style="padding:40px 0;text-align:center">Loading…</div>';
+  body.innerHTML = swSkelDetail();
   overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   try {
@@ -5648,6 +5916,7 @@ async function discLoadFacets() {
 async function discLoadTrending() {
   const row = $id('discover-trending-row');
   if (!row) return;
+  row.innerHTML = swSkelTiles(4);
   try {
     const { trending } = await api('GET', '/api/member/network/trending');
     if (!trending.length) { row.innerHTML = `<div class="skill-chip-empty">Nothing trending yet — be the first to post.</div>`; return; }
@@ -5667,6 +5936,7 @@ async function discLoadTrending() {
 async function discLoadNewJoiners() {
   const row = $id('discover-newjoiners-row');
   if (!row) return;
+  row.innerHTML = swSkelTiles(4);
   try {
     const joiners = await api('GET', '/api/member/network/new-joiners');
     if (!joiners.length) { row.innerHTML = `<div class="skill-chip-empty">No new joiners yet.</div>`; return; }
@@ -5686,7 +5956,7 @@ async function discLoadMembers(reset = false) {
   if (reset) { DISC.page = 1; DISC.exhausted = false; }
   const list = $id('discover-list');
   if (!list) return;
-  if (reset) list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  if (reset) list.innerHTML = swSkelRows(5);
   DISC.loading = true;
   try {
     const params = new URLSearchParams({ page: DISC.page });
@@ -5761,7 +6031,7 @@ function lbRankClass(rank) {
 async function lbLoad() {
   const list = $id('lb-list');
   if (!list) return;
-  list.innerHTML = '<div class="sw-loading">Loading…</div>';
+  list.innerHTML = swSkelRows(6);
   hideEl('lb-my-rank');
   try {
     const resp = await api('GET', `/api/member/network/leaderboard?period=${LB.period}`);
@@ -6079,6 +6349,13 @@ async function dmLoadMsgs(prepend) {
       });
     }
     DM.oldestSentAt = DM.msgs.find(m => !m.id.startsWith('tmp-'))?.sent_at || null;
+
+    // ── Auto-rewrap: silently backfill E2EE ciphers for any of my own or the
+    // peer's devices that are missing one (new device login, previously-sent
+    // messages). Mirrors gcAutoRewrapMissingKeys for group chats.
+    if (myId && E2EE.ready() && DM.activePeer?.id) {
+      dmAutoRewrapMissingKeys(DM.activePeer.id, DM.msgs, myId).catch(() => {});
+    }
 
     const list = $id('dm-msg-list');
     if (!list) return;
@@ -7661,8 +7938,8 @@ async function _dmSubmitEdit(newBody) {
       msg.body = res.message?.body ?? newBody;
       msg.edited_at = res.message?.edited_at || new Date().toISOString();
       msg.e2ee = res.message?.e2ee ?? msg.e2ee;
-      msg.cipher_for_recipient = res.message?.cipher_for_recipient ?? null;
-      msg.cipher_for_self = res.message?.cipher_for_self ?? null;
+      msg.ciphers = res.message?.ciphers ?? null;
+      msg.sender_device_id = res.message?.sender_device_id ?? msg.sender_device_id;
       msg._plaintext = newBody; // avoid a re-decrypt round-trip
     }
     _applyEditedBubble(state.id, newBody);
@@ -7698,6 +7975,7 @@ async function _gcSubmitEdit(newBody) {
       msg.e2ee = res.message?.e2ee ?? msg.e2ee;
       msg.ciphertext = res.message?.ciphertext ?? null;
       msg.wrapped_keys = res.message?.wrapped_keys ?? null;
+      msg.sender_device_id = res.message?.sender_device_id ?? msg.sender_device_id;
       msg._plaintext = newBody;
     }
     _applyEditedBubble(state.id, newBody);
@@ -9181,41 +9459,98 @@ async function gcAutoRewrapMissingKeys(groupId, msgs, myId) {
   const groupData = GC.activeGroup;
   if (!groupData?.members?.length) return;
   const memberIds = groupData.members.map(m => m.id).filter(Boolean);
+  const myDeviceId = E2EE.myDeviceId();
 
-  // Filter to E2EE messages I sent that are missing at least one member's key
+  // Resolve every registered device for every current member — this is the
+  // full set of (member, device) pairs that SHOULD have a wrapped key on any
+  // message I sent. A member logging into a second device is exactly as much
+  // a "gap" as a brand-new member joining, so both are handled the same way.
+  const memberDeviceMap = {};
+  await Promise.all(memberIds.map(async mid => {
+    try { memberDeviceMap[mid] = await E2EE.getDeviceIdsForMember(mid); }
+    catch { memberDeviceMap[mid] = []; }
+  }));
+
+  const hasGap = m => memberIds.some(mid =>
+    (memberDeviceMap[mid] || []).some(did => !m.wrapped_keys[`${mid}:${did}`])
+  );
+
+  // Filter to E2EE messages I sent that are missing at least one (member, device) key
+  const toFix = msgs.filter(m => m.e2ee && m.sender_id === myId && m.wrapped_keys && hasGap(m));
+  if (!toFix.length) return;
+
+  for (const msg of toFix) {
+    try {
+      // Legacy fallback: pre-migration messages only ever had wrapped_keys[myId].
+      const myWrappedKey = msg.wrapped_keys[`${myId}:${myDeviceId}`] ?? msg.wrapped_keys[myId];
+      if (!myWrappedKey) continue; // I don't have my own key either — can't help
+
+      // For each (member, device) missing a wrapped key, re-wrap and patch
+      // the server. E2EE.rewrapMsgKey handles the unwrap+rewrap entirely
+      // within the E2EE closure so we never reach private internals here.
+      for (const memberId of memberIds) {
+        const missingDevices = (memberDeviceMap[memberId] || [])
+          .filter(did => !msg.wrapped_keys[`${memberId}:${did}`]);
+        for (const deviceId of missingDevices) {
+          try {
+            const wrappedKey = await E2EE.rewrapMsgKey(myWrappedKey, memberId, deviceId);
+            await api('PATCH', `/api/member/groups/${groupId}/messages/${msg.id}/wrapped-key`, {
+              member_id:   memberId,
+              device_id:   deviceId,
+              wrapped_key: wrappedKey,
+            });
+            // Update local cache so the recipient can decrypt immediately on next render
+            msg.wrapped_keys = { ...msg.wrapped_keys, [`${memberId}:${deviceId}`]: wrappedKey };
+          } catch (e) {
+            // Device may not have published a key yet — skip silently
+            console.warn('[E2EE] auto-rewrap skipped for', `${memberId}:${deviceId}`, e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[E2EE] auto-rewrap failed for msg', msg.id, e.message);
+    }
+  }
+}
+
+// ── DM equivalent of gcAutoRewrapMissingKeys ─────────────────────────────────
+// DMs have no per-message wrap key to re-wrap (each device gets its own
+// direct ciphertext), so the repair path is: decrypt the message locally
+// using a cipher entry this device already has, then re-encrypt just the
+// plaintext for whichever devices are missing an entry, and patch the server
+// with only the new cipher entries (existing ones are left untouched).
+async function dmAutoRewrapMissingKeys(peerId, msgs, myId) {
+  if (!E2EE.ready() || !peerId) return;
+  const myDeviceId = E2EE.myDeviceId();
+
+  let myDeviceIds = [], peerDeviceIds = [];
+  try { myDeviceIds = await E2EE.getDeviceIdsForMember(myId); } catch {}
+  try { peerDeviceIds = await E2EE.getDeviceIdsForMember(peerId); } catch {}
+  const expectedDeviceIds = Array.from(new Set([...myDeviceIds, ...peerDeviceIds, myDeviceId]));
+  if (!expectedDeviceIds.length) return;
+
   const toFix = msgs.filter(m =>
-    m.e2ee &&
-    m.sender_id === myId &&
-    m.wrapped_keys &&
-    memberIds.some(mid => !m.wrapped_keys[mid])
+    m.e2ee && m.sender_id === myId && m.ciphers &&
+    expectedDeviceIds.some(did => !m.ciphers[did])
   );
   if (!toFix.length) return;
 
   for (const msg of toFix) {
     try {
-      const myWrappedKey = msg.wrapped_keys[myId];
-      if (!myWrappedKey) continue; // I don't have my own key either — can't help
+      // Decrypt locally first (uses whatever cipher entry this device has)
+      const plaintext = await E2EE.decryptDm(msg, myId);
+      if (!plaintext || plaintext.startsWith('🔒') || plaintext === '[message unavailable]') continue;
 
-      // For each member missing a wrapped key, re-wrap and patch the server.
-      // E2EE.rewrapMsgKey handles the unwrap+rewrap entirely within the E2EE
-      // closure so we never need to reach private (_-prefixed) internals here.
-      const missing = memberIds.filter(mid => !msg.wrapped_keys[mid]);
-      for (const memberId of missing) {
-        try {
-          const wrappedKey = await E2EE.rewrapMsgKey(myWrappedKey, memberId);
-          await api('PATCH', `/api/member/groups/${groupId}/messages/${msg.id}/wrapped-key`, {
-            member_id:   memberId,
-            wrapped_key: wrappedKey,
-          });
-          // Update local cache so the recipient can decrypt immediately on next render
-          msg.wrapped_keys = { ...msg.wrapped_keys, [memberId]: wrappedKey };
-        } catch (e) {
-          // Member may not have published a key yet — skip silently
-          console.warn('[E2EE] auto-rewrap skipped for member', memberId, e.message);
-        }
-      }
+      const missing = expectedDeviceIds.filter(did => !msg.ciphers[did]);
+      if (!missing.length) continue;
+      const newCiphers = await E2EE.encryptForDevices(plaintext, peerId, missing);
+      if (!Object.keys(newCiphers).length) continue;
+
+      await api('PATCH', `/api/member/dm/messages/${msg.id}/ciphers`, { ciphers: newCiphers });
+      // Update local cache so those devices can decrypt immediately
+      msg.ciphers = { ...msg.ciphers, ...newCiphers };
     } catch (e) {
-      console.warn('[E2EE] auto-rewrap failed for msg', msg.id, e.message);
+      console.warn('[E2EE] DM auto-rewrap failed for msg', msg.id, e.message);
     }
   }
 }
@@ -10543,7 +10878,9 @@ async function gcDeleteGroup() {
 
 function initGC() {
   $id('gc-new-btn')?.addEventListener('click', gcOpenCreateModal);
-  $id('gc-back-btn')?.addEventListener('click', gcGoBack);
+  // NOTE: gc-back-btn is wired in initUnifiedInbox — was double-bound here
+  // too, which fired gcGoBack() twice per tap (harmless but wasteful, and
+  // risked visible double-navigation on slower devices).
   // NOTE: gc-info-btn and gc-send/input are also wired in initUnifiedInbox — don't double-bind here
   $id('gc-load-earlier')?.addEventListener('click', () => gcLoadMsgs(true));
   gcRefreshBadge();
@@ -11387,6 +11724,13 @@ if (document.readyState === "loading") {
   function dpOpen() {
     const panel = document.getElementById('dm-detail-panel');
     if (!panel) return;
+    // Invalidate any pending close-hide from a previous dpClose() call —
+    // without this, a close-then-reopen within one CSS transition duration
+    // (~240ms) lets the OLD close's deferred `transitionend` handler fire
+    // after we've just reopened, forcing display:none on a panel that's
+    // supposed to be visible again. This is the root cause behind "the
+    // panel opens and then immediately disappears" on mobile.
+    panel._dpCloseToken = (panel._dpCloseToken || 0) + 1;
     panel.style.display = 'flex';
     // Mobile: show scrim + animate in
     if (window.innerWidth <= 768) {
@@ -11413,7 +11757,14 @@ if (document.readyState === "loading") {
     if (!isMobile) {
       panel.style.display = 'none';
     } else {
-      panel.addEventListener('transitionend', () => { panel.style.display = 'none'; }, { once: true });
+      const token = (panel._dpCloseToken = (panel._dpCloseToken || 0) + 1);
+      panel.addEventListener('transitionend', () => {
+        // Only actually hide if nothing re-opened the panel since this
+        // close was requested — see the note in dpOpen() above.
+        if (panel._dpCloseToken === token && !panel.classList.contains('open')) {
+          panel.style.display = 'none';
+        }
+      }, { once: true });
     }
   }
 
@@ -11869,11 +12220,28 @@ if (document.readyState === "loading") {
     document.getElementById('dm-detail-leave-btn')?.addEventListener('click', dpLeaveGroup);
     document.getElementById('dm-detail-add-member-btn')?.addEventListener('click', dpAddMembers);
 
+    // Fires a handler at most once per tap even if the browser sends both
+    // a `touchend` AND a follow-up synthetic `click` for the same touch —
+    // relying on touchend's preventDefault() to suppress that synthetic
+    // click is NOT reliable across all mobile browsers/webviews, and a
+    // real double-fire here toggles the panel open→closed (or vice versa)
+    // within the same gesture, which is exactly the "opens then
+    // disappears" / "nothing opens" glitch.
+    function _tapOnce(handler) {
+      let last = 0;
+      return (e) => {
+        const now = Date.now();
+        if (now - last < 500) return;
+        last = now;
+        handler(e);
+      };
+    }
+
     // DM topbar ⓘ button — stopPropagation so the document click-outside
     // handler (below) doesn't fire on the same event and immediately close the panel.
     const _dmInfoBtn = document.getElementById('dm-info-btn');
     if (_dmInfoBtn) {
-      const _dmInfoHandler = (e) => {
+      const _dmInfoHandler = _tapOnce((e) => {
         e.stopPropagation();
         e.preventDefault();
         if (!DM.activePeer) return;
@@ -11881,7 +12249,7 @@ if (document.readyState === "loading") {
         const isOpen = panel && panel.classList.contains('open');
         if (isOpen && DP.mode === 'dm') { dpClose(); return; }
         dpShowDm(DM.activePeer);
-      };
+      });
       _dmInfoBtn.addEventListener('click', _dmInfoHandler);
       // Android fallback: touchend fires reliably even when click is delayed
       _dmInfoBtn.addEventListener('touchend', (e) => {
@@ -11893,7 +12261,7 @@ if (document.readyState === "loading") {
     // GC topbar ⓘ button (re-wire to use dpShowGroup)
     const _gcInfoBtn = document.getElementById('gc-info-btn');
     if (_gcInfoBtn) {
-      const _gcInfoHandler = (e) => {
+      const _gcInfoHandler = _tapOnce((e) => {
         e.stopPropagation();
         e.preventDefault();
         // Prefer activeGroup; fall back to fetching by activeId if group object isn't cached yet
@@ -11903,14 +12271,18 @@ if (document.readyState === "loading") {
         const panel = document.getElementById('dm-detail-panel');
         const isOpen = panel && panel.classList.contains('open');
         if (isOpen && DP.mode === 'group') { dpClose(); return; }
-        if (group && group.members?.some(m => m.name)) {
-          dpShowGroup(group);
-        } else {
-          api('GET', `/api/member/groups/${groupId}`)
-            .then(data => { GC.activeGroup = { ...(GC.activeGroup || {}), ...data }; dpShowGroup(GC.activeGroup); })
-            .catch(() => { if (group) dpShowGroup(group); });
-        }
-      };
+        // Open immediately with whatever we already have cached — waiting
+        // on the network fetch before showing anything is what reads as a
+        // brief freeze/no-response when tapping ⓘ on a slow connection.
+        if (group) dpShowGroup(group);
+        api('GET', `/api/member/groups/${groupId}`)
+          .then(data => {
+            GC.activeGroup = { ...(GC.activeGroup || {}), ...data };
+            // Only re-render in place if the panel is still showing this group
+            if (DP.mode === 'group' && DP.group?.id === groupId) dpShowGroup(GC.activeGroup);
+          })
+          .catch(() => { /* panel already shows the cached group above; nothing more to do */ });
+      });
       _gcInfoBtn.addEventListener('click', _gcInfoHandler);
       // Android fallback: touchend fires reliably even when click is delayed
       _gcInfoBtn.addEventListener('touchend', (e) => {
