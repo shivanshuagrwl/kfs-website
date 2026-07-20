@@ -11009,14 +11009,20 @@
       }
 
       /* ── Improved mobile keyboard avoidance ─────────────────────────── */
-      @supports (height: env(keyboard-inset-height)) {
+      /* env(keyboard-inset-height) isn't actually supported in shipping
+         iOS/Android browsers, so the old @supports block here never ran.
+         Real fix: JS (see kfsInitViewportFix) tracks window.visualViewport
+         and writes the true visible height to --kfs-vvh; .dm-panel below
+         uses that instead of 100vh so the whole chat column — including
+         the composer pinned to its bottom via flex — resizes to sit above
+         the keyboard instead of getting covered by it. */
+      @media (max-width: 768px) {
+        .dm-panel {
+          height: calc(var(--kfs-vvh, 100dvh) - var(--dm-reserve)) !important;
+        }
         .dm-compose,
         .gc-compose {
-          padding-bottom: max(
-            env(keyboard-inset-height),
-            env(safe-area-inset-bottom),
-            12px
-          );
+          padding-bottom: max(env(safe-area-inset-bottom), 10px);
         }
       }
 

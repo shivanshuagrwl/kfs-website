@@ -16754,3 +16754,31 @@ function _tourEnd() {
   };
   window.switchPanel.__kfsBackNavPatched = true;
 })();
+
+// ── Mobile viewport-height fix (keyboard-safe DM/GC composer) ─────────────
+// iOS Safari and most Android browsers don't shrink `100vh` when the on-
+// screen keyboard opens (only the *visual* viewport shrinks), which is why
+// the composer used to get covered by the keyboard or the page jumped.
+// window.visualViewport reports the real visible height, so we mirror it
+// into a CSS var and let .dm-panel (mobile-only, see CSS) size off that
+// instead of 100vh. No-ops harmlessly on desktop / unsupported browsers.
+(function kfsInitViewportFix() {
+  const root = document.documentElement;
+  if (!window.visualViewport) return; // graceful no-op on old browsers
+
+  let raf = null;
+  function apply() {
+    raf = null;
+    root.style.setProperty('--kfs-vvh', window.visualViewport.height + 'px');
+  }
+  function schedule() {
+    if (raf) return;
+    raf = requestAnimationFrame(apply);
+  }
+
+  apply();
+  window.visualViewport.addEventListener('resize', schedule);
+  window.visualViewport.addEventListener('scroll', schedule);
+  // Orientation changes can land visualViewport a frame late on iOS.
+  window.addEventListener('orientationchange', () => setTimeout(apply, 120));
+})();
