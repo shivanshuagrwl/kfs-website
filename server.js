@@ -14090,34 +14090,118 @@ async function sanitizeReplyBody(table, repliedToId, repliedToBody) {
   return String(repliedToBody).slice(0, 300);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// E2EE MULTI-DEVICE KEY STORE + DEVICE LIFECYCLE
+//
+// Replaces the old member_e2ee_keys table (ONE row per member — the last
+// device to log in silently overwrote every other device's key, which is
+// the root cause documented at length in membersaccess.js). Every device now
+// gets its own row, keyed by (member_id, device_id), never overwritten by a
+// different device logging in.
+//
+// SQL migration (run once in Supabase):
+//
+//   CREATE TABLE IF NOT EXISTS member_e2ee_devices (
+//     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     member_id       UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+//     device_id       TEXT NOT NULL,
+//     public_key_jwk  JSONB NOT NULL,
+//     fingerprint     TEXT,
+//     device_name     TEXT,        -- best-effort UA-derived label, e.g. "Chrome on macOS"
+//     platform        TEXT,        -- 'desktop' | 'mobile' | 'unknown'
+//     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     last_seen_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     revoked_at      TIMESTAMPTZ,  -- NULL = active device
+//     UNIQUE (member_id, device_id)
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_e2ee_devices_member_active
+//     ON member_e2ee_devices(member_id) WHERE revoked_at IS NULL;
+//   ALTER TABLE member_e2ee_devices DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+//
+//   -- One-time data migration from the old single-key table, if it has rows:
+//   INSERT INTO member_e2ee_devices (member_id, device_id, public_key_jwk, fingerprint, created_at, last_seen_at)
+//     SELECT member_id, 'legacy', public_key_jwk, fingerprint, published_at, updated_at
+//     FROM member_e2ee_keys
+//     ON CONFLICT (member_id, device_id) DO NOTHING;
+//   -- member_e2ee_keys can be dropped once all clients have re-published
+//   -- under this new scheme (happens automatically on next login, no user
+//   -- action needed) — leave it in place for a rollout window instead of
+//   -- dropping it immediately.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _guessPlatform(ua) {
+  if (!ua) return "unknown";
+  if (/mobile|android|iphone|ipad|ipod/i.test(ua)) return "mobile";
+  return "desktop";
+}
+function _guessDeviceName(ua) {
+  if (!ua) return "Unknown device";
+  const browser =
+    /edg\//i.test(ua) ? "Edge" :
+    /chrome\//i.test(ua) ? "Chrome" :
+    /firefox\//i.test(ua) ? "Firefox" :
+    /safari\//i.test(ua) ? "Safari" : "Browser";
+  const os =
+    /windows/i.test(ua) ? "Windows" :
+    /mac os|macintosh/i.test(ua) ? "macOS" :
+    /android/i.test(ua) ? "Android" :
+    /iphone|ipad|ipod/i.test(ua) ? "iOS" :
+    /linux/i.test(ua) ? "Linux" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
+
 // ── POST /api/member/e2ee/publish-key ────────────────────────────────────────
-// Upsert caller's ECDH P-256 public key. Called on every login after key-gen.
-// Server validates structure but NEVER receives or stores private keys.
+// Upsert THIS DEVICE's ECDH P-256 public key. Called on every login after
+// key-gen. Server validates structure but NEVER receives or stores private
+// keys. Never touches any other device's row for this member.
 app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eePublishLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
-    const { public_key_jwk } = req.body || {};
+    const { device_id, public_key_jwk } = req.body || {};
+    if (!device_id || typeof device_id !== 'string' || device_id.length > 100)
+      return res.status(400).json({ error: "device_id required" });
     if (!public_key_jwk || typeof public_key_jwk !== 'object')
       return res.status(400).json({ error: "public_key_jwk (JWK object) required" });
     if (public_key_jwk.kty !== 'EC' || public_key_jwk.crv !== 'P-256' || !public_key_jwk.x || !public_key_jwk.y)
       return res.status(400).json({ error: "Invalid public key: must be ECDH P-256 JWK with x, y coords" });
     if (public_key_jwk.d)
       return res.status(400).json({ error: "Private key component (d) must never be sent to the server" });
-    // Was there already a key on file? If so this publish is a *rotation*
-    // (new device/browser, or local storage was cleared) rather than a
-    // first-ever setup — the client uses this to decide whether to warn
-    // that older messages may no longer decrypt.
+
+    // If this exact device_id was previously REVOKED, refuse to silently
+    // reactivate it — a revoked device_id re-publishing usually means the
+    // browser storage that held revocation-aware state was never cleared
+    // (e.g. a lost/stolen device an admin revoked remotely rather than the
+    // member logging it out themselves). The client is expected to treat
+    // this response as "start over as a brand-new device": wipe local
+    // IndexedDB/localStorage, generate a fresh device_id + keypair, retry.
     const { data: existing } = await supabase
-      .from("member_e2ee_keys")
-      .select("member_id")
+      .from("member_e2ee_devices")
+      .select("device_id, revoked_at")
       .eq("member_id", myId)
+      .eq("device_id", device_id)
       .maybeSingle();
-    const rotated = !!existing;
+    if (existing?.revoked_at) {
+      return res.status(409).json({
+        error: "This device was revoked and cannot re-register with the same device id.",
+        code: "device_revoked",
+      });
+    }
+
+    const rotated = !!existing; // true only if THIS device_id already had a key on file
     const now = new Date().toISOString();
+    const ua = req.headers['user-agent'] || '';
     const { error } = await supabase
-      .from("member_e2ee_keys")
-      .upsert([{ member_id: myId, public_key_jwk, fingerprint: null, published_at: now, updated_at: now }],
-              { onConflict: "member_id" });
+      .from("member_e2ee_devices")
+      .upsert([{
+        member_id:      myId,
+        device_id,
+        public_key_jwk,
+        fingerprint:    null,
+        device_name:    _guessDeviceName(ua),
+        platform:       _guessPlatform(ua),
+        last_seen_at:   now,
+        ...(rotated ? {} : { created_at: now }),
+      }], { onConflict: "member_id,device_id" });
     if (error) throw error;
     res.json({ success: true, rotated });
   } catch (e) {
@@ -14126,19 +14210,50 @@ app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eePublishLimit,
   }
 });
 
+// ── GET /api/member/e2ee/public-keys/:memberId ────────────────────────────────
+// All of a member's ACTIVE (non-revoked) devices. This is the primary route
+// the client uses to fan out encryption to every device that should be able
+// to read a message. Public keys are not secret — any authenticated member
+// can fetch any other's.
+app.get("/api/member/e2ee/public-keys/:memberId", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("member_e2ee_devices")
+      .select("device_id, public_key_jwk, fingerprint, last_seen_at")
+      .eq("member_id", req.params.memberId)
+      .is("revoked_at", null);
+    if (error) throw error;
+    res.json({
+      devices: (data || []).map(d => ({
+        device_id:      d.device_id,
+        public_key_jwk: d.public_key_jwk,
+        fingerprint:    d.fingerprint,
+      })),
+    });
+  } catch (e) {
+    console.error("[e2ee/public-keys/:memberId GET]", e.message);
+    res.status(500).json({ error: "Failed to fetch keys" });
+  }
+});
+
 // ── GET /api/member/e2ee/public-key/:memberId ─────────────────────────────────
-// Fetch a member's ECDH public key so the caller can encrypt to them.
-// Public keys are not secret — any authenticated member can fetch any other's.
+// LEGACY single-key compatibility route, kept for any client build that
+// hasn't picked up the multi-device JS yet. Best-effort: returns the most
+// recently active device's key. New clients should always prefer the plural
+// /public-keys/:memberId route above, which returns every device.
 app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from("member_e2ee_keys")
-      .select("public_key_jwk, fingerprint, updated_at")
+      .from("member_e2ee_devices")
+      .select("public_key_jwk, fingerprint, last_seen_at")
       .eq("member_id", req.params.memberId)
+      .is("revoked_at", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "No E2EE key found for this member" });
-    res.json({ member_id: req.params.memberId, public_key_jwk: data.public_key_jwk, fingerprint: data.fingerprint, updated_at: data.updated_at });
+    res.json({ member_id: req.params.memberId, public_key_jwk: data.public_key_jwk, fingerprint: data.fingerprint, updated_at: data.last_seen_at });
   } catch (e) {
     console.error("[e2ee/public-key GET]", e.message);
     res.status(500).json({ error: "Failed to fetch key" });
@@ -14146,22 +14261,124 @@ app.get("/api/member/e2ee/public-key/:memberId", memberAuthMiddleware, e2eeReadL
 });
 
 // ── GET /api/member/e2ee/public-keys?ids=a,b,c ───────────────────────────────
-// Batch-fetch public keys for all members in a group chat.
+// LEGACY batch route (superseded by per-member /public-keys/:memberId, which
+// returns full device lists). Kept for compatibility; returns each member's
+// single most-recently-active device only.
 app.get("/api/member/e2ee/public-keys", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
   try {
     const ids = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 60);
     if (!ids.length) return res.json({});
     const { data, error } = await supabase
-      .from("member_e2ee_keys")
-      .select("member_id, public_key_jwk, fingerprint")
-      .in("member_id", ids);
+      .from("member_e2ee_devices")
+      .select("member_id, public_key_jwk, fingerprint, last_seen_at")
+      .in("member_id", ids)
+      .is("revoked_at", null)
+      .order("last_seen_at", { ascending: false });
     if (error) throw error;
     const out = {};
-    (data || []).forEach(r => { out[r.member_id] = { public_key_jwk: r.public_key_jwk, fingerprint: r.fingerprint }; });
+    (data || []).forEach(r => { if (!out[r.member_id]) out[r.member_id] = { public_key_jwk: r.public_key_jwk, fingerprint: r.fingerprint }; });
     res.json(out);
   } catch (e) {
     console.error("[e2ee/public-keys batch GET]", e.message);
     res.status(500).json({ error: "Failed to fetch keys" });
+  }
+});
+
+// ── Device lifecycle: list / revoke one / revoke all others ─────────────────
+// Self-service only — a member manages their own devices. There is no route
+// to revoke someone else's device; that's an account-security boundary, not
+// a moderation feature.
+
+// GET /api/member/e2ee/devices — list caller's own devices (active + recently revoked)
+app.get("/api/member/e2ee/devices", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const currentDeviceId = String(req.headers['x-device-id'] || req.query.current_device_id || '');
+    const { data, error } = await supabase
+      .from("member_e2ee_devices")
+      .select("device_id, device_name, platform, created_at, last_seen_at, revoked_at")
+      .eq("member_id", myId)
+      .order("last_seen_at", { ascending: false });
+    if (error) throw error;
+    res.json({
+      devices: (data || []).map(d => ({
+        device_id:    d.device_id,
+        device_name:  d.device_name || "Unknown device",
+        platform:     d.platform || "unknown",
+        created_at:   d.created_at,
+        last_seen_at: d.last_seen_at,
+        revoked:      !!d.revoked_at,
+        revoked_at:   d.revoked_at || null,
+        is_current:   d.device_id === currentDeviceId,
+      })),
+    });
+  } catch (e) {
+    console.error("[e2ee/devices GET]", e.message);
+    res.status(500).json({ error: "Failed to list devices" });
+  }
+});
+
+// POST /api/member/e2ee/devices/:deviceId/revoke — revoke one of my own devices.
+// Effective immediately: excluded from /public-keys/:memberId (so no future
+// message gets encrypted for it) as soon as this commits, and it can never
+// re-publish a key under the same device_id (see publish-key above).
+app.post("/api/member/e2ee/devices/:deviceId/revoke", memberAuthMiddleware, e2eePublishLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const targetDeviceId = req.params.deviceId;
+    const { data: device } = await supabase
+      .from("member_e2ee_devices")
+      .select("device_id, revoked_at")
+      .eq("member_id", myId)
+      .eq("device_id", targetDeviceId)
+      .maybeSingle();
+    if (!device) return res.status(404).json({ error: "Device not found" });
+    if (device.revoked_at) return res.json({ success: true, already_revoked: true });
+
+    const { error } = await supabase
+      .from("member_e2ee_devices")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("member_id", myId)
+      .eq("device_id", targetDeviceId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[e2ee/devices revoke]", e.message);
+    res.status(500).json({ error: "Failed to revoke device" });
+  }
+});
+
+// POST /api/member/e2ee/devices/revoke-others — "log out all other devices".
+// Body: { current_device_id } — every OTHER active device for this member is
+// revoked; the calling device is left untouched even if it's also sent via
+// the X-Device-Id header (current_device_id in the body wins if both present).
+app.post("/api/member/e2ee/devices/revoke-others", memberAuthMiddleware, e2eePublishLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const currentDeviceId = String((req.body && req.body.current_device_id) || req.headers['x-device-id'] || '');
+    if (!currentDeviceId) return res.status(400).json({ error: "current_device_id required" });
+
+    const { data: others, error: selErr } = await supabase
+      .from("member_e2ee_devices")
+      .select("device_id")
+      .eq("member_id", myId)
+      .is("revoked_at", null)
+      .neq("device_id", currentDeviceId);
+    if (selErr) throw selErr;
+
+    const revokedIds = (others || []).map(d => d.device_id);
+    if (revokedIds.length) {
+      const { error } = await supabase
+        .from("member_e2ee_devices")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("member_id", myId)
+        .in("device_id", revokedIds);
+      if (error) throw error;
+    }
+    res.json({ success: true, revoked_count: revokedIds.length, revoked_device_ids: revokedIds });
+  } catch (e) {
+    console.error("[e2ee/devices revoke-others]", e.message);
+    res.status(500).json({ error: "Failed to revoke other devices" });
   }
 });
 
@@ -14526,7 +14743,14 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
     const asc = !!since;
 
     // Fetch both sides: messages received by me + messages I sent in this conv
-    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, delivered_at, read_at, created_at, edited_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, attachment_url, attachment_type, attachment_opacity";
+    // SQL migration (run once in Supabase):
+    //   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS ciphers JSONB;
+    //   ALTER TABLE member_notifications ADD COLUMN IF NOT EXISTS sender_device_id TEXT;
+    // `ciphers` is { [device_id]: cipherStr }, one entry per device that can
+    // read this message (every recipient device + every sender device).
+    // `cipher_for_recipient`/`cipher_for_self` remain for messages sent
+    // before this migration — decryptDm() in the client falls back to them.
+    const _dmSelect = "id, actor_id, actor_name, actor_photo, member_id, body, is_read, delivered_at, read_at, created_at, edited_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id, attachment_url, attachment_type, attachment_opacity";
     let qRecv = supabase
       .from("member_notifications")
       .select(_dmSelect)
@@ -14604,6 +14828,8 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       e2ee:                 m.e2ee || false,
       cipher_for_recipient: m.cipher_for_recipient || null,
       cipher_for_self:      m.cipher_for_self || null,
+      ciphers:              m.ciphers || null,
+      sender_device_id:     m.sender_device_id || null,
       // Attachments (image sharing) — null for plain text messages
       attachment_url:       m.attachment_url || null,
       attachment_type:      m.attachment_type || null,
@@ -14616,24 +14842,44 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
 });
 
 // ── POST /api/member/dm/send ──────────────────────────────────────────────────
-// Body: { to_member_id, body } — or E2EE: { to_member_id, e2ee: true, cipher_for_recipient, cipher_for_self, body: "" }
+// Body: { to_member_id, body } — or E2EE (multi-device):
+//   { to_member_id, e2ee: true, ciphers: { [device_id]: cipherStr }, sender_device_id, body: "" }
+// Legacy single-cipher shape ({ cipher_for_recipient, cipher_for_self }) is
+// still accepted from any client build that hasn't picked up the multi-device
+// JS yet, so a rolling deploy doesn't break in-flight sessions.
 app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
     const { to_member_id, body, replied_to_id, replied_to_body, replied_to_sender,
-            e2ee, cipher_for_recipient, cipher_for_self } = req.body || {};
+            e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id } = req.body || {};
 
     if (!to_member_id) return res.status(400).json({ error: "to_member_id required" });
     if (to_member_id === myId) return res.status(400).json({ error: "Cannot message yourself" });
 
     // E2EE messages arrive with e2ee:true and empty body; validate ciphertexts present
     if (e2ee) {
-      if (!cipher_for_recipient || !cipher_for_self)
-        return res.status(400).json({ error: "E2EE message missing cipher_for_recipient or cipher_for_self" });
-      if (typeof cipher_for_recipient !== 'string' || cipher_for_recipient.length > 8000)
-        return res.status(400).json({ error: "cipher_for_recipient invalid" });
-      if (typeof cipher_for_self !== 'string' || cipher_for_self.length > 8000)
-        return res.status(400).json({ error: "cipher_for_self invalid" });
+      const hasMultiDevice = ciphers && typeof ciphers === 'object' && !Array.isArray(ciphers) && Object.keys(ciphers).length > 0;
+      const hasLegacy = cipher_for_recipient && cipher_for_self;
+      if (!hasMultiDevice && !hasLegacy)
+        return res.status(400).json({ error: "E2EE message missing ciphers (or legacy cipher_for_recipient/cipher_for_self)" });
+      if (hasMultiDevice) {
+        const entries = Object.entries(ciphers);
+        if (entries.length > 20) return res.status(400).json({ error: "Too many device ciphers on one message" });
+        for (const [deviceId, cipherStr] of entries) {
+          if (typeof deviceId !== 'string' || deviceId.length > 100)
+            return res.status(400).json({ error: "Invalid device id in ciphers" });
+          if (typeof cipherStr !== 'string' || cipherStr.length > 8000)
+            return res.status(400).json({ error: `Invalid cipher for device ${deviceId}` });
+        }
+      }
+      if (hasLegacy) {
+        if (typeof cipher_for_recipient !== 'string' || cipher_for_recipient.length > 8000)
+          return res.status(400).json({ error: "cipher_for_recipient invalid" });
+        if (typeof cipher_for_self !== 'string' || cipher_for_self.length > 8000)
+          return res.status(400).json({ error: "cipher_for_self invalid" });
+      }
+      if (sender_device_id && (typeof sender_device_id !== 'string' || sender_device_id.length > 100))
+        return res.status(400).json({ error: "sender_device_id invalid" });
     }
 
     const trimmed = (body || "").trim();
@@ -14699,10 +14945,12 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         replied_to_sender:     replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
         // E2EE columns (null for legacy plaintext messages)
         e2ee:                  e2ee ? true : false,
-        cipher_for_recipient:  e2ee ? cipher_for_recipient : null,
-        cipher_for_self:       e2ee ? cipher_for_self : null,
+        cipher_for_recipient:  e2ee ? (cipher_for_recipient || null) : null,
+        cipher_for_self:       e2ee ? (cipher_for_self || null) : null,
+        ciphers:               e2ee ? (ciphers || null) : null,
+        sender_device_id:      e2ee ? (sender_device_id || null) : null,
       }])
-      .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self")
+      .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id")
       .single();
 
     if (insertErr) throw insertErr;
@@ -14725,6 +14973,8 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
         e2ee:                 msg.e2ee || false,
         cipher_for_recipient: msg.cipher_for_recipient || null,
         cipher_for_self:      msg.cipher_for_self || null,
+        ciphers:              msg.ciphers || null,
+        sender_device_id:     msg.sender_device_id || null,
       },
     });
   } catch (e) {
@@ -14771,7 +15021,7 @@ app.patch("/api/member/dm/messages/:msgId", memberAuthMiddleware, dmRateLimit, a
   try {
     const myId  = req.member.memberId;
     const msgId = req.params.msgId;
-    const { body: rawBody, e2ee, cipher_for_recipient, cipher_for_self } = req.body || {};
+    const { body: rawBody, e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id } = req.body || {};
 
     const { data: msg } = await supabase
       .from("member_notifications")
@@ -14785,21 +15035,28 @@ app.patch("/api/member/dm/messages/:msgId", memberAuthMiddleware, dmRateLimit, a
 
     let update;
     if (e2ee) {
-      if (!cipher_for_recipient || !cipher_for_self) {
-        return res.status(400).json({ error: "E2EE ciphertext missing" });
-      }
-      update = { body: "", e2ee: true, cipher_for_recipient, cipher_for_self, edited_at: new Date().toISOString() };
+      const hasMultiDevice = ciphers && typeof ciphers === 'object' && !Array.isArray(ciphers) && Object.keys(ciphers).length > 0;
+      const hasLegacy = cipher_for_recipient && cipher_for_self;
+      if (!hasMultiDevice && !hasLegacy) return res.status(400).json({ error: "E2EE ciphertext missing" });
+      update = {
+        body: "", e2ee: true,
+        cipher_for_recipient: hasLegacy ? cipher_for_recipient : null,
+        cipher_for_self:      hasLegacy ? cipher_for_self : null,
+        ciphers:              hasMultiDevice ? ciphers : null,
+        sender_device_id:     sender_device_id || null,
+        edited_at: new Date().toISOString(),
+      };
     } else {
       const trimmed = (rawBody || "").trim();
       if (!trimmed || trimmed.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
-      update = { body: trimmed, e2ee: false, cipher_for_recipient: null, cipher_for_self: null, edited_at: new Date().toISOString() };
+      update = { body: trimmed, e2ee: false, cipher_for_recipient: null, cipher_for_self: null, ciphers: null, sender_device_id: null, edited_at: new Date().toISOString() };
     }
 
     const { data: updated, error } = await supabase
       .from("member_notifications")
       .update(update)
       .eq("id", msgId)
-      .select("id, body, edited_at, e2ee, cipher_for_recipient, cipher_for_self")
+      .select("id, body, edited_at, e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id")
       .single();
     if (error) throw error;
 
@@ -14807,6 +15064,46 @@ app.patch("/api/member/dm/messages/:msgId", memberAuthMiddleware, dmRateLimit, a
   } catch (e) {
     dmLogErr("[dm/edit]", e);
     res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+// ── PATCH /api/member/dm/messages/:msgId/ciphers ──────────────────────────────
+// MERGES additional per-device ciphers into an existing E2EE message, rather
+// than replacing the whole map. Used by the client's auto-repair pass
+// (dmAutoRewrapMissingKeys) to backfill just the devices that were missing a
+// cipher — e.g. a new device logged in after the message was originally
+// sent. Only the original sender can patch their own message this way.
+app.patch("/api/member/dm/messages/:msgId/ciphers", memberAuthMiddleware, dmRateLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const msgId = req.params.msgId;
+    const { ciphers: newCiphers } = req.body || {};
+    if (!newCiphers || typeof newCiphers !== 'object' || Array.isArray(newCiphers) || !Object.keys(newCiphers).length)
+      return res.status(400).json({ error: "ciphers ({ deviceId: cipherStr }) required" });
+    for (const [deviceId, cipherStr] of Object.entries(newCiphers)) {
+      if (typeof deviceId !== 'string' || deviceId.length > 100) return res.status(400).json({ error: "Invalid device id" });
+      if (typeof cipherStr !== 'string' || cipherStr.length > 8000) return res.status(400).json({ error: `Invalid cipher for device ${deviceId}` });
+    }
+
+    const { data: msg } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, link_type, e2ee, ciphers")
+      .eq("id", msgId)
+      .maybeSingle();
+    if (!msg || msg.link_type !== "dm") return res.status(404).json({ error: "Not found" });
+    if (msg.actor_id !== myId) return res.status(403).json({ error: "Cannot patch another member's message" });
+    if (!msg.e2ee) return res.status(400).json({ error: "Not an E2EE message" });
+
+    const merged = { ...(msg.ciphers || {}), ...newCiphers };
+    const { error } = await supabase
+      .from("member_notifications")
+      .update({ ciphers: merged })
+      .eq("id", msgId);
+    if (error) throw error;
+    res.json({ success: true, ciphers: merged });
+  } catch (e) {
+    dmLogErr("[dm/messages/:msgId/ciphers PATCH]", e);
+    res.status(500).json({ error: "Failed to update ciphers" });
   }
 });
 
@@ -16524,9 +16821,14 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const { data: nickRows } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid);
     const nickMap = Object.fromEntries((nickRows || []).map(r => [r.member_id, r.nickname]));
 
+    // SQL migration (run once in Supabase):
+    //   ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS sender_device_id TEXT;
+    // wrapped_keys was already JSONB; its keys just changed shape from plain
+    // memberId to "${memberId}:${deviceId}" (client falls back to the old
+    // memberId-only shape for messages sent before this migration).
     let q = supabase
       .from("dm_group_messages")
-      .select("id, sender_id, body, created_at, edited_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, attachment_url, attachment_type, attachment_opacity")
+      .select("id, sender_id, body, created_at, edited_at, is_pinned, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, sender_device_id, attachment_url, attachment_type, attachment_opacity")
       .eq("group_id", gid)
       .is("deleted_at", null)
       .order("created_at", { ascending: !!since })
@@ -16577,6 +16879,7 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
           e2ee:             m.e2ee || false,
           ciphertext:       m.ciphertext || null,
           wrapped_keys:     m.wrapped_keys || null,
+          sender_device_id: m.sender_device_id || null,
           // Attachments (image sharing)
           attachment_url:   m.attachment_url || null,
           attachment_type:  m.attachment_type || null,
@@ -16617,7 +16920,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
     if (!myId) return res.status(403).json({ error: "Not authenticated" });
     const gid  = req.params.id;
     const { body: rawBody, replied_to_id, replied_to_body, replied_to_sender,
-            e2ee, ciphertext, wrapped_keys } = req.body || {};
+            e2ee, ciphertext, wrapped_keys, sender_device_id } = req.body || {};
     const body = (rawBody || "").trim();
 
     // E2EE validation
@@ -16661,8 +16964,9 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         e2ee:              e2ee ? true : false,
         ciphertext:        e2ee ? ciphertext : null,
         wrapped_keys:      e2ee ? wrapped_keys : null,
+        sender_device_id:  e2ee ? (sender_device_id || null) : null,
       }])
-      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys")
+      .select("id, sender_id, body, created_at, replied_to_id, replied_to_body, replied_to_sender, e2ee, ciphertext, wrapped_keys, sender_device_id")
       .single();
     if (error) throw error;
 
@@ -16737,6 +17041,7 @@ app.post("/api/member/groups/:id/messages", memberAuthMiddleware, gcWriteLimit, 
         e2ee:             msg.e2ee || false,
         ciphertext:       msg.ciphertext || null,
         wrapped_keys:     msg.wrapped_keys || null,
+        sender_device_id: msg.sender_device_id || null,
       },
     });
   } catch (e) {
@@ -16774,7 +17079,7 @@ app.patch("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWrit
     const myId  = req.member.memberId;
     const gid   = req.params.id;
     const msgId = req.params.msgId;
-    const { body: rawBody, e2ee, ciphertext, wrapped_keys } = req.body || {};
+    const { body: rawBody, e2ee, ciphertext, wrapped_keys, sender_device_id } = req.body || {};
 
     const { data: msg } = await supabase.from("dm_group_messages").select("sender_id, group_id, deleted_at").eq("id", msgId).maybeSingle();
     if (!msg || msg.group_id !== gid) return res.status(404).json({ error: "Not found" });
@@ -16786,19 +17091,19 @@ app.patch("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWrit
       if (!ciphertext || typeof ciphertext !== 'string' || ciphertext.length > 8000)
         return res.status(400).json({ error: "E2EE ciphertext missing or invalid" });
       if (!wrapped_keys || typeof wrapped_keys !== 'object' || Array.isArray(wrapped_keys))
-        return res.status(400).json({ error: "E2EE wrapped_keys must be an object { memberId: wrappedKey }" });
-      update = { body: "\u200B", e2ee: true, ciphertext, wrapped_keys, edited_at: new Date().toISOString() };
+        return res.status(400).json({ error: "E2EE wrapped_keys must be an object { \"memberId:deviceId\": wrappedKey }" });
+      update = { body: "\u200B", e2ee: true, ciphertext, wrapped_keys, sender_device_id: sender_device_id || null, edited_at: new Date().toISOString() };
     } else {
       const trimmed = (rawBody || "").trim();
       if (!trimmed || trimmed.length > 2000) return res.status(400).json({ error: "Message body required (max 2000 chars)" });
-      update = { body: trimmed, e2ee: false, ciphertext: null, wrapped_keys: null, edited_at: new Date().toISOString() };
+      update = { body: trimmed, e2ee: false, ciphertext: null, wrapped_keys: null, sender_device_id: null, edited_at: new Date().toISOString() };
     }
 
     const { data: updated, error } = await supabase
       .from("dm_group_messages")
       .update(update)
       .eq("id", msgId)
-      .select("id, body, edited_at, e2ee, ciphertext, wrapped_keys")
+      .select("id, body, edited_at, e2ee, ciphertext, wrapped_keys, sender_device_id")
       .single();
     if (error) throw error;
 
@@ -16806,6 +17111,49 @@ app.patch("/api/member/groups/:id/messages/:msgId", memberAuthMiddleware, gcWrit
   } catch (e) {
     console.error("[groups/messages PATCH]", e.message);
     res.status(500).json({ error: "Failed to edit message" });
+  }
+});
+
+// ── PATCH /api/member/groups/:id/messages/:msgId/wrapped-key ─────────────────
+// MERGES a single (member_id, device_id) wrapped-key entry into an existing
+// E2EE group message, rather than replacing the whole wrapped_keys map. Used
+// by the client's auto-repair pass (gcAutoRewrapMissingKeys) to backfill
+// devices that joined, rotated keys, or logged in after the message was
+// originally sent. Only the original sender can patch their own message.
+// NOTE: this route did not previously exist server-side — the client has
+// been calling it since the multi-device migration and receiving 404s, so
+// no group message auto-repair has actually been landing on the server yet.
+app.patch("/api/member/groups/:id/messages/:msgId/wrapped-key", memberAuthMiddleware, gcWriteLimit, async (req, res) => {
+  try {
+    const myId  = req.member.memberId;
+    const gid   = req.params.id;
+    const msgId = req.params.msgId;
+    const { member_id, device_id, wrapped_key } = req.body || {};
+    if (!member_id || !device_id || typeof wrapped_key !== 'string' || !wrapped_key || wrapped_key.length > 8000)
+      return res.status(400).json({ error: "member_id, device_id, wrapped_key required" });
+
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const { data: msg } = await supabase
+      .from("dm_group_messages")
+      .select("sender_id, group_id, e2ee, wrapped_keys")
+      .eq("id", msgId)
+      .maybeSingle();
+    if (!msg || msg.group_id !== gid) return res.status(404).json({ error: "Not found" });
+    if (msg.sender_id !== myId) return res.status(403).json({ error: "Cannot patch another member's message" });
+    if (!msg.e2ee) return res.status(400).json({ error: "Not an E2EE message" });
+
+    const merged = { ...(msg.wrapped_keys || {}), [`${member_id}:${device_id}`]: wrapped_key };
+    const { error } = await supabase
+      .from("dm_group_messages")
+      .update({ wrapped_keys: merged })
+      .eq("id", msgId);
+    if (error) throw error;
+    res.json({ success: true, wrapped_keys: merged });
+  } catch (e) {
+    console.error("[groups/messages/:msgId/wrapped-key PATCH]", e.message);
+    res.status(500).json({ error: "Failed to update wrapped key" });
   }
 });
 
@@ -17321,6 +17669,41 @@ setInterval(
   },
   1000 * 60 * 29,
 );
+
+// Purge stale E2EE device rows — run once per day.
+//   - Devices revoked more than 30 days ago: safe to hard-delete, nothing
+//     references them anymore (messages store the key material inline in
+//     ciphers/wrapped_keys, not a foreign key to this table).
+//   - Devices never revoked but not seen in 180+ days: almost certainly an
+//     abandoned browser/uninstalled app. Removing them keeps encryptDm/
+//     encryptGroup from wasting effort fanning out to dead devices, and
+//     keeps the "Manage devices" list meaningful. This does NOT revoke
+//     access to anything retroactively — it just stops future messages
+//     from being encrypted for a device nobody uses anymore.
+setInterval(
+  async () => {
+    try {
+      const revokedCutoff = new Date();
+      revokedCutoff.setDate(revokedCutoff.getDate() - 30);
+      await supabase
+        .from("member_e2ee_devices")
+        .delete()
+        .not("revoked_at", "is", null)
+        .lt("revoked_at", revokedCutoff.toISOString());
+
+      const staleCutoff = new Date();
+      staleCutoff.setDate(staleCutoff.getDate() - 180);
+      await supabase
+        .from("member_e2ee_devices")
+        .delete()
+        .is("revoked_at", null)
+        .lt("last_seen_at", staleCutoff.toISOString());
+    } catch (e) {
+      console.error("[e2ee devices cleanup]", e.message);
+    }
+  },
+  1000 * 60 * 60 * 24,
+); // every 24h
 
 // Trim old page_view rows older than 90 days — run once per day
 setInterval(

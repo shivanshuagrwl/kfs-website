@@ -38,7 +38,17 @@ const E2EE = (() => {
   const DB_NAME    = 'kfs-e2ee';
   const DB_VERSION = 1;
   const STORE_NAME = 'keys';
-  const MY_KEY_ID  = 'my-identity-keypair'; // fixed key in IndexedDB store
+  // Identity keypairs are stored keyed by member id, NOT a single fixed slot.
+  // This is what lets two different members share the same physical
+  // browser/device safely: logging in as member B never reads or overwrites
+  // member A's private key, because each gets its own IndexedDB row
+  // ('my-identity-keypair:<memberId>'). It also means a normal logout/login
+  // cycle for the SAME member on the SAME device can safely leave key
+  // material in place (see logoutMember in the portal code) without any
+  // risk of the next person to use this browser inheriting it.
+  function _myKeyRowId(memberId) {
+    return `my-identity-keypair:${memberId}`;
+  }
 
   // ── IndexedDB helpers ────────────────────────────────────────────────────────
 
@@ -156,7 +166,7 @@ const E2EE = (() => {
    * Generate a new ECDH P-256 key pair and persist private key in IndexedDB.
    * Returns { publicKeyJwk, privateKey (CryptoKey) }.
    */
-  async function _generateKeyPair() {
+  async function _generateKeyPair(memberId) {
     const kp = await crypto.subtle.generateKey(
       { name: 'ECDH', namedCurve: 'P-256' },
       true,  // extractable so we can export the public key for the server
@@ -164,17 +174,17 @@ const E2EE = (() => {
     );
     const publicKeyJwk  = await crypto.subtle.exportKey('jwk', kp.publicKey);
     const privateKeyJwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
-    await _dbPut(MY_KEY_ID, { publicKeyJwk, privateKeyJwk });
+    await _dbPut(_myKeyRowId(memberId), { publicKeyJwk, privateKeyJwk });
     return { publicKeyJwk, privateKey: kp.privateKey };
   }
 
   /**
-   * Load our identity key pair from IndexedDB.
-   * Creates a new one if none exists yet.
+   * Load our identity key pair from IndexedDB, scoped to `memberId`.
+   * Creates a new one if none exists yet for this member on this device.
    * Returns { publicKeyJwk, privateKey (CryptoKey), isFresh }.
    */
-  async function _loadMyKeyPair() {
-    const stored = await _dbGet(MY_KEY_ID);
+  async function _loadMyKeyPair(memberId) {
+    const stored = await _dbGet(_myKeyRowId(memberId));
     if (stored) {
       const privateKey = await crypto.subtle.importKey(
         'jwk', stored.privateKeyJwk,
@@ -183,7 +193,7 @@ const E2EE = (() => {
       );
       return { publicKeyJwk: stored.publicKeyJwk, privateKey, isFresh: false };
     }
-    const fresh = await _generateKeyPair();
+    const fresh = await _generateKeyPair(memberId);
     return { ...fresh, isFresh: true };
   }
 
@@ -299,11 +309,99 @@ const E2EE = (() => {
     else _peerDeviceCache.clear();
   }
 
+  // ── Automatic decrypt recovery ────────────────────────────────────────────
+  // Required flow (per audit): decrypt fails → invalidate peer/device cache →
+  // fetch fresh public keys for the sender → rebuild the shared secret →
+  // retry decryption once → only show an error if the retry also fails.
+  //
+  // Failures are classified so we don't collapse every exception into the
+  // same catch-all UI message:
+  //   missing-key         — no cipher/wrapped-key entry for this device at
+  //                          all. Not a key-derivation problem, so a cache
+  //                          refresh + retry can't fix it by itself — it
+  //                          means the sender's message object never
+  //                          targeted this device (auto-repair backfills
+  //                          this asynchronously; see dmAutoRewrapMissingKeys
+  //                          / gcAutoRewrapMissingKeys).
+  //   stale-key-cache      — we had a cached public key for the sender's
+  //                          device, but AES-GCM auth failed with it — almost
+  //                          always means the cache is out of date. Recoverable.
+  //   unknown-device       — the sender's device isn't in our device list at
+  //                          all yet. Could be a cache that hasn't caught up
+  //                          (recoverable) or a device that's since been
+  //                          revoked (confirmed only after the retry).
+  //   network-failure      — the public-keys fetch itself failed (offline,
+  //                          timeout, 5xx). Recoverable once connectivity is
+  //                          back — retrying immediately covers the common
+  //                          "blip" case; a longer offline stretch still
+  //                          self-heals the next time this message renders.
+  //   corrupted-ciphertext — the ciphertext string itself is malformed. Not
+  //                          fixable by re-fetching keys.
+  function _classifiedError(cause, message) {
+    const err = new Error(message);
+    err.e2eeCause = cause;
+    return err;
+  }
+
+  const _RECOVERABLE_CAUSES = new Set(['stale-key-cache', 'unknown-device', 'network-failure']);
+
+  function _decryptFallbackMessage(cause) {
+    switch (cause) {
+      case 'missing-key':
+        // Sender hasn't (yet) wrapped/ciphered a copy for this specific
+        // device — same as Signal/WhatsApp for a device that joined after
+        // the message was sent. Auto-repair will backfill it; there's
+        // nothing this device can retroactively derive on its own.
+        return '[message unavailable]';
+      case 'network-failure':
+        return "🔒 Couldn't reach the server to decrypt this message";
+      case 'corrupted-ciphertext':
+        return '🔒 This message could not be decrypted';
+      case 'unknown-device':
+      case 'stale-key-cache':
+      default:
+        return '🔒 Message encrypted before your keys were set up';
+    }
+  }
+
+  /**
+   * Run `decryptOnce(msg, myId)` with automatic recovery: on a recoverable
+   * failure, invalidate the cached device list for `peerId`, force a fresh
+   * fetch, and retry exactly once before falling back to a (cause-specific)
+   * placeholder. Never surfaces the generic "encrypted before your keys were
+   * set up" message for a failure that recovery could plausibly fix — that
+   * string is reserved for cases where recovery was attempted and still
+   * failed, or where the cause isn't cache-related at all.
+   */
+  async function _decryptWithRecovery(kind, decryptOnce, msg, myId, peerId) {
+    try {
+      return await decryptOnce(msg, myId);
+    } catch (firstErr) {
+      const cause = firstErr.e2eeCause || 'unknown';
+      if (!_RECOVERABLE_CAUSES.has(cause)) {
+        console.warn(`[E2EE] ${kind} decrypt failed (${cause}, not recoverable) for msg`, msg.id, firstErr.message);
+        return _decryptFallbackMessage(cause);
+      }
+      console.warn(`[E2EE] ${kind} decrypt failed (${cause}) for msg`, msg.id, '— attempting automatic recovery');
+      _invalidatePeerCache(peerId);
+      try {
+        const result = await decryptOnce(msg, myId);
+        console.info(`[E2EE] ${kind} decrypt recovered for msg`, msg.id, 'after cache refresh + retry');
+        return result;
+      } catch (secondErr) {
+        const cause2 = secondErr.e2eeCause || 'unknown';
+        console.warn(`[E2EE] ${kind} decrypt recovery retry also failed (${cause2}) for msg`, msg.id, secondErr.message);
+        return _decryptFallbackMessage(cause2);
+      }
+    }
+  }
+
   // ── Initialise: load/generate key pair, publish public key to server ──────────
 
   let _myPrivateKey   = null;
   let _myPublicKeyJwk = null;
   let _myDeviceId     = null;
+  let _myMemberId     = null; // whoever init() was called for — keys/local storage are scoped to this id
   let _ready          = false;
   let _readyPromise   = null;
   let _wasRotated     = false; // true only if THIS device_id already had a different key on file (e.g. local storage was cleared and regenerated) — no longer true just because another device logged in, since devices no longer share one slot.
@@ -338,14 +436,28 @@ const E2EE = (() => {
    * (which could immediately hit the same failure again, e.g. still rate
    * limited) — see also the e2eePublishLimit/e2eeReadLimit split server-side.
    */
-  async function init() {
-    if (_readyPromise) return _readyPromise;
+  async function init(memberId) {
+    if (_readyPromise && _myMemberId === memberId) return _readyPromise;
+    if (_myMemberId !== null && _myMemberId !== memberId) {
+      // Someone else logged in on this same page session (no full reload in
+      // between) — drop the previous member's in-memory key material so we
+      // don't keep encrypting/decrypting as them. Their on-disk key is left
+      // alone (it's stored under their own member-scoped row) so they can
+      // pick back up cleanly if they log back in later.
+      _ready = false;
+      _readyPromise = null;
+      _myPrivateKey = null;
+      _myPublicKeyJwk = null;
+      _peerDeviceCache.clear();
+      _revokedResetDone = false;
+    }
+    _myMemberId = memberId;
     _readyPromise = (async () => {
       const maxAttempts = 5;
       const backoffMs = [1000, 3000, 8000, 15000, 30000];
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-          const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair();
+          const { publicKeyJwk, privateKey, isFresh } = await _loadMyKeyPair(_myMemberId);
           _myPrivateKey   = privateKey;
           _myPublicKeyJwk = publicKeyJwk;
           _myDeviceId     = _getOrCreateDeviceId();
@@ -368,6 +480,18 @@ const E2EE = (() => {
           // isn't blocked on it.
           return;
         } catch (e) {
+          // This device_id was explicitly revoked (see POST /devices/:id/revoke).
+          // A revoked device can never re-register under the same id — that's
+          // the whole point of revocation. Treat this the same as a fresh
+          // install: wipe local key material + device id and re-run as a
+          // brand-new device, exactly once (guarded by _revokedResetDone so a
+          // server bug returning this repeatedly can't spin forever).
+          if (e._data?.code === 'device_revoked' && !_revokedResetDone) {
+            _revokedResetDone = true;
+            console.warn('[E2EE] This device was revoked — resetting local identity and re-registering as a new device.');
+            try { await resetLocalDeviceIdentity(); } catch (resetErr) { console.error('[E2EE] reset after revoke failed:', resetErr.message); }
+            continue; // retry immediately with the new identity, same attempt budget
+          }
           const isLastAttempt = attempt === maxAttempts - 1;
           console.error(`[E2EE] init failed (attempt ${attempt + 1}/${maxAttempts}):`, e.message);
           if (isLastAttempt) {
@@ -383,6 +507,7 @@ const E2EE = (() => {
     })();
     return _readyPromise;
   }
+  let _revokedResetDone = false;
 
   function ready() { return _ready; }
   function myDeviceId() { return _myDeviceId; }
@@ -491,12 +616,58 @@ const E2EE = (() => {
   }
 
   /**
-   * Decrypt a DM message.
-   * `msg` from server has `ciphers: { [device_id]: cipherStr }` plus
-   * `sender_device_id` identifying which of the sender's devices produced
-   * them. Falls back to the legacy single `cipher_for_recipient`/
-   * `cipher_for_self` fields for messages sent before this device-fan-out
-   * migration. Falls back to `msg.body` for legacy plaintext messages.
+   * Single decrypt attempt for a DM message. Throws a classified error
+   * (err.e2eeCause) instead of swallowing failures, so _decryptWithRecovery
+   * can decide whether the failure is worth an automatic retry.
+   */
+  async function _decryptDmOnce(msg, myId) {
+    const isMine = msg.sender_id === myId;
+    let cipherStr = msg.ciphers?.[_myDeviceId];
+    if (!cipherStr) {
+      // Pre-migration message: only had one cipher for "the recipient" and
+      // one for "self", with no concept of device.
+      cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
+    }
+    if (!cipherStr) throw _classifiedError('missing-key', `no cipher for this device on msg ${msg.id}`);
+
+    // Derive the same shared secret the sender used for THIS device: our
+    // own private key + the specific sender device's public key.
+    const senderDeviceId = msg.sender_device_id;
+    let peerPublicKey;
+    if (isMine && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
+      // Self-authored on this exact device (or a legacy self-cipher) —
+      // use the local key directly, no network dependency.
+      peerPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
+    } else {
+      const peerId = isMine ? myId : msg.sender_id;
+      let devices;
+      try {
+        devices = await _getPeerDevices(peerId);
+      } catch (e) {
+        throw _classifiedError('network-failure', 'could not fetch peer devices: ' + e.message);
+      }
+      const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
+      peerPublicKey = (match || devices[0])?.publicKey;
+      if (!peerPublicKey) throw _classifiedError('unknown-device', `sender device ${senderDeviceId} not found for ${peerId}`);
+    }
+    const sharedKey = await _deriveSharedKey(_myPrivateKey, peerPublicKey);
+    try {
+      return await _aesDecrypt(sharedKey, cipherStr);
+    } catch (e) {
+      // AES-GCM auth-tag rejection almost always means "wrong key" (stale
+      // cached peer public key) rather than bit-level corruption — genuine
+      // corruption usually fails at the malformed-string check instead.
+      const cause = /malformed ciphertext/.test(e.message) ? 'corrupted-ciphertext' : 'stale-key-cache';
+      throw _classifiedError(cause, 'AES-GCM decrypt failed: ' + e.message);
+    }
+  }
+
+  /**
+   * Decrypt a DM message, with automatic recovery on failure (see
+   * _decryptWithRecovery). `msg` from server has `ciphers: { [device_id]:
+   * cipherStr }` plus `sender_device_id`. Falls back to the legacy single
+   * `cipher_for_recipient`/`cipher_for_self` fields for messages sent before
+   * this device-fan-out migration, and to `msg.body` for legacy plaintext.
    */
   async function decryptDm(msg, myId) {
     // Legacy plaintext message (pre-E2EE)
@@ -505,41 +676,8 @@ const E2EE = (() => {
     // server-side sentinel here, so don't return it (renders as a blank
     // bubble). Show the same placeholder used for real decrypt failures.
     if (!_ready) return '🔒 Message encrypted before your keys were set up';
-    try {
-      const isMine = msg.sender_id === myId;
-      let cipherStr = msg.ciphers?.[_myDeviceId];
-      if (!cipherStr) {
-        // Pre-migration message: only had one cipher for "the recipient" and
-        // one for "self", with no concept of device.
-        cipherStr = isMine ? msg.cipher_for_self : msg.cipher_for_recipient;
-      }
-      // Genuinely missing for this device (e.g. a device that logged in
-      // after this message was sent, and the auto-repair pass hasn't caught
-      // up to it yet) — same behavior as Signal/WhatsApp: can't retroactively
-      // decrypt without the sender re-wrapping for this device.
-      if (!cipherStr) return '[message unavailable]';
-
-      // Derive the same shared secret the sender used for THIS device: our
-      // own private key + the specific sender device's public key.
-      const senderDeviceId = msg.sender_device_id;
-      let peerPublicKey;
-      if (isMine && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
-        // Self-authored on this exact device (or a legacy self-cipher) —
-        // use the local key directly, no network dependency.
-        peerPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
-      } else {
-        const peerId = isMine ? myId : msg.sender_id;
-        const devices = await _getPeerDevices(peerId);
-        const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
-        peerPublicKey = (match || devices[0])?.publicKey;
-        if (!peerPublicKey) throw new Error('no matching sender device key');
-      }
-      const sharedKey = await _deriveSharedKey(_myPrivateKey, peerPublicKey);
-      return await _aesDecrypt(sharedKey, cipherStr);
-    } catch (e) {
-      console.warn('[E2EE] DM decrypt failed for msg', msg.id, e.message);
-      return '🔒 Message encrypted before your keys were set up';
-    }
+    const peerId = msg.sender_id === myId ? myId : msg.sender_id;
+    return _decryptWithRecovery('DM', _decryptDmOnce, msg, myId, peerId);
   }
 
   // ── Group encrypt / decrypt ───────────────────────────────────────────────────
@@ -602,34 +740,46 @@ const E2EE = (() => {
    * plus `sender_device_id`. Falls back to the legacy `wrapped_keys[myId]`
    * (no device) shape for messages sent before this migration.
    */
+  async function _decryptGroupOnce(msg, myId) {
+    const myWrappedKey = msg.wrapped_keys?.[`${myId}:${_myDeviceId}`] ?? msg.wrapped_keys?.[myId];
+    if (!myWrappedKey) throw _classifiedError('missing-key', `no wrapped key for this device on msg ${msg.id}`);
+
+    const senderDeviceId = msg.sender_device_id;
+    let senderPublicKey;
+    if (msg.sender_id === myId && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
+      senderPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
+    } else {
+      let devices;
+      try {
+        devices = await _getPeerDevices(msg.sender_id);
+      } catch (e) {
+        throw _classifiedError('network-failure', 'could not fetch sender devices: ' + e.message);
+      }
+      const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
+      senderPublicKey = (match || devices[0])?.publicKey;
+      if (!senderPublicKey) throw _classifiedError('unknown-device', `sender device ${senderDeviceId} not found`);
+    }
+    const sharedKey = await _deriveSharedKey(_myPrivateKey, senderPublicKey);
+    let msgKey;
+    try {
+      msgKey = await _unwrapAesKey(myWrappedKey, sharedKey);
+    } catch (e) {
+      throw _classifiedError('stale-key-cache', 'unwrap failed: ' + e.message);
+    }
+    try {
+      return await _aesDecrypt(msgKey, msg.ciphertext);
+    } catch (e) {
+      const cause = /malformed ciphertext/.test(e.message) ? 'corrupted-ciphertext' : 'stale-key-cache';
+      throw _classifiedError(cause, 'AES-GCM decrypt failed: ' + e.message);
+    }
+  }
+
   async function decryptGroup(msg, myId) {
     if (!msg.e2ee) return msg.body || ''; // legacy plaintext
     // E2EE message but our keys aren't loaded yet — see decryptDm for why we
     // don't fall through to msg.body here (it's just the empty sentinel).
     if (!_ready) return '🔒 Message encrypted before your keys were set up';
-    try {
-      const myWrappedKey = msg.wrapped_keys?.[`${myId}:${_myDeviceId}`] ?? msg.wrapped_keys?.[myId];
-      // Genuinely missing for this device — e.g. a device that logged in
-      // after this message was sent, and auto-repair hasn't caught up yet.
-      if (!myWrappedKey) return '[message unavailable]';
-
-      const senderDeviceId = msg.sender_device_id;
-      let senderPublicKey;
-      if (msg.sender_id === myId && (!senderDeviceId || senderDeviceId === _myDeviceId)) {
-        senderPublicKey = await _importPeerPublicKey(_myPublicKeyJwk);
-      } else {
-        const devices = await _getPeerDevices(msg.sender_id);
-        const match = senderDeviceId ? devices.find(d => d.deviceId === senderDeviceId) : null;
-        senderPublicKey = (match || devices[0])?.publicKey;
-        if (!senderPublicKey) throw new Error('no matching sender device key');
-      }
-      const sharedKey = await _deriveSharedKey(_myPrivateKey, senderPublicKey);
-      const msgKey = await _unwrapAesKey(myWrappedKey, sharedKey);
-      return await _aesDecrypt(msgKey, msg.ciphertext);
-    } catch (e) {
-      console.warn('[E2EE] Group decrypt failed for msg', msg.id, e.message);
-      return '🔒 Message encrypted before your keys were set up';
-    }
+    return _decryptWithRecovery('Group', _decryptGroupOnce, msg, myId, msg.sender_id);
   }
 
   // ── Report: decrypt a specific message and send plaintext to admin-only endpoint
@@ -713,6 +863,79 @@ const E2EE = (() => {
     return _wrapAesKey(msgKey, sharedKey);
   }
 
+  // ── Device lifecycle ──────────────────────────────────────────────────────
+  // Covers: viewing all devices on the account, revoking one, revoking every
+  // OTHER device ("log out everywhere else"), and the local-side resets that
+  // back device logout / browser-storage-cleared / uninstall-reinstall /
+  // device-replacement flows. All of these ultimately reduce to two
+  // primitives: (a) tell the server a device_id is no longer trusted, and
+  // (b) wipe this device's own local key material so it can't decrypt new
+  // fan-outs it's no longer part of and, on next use, registers as a clean
+  // new device rather than resurrecting the old one.
+
+  /**
+   * List every device on the current member's account (server-side view).
+   * Returns [{ device_id, device_name, platform, created_at, last_seen_at,
+   *            revoked, revoked_at, is_current }, ...], newest-active first.
+   */
+  async function listDevices() {
+    const data = await api('GET', '/api/member/e2ee/devices');
+    return data?.devices || [];
+  }
+
+  /**
+   * Revoke one device by id. Fire this for a single "sign out this device"
+   * action in a device-list UI, or for a lost/stolen device. Idempotent —
+   * revoking an already-revoked device is a no-op success, not an error.
+   */
+  async function revokeDevice(deviceId) {
+    return api('POST', `/api/member/e2ee/devices/${encodeURIComponent(deviceId)}/revoke`);
+  }
+
+  /**
+   * "Log out all other devices" — revokes every active device except this
+   * one. Useful after a password change or suspected compromise.
+   */
+  async function revokeAllOtherDevices() {
+    return api('POST', '/api/member/e2ee/devices/revoke-others', { current_device_id: _myDeviceId });
+  }
+
+  /**
+   * Wipe THIS device's local E2EE identity (IndexedDB private key + the
+   * localStorage device id) and start over as a brand-new device on next
+   * init(). Does NOT call the server — pair with revokeDevice(myDeviceId())
+   * first if the intent is "this device should also lose server-side trust"
+   * (e.g. device logout, uninstall/reinstall). Browser-storage-cleared is
+   * this same reset, just triggered by the browser instead of by us.
+   */
+  async function resetLocalDeviceIdentity() {
+    _ready = false;
+    _readyPromise = null;
+    _myPrivateKey = null;
+    _myPublicKeyJwk = null;
+    _peerDeviceCache.clear();
+    try { await _dbPut(_myKeyRowId(_myMemberId), undefined); } catch {} // best-effort clear; a fresh generateKeyPair overwrites it regardless
+    try { localStorage.removeItem(DEVICE_ID_KEY); } catch {}
+    _volatileDeviceId = null;
+    _myDeviceId = null;
+  }
+
+  /**
+   * Full "device logout" flow: revoke this device server-side (so no future
+   * message gets encrypted for it) and wipe its local key material. Call
+   * this from the member-facing logout action, alongside the normal
+   * session/token logout — the two are independent (one is "this browser
+   * can't act as this member anymore", the other is "this device can't
+   * decrypt E2EE messages anymore").
+   */
+  async function logoutThisDevice() {
+    const deviceId = _myDeviceId;
+    if (deviceId) {
+      try { await revokeDevice(deviceId); } catch (e) { console.warn('[E2EE] revoke on logout failed (continuing with local reset):', e.message); }
+    }
+    await resetLocalDeviceIdentity();
+  }
+
   return {
     init,
     ready,
@@ -731,6 +954,11 @@ const E2EE = (() => {
     getDeviceIdsForMember,
     invalidatePeerCache: _invalidatePeerCache,
     getMyPublicKeyJwk: () => _myPublicKeyJwk,
+    listDevices,
+    revokeDevice,
+    revokeAllOtherDevices,
+    resetLocalDeviceIdentity,
+    logoutThisDevice,
   };
 
 })();
@@ -772,6 +1000,13 @@ async function api(method, path, body, isForm = false) {
   const headers = {};
   if (_token) headers['Authorization'] = `Bearer ${_token}`;
   if (!isForm) headers['Content-Type'] = 'application/json';
+  // Lets device-lifecycle endpoints (GET .../e2ee/devices, revoke-others)
+  // identify "this device" without a query param on every call. Harmless
+  // no-op for any route that doesn't look at it. typeof-guarded because this
+  // file loads before the E2EE IIFE has necessarily run in every code path.
+  if (typeof E2EE !== 'undefined' && E2EE.myDeviceId && E2EE.myDeviceId()) {
+    headers['x-device-id'] = E2EE.myDeviceId();
+  }
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())) {
     headers['x-csrf-token'] = await getCsrf();
   }
@@ -1177,6 +1412,8 @@ function wireStaticButtons() {
   on('sec-change-pw-btn',  'click', changePasswordFromSecurity);
   on('revoke-sessions-btn','click', revokeAllSessions);
   on('security-logout-btn','click', logoutMember);
+  on('e2ee-revoke-others-btn','click', revokeAllOtherE2eeDevices);
+  on('e2ee-remove-this-device-btn','click', removeThisE2eeDevice);
   on('replay-tutorial-btn','click', () => {
     // Jump to the Strand feed first so the tour's spotlight targets (nav
     // items, post button, etc.) are actually visible/in-DOM before it starts.
@@ -1402,7 +1639,10 @@ async function loadDashboard() {
   await loadProfile();
   // Initialise E2EE: generate or load ECDH key pair, publish public key to server.
   // Non-blocking — runs in background. Falls back to plaintext if crypto unavailable.
-  E2EE.init();
+  // Member id is passed explicitly because the local keypair is stored keyed
+  // by member id (see E2EE module) — this is what lets a second member log
+  // into the same browser without ever touching the first member's key.
+  E2EE.init(_member.id);
   // onReady fires once keys are actually ready, whether that's on the first
   // try or after init() retries in the background (see E2EE.init — it now
   // retries with backoff instead of giving up for the whole session on a
@@ -2014,6 +2254,16 @@ async function skip2FASetup() {
 // ── Logout ────────────────────────────────────────────────────────────────────
 
 async function logoutMember() {
+  // Signing out ends the AUTH session only — it does not revoke this
+  // device's E2EE identity. Those are deliberately separate actions (see
+  // "Remove this device" in Security settings, wired to
+  // E2EE.logoutThisDevice()): auto-revoking on every ordinary logout would
+  // mean logging out and back in on your own phone/laptop keeps minting new
+  // device identities, which is not how Signal/WhatsApp/Discord behave and
+  // creates needless churn (and needless re-encryption fan-out) for no
+  // security benefit. The private key stays on disk, scoped to this member
+  // id, so logging back in on the same device picks the same identity back
+  // up with no server round trip needed to re-establish trust.
   try { await api('POST', '/api/member/logout'); } catch (_) {}
   _token = null; _member = null; _csrfToken = null;
   _recoveryPromptDismissedThisSession = false;
@@ -2457,6 +2707,7 @@ async function submitMovie() {
 async function loadSecurity() {
   loadSessions();
   load2FAStatus();
+  loadE2EEDevices();
 }
 
 async function changePasswordFromSecurity() {
@@ -2585,6 +2836,119 @@ async function revokeAllSessions() {
   } catch (e) {
     console.error(e);
   }
+}
+
+// ── E2EE device management ───────────────────────────────────────────────────
+// Renders every device the member has ever registered for encrypted DMs/group
+// chats, and wires the three lifecycle actions:
+//   - revoke a single OTHER device (with confirmation)
+//   - "Log Out All Other Devices" (with confirmation, current device excluded
+//     both by the server — see revoke-others — and visually, since it's
+//     never shown with its own revoke button)
+//   - "Remove This Device" — the one action that touches the CURRENT device.
+//     Deliberately separate from plain Sign Out (see logoutMember): this one
+//     revokes the E2EE identity server-side and wipes local key material,
+//     then ends the session too, since staying signed in with no working
+//     encryption identity would just recreate the original bug.
+
+async function loadE2EEDevices() {
+  const list = $id('e2ee-devices-list');
+  if (!list || typeof E2EE === 'undefined' || !E2EE.listDevices) return;
+  list.innerHTML = swSkelRows(2);
+  try {
+    const devices = await E2EE.listDevices();
+    renderE2eeDevices(devices);
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+  }
+}
+
+function renderE2eeDevices(devices) {
+  const list = $id('e2ee-devices-list');
+  if (!list) return;
+  if (!devices.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px">No devices registered yet</div>';
+    return;
+  }
+  // Newest-active first is already how the server sorts them; just split
+  // out "this device" so it always renders first regardless of recency.
+  const current = devices.find(d => d.is_current);
+  const others  = devices.filter(d => !d.is_current);
+  const ordered = current ? [current, ...others] : devices;
+
+  list.innerHTML = ordered.map(d => {
+    const name = d.device_name || d.platform || 'Unknown device';
+    const isRevoked = !!d.revoked_at;
+    const statusBadge = isRevoked
+      ? '<span class="badge badge-rejected">Revoked</span>'
+      : (d.is_current ? '<span class="badge badge-approved">This device</span>' : '');
+    const lastActive = isRevoked
+      ? `Revoked ${relTime(d.revoked_at)}`
+      : `Last active ${relTime(d.last_seen_at)}`;
+    const canRevoke = !isRevoked && !d.is_current;
+    return `
+      <div class="session-item" data-device-id="${escHtml(d.device_id)}">
+        <div>
+          <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">${escHtml(name)} ${statusBadge}</div>
+          <div style="font-size:11px;color:var(--muted)">${lastActive}</div>
+        </div>
+        ${canRevoke ? `<button class="btn-sm btn-danger e2ee-revoke-device-btn" data-device-id="${escHtml(d.device_id)}" style="max-width:110px">Revoke</button>` : ''}
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('.e2ee-revoke-device-btn').forEach(btn => {
+    btn.addEventListener('click', () => revokeOneE2eeDevice(btn.dataset.deviceId, btn));
+  });
+}
+
+async function revokeOneE2eeDevice(deviceId, btn) {
+  if (!deviceId) return;
+  const ok = await swConfirm(
+    "Revoke this device? It will stop receiving new encrypted messages immediately, and it would need to sign in again to rejoin.",
+    { title: 'Revoke device', confirmLabel: 'Revoke', danger: true }
+  );
+  if (!ok) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Revoking…'; }
+  try {
+    await E2EE.revokeDevice(deviceId);
+    showMsg('e2ee-devices-msg', 'Device revoked.');
+    await loadE2EEDevices();
+  } catch (e) {
+    showMsg('e2ee-devices-err', e.message, false);
+    if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; }
+  }
+}
+
+async function revokeAllOtherE2eeDevices() {
+  const ok = await swConfirm(
+    "Log out all other devices? Every device except this one will immediately stop receiving new encrypted messages and would need to sign in again to rejoin. This device is not affected.",
+    { title: 'Log out all other devices', confirmLabel: 'Log Out Others', danger: true }
+  );
+  if (!ok) return;
+  try {
+    const result = await E2EE.revokeAllOtherDevices();
+    const count = result?.revoked_count ?? 0;
+    showMsg('e2ee-devices-msg', count ? `Logged out ${count} other device${count === 1 ? '' : 's'}.` : 'No other devices to log out.');
+    await loadE2EEDevices();
+  } catch (e) {
+    showMsg('e2ee-devices-err', e.message, false);
+  }
+}
+
+async function removeThisE2eeDevice() {
+  const ok = await swConfirm(
+    "Remove this device? It stops this device from receiving new encrypted messages, clears its local encryption keys, and signs you out. You'd need to sign in again to rejoin as a new device.",
+    { title: 'Remove this device', confirmLabel: 'Remove & Sign Out', danger: true }
+  );
+  if (!ok) return;
+  try {
+    if (typeof E2EE !== 'undefined' && E2EE.logoutThisDevice) {
+      await E2EE.logoutThisDevice();
+    }
+  } catch (e) {
+    console.warn('[E2EE] remove-this-device failed (continuing with sign out):', e.message);
+  }
+  await logoutMember();
 }
 
 // ── My Works ──────────────────────────────────────────────────────────────────

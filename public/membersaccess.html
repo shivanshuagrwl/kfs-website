@@ -4105,6 +4105,58 @@
               <div id="sessions-msg" class="ok-msg" style="display: none"></div>
             </div>
 
+            <!-- E2EE device management -->
+            <div class="card">
+              <div class="card-title">Encrypted Message Devices</div>
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--muted);
+                  margin-bottom: 16px;
+                  line-height: 1.5;
+                "
+              >
+                Every device you've used to read encrypted DMs and group
+                chats. Removing a device stops it from receiving new
+                encrypted messages — it can't be undone, and that device
+                would need to sign in again to rejoin.
+              </div>
+              <div id="e2ee-devices-list">
+                <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+                <div class="sw-skel-row"><div class="sw-skel-avatar"></div><div class="sw-skel-lines"><div class="sw-skel-line"></div><div class="sw-skel-line"></div></div></div>
+              </div>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px">
+                <button
+                  class="btn-sm btn-danger"
+                  id="e2ee-revoke-others-btn"
+                >
+                  Log Out All Other Devices
+                </button>
+                <button
+                  class="btn-sm"
+                  id="e2ee-remove-this-device-btn"
+                >
+                  Remove This Device
+                </button>
+              </div>
+              <div
+                style="
+                  font-size: 12px;
+                  color: var(--muted);
+                  margin-top: 10px;
+                  line-height: 1.5;
+                "
+              >
+                "Remove This Device" is different from Sign Out below: it
+                permanently unlinks this device's encryption identity (it
+                would need to start fresh and re-sync history if you sign
+                back in), while Sign Out just ends this session and leaves
+                encrypted messaging on this device untouched.
+              </div>
+              <div id="e2ee-devices-msg" class="ok-msg" style="display: none"></div>
+              <div id="e2ee-devices-err" class="err-msg" style="display: none"></div>
+            </div>
+
             <!-- Replay tutorial -->
             <div class="card">
               <div class="card-title" style="margin-bottom: 6px">Guided Tour</div>
