@@ -11074,10 +11074,10 @@
          the Social Strand, and shared-post cards in DMs (see
          VideoLinkPreview in membersaccess.js). Keep this the single source
          of styling for all of them so they can never visually drift apart.
-         This is a link-out preview card ONLY — no player is ever embedded
-         here, so there is deliberately no iframe rule in this block.
-         Clicking anywhere on the card opens the video on its native
-         platform in a new tab. ─────────────────────────────────────────── */
+         This is a link-out preview card — clicking anywhere on it, even
+         while the live autoplay preview below is playing, opens the video
+         on its native platform in a new tab; it never becomes a real
+         in-app player. ─────────────────────────────────────────────────── */
       .video-link-preview {
         position: relative;
         width: 100%;
@@ -11212,6 +11212,33 @@
         0% { background-position: 200% 0; }
         100% { background-position: -200% 0; }
       }
+      /* ── Live inline preview (muted autoplay-while-visible) ───────────────
+         The iframe sits on top of the thumbnail but starts invisible
+         (opacity:0) so there's never a flash of a loading/blank player —
+         the poster thumbnail stays what's shown until the embed actually
+         starts playing, then it cross-fades in. pointer-events:none is
+         load-bearing: it's what guarantees every tap still lands on the
+         card's own click handler (open original video) instead of the
+         provider's controls, even though a live player now sits there. */
+      .video-link-preview .vlp-live-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.35s ease;
+      }
+      .video-link-preview .vlp-media.vlp-live-active .vlp-live-frame {
+        opacity: 1;
+      }
+      /* Hide the static "play" affordance once the muted preview is
+         actually rolling — it reads as playing, same as Instagram/X. */
+      .video-link-preview .vlp-media.vlp-live-active .vlp-play-btn {
+        opacity: 0;
+      }
+
       /* Unsupported/broken link state */
       .video-link-preview.vlp-invalid {
         cursor: default;
@@ -11463,6 +11490,41 @@
         padding-bottom: calc(
           env(safe-area-inset-bottom) + var(--kfs-nav-safe-area)
         ) !important;
+      }
+
+      /* ── Mobile-only compact composer (Instagram DM style) ─────────────
+         Desktop keeps the original .dm-compose/.dm-textarea/.dm-send/
+         .dm-attach-btn rules further up this file untouched — everything
+         here is scoped to @media (max-width: 768px) and only trims sizing/
+         spacing, so no markup or JS changed. Keyboard-safe positioning is
+         unaffected — .dm-panel still sizes off --kfs-vvh (see
+         kfsInitViewportFix in membersaccess.js), this block only makes the
+         bar itself shorter so more of the conversation shows above it. */
+      @media (max-width: 768px) {
+        .dm-compose,
+        .gc-compose {
+          gap: 6px !important;
+          padding: 6px 10px !important;
+          padding-bottom: max(env(safe-area-inset-bottom), 8px) !important;
+        }
+        .dm-textarea {
+          padding: 6px 12px !important;
+          border-radius: 20px !important;
+          line-height: 1.3 !important;
+          min-height: 30px !important;
+        }
+        .dm-attach-btn {
+          width: 30px !important;
+          height: 30px !important;
+        }
+        .dm-send {
+          width: 30px !important;
+          height: 30px !important;
+        }
+        .dm-send svg {
+          width: 14px !important;
+          height: 14px !important;
+        }
       }
     </style>
   </body>
