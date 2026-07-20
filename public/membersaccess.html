@@ -229,10 +229,11 @@
             0 12px 36px rgba(0, 0, 0, 0.35),
             0 2px 10px rgba(0, 0, 0, 0.2),
             inset 0 1px 0 rgba(255, 255, 255, 0.08);
-          /* Equal-rhythm spacing: left/right padding matches the gap
-             between items exactly, so edge→icon spacing reads identical
-             to icon→icon spacing (no per-item margin hacks needed). */
-          padding: 0 27px;
+          /* Edge padding kept slightly tighter than the icon-to-icon gap —
+             matches the reference, where the group sits closer to the
+             rounded edges than the items sit to each other. Gap (27px)
+             is untouched; only this horizontal padding was reduced. */
+          padding: 0 19px;
           justify-content: center;
           align-items: center;
           gap: 27px;
