@@ -1642,7 +1642,18 @@ async function loadDashboard() {
   // Member id is passed explicitly because the local keypair is stored keyed
   // by member id (see E2EE module) — this is what lets a second member log
   // into the same browser without ever touching the first member's key.
-  E2EE.init(_member.id);
+  // Sourced defensively: the bare `_member` variable is occasionally still
+  // null here (e.g. a session-restore refresh whose response didn't include
+  // `member`), and `_member.id` would throw synchronously and abort the
+  // rest of loadDashboard — including the feed/movies/security/chat loads
+  // below it. window._memberProfile is reliably populated at this point
+  // because loadProfile() was just awaited, so it comes first.
+  const _e2eeMemberId = window._memberProfile?.id || _member?.id || window._member?.id;
+  if (_e2eeMemberId) {
+    E2EE.init(_e2eeMemberId);
+  } else {
+    console.error('[E2EE] No member id available at init — encrypted messaging will stay unavailable this session.');
+  }
   // onReady fires once keys are actually ready, whether that's on the first
   // try or after init() retries in the background (see E2EE.init — it now
   // retries with backoff instead of giving up for the whole session on a
