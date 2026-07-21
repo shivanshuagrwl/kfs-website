@@ -704,8 +704,14 @@ const E2EE = (() => {
     if (!msg.e2ee) return msg.body || '';
     // E2EE message but our keys aren't loaded yet — body is just the empty
     // server-side sentinel here, so don't return it (renders as a blank
-    // bubble). Show the same placeholder used for real decrypt failures.
-    if (!_ready) return '🔒 Message encrypted before your keys were set up';
+    // bubble). THROW (don't return a placeholder string) so this is
+    // distinguishable from every other decrypt outcome — callers (see
+    // dmRenderMsgs) tag the bubble as retryable-once-ready, and a single
+    // targeted sweep from E2EE.onReady() (_dmRetryFailedDecrypts) patches
+    // just these bubbles in place once keys are actually loaded, instead of
+    // reloading the whole conversation (which raced with in-flight sends —
+    // see the "message disappears after send" fix).
+    if (!_ready) throw _classifiedError('not-ready', 'E2EE keys not loaded yet');
     const peerId = msg.sender_id === myId ? myId : msg.sender_id;
     return _decryptWithRecovery('DM', _decryptDmOnce, msg, myId, peerId);
   }
@@ -806,9 +812,9 @@ const E2EE = (() => {
 
   async function decryptGroup(msg, myId) {
     if (!msg.e2ee) return msg.body || ''; // legacy plaintext
-    // E2EE message but our keys aren't loaded yet — see decryptDm for why we
-    // don't fall through to msg.body here (it's just the empty sentinel).
-    if (!_ready) return '🔒 Message encrypted before your keys were set up';
+    // E2EE message but our keys aren't loaded yet — see decryptDm for why
+    // this throws (not-ready) instead of returning a placeholder string.
+    if (!_ready) throw _classifiedError('not-ready', 'E2EE keys not loaded yet');
     return _decryptWithRecovery('Group', _decryptGroupOnce, msg, myId, msg.sender_id);
   }
 
@@ -1699,12 +1705,32 @@ async function loadDashboard() {
       // letting people discover it message-by-message.
       swShowToast("New device detected — some older encrypted messages may show as locked here.", 5000);
     }
-    // If a conversation was opened before keys were ready, its messages were
-    // decrypted with _ready still false and are showing as blank/placeholder
-    // bubbles (see decryptDm/decryptGroup). Re-render now that keys are
-    // loaded so people don't have to reload the page to see them.
-    if (typeof DM !== 'undefined' && DM.activeKey) dmLoadMsgs(false).catch(() => {});
-    if (typeof GC !== 'undefined' && GC.activeId)  gcLoadMsgs(false).catch(() => {});
+    // If a conversation was opened before keys were ready, its E2EE messages
+    // decrypted with _ready still false and are showing the "encrypted
+    // before your keys were set up" placeholder (see decryptDm/decryptGroup,
+    // which now throw a classified 'not-ready' error for exactly this case
+    // instead of returning that string as if it were a real result).
+    //
+    // IMPORTANT: this used to call dmLoadMsgs(false)/gcLoadMsgs(false), which
+    // fully replace DM.msgs/GC.msgs from a fresh GET and wipe+rebuild the
+    // whole message list DOM. That raced with any send in flight at the same
+    // moment — see the disappearing-message bug — because a message already
+    // reconciled from optimistic→confirmed by dmSend()/gcSend() has no
+    // "tmp-" id to be protected by, and a GET that happens to read the DB a
+    // moment before that message's INSERT committed would silently drop it
+    // from the freshly-fetched array, which then became the new DM.msgs.
+    //
+    // Instead, patch ONLY the specific bubbles that failed for the
+    // 'not-ready' reason, in place, leaving DM.msgs/GC.msgs, the rest of the
+    // DOM, scroll position, and any in-flight optimistic send completely
+    // untouched. See _dmRetryFailedDecrypts / _gcRetryFailedDecrypts.
+    console.log('[E2EE] onReady: retrying any not-ready decrypt failures in the active conversation (no reload)');
+    if (typeof DM !== 'undefined' && DM.activeKey && typeof _dmRetryFailedDecrypts === 'function') {
+      _dmRetryFailedDecrypts().catch(() => {});
+    }
+    if (typeof GC !== 'undefined' && GC.activeId && typeof _gcRetryFailedDecrypts === 'function') {
+      _gcRetryFailedDecrypts().catch(() => {});
+    }
   });
   loadMovies();
   loadSecurity();
@@ -6508,6 +6534,17 @@ const DM = {
   loadingMsgs:   false,     // true while initial dmLoadMsgs fetch is in flight
 };
 
+// Generates a unique id for optimistic (not-yet-confirmed) DM/group messages.
+// Date.now() alone can collide when messages are sent in rapid succession
+// (two sends inside the same millisecond) — that collision would make the
+// second optimistic bubble overwrite/interfere with the first one's DOM tag
+// and DM.msgs/GC.msgs entry. A monotonic counter suffix makes every call
+// unique regardless of timing.
+let _tmpIdCounter = 0;
+function _genTmpId() {
+  return 'tmp-' + Date.now() + '-' + (++_tmpIdCounter);
+}
+
 const DM_POLL = 5000; // ms
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -6720,12 +6757,14 @@ async function dmStartWith(memberId, peerHint) {
 async function dmLoadMsgs(prepend) {
   if (!DM.activeKey) return;
   if (!prepend) DM.loadingMsgs = true;
+  console.log('[TRACE][DM] dmLoadMsgs(prepend=', prepend, ') for conv', DM.activeKey); // temporary
   try {
     const myId = dmMyId();
     let url = `/api/member/dm/messages/${encodeURIComponent(DM.activeKey)}?limit=40`;
     if (prepend && DM.oldestSentAt) url += `&before=${encodeURIComponent(DM.oldestSentAt)}`;
 
     const msgs = await api('GET', url);
+    console.log('[TRACE][DM] dmLoadMsgs fetched', msgs?.length || 0, 'message(s)'); // temporary
     if (!msgs || !msgs.length) {
       if (prepend) $id('dm-load-earlier-wrap') && ($id('dm-load-earlier-wrap').style.display = 'none');
       return;
@@ -6740,6 +6779,7 @@ async function dmLoadMsgs(prepend) {
       // Preserve any optimistic (tmp) messages that were added while this fetch was in flight
       const optimistic = DM.msgs.filter(m => m.id.startsWith('tmp-'));
       const fetchedIds = new Set(msgs.map(m => m.id));
+      console.log('[TRACE][DM] dmLoadMsgs full-load merge: replacing DM.msgs (was', DM.msgs.length, 'entries) with fetched + ', optimistic.length, 'preserved optimistic'); // temporary
       // Also preserve confirmed messages that arrived via poll but aren't in this batch
       DM.msgs = [...msgs, ...optimistic].filter((m, i, arr) =>
         !fetchedIds.has(m.id) || arr.findIndex(x => x.id === m.id) === i
@@ -6957,6 +6997,7 @@ function _resolveReplyPreviewText(m, msgArray) {
 }
 
 function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
+  console.log('[TRACE][DM] dmRenderMsgs() called with', msgs.length, 'message(s) — appends into container, never clears it itself'); // temporary
   // Group consecutive messages from same sender.
   // lastSenderHint: pass the sender_id of the last message already in the DOM
   // so incremental appends can continue an existing group instead of creating a new one.
@@ -7036,10 +7077,14 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
           bodyNode.style.opacity = '';
           _attachStrandPreviewToBubble(bubble, pt, false);
         }
-      }).catch(() => {
+      }).catch(err => {
         bodyNode.textContent = '🔒 Message encrypted before your keys were set up';
         bodyNode.style.opacity = '0.5';
         bubble.classList.add('dm-e2ee-failed');
+        // Only the "keys aren't loaded yet" case is worth retrying once
+        // E2EE finishes initializing — see _dmRetryFailedDecrypts, called
+        // from E2EE.onReady() instead of reloading the whole conversation.
+        if (err?.e2eeCause === 'not-ready') bubble.classList.add('dm-e2ee-not-ready');
       });
       _pendingDecrypts.push(_decryptP);
     } else {
@@ -7185,6 +7230,57 @@ function dmScrollBottom() {
   if (el) el.scrollTop = el.scrollHeight;
 }
 
+// ── Retry decrypt for messages that only failed because E2EE wasn't ready ──
+// Called once from E2EE.onReady() (see loadDashboard) instead of reloading
+// the whole conversation. Deliberately does NOT touch DM.msgs, does NOT
+// touch list.innerHTML, and does NOT call dmRenderMsgs — it only patches the
+// specific bubbles tagged `.dm-e2ee-not-ready` in place. This means it is
+// safe to run concurrently with an in-flight dmSend(), _dmPollNewMessages(),
+// or a user switching conversations: there is nothing here for any of those
+// to race against, because nothing shared is reassigned.
+async function _dmRetryFailedDecrypts() {
+  const list = $id('dm-msg-list');
+  if (!list) return;
+  const bubbles = Array.from(list.querySelectorAll('.dm-bubble.dm-e2ee-not-ready'));
+  if (!bubbles.length) return;
+  console.log('[DM] retryFailedDecrypts: found', bubbles.length, 'bubble(s) waiting on E2EE readiness');
+  const myId = dmMyId();
+  await Promise.allSettled(bubbles.map(async bubble => {
+    const msgId = bubble.dataset.msgId;
+    // Look the message up by id rather than trusting anything captured in a
+    // closure — DM.msgs may have had messages appended/removed since this
+    // bubble was first rendered (new sends, poll ticks), but the message
+    // this bubble represents is still found by id if it still exists.
+    const m = DM.msgs.find(x => x.id === msgId);
+    if (!m || !m.e2ee) { bubble.classList.remove('dm-e2ee-not-ready'); return; }
+    try {
+      const pt = await E2EE.decryptDm(m, myId);
+      m._plaintext = pt;
+      bubble.classList.remove('dm-e2ee-failed', 'dm-e2ee-not-ready');
+      if (_isStrandShareOnly(pt)) {
+        bubble.querySelector('.dm-bubble-text')?.remove();
+        bubble.classList.add('dm-bubble-strand-share');
+        _attachStrandPreviewToBubble(bubble, pt, true);
+      } else {
+        const bodyNode = bubble.querySelector('.dm-bubble-text');
+        if (bodyNode) {
+          bodyNode.textContent = pt;
+          bodyNode.style.opacity = '';
+        }
+        _attachStrandPreviewToBubble(bubble, pt, false);
+      }
+      console.log('[DM] retryFailedDecrypts: recovered msg', msgId);
+    } catch (e) {
+      // Genuinely undecryptable (not a readiness issue this time) — leave
+      // the existing placeholder as-is. Drop the retry marker so a stray
+      // second call to this function (there shouldn't be one — onReady
+      // fires once per session) doesn't keep re-attempting it forever.
+      bubble.classList.remove('dm-e2ee-not-ready');
+      console.log('[DM] retryFailedDecrypts: msg', msgId, 'still failed —', e?.e2eeCause || e?.message);
+    }
+  }));
+}
+
 // ─── Send ─────────────────────────────────────────────────────────────────────
 
 async function dmSend() {
@@ -7192,6 +7288,7 @@ async function dmSend() {
   if (!input) return;
   const body = input.value.trim();
   if (!body) return;
+  console.log('[TRACE][DM] dmSend() called, body length', body.length); // temporary
 
   // Edit mode — route to the PATCH flow instead of posting a new message.
   if (_editState.dm) { await _dmSubmitEdit(body); return; }
@@ -7215,10 +7312,11 @@ async function dmSend() {
   // Optimistic bubble — include reply fields so the quote box renders
   // immediately instead of waiting for the next poll/refresh.
   const myId      = dmMyId();
-  const tmpId     = 'tmp-' + Date.now();
+  const tmpId     = _genTmpId();
   const replyData = _dmGetReplyPayload();
   const tmp   = { id: tmpId, sender_id: myId, body, sent_at: new Date().toISOString(), read_at: null, reactions: [], ...replyData };
   DM.msgs.push(tmp);
+  console.log('[TRACE][DM] optimistic insert, tmpId=', tmpId, 'DM.msgs.length=', DM.msgs.length); // temporary
   // Tell the poll not to re-append this message body while the request is in-flight
   DM.pendingBodies.add(body);
 
@@ -7258,6 +7356,7 @@ async function dmSend() {
       }
     }
     const res = await api('POST', '/api/member/dm/send', dmPayload);
+    console.log('[TRACE][DM] POST resolved, tmpId=', tmpId, 'realMsgId=', res.message?.id); // temporary
     _setReply('dm', null); // clear reply bar after successful send
 
     // If this was a new conversation, update our active key
@@ -7265,12 +7364,32 @@ async function dmSend() {
 
     const realMsg = res.message;
 
-    // Replace temp msg in DM.msgs with the real confirmed message
-    DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
-    if (realMsg) DM.msgs.push(realMsg);
+    // The user may have switched to a different conversation (or the same
+    // one via a fresh dmOpenConv, which resets DM.msgs) while this POST was
+    // in flight. If so, DM.msgs and `list` now belong to that OTHER
+    // conversation — filtering/pushing into them here would silently inject
+    // this message into the wrong conversation's array and DOM. The message
+    // is already safely persisted server-side; if the user comes back to
+    // this conversation, dmLoadMsgs will pick it up normally. Only reconcile
+    // local state if we're still looking at the conversation we sent to.
+    const stillActive = DM.activePeer?.id === peerId;
+    console.log('[TRACE][DM] reconcile check: stillActive=', stillActive, 'tmpId=', tmpId, 'realMsgId=', realMsg?.id); // temporary
+    if (!stillActive) {
+      console.log('[DM] send resolved after switching away from', peerId, '— skipping local reconcile (message is saved server-side)');
+    }
+
+    // Replace temp msg in DM.msgs with the real confirmed message. Dedupe by
+    // id: it's possible the user switched away and back before this POST's
+    // response arrived, in which case dmOpenConv → dmLoadMsgs already
+    // fetched this exact message from the server — pushing it again would
+    // duplicate the bubble.
+    if (stillActive) {
+      DM.msgs = DM.msgs.filter(m => m.id !== tmpId);
+      if (realMsg && !DM.msgs.some(m => m.id === realMsg.id)) DM.msgs.push(realMsg);
+    }
 
     // Swap tmp bubble in-place — no DOM nuke, no flicker
-    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    const tmpBubble = stillActive ? list?.querySelector(`[data-tmp-id="${tmpId}"]`) : null;
     if (tmpBubble && realMsg) {
       delete tmpBubble.dataset.tmpId;
       // CRITICAL: update data-msg-id so reactions, reply, and context menu work
@@ -7309,15 +7428,23 @@ async function dmSend() {
           else _dmMetaRow.insertAdjacentHTML('beforeend', _tickHTML);
         }
       }
-    } else if (list) {
-      // Fallback: full rerender (bubble wasn't tagged somehow)
+    } else if (stillActive && list) {
+      // Fallback: full rerender (bubble wasn't tagged somehow — e.g. the
+      // switch-away-and-back edge case above). Still gated on stillActive so
+      // this never rebuilds a conversation other than the one being viewed.
       list.innerHTML = '';
       dmRenderMsgs(DM.msgs, list, myId);
       dmScrollBottom();
     }
 
-    // Update conv list locally (avoid full refetch on every send)
-    const existingConv = DM.convs.find(c => c.conv_key === DM.activeKey);
+    // Update conv list locally (avoid full refetch on every send). Keyed off
+    // res.conv_key — the conversation this message actually belongs to — not
+    // DM.activeKey, which may now point at a different conversation if the
+    // user switched away while this send was still in flight. Safe to run
+    // unconditionally (not gated on stillActive): the conv list is shared
+    // across all conversations, not just the currently-open one.
+    const sentConvKey = res.conv_key || DM.activeKey;
+    const existingConv = DM.convs.find(c => c.conv_key === sentConvKey);
     if (existingConv) {
       existingConv.last_snippet      = dmPayload.e2ee ? null : body.slice(0, 80);
       existingConv.last_is_e2ee      = dmPayload.e2ee ? true : false;
@@ -7370,7 +7497,7 @@ async function _dmSendImage(file, opacity = 100) {
 
   // Optimistic "sending" bubble with a local object URL preview
   const myId  = dmMyId();
-  const tmpId = 'tmp-' + Date.now();
+  const tmpId = _genTmpId();
   const localUrl = URL.createObjectURL(file);
   const replyData = _dmGetReplyPayload();
   const tmp = { id: tmpId, sender_id: myId, body: '📷 Photo', attachment_url: localUrl, attachment_type: 'image', attachment_opacity: opacity, sent_at: new Date().toISOString(), read_at: null, reactions: [], ...replyData };
@@ -7627,6 +7754,7 @@ async function _dmPollNewMessages() {
   const known   = new Set(DM.msgs.map(m => m.id));
   const newMsgs = msgs.filter(m => !known.has(m.id) && !DM.pendingBodies.has(m.body));
   if (!newMsgs.length) return;
+  console.log('[TRACE][DM] poll: appending', newMsgs.length, 'new message(s) — additive only, DM.msgs never replaced'); // temporary
   DM.msgs.push(...newMsgs);
   const list = $id('dm-msg-list');
   if (!list) return;
@@ -9963,6 +10091,7 @@ async function dmAutoRewrapMissingKeys(peerId, msgs, myId) {
 async function gcLoadMsgs(prepend) {
   if (!GC.activeId) return;
   if (!prepend) GC.loadingMsgs = true;
+  console.log('[TRACE][GC] gcLoadMsgs(prepend=', prepend, ') for group', GC.activeId); // temporary
   try {
     const myId = gcMyId();
     let url    = `/api/member/groups/${encodeURIComponent(GC.activeId)}/messages?limit=40`;
@@ -9972,6 +10101,7 @@ async function gcLoadMsgs(prepend) {
     // Server returns a plain array (not wrapped in {messages:…})
     const msgs      = Array.isArray(resp) ? resp : (resp.messages || []);
     const nicknames = Array.isArray(resp) ? [] : (resp.nicknames || []);
+    console.log('[TRACE][GC] gcLoadMsgs fetched', msgs.length, 'message(s)'); // temporary
 
     // Merge nicknames into cache using the dedicated group nicks seeder
     // nicknames here come from dm_group_members.nickname — { member_id, nickname }
@@ -9990,6 +10120,7 @@ async function gcLoadMsgs(prepend) {
     } else {
       const optimistic = GC.msgs.filter(m => m.id.startsWith('tmp-'));
       const fetchedIds = new Set(msgs.map(m => m.id));
+      console.log('[TRACE][GC] gcLoadMsgs full-load merge: replacing GC.msgs (was', GC.msgs.length, 'entries) with fetched + ', optimistic.length, 'preserved optimistic'); // temporary
       GC.msgs = [...msgs, ...optimistic].filter((m, i, arr) =>
         !fetchedIds.has(m.id) || arr.findIndex(x => x.id === m.id) === i
       );
@@ -10172,6 +10303,7 @@ function _gcMentionOnKeydown(e) {
 }
 
 function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
+  console.log('[TRACE][GC] gcRenderMsgs() called with', msgs.length, 'message(s) — appends into container, never clears it itself'); // temporary
   let lastSender = lastSenderHint || null;
   let group = (lastSenderHint && container.lastElementChild?.classList.contains('dm-msg-group'))
     ? container.lastElementChild : null;
@@ -10295,10 +10427,11 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
           bodyNode.style.opacity = '';
           _attachStrandPreviewToBubble(bubble, pt, false);
         }
-      }).catch(() => {
+      }).catch(err => {
         bodyNode.textContent = '🔒 Message encrypted before your keys were set up';
         bodyNode.style.opacity = '0.5';
         bubble.classList.add('dm-e2ee-failed');
+        if (err?.e2eeCause === 'not-ready') bubble.classList.add('dm-e2ee-not-ready');
       });
       _pendingDecrypts.push(_decryptP);
     } else {
@@ -10372,6 +10505,45 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 function gcScrollBottom() {
   const el = $id('gc-msgs');
   if (el) el.scrollTop = el.scrollHeight;
+}
+
+// ── Retry decrypt for messages that only failed because E2EE wasn't ready ──
+// Mirrors _dmRetryFailedDecrypts — see that function for the full rationale.
+// Never touches GC.msgs, never touches list.innerHTML, never calls
+// gcRenderMsgs. Only patches bubbles tagged `.dm-e2ee-not-ready` in place.
+async function _gcRetryFailedDecrypts() {
+  const list = $id('gc-msg-list');
+  if (!list) return;
+  const bubbles = Array.from(list.querySelectorAll('.dm-bubble.dm-e2ee-not-ready'));
+  if (!bubbles.length) return;
+  console.log('[GC] retryFailedDecrypts: found', bubbles.length, 'bubble(s) waiting on E2EE readiness');
+  const myId = gcMyId();
+  await Promise.allSettled(bubbles.map(async bubble => {
+    const msgId = bubble.dataset.msgId;
+    const m = GC.msgs.find(x => x.id === msgId);
+    if (!m || !m.e2ee) { bubble.classList.remove('dm-e2ee-not-ready'); return; }
+    try {
+      const pt = await E2EE.decryptGroup(m, myId);
+      m._plaintext = pt;
+      bubble.classList.remove('dm-e2ee-failed', 'dm-e2ee-not-ready');
+      if (_isStrandShareOnly(pt)) {
+        bubble.querySelector('.dm-bubble-text')?.remove();
+        bubble.classList.add('dm-bubble-strand-share');
+        _attachStrandPreviewToBubble(bubble, pt, true);
+      } else {
+        const bodyNode = bubble.querySelector('.dm-bubble-text');
+        if (bodyNode) {
+          bodyNode.innerHTML = _gcHighlightMentions(pt);
+          bodyNode.style.opacity = '';
+        }
+        _attachStrandPreviewToBubble(bubble, pt, false);
+      }
+      console.log('[GC] retryFailedDecrypts: recovered msg', msgId);
+    } catch (e) {
+      bubble.classList.remove('dm-e2ee-not-ready');
+      console.log('[GC] retryFailedDecrypts: msg', msgId, 'still failed —', e?.e2eeCause || e?.message);
+    }
+  }));
 }
 
 // ─── "Seen by" avatar stack (WhatsApp-style, groups only) ────────────────────
@@ -10458,6 +10630,7 @@ async function gcSend() {
   if (!input) return;
   const body = input.value.trim();
   if (!body || !GC.activeId) return;
+  console.log('[TRACE][GC] gcSend() called, groupId=', GC.activeId, 'body length', body.length); // temporary
 
   // Edit mode — route to the PATCH flow instead of posting a new message.
   if (_editState.group) { await _gcSubmitEdit(body); return; }
@@ -10470,10 +10643,12 @@ async function gcSend() {
   }
 
   const myId      = gcMyId();
-  const tmpId     = 'tmp-' + Date.now();
+  const sentGroupId = GC.activeId; // captured now — GC.activeId can change if the user switches groups before this send resolves
+  const tmpId     = _genTmpId();
   const replyData = _gcGetReplyPayload();
   const tmp   = { id: tmpId, sender_id: myId, sender: window._memberProfile || { id: myId, name: 'You', photo: null }, body, sent_at: new Date().toISOString(), is_deleted: false, reactions: [], ...replyData };
   GC.msgs.push(tmp);
+  console.log('[TRACE][GC] optimistic insert, tmpId=', tmpId, 'GC.msgs.length=', GC.msgs.length); // temporary
   GC.pendingBodies.add(body);
 
   const list = $id('gc-msg-list');
@@ -10503,14 +10678,26 @@ async function gcSend() {
         console.warn('[E2EE] Group encrypt failed, sending plaintext:', encErr.message);
       }
     }
-    const res = await api('POST', `/api/member/groups/${GC.activeId}/messages`, gcPayload);
+    const res = await api('POST', `/api/member/groups/${sentGroupId}/messages`, gcPayload);
+    console.log('[TRACE][GC] POST resolved, tmpId=', tmpId, 'realMsgId=', res.message?.id); // temporary
     _setReply('group', null); // clear reply bar after successful send
     const realMsg = res.message;
 
-    GC.msgs = GC.msgs.filter(m => m.id !== tmpId);
-    if (realMsg) GC.msgs.push(realMsg);
+    // See matching comment in dmSend: if the user switched to a different
+    // group (or back to this one, resetting GC.msgs) while this POST was in
+    // flight, GC.msgs/list no longer belong to sentGroupId — don't touch them.
+    const stillActive = GC.activeId === sentGroupId;
+    console.log('[TRACE][GC] reconcile check: stillActive=', stillActive, 'tmpId=', tmpId, 'realMsgId=', realMsg?.id); // temporary
+    if (!stillActive) {
+      console.log('[GC] send resolved after switching away from group', sentGroupId, '— skipping local reconcile (message is saved server-side)');
+    }
 
-    const tmpBubble = list?.querySelector(`[data-tmp-id="${tmpId}"]`);
+    if (stillActive) {
+      GC.msgs = GC.msgs.filter(m => m.id !== tmpId);
+      if (realMsg && !GC.msgs.some(m => m.id === realMsg.id)) GC.msgs.push(realMsg);
+    }
+
+    const tmpBubble = stillActive ? list?.querySelector(`[data-tmp-id="${tmpId}"]`) : null;
     if (tmpBubble && realMsg) {
       delete tmpBubble.dataset.tmpId;
       // CRITICAL: update data-msg-id so reactions, reply, context menu all work immediately
@@ -10537,14 +10724,21 @@ async function gcSend() {
           btn.replaceWith(nb);
         }
       });
-    } else if (list) {
+    } else if (stillActive && list) {
+      // Fallback: full rerender, gated on stillActive so this never rebuilds
+      // a group other than the one actually being viewed right now.
       list.innerHTML = '';
       gcRenderMsgs(GC.msgs, list, myId);
       gcScrollBottom();
     }
-    _gcRenderSeenBy();
+    if (stillActive) _gcRenderSeenBy();
 
-    const existing = GC.groups.find(g => g.id === GC.activeId);
+    // Keyed off sentGroupId (the group this message was actually sent to),
+    // not GC.activeId — which may now point at a different group if the
+    // user switched away while this send was in flight. Safe to run
+    // unconditionally: GC.groups is shared across all groups, not just the
+    // currently-open one.
+    const existing = GC.groups.find(g => g.id === sentGroupId);
     if (existing) {
       existing.last_snippet      = body.slice(0, 80);
       existing.last_msg_at       = realMsg?.sent_at || new Date().toISOString();
@@ -10591,7 +10785,7 @@ async function _gcSendImage(file, opacity = 100) {
   if (btn) btn.disabled = true;
 
   const myId  = gcMyId();
-  const tmpId = 'tmp-' + Date.now();
+  const tmpId = _genTmpId();
   const localUrl = URL.createObjectURL(file);
   const replyData = _gcGetReplyPayload();
   const tmp = { id: tmpId, sender_id: myId, sender: window._memberProfile || { id: myId, name: 'You', photo: null }, body: '📷 Photo', attachment_url: localUrl, attachment_type: 'image', attachment_opacity: opacity, sent_at: new Date().toISOString(), is_deleted: false, reactions: [], ...replyData };
@@ -10710,6 +10904,7 @@ async function _gcPollNewMessages() {
     !known.has(m.id) && (m.is_system || !GC.pendingBodies.has(m.body))
   );
   if (!newMsgs.length) return;
+  console.log('[TRACE][GC] poll: appending', newMsgs.length, 'new message(s) — additive only, GC.msgs never replaced'); // temporary
 
   // Merge new nicknames (only available when resp is an object, not array)
   if (!Array.isArray(resp) && resp.nicknames?.length) {
