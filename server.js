@@ -14155,6 +14155,9 @@ function _guessDeviceName(ua) {
 // key-gen. Server validates structure but NEVER receives or stores private
 // keys. Never touches any other device's row for this member.
 app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eePublishLimit, async (req, res) => {
+  console.log("[TRACE][publish-key] BODY:", JSON.stringify(req.body)); // temporary
+  console.log("[TRACE][publish-key] PARAMS:", JSON.stringify(req.params)); // temporary
+  console.log("[TRACE][publish-key] MEMBER:", JSON.stringify(req.member)); // temporary
   try {
     const myId = req.member.memberId;
     const { device_id, public_key_jwk } = req.body || {};
@@ -14190,23 +14193,39 @@ app.post("/api/member/e2ee/publish-key", memberAuthMiddleware, e2eePublishLimit,
     const rotated = !!existing; // true only if THIS device_id already had a key on file
     const now = new Date().toISOString();
     const ua = req.headers['user-agent'] || '';
+    const upsertRow = {
+      member_id:      myId,
+      device_id,
+      public_key_jwk,
+      fingerprint:    null,
+      device_name:    _guessDeviceName(ua),
+      platform:       _guessPlatform(ua),
+      last_seen_at:   now,
+      ...(rotated ? {} : { created_at: now }),
+    };
+    console.log("[TRACE][publish-key] SQL: upsert into member_e2ee_devices, onConflict=member_id,device_id"); // temporary
+    console.log("[TRACE][publish-key] SQL PARAMS:", JSON.stringify(upsertRow)); // temporary
     const { error } = await supabase
       .from("member_e2ee_devices")
-      .upsert([{
-        member_id:      myId,
-        device_id,
-        public_key_jwk,
-        fingerprint:    null,
-        device_name:    _guessDeviceName(ua),
-        platform:       _guessPlatform(ua),
-        last_seen_at:   now,
-        ...(rotated ? {} : { created_at: now }),
-      }], { onConflict: "member_id,device_id" });
-    if (error) throw error;
+      .upsert([upsertRow], { onConflict: "member_id,device_id" });
+    if (error) {
+      console.error("[TRACE][publish-key] SUPABASE ERROR:", JSON.stringify(error)); // temporary — Supabase errors carry .message, .code, .details, .hint
+      throw error;
+    }
     res.json({ success: true, rotated });
   } catch (e) {
     console.error("[e2ee/publish-key]", e.message);
-    res.status(500).json({ error: "Failed to publish key" });
+    console.error(e.stack); // temporary
+    // TEMPORARY DEBUG RESPONSE — leaks internals to the client, remove before
+    // shipping. code/details/hint are the actual Postgres/PostgREST fields
+    // (e.g. "42P01" = undefined_table, "42703" = undefined_column).
+    res.status(500).json({
+      error: e.message,
+      code: e.code || null,
+      details: e.details || null,
+      hint: e.hint || null,
+      stack: e.stack,
+    });
   }
 });
 
@@ -14291,15 +14310,23 @@ app.get("/api/member/e2ee/public-keys", memberAuthMiddleware, e2eeReadLimit, asy
 
 // GET /api/member/e2ee/devices — list caller's own devices (active + recently revoked)
 app.get("/api/member/e2ee/devices", memberAuthMiddleware, e2eeReadLimit, async (req, res) => {
+  console.log("[TRACE][devices] BODY:", JSON.stringify(req.body)); // temporary
+  console.log("[TRACE][devices] PARAMS:", JSON.stringify(req.params)); // temporary
+  console.log("[TRACE][devices] QUERY:", JSON.stringify(req.query)); // temporary
+  console.log("[TRACE][devices] MEMBER:", JSON.stringify(req.member)); // temporary
   try {
     const myId = req.member.memberId;
     const currentDeviceId = String(req.headers['x-device-id'] || req.query.current_device_id || '');
+    console.log("[TRACE][devices] SQL: select device_id, device_name, platform, created_at, last_seen_at, revoked_at from member_e2ee_devices where member_id =", myId, "order by last_seen_at desc"); // temporary
     const { data, error } = await supabase
       .from("member_e2ee_devices")
       .select("device_id, device_name, platform, created_at, last_seen_at, revoked_at")
       .eq("member_id", myId)
       .order("last_seen_at", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      console.error("[TRACE][devices] SUPABASE ERROR:", JSON.stringify(error)); // temporary
+      throw error;
+    }
     res.json({
       devices: (data || []).map(d => ({
         device_id:    d.device_id,
@@ -14314,7 +14341,14 @@ app.get("/api/member/e2ee/devices", memberAuthMiddleware, e2eeReadLimit, async (
     });
   } catch (e) {
     console.error("[e2ee/devices GET]", e.message);
-    res.status(500).json({ error: "Failed to list devices" });
+    console.error(e.stack); // temporary
+    res.status(500).json({
+      error: e.message,
+      code: e.code || null,
+      details: e.details || null,
+      hint: e.hint || null,
+      stack: e.stack,
+    });
   }
 });
 
@@ -14848,6 +14882,9 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
 // still accepted from any client build that hasn't picked up the multi-device
 // JS yet, so a rolling deploy doesn't break in-flight sessions.
 app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, res) => {
+  console.log("[TRACE][dm/send] BODY:", JSON.stringify(req.body)); // temporary
+  console.log("[TRACE][dm/send] PARAMS:", JSON.stringify(req.params)); // temporary
+  console.log("[TRACE][dm/send] MEMBER:", JSON.stringify(req.member)); // temporary
   try {
     const myId = req.member.memberId;
     const { to_member_id, body, replied_to_id, replied_to_body, replied_to_sender,
@@ -14926,34 +14963,40 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     const now = new Date().toISOString();
     const safeReplyBody = await sanitizeReplyBody("member_notifications", replied_to_id, replied_to_body);
 
+    const insertRow = {
+      member_id:             to_member_id,
+      type:                  "dm",
+      title:                 `Message from ${sender?.name || req.member.username}`,
+      // E2EE: body is empty sentinel; plaintext never touches the server
+      body:                  e2ee ? "" : trimmed,
+      actor_id:              myId,
+      actor_name:            sender?.name   || req.member.username,
+      actor_photo:           sender?.photo  || null,
+      link_type:             "dm",
+      link_id:               key,
+      is_read:               false,
+      replied_to_id:         replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
+      replied_to_body:       safeReplyBody,
+      replied_to_sender:     replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
+      // E2EE columns (null for legacy plaintext messages)
+      e2ee:                  e2ee ? true : false,
+      cipher_for_recipient:  e2ee ? (cipher_for_recipient || null) : null,
+      cipher_for_self:       e2ee ? (cipher_for_self || null) : null,
+      ciphers:               e2ee ? (ciphers || null) : null,
+      sender_device_id:      e2ee ? (sender_device_id || null) : null,
+    };
+    console.log("[TRACE][dm/send] SQL: insert into member_notifications"); // temporary
+    console.log("[TRACE][dm/send] SQL PARAMS:", JSON.stringify(insertRow)); // temporary
     const { data: msg, error: insertErr } = await supabase
       .from("member_notifications")
-      .insert([{
-        member_id:             to_member_id,
-        type:                  "dm",
-        title:                 `Message from ${sender?.name || req.member.username}`,
-        // E2EE: body is empty sentinel; plaintext never touches the server
-        body:                  e2ee ? "" : trimmed,
-        actor_id:              myId,
-        actor_name:            sender?.name   || req.member.username,
-        actor_photo:           sender?.photo  || null,
-        link_type:             "dm",
-        link_id:               key,
-        is_read:               false,
-        replied_to_id:         replied_to_id    ? String(replied_to_id).slice(0, 36) : null,
-        replied_to_body:       safeReplyBody,
-        replied_to_sender:     replied_to_sender ? String(replied_to_sender).slice(0, 100) : null,
-        // E2EE columns (null for legacy plaintext messages)
-        e2ee:                  e2ee ? true : false,
-        cipher_for_recipient:  e2ee ? (cipher_for_recipient || null) : null,
-        cipher_for_self:       e2ee ? (cipher_for_self || null) : null,
-        ciphers:               e2ee ? (ciphers || null) : null,
-        sender_device_id:      e2ee ? (sender_device_id || null) : null,
-      }])
+      .insert([insertRow])
       .select("id, actor_id, member_id, body, created_at, is_read, replied_to_id, replied_to_body, replied_to_sender, e2ee, cipher_for_recipient, cipher_for_self, ciphers, sender_device_id")
       .single();
 
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      console.error("[TRACE][dm/send] SUPABASE ERROR:", JSON.stringify(insertErr)); // temporary
+      throw insertErr;
+    }
 
     res.json({
       success:         true,
@@ -14979,7 +15022,14 @@ app.post("/api/member/dm/send", memberAuthMiddleware, dmRateLimit, async (req, r
     });
   } catch (e) {
     dmLogErr("[dm/send]", e);
-    res.status(500).json({ error: "Failed to send message" });
+    console.error(e.stack); // temporary
+    res.status(500).json({
+      error: e.message,
+      code: e.code || null,
+      details: e.details || null,
+      hint: e.hint || null,
+      stack: e.stack,
+    });
   }
 });
 

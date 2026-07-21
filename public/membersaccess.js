@@ -1033,6 +1033,12 @@ async function getCsrf() {
 }
 
 async function api(method, path, body, isForm = false) {
+  // ── [TRACE] temporary network logging for DM/group-relevant requests ──────
+  const _dmgcRelevant = /\/dm\/(conversations|send|messages)|\/groups(\/|\?|$)/.test(path);
+  const _traceId = _dmgcRelevant ? (Date.now() + '-' + Math.random().toString(36).slice(2, 6)) : null;
+  if (_traceId) {
+    console.log(`[TRACE][NET][${_traceId}] → ${method} ${path}`, (body && !isForm) ? JSON.parse(JSON.stringify(body)) : (isForm ? '(form data)' : '(no body)'));
+  }
   const headers = {};
   if (_token) headers['Authorization'] = `Bearer ${_token}`;
   if (!isForm) headers['Content-Type'] = 'application/json';
@@ -1058,7 +1064,11 @@ async function api(method, path, body, isForm = false) {
   if (method.toUpperCase() === 'GET' && (path.includes('/groups') || path.includes('/nicknames'))) {
     fetchPath += (path.includes('?') ? '&' : '?') + '_cb=' + Date.now() + Math.random().toString(36).slice(2);
   }
+  const _reqSentAt = Date.now(); // temporary trace
   let r = await fetch(API + fetchPath, opts);
+  if (_traceId) {
+    console.log(`[TRACE][NET][${_traceId}] ← status ${r.status} after ${Date.now() - _reqSentAt}ms — ${method} ${path}`);
+  }
 
   // ── 401 auto-refresh ─────────────────────────────────────────────────────
   // Member JWTs expire after 15 min. On 401, silently refresh via the httpOnly
@@ -1072,6 +1082,7 @@ async function api(method, path, body, isForm = false) {
       }
       r = await fetch(API + fetchPath, { ...opts, headers: retryHeaders });
       if (r.status === 401) _handleSessionExpired(); // refreshed token was rejected too — truly expired
+      if (_traceId) console.log(`[TRACE][NET][${_traceId}] ← retried after 401, status now ${r.status}`);
     } else {
       // The httpOnly refresh cookie is gone/expired too — there's no way to
       // silently recover. Previously the request just threw here and
@@ -1086,6 +1097,7 @@ async function api(method, path, body, isForm = false) {
   // it (only 200–299 counts), and a 304 has no body, so r.json() would throw.
   // Treat it as an empty-but-successful response rather than an error.
   if (r.status === 304) {
+    if (_traceId) console.log(`[TRACE][NET][${_traceId}] ← 304 Not Modified, returning {}`);
     return {};
   }
   const d = await (async () => {
@@ -1096,9 +1108,23 @@ async function api(method, path, body, isForm = false) {
     return r.json().catch(() => ({}));
   })();
   if (!r.ok) {
+    if (_traceId) console.log(`[TRACE][NET][${_traceId}] ← ERROR body:`, d);
     const err = new Error(d.error || 'Request failed');
     err._data = d; // attach full response so callers can read warned/muted/banned
     throw err;
+  }
+  if (_traceId) {
+    const arr = Array.isArray(d) ? d : (Array.isArray(d?.messages) ? d.messages : null);
+    const summary = {
+      isArray: Array.isArray(d),
+      count: arr ? arr.length : undefined,
+      sampleIds: arr ? arr.slice(0, 5).map(x => x.id) : undefined,
+      sampleSentAt: arr ? arr.slice(0, 5).map(x => x.sent_at) : undefined,
+      singleMessageId: d?.message?.id,
+      singleMessageSentAt: d?.message?.sent_at,
+      conv_key: d?.conv_key,
+    };
+    console.log(`[TRACE][NET][${_traceId}] ← body summary`, summary);
   }
   return d;
 }
@@ -6519,7 +6545,56 @@ if(document.readyState==='loading'){
 // conv_key = "<smaller_uuid>:<larger_uuid>" (deterministic pair key)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const DM = {
+// ── [TRACE] temporary state-mutation logging for DM.msgs / GC.msgs ─────────
+// Wraps an owner object (DM or GC) in a Proxy so that:
+//   1. Any `OWNER.msgs = something` reassignment is logged with prev/new
+//      length and a full stack trace (shows exactly which function did it).
+//   2. Any in-place array mutation (push/splice/sort/pop/shift/unshift) on
+//      the array currently sitting in OWNER.msgs is also logged the same way.
+// This does not change behavior at all — every trapped operation still runs
+// exactly as before, this only observes and logs it.
+function _instrumentMsgsOwner(ownerName, obj) {
+  function wrapArray(arr) {
+    return new Proxy(arr, {
+      get(target, prop, receiver) {
+        if (['push', 'splice', 'sort', 'pop', 'shift', 'unshift'].includes(prop) && typeof target[prop] === 'function') {
+          return function (...args) {
+            const before = target.length;
+            const result = Array.prototype[prop].apply(target, args);
+            console.log(
+              `[TRACE][STATE] ${ownerName}.msgs.${prop}() — length ${before} -> ${target.length}`,
+              '\n' + (new Error().stack)
+            );
+            return result;
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      }
+    });
+  }
+  let _current = wrapArray(obj.msgs || []);
+  return new Proxy(obj, {
+    get(target, prop, receiver) {
+      if (prop === 'msgs') return _current;
+      return Reflect.get(target, prop, receiver);
+    },
+    set(target, prop, value, receiver) {
+      if (prop === 'msgs') {
+        const before = _current ? _current.length : 0;
+        const afterLen = Array.isArray(value) ? value.length : 0;
+        console.log(
+          `[TRACE][STATE] ${ownerName}.msgs REASSIGNED — length ${before} -> ${afterLen}`,
+          '\n' + (new Error().stack)
+        );
+        _current = wrapArray(Array.isArray(value) ? value : []);
+        return true;
+      }
+      return Reflect.set(target, prop, value, receiver);
+    }
+  });
+}
+
+const DM = _instrumentMsgsOwner('DM', {
   convs:         [],    // loaded conversations
   loaded:        false, // true once DM.convs has been fetched at least once this session
   activeKey:     null,  // current conv_key
@@ -6532,7 +6607,7 @@ const DM = {
   panelVisible:  false,
   pendingBodies: new Set(), // bodies of in-flight optimistic messages (for poll dedup)
   loadingMsgs:   false,     // true while initial dmLoadMsgs fetch is in flight
-};
+});
 
 // Generates a unique id for optimistic (not-yet-confirmed) DM/group messages.
 // Date.now() alone can collide when messages are sent in rapid succession
@@ -7149,7 +7224,12 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
   _markLastBubbleInGroups(container);
   if (_pendingDecrypts.length) {
     console.log('[TRACE][DM] waiting on', _pendingDecrypts.length, 'pending decrypt(s) before running collapse check'); // temporary
-    Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
+    Promise.allSettled(_pendingDecrypts).then(() => {
+      _collapseFailedDecrypts(container);
+      _traceVerifyRenderConsistency('DM', DM.msgs, 'dm-msg-list'); // temporary
+    });
+  } else {
+    _traceVerifyRenderConsistency('DM', DM.msgs, 'dm-msg-list'); // temporary
   }
 }
 
@@ -9788,7 +9868,7 @@ function dmRefreshDisplayNames(convKey) {
 // GROUP CHAT MODULE (GC)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const GC = {
+const GC = _instrumentMsgsOwner('GC', {
   groups:         [],      // loaded group list
   activeId:       null,    // currently open group UUID
   activeGroup:    null,    // { id, name, members[], my_role, ... }
@@ -9799,7 +9879,7 @@ const GC = {
   pendingBodies:  new Set(),
   loadingMsgs:    false,
   reads:          [],      // cached [{member_id, last_read_at}] for "seen by" — see _gcRefreshSeenBy
-};
+});
 
 const GC_POLL = 5000;
 
@@ -10524,6 +10604,92 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
 function gcScrollBottom() {
   const el = $id('gc-msgs');
   if (el) el.scrollTop = el.scrollHeight;
+}
+
+// ── [TRACE] temporary state-vs-DOM consistency check ────────────────────────
+// Compares the ids currently in DM.msgs/GC.msgs against the ids actually
+// present in the DOM message list. Logs any mismatch explicitly instead of
+// silently proceeding. Note: a bubble legitimately disappearing into the
+// "N messages can't be decrypted" collapse summary is an EXPECTED, reported
+// case — not a fault — because the summary row intentionally has no
+// data-msg-id. This function calls that out separately from any other,
+// unexplained mismatch so real anomalies aren't buried in expected ones.
+function _traceVerifyRenderConsistency(label, msgsArr, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const stateIds = msgsArr.map(m => String(m.id));
+  const domIds = Array.from(container.querySelectorAll('[data-msg-id]')).map(n => n.dataset.msgId);
+  const summaryRows = container.querySelectorAll('.dm-e2ee-summary').length;
+
+  const missingFromDom = stateIds.filter(id => !domIds.includes(id));
+  const extraInDom = domIds.filter(id => !stateIds.includes(id));
+
+  if (!missingFromDom.length && !extraInDom.length) {
+    console.log(`[TRACE][VERIFY][${label}] OK — state (${stateIds.length}) and DOM (${domIds.length}) ids match exactly`);
+    return;
+  }
+  console.log(
+    `[TRACE][VERIFY][${label}] MISMATCH — state has ${stateIds.length} id(s), DOM has ${domIds.length} id(s), ` +
+    `${summaryRows} collapse-summary row(s) present (each can legitimately account for 3+ missing ids)`
+  );
+  if (missingFromDom.length) {
+    console.log(`[TRACE][VERIFY][${label}] in DM/GC.msgs but NOT rendered in DOM:`, missingFromDom);
+  }
+  if (extraInDom.length) {
+    console.log(`[TRACE][VERIFY][${label}] rendered in DOM but NOT in DM/GC.msgs (orphaned):`, extraInDom);
+  }
+}
+
+// ── [TRACE] temporary MutationObserver — detects any bubble removed from the
+// DM/GC message list containers, regardless of which function did it. ──────
+// IMPORTANT CAVEAT: MutationObserver callbacks fire in a microtask AFTER the
+// actual DOM mutation, so `new Error().stack` captured inside this callback
+// shows the microtask-flush call stack, NOT the original synchronous call
+// site that removed the node. Use the timestamp printed here to correlate
+// with the [TRACE][STATE] logs above (which DO capture a real stack trace at
+// the exact moment of mutation) — whichever [TRACE][STATE]/[TRACE][...] line
+// logged immediately before a given [TRACE][DOM-REMOVE] timestamp is the
+// actual cause.
+function _installMsgContainerObservers() {
+  const targets = [
+    { id: 'dm-msg-list', convType: 'DM', activeIdGetter: () => (typeof DM !== 'undefined' ? DM.activeKey : null) },
+    { id: 'gc-msg-list',  convType: 'GC', activeIdGetter: () => (typeof GC !== 'undefined' ? GC.activeId  : null) },
+  ];
+  targets.forEach(({ id, convType, activeIdGetter }) => {
+    const el = document.getElementById(id);
+    if (!el) { console.log(`[TRACE][DOM-OBSERVER] could not attach — #${id} not found in DOM yet`); return; }
+    const observer = new MutationObserver(mutations => {
+      const now = new Date().toISOString();
+      mutations.forEach(mut => {
+        mut.removedNodes.forEach(node => {
+          if (!(node instanceof HTMLElement)) return;
+          // A removed node might be a whole .dm-msg-group (containing many
+          // bubbles), a single .dm-bubble-wrap, or a .dm-meta — find every
+          // bubble inside whatever was removed, including the node itself.
+          const bubbles = [];
+          if (node.matches?.('.dm-bubble')) bubbles.push(node);
+          node.querySelectorAll?.('.dm-bubble').forEach(b => bubbles.push(b));
+          if (!bubbles.length) return; // not message content (e.g. a stray text node)
+          bubbles.forEach(b => {
+            console.log(
+              `[TRACE][DOM-REMOVE][${convType}] msgId=`, b.dataset.msgId || '(none)',
+              'tmpId=', b.dataset.tmpId || '(none)',
+              'activeConv=', activeIdGetter(),
+              'at', now,
+              '— node classes:', b.className
+            );
+          });
+        });
+      });
+    });
+    observer.observe(el, { childList: true, subtree: true });
+    console.log(`[TRACE][DOM-OBSERVER] attached to #${id}`);
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _installMsgContainerObservers);
+} else {
+  _installMsgContainerObservers();
 }
 
 // ── Retry decrypt for messages that only failed because E2EE wasn't ready ──
