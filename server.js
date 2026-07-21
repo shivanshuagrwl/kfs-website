@@ -15263,17 +15263,24 @@ app.post("/api/member/dm/messages/image", memberAuthMiddleware, dmRateLimit,
   }
 );
 
-// ── GET /api/member/dm/messages/status?ids=a,b,c ──────────────────────────────
+// ── POST /api/member/dm/messages/status  { ids: [a,b,c] } ────────────────────
 // Lightweight delivered/read-receipt refresh for own sent messages already
 // rendered on screen — piggybacked on the DM poll tick, same pattern as
 // /api/member/messages/reactions, so tick status (sent/delivered/seen) updates
 // live without re-fetching the whole thread. Only the original sender gets a
 // message's receipt info back; everyone else's ids are silently dropped.
+// NOTE: was GET with ?ids=a,b,c,... — moved to POST+body because a long
+// comma-separated query string (16+ UUIDs, ~600+ chars) was being blocked
+// with a 403 before it ever reached this handler, most likely by a CDN/WAF
+// layer in front of the app rather than by any code here.
 const reactionLimit = rateLimit({ windowMs: 60_000, max: 150, standardHeaders: true, legacyHeaders: false });
-app.get("/api/member/dm/messages/status", memberAuthMiddleware, reactionLimit, async (req, res) => {
+app.post("/api/member/dm/messages/status", memberAuthMiddleware, reactionLimit, async (req, res) => {
   try {
     const myId = req.member.memberId;
-    const ids  = String(req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 100);
+    const rawIds = Array.isArray(req.body?.ids)
+      ? req.body.ids
+      : String(req.body?.ids || "").split(",");
+    const ids = rawIds.map(s => String(s).trim()).filter(Boolean).slice(0, 100);
     if (!ids.length) return res.json({});
 
     const { data } = await supabase
@@ -15289,7 +15296,39 @@ app.get("/api/member/dm/messages/status", memberAuthMiddleware, reactionLimit, a
     });
     res.json(map);
   } catch (e) {
-    console.error("[dm/messages/status GET]", e.message);
+    console.error("[dm/messages/status POST]", e.message);
+    res.json({});
+  }
+});
+
+// ── POST /api/member/dm/messages/status { ids: [...] } ──────────────────────
+// Same as the GET above, but ids travel in the body instead of a comma-joined
+// query string. The GET version (16 ids ≈ 600 char query string) was hitting
+// a 403 in front of this app — infra-level (WAF/CDN), not Express — before
+// ever reaching this route. Client now calls this POST instead; GET kept
+// above only for any stale cached clients still calling it.
+app.post("/api/member/dm/messages/status", memberAuthMiddleware, reactionLimit, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const ids  = Array.isArray(req.body?.ids)
+      ? req.body.ids.map(s => String(s).trim()).filter(Boolean).slice(0, 100)
+      : [];
+    if (!ids.length) return res.json({});
+
+    const { data } = await supabase
+      .from("member_notifications")
+      .select("id, actor_id, link_type, delivered_at, read_at")
+      .eq("link_type", "dm")
+      .in("id", ids);
+
+    const map = {};
+    (data || []).forEach(r => {
+      if (r.actor_id !== myId) return; // only the sender may see their own message's receipts
+      map[r.id] = { delivered_at: r.delivered_at || null, read_at: r.read_at || null };
+    });
+    res.json(map);
+  } catch (e) {
+    console.error("[dm/messages/status POST]", e.message);
     res.json({});
   }
 });

@@ -9029,7 +9029,7 @@ async function _refreshVisibleDmStatus() {
     .slice(-40)
     .map(m => m.id);
   if (!ids.length) return;
-  const map = await api('GET', `/api/member/dm/messages/status?ids=${ids.map(encodeURIComponent).join(',')}`);
+  const map = await api('POST', `/api/member/dm/messages/status`, { ids });
   if (!map || typeof map !== 'object') return;
   ids.forEach(id => {
     const msg = DM.msgs.find(m => m.id === id);
