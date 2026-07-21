@@ -14698,16 +14698,19 @@ app.get("/api/member/dm/conversations", memberAuthMiddleware, async (req, res) =
       }
     }
 
-    // Read receipts — "delivered" (gray double-tick) fires the moment the
-    // recipient's client syncs their inbox, even before they open the thread;
-    // "seen" (blue double-tick) is stamped separately, in the thread GET route,
-    // when they actually view the conversation. Fire-and-forget, never blocks.
+    // Delivered receipt fires the moment the recipient's client syncs their
+    // inbox, even before they open the thread. "Read" is never stamped here,
+    // in the messages GET route, or in any GET route at all anymore — it's
+    // only stamped by the explicit POST /api/member/dm/read, which the client
+    // calls after confirming the thread is open, visible, focused, and the
+    // message has actually rendered. Fire-and-forget, never blocks.
     const undeliveredIds = (received || []).filter(r => !r.delivered_at).map(r => r.id);
     if (undeliveredIds.length) {
       supabase
         .from("member_notifications")
         .update({ delivered_at: new Date().toISOString() })
         .in("id", undeliveredIds)
+        .is("delivered_at", null) // idempotent — never rewrite an existing delivered_at
         .then(() => {})
         .catch(e => console.error("[dm/mark-delivered]", e.message));
     }
@@ -14825,21 +14828,26 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .slice(since ? 0 : -limit); // for since: keep all new msgs; for before: keep last N
 
-    // Mark unread received messages as read — fire-and-forget, never blocks response.
-    // Opening/polling this thread means the recipient has both received (delivered)
-    // and viewed (read/seen) the message, so both timestamps are stamped together.
+    // Delivered-only auto-stamp. Fetching/polling this thread proves the
+    // recipient's client has received the message — that's ALL it proves.
+    // It does NOT mean the person has seen it: the tab could be backgrounded,
+    // unfocused, or this could be a background poll tick. "Read" is a
+    // separate, explicit act — see POST /api/member/dm/read below, which the
+    // client only calls after confirming the conversation is open, the tab is
+    // visible and focused, and the message bubble actually rendered in the DOM.
     const nowIso = new Date().toISOString();
-    const unreadIds = (recv || []).filter(m => !m.is_read).map(m => m.id);
-    if (unreadIds.length) {
+    const undeliveredIds = (recv || []).filter(m => !m.delivered_at).map(m => m.id);
+    if (undeliveredIds.length) {
       supabase
         .from("member_notifications")
-        .update({ is_read: true, delivered_at: nowIso, read_at: nowIso })
-        .in("id", unreadIds)
+        .update({ delivered_at: nowIso })
+        .in("id", undeliveredIds)
+        .is("delivered_at", null) // idempotent — never rewrite an existing delivered_at
         .then(() => {})
-        .catch(e => console.error("[dm/mark-read]", e.message));
-      unreadIds.forEach(id => {
+        .catch(e => console.error("[dm/mark-delivered]", e.message));
+      undeliveredIds.forEach(id => {
         const m = msgs.find(x => x.id === id);
-        if (m) { m.delivered_at = nowIso; m.read_at = nowIso; }
+        if (m) m.delivered_at = nowIso;
       });
     }
 
@@ -14875,7 +14883,65 @@ app.get("/api/member/dm/messages/:convKey", memberAuthMiddleware, async (req, re
   }
 });
 
-// ── POST /api/member/dm/send ──────────────────────────────────────────────────
+// ── POST /api/member/dm/read ─────────────────────────────────────────────────
+// Body: { ids: [messageId, ...], conv_key }
+// The ONLY place is_read/read_at get written for DMs. Called exclusively by
+// the client, and only after it has confirmed: the conversation is still the
+// active one, document.visibilityState === "visible", document.hasFocus()
+// is true, rendering has finished, and the message bubble actually exists in
+// the DOM. Fetching/polling a conversation never calls this — see the GET
+// route above, which only ever stamps delivered_at.
+// Never trusts the client's list at face value — every id in the response is
+// independently re-verified server-side against ALL of:
+//   • member_id = caller            (addressed to this user)
+//   • link_type = "dm" AND link_id = conv_key (belongs to this conversation)
+//   • read_at IS NULL               (idempotent — never rewrite an existing read_at)
+// Returns the ids that were ACTUALLY updated (a subset of what was requested
+// is normal — already-read or not-yet-delivered-to-this-convo ids are simply
+// dropped, not errored) plus the single server-generated read_at timestamp
+// used for all of them, so the client never invents its own timestamp.
+app.post("/api/member/dm/read", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const convKey = String(req.body?.conv_key || "");
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
+      .map(s => String(s).trim())
+      .filter(Boolean)
+      .slice(0, 200);
+    if (!ids.length) return res.json({ updated: [], read_at: null });
+
+    // conv_key must actually contain the caller — same shape check as the
+    // messages GET route — so a forged conv_key can't be used to probe
+    // whether some other pair's conversation exists.
+    const parts = convKey.split(":");
+    if (!convKey || parts.length !== 2 || !parts.includes(myId)) {
+      return res.status(403).json({ error: "Invalid or missing conv_key" });
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("member_notifications")
+      .update({ is_read: true, read_at: nowIso, delivered_at: nowIso })
+      .eq("member_id", myId)       // addressed to this user — can't mark others' inbound messages
+      .eq("link_type", "dm")
+      .eq("link_id", convKey)      // must belong to this exact conversation
+      .in("id", ids)
+      .is("read_at", null)         // idempotent — never rewrite an existing read_at
+      .select("id");
+    if (error) throw error;
+
+    // delivered_at above is a safety net only (covers the rare case where a
+    // message is marked read before the delivered-stamp poll tick reached
+    // it) — it's set alongside read_at but guarded by the same read_at IS
+    // NULL condition, so it never fires a second time for the same message.
+    res.json({ updated: (data || []).map(r => r.id), read_at: nowIso });
+  } catch (e) {
+    console.error("[dm/read POST]", e.message);
+    res.status(500).json({ error: "Failed to mark read", code: e.code || null });
+  }
+});
+
+
 // Body: { to_member_id, body } — or E2EE (multi-device):
 //   { to_member_id, e2ee: true, ciphers: { [device_id]: cipherStr }, sender_device_id, body: "" }
 // Legacy single-cipher shape ({ cipher_for_recipient, cipher_for_self }) is
@@ -16895,16 +16961,11 @@ app.get("/api/member/groups/:id/messages", memberAuthMiddleware, gcReadLimit, as
     const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
     if (!mem) return res.status(403).json({ error: "Not in this group" });
 
-    // Stamp my last-read watermark for this group — fire-and-forget, never blocks
-    // the response. This is the WhatsApp-style "seen by" mechanism: one row per
-    // (group, member) rather than a flag per message, so the client can compute
-    // who's seen the latest message by comparing everyone's last_read_at against
-    // that message's created_at. See GET /api/member/groups/:id/seen below.
-    supabase
-      .from("dm_group_reads")
-      .upsert([{ group_id: gid, member_id: myId, last_read_at: new Date().toISOString() }], { onConflict: "group_id,member_id" })
-      .then(() => {})
-      .catch(e => console.error("[group/mark-read]", e.message));
+    // NOTE: the last-read watermark is NOT stamped here anymore. Fetching or
+    // polling this route only proves the client received the messages — it
+    // does not prove anyone looked at them. See POST /api/member/groups/:id/read
+    // below, which the client calls only after confirming the group panel is
+    // open, visible, focused, and the messages actually rendered.
 
     // Pull nicknames for this group
     const { data: nickRows } = await supabase.from("dm_group_members").select("member_id, nickname").eq("group_id", gid);
@@ -16999,6 +17060,34 @@ app.get("/api/member/groups/:id/seen", memberAuthMiddleware, gcReadLimit, async 
   } catch (e) {
     console.error("[groups/seen GET]", e.message);
     res.json([]);
+  }
+});
+
+// ── POST /api/member/groups/:id/read ─────────────────────────────────────────
+// The ONLY place a group's last-read watermark gets stamped. Called
+// exclusively by the client, only after confirming: the group panel is still
+// the active conversation, document.visibilityState === "visible",
+// document.hasFocus() is true, rendering has finished, and at least one
+// message bubble actually exists in the DOM. Fetching/polling messages (GET
+// /api/member/groups/:id/messages above) never touches this anymore.
+// Per-member, so marking my own read status never affects anyone else's row
+// in dm_group_reads (rule: group read status tracked per member).
+app.post("/api/member/groups/:id/read", memberAuthMiddleware, async (req, res) => {
+  try {
+    const myId = req.member.memberId;
+    const gid  = req.params.id;
+    const { data: mem } = await supabase.from("dm_group_members").select("member_id").eq("group_id", gid).eq("member_id", myId).maybeSingle();
+    if (!mem) return res.status(403).json({ error: "Not in this group" });
+
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from("dm_group_reads")
+      .upsert([{ group_id: gid, member_id: myId, last_read_at: nowIso }], { onConflict: "group_id,member_id" });
+    if (error) throw error;
+    res.json({ success: true, last_read_at: nowIso });
+  } catch (e) {
+    console.error("[groups/read POST]", e.message);
+    res.status(500).json({ error: "Failed to mark read", code: e.code || null });
   }
 });
 

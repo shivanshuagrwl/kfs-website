@@ -7227,11 +7227,133 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
     Promise.allSettled(_pendingDecrypts).then(() => {
       _collapseFailedDecrypts(container);
       _traceVerifyRenderConsistency('DM', DM.msgs, 'dm-msg-list'); // temporary
+      _maybeMarkDmRead(); // rendering has now genuinely finished, incl. decrypt
     });
   } else {
     _traceVerifyRenderConsistency('DM', DM.msgs, 'dm-msg-list'); // temporary
+    _maybeMarkDmRead();
   }
 }
+
+// ── Read receipts (recipient side) ───────────────────────────────────────────
+// This is the ONLY place a DM gets marked read on the client. It fires after
+// rendering completes (both full loads and poll-appends funnel through
+// dmRenderMsgs above) and again on visibilitychange/focus (registered below),
+// but every single call re-checks eligibility fresh — nothing here assumes
+// the conditions still hold just because they held when the timer was set.
+//   • DM.activeKey must still match — switching chats mid-debounce cancels it
+//   • document.visibilityState === 'visible' — tab must not be backgrounded
+//   • document.hasFocus() — window must be the focused one, not just open
+//   • the message bubble must actually exist in the DOM (data-msg-id lookup),
+//     snapshotted synchronously at flush time so anything that arrives after
+//     that snapshot (e.g. a poll response landing mid-flush) is excluded from
+//     THIS batch and picked up by the next trigger instead.
+// Batched: all eligible ids collected into one POST. Debounced ~150ms so a
+// burst of renders (initial load + immediate poll tick) coalesces into one
+// request instead of one per render. Idempotent client-side via _dmReadSent
+// (never re-sends an id once acknowledged) on top of the server's own
+// `WHERE read_at IS NULL` guard. Only one request in flight at a time — a
+// trigger that arrives mid-request is deferred, not dropped, and re-runs once
+// the in-flight request settles. The server is the only source of truth for
+// read_at — the client never generates its own timestamp.
+let _dmReadDebounceTimer = null;
+let _dmReadInFlight = false;
+let _dmReadRerunPending = false;
+const _dmReadSent = new Set();
+
+function _dmReadEligibleNow() {
+  if (!DM.activeKey) return 'no active conversation';
+  if (document.visibilityState !== 'visible') return 'tab not visible';
+  if (!document.hasFocus()) return 'window not focused';
+  return null; // eligible
+}
+
+function _maybeMarkDmRead() {
+  clearTimeout(_dmReadDebounceTimer);
+  _dmReadDebounceTimer = setTimeout(_dmFlushRead, 150);
+}
+
+async function _dmFlushRead() {
+  if (_dmReadInFlight) {
+    console.log('[READ] Blocked (request already in flight)'); // temporary
+    _dmReadRerunPending = true;
+    return;
+  }
+
+  const blockedReason = _dmReadEligibleNow();
+  if (blockedReason) {
+    console.log('[READ] Blocked (' + blockedReason + ')'); // temporary
+    return;
+  }
+
+  const myId = dmMyId();
+  const convKey = DM.activeKey;
+  const list = $id('dm-msg-list');
+  if (!myId || !convKey || !list) {
+    console.log('[READ] Blocked (missing myId/convKey/list)'); // temporary
+    return;
+  }
+
+  // Snapshot the DOM's current rendered ids synchronously, right now — this
+  // is "the current rendered state", not a moving target. Anything appended
+  // after this line (e.g. a concurrent poll append) is simply not in this
+  // snapshot and will be picked up by the next trigger, not this one.
+  const domIds = new Set(Array.from(list.querySelectorAll('[data-msg-id]')).map(el => el.dataset.msgId));
+
+  const ids = DM.msgs
+    .filter(m => m.sender_id !== myId && !m.read_at && !_dmReadSent.has(m.id))
+    .filter(m => domIds.has(m.id))
+    .map(m => m.id);
+
+  if (!ids.length) {
+    console.log('[READ] Blocked (no eligible unread ids in current render)'); // temporary
+    return;
+  }
+
+  console.log('[READ] Eligible'); // temporary
+  console.log('[READ] Sending ids', ids); // temporary
+
+  ids.forEach(id => _dmReadSent.add(id));
+  _dmReadInFlight = true;
+  try {
+    const res = await api('POST', '/api/member/dm/read', { ids, conv_key: convKey });
+    const updated = Array.isArray(res?.updated) ? res.updated : [];
+    const serverReadAt = res?.read_at || null;
+    console.log('[READ] Server marked', updated); // temporary
+
+    if (updated.length && serverReadAt) {
+      const updatedSet = new Set(updated);
+      DM.msgs.forEach(m => {
+        if (updatedSet.has(m.id)) { m.is_read = true; m.read_at = serverReadAt; }
+      });
+      // No local tick DOM update needed here: ticks (_dmTickSpanHTML) only
+      // ever render on the sender's OWN bubbles (see its comment above), and
+      // these ids are, by construction, messages sent BY THE PEER TO ME —
+      // never mine. The peer's own client picks this up via its existing
+      // /api/member/dm/messages/status poll (_refreshVisibleDmStatus), which
+      // already re-renders just that message's tick span in place.
+      console.log('[READ] Local state updated'); // temporary
+    }
+    // Anything requested but NOT confirmed updated by the server (already
+    // read via a race, or otherwise rejected) — drop from the sent-cache so
+    // it's re-evaluated fresh next time rather than assumed handled forever.
+    const notConfirmed = ids.filter(id => !updated.includes(id));
+    if (notConfirmed.length) {
+      notConfirmed.forEach(id => _dmReadSent.delete(id));
+      console.log('[READ] Retry scheduled', notConfirmed); // temporary
+    }
+  } catch (e) {
+    ids.forEach(id => _dmReadSent.delete(id)); // never permanently mark as sent on failure
+    console.log('[READ] Retry scheduled', ids); // temporary
+  } finally {
+    _dmReadInFlight = false;
+    if (_dmReadRerunPending) {
+      _dmReadRerunPending = false;
+      _maybeMarkDmRead();
+    }
+  }
+}
+
 
 /**
  * If a device's local E2EE key changed (new device/browser, or the browser's
@@ -10597,9 +10719,101 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
   _gcRenderSeenBy();
   if (_pendingDecrypts.length) {
     console.log('[TRACE][GC] waiting on', _pendingDecrypts.length, 'pending decrypt(s) before running collapse check'); // temporary
-    Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
+    Promise.allSettled(_pendingDecrypts).then(() => {
+      _collapseFailedDecrypts(container);
+      _maybeMarkGcRead(); // rendering has now genuinely finished, incl. decrypt
+    });
+  } else {
+    _maybeMarkGcRead();
   }
 }
+
+// ── Read receipts (recipient side, group) ────────────────────────────────────
+// Group reads are a per-member watermark (dm_group_reads.last_read_at), not a
+// per-message flag, so there's no id list to batch — one POST stamps "I've
+// seen this group as of now" for the caller only, never touching other
+// members' rows. Same eligibility gate as DMs: active conversation, tab
+// visible, window focused, and at least one message bubble actually rendered
+// in the DOM (snapshotted synchronously at flush time, same as DMs). Same
+// in-flight guard and server-timestamp-only rule as DMs, same trace logs.
+let _gcReadDebounceTimer = null;
+let _gcReadInFlight = false;
+let _gcReadRerunPending = false;
+
+function _gcReadEligibleNow() {
+  if (!GC.activeId) return 'no active conversation';
+  if (document.visibilityState !== 'visible') return 'tab not visible';
+  if (!document.hasFocus()) return 'window not focused';
+  return null; // eligible
+}
+
+function _maybeMarkGcRead() {
+  clearTimeout(_gcReadDebounceTimer);
+  _gcReadDebounceTimer = setTimeout(_gcFlushRead, 150);
+}
+
+async function _gcFlushRead() {
+  if (_gcReadInFlight) {
+    console.log('[READ][GC] Blocked (request already in flight)'); // temporary
+    _gcReadRerunPending = true;
+    return;
+  }
+
+  const blockedReason = _gcReadEligibleNow();
+  if (blockedReason) {
+    console.log('[READ][GC] Blocked (' + blockedReason + ')'); // temporary
+    return;
+  }
+
+  const gid = GC.activeId;
+  const list = $id('gc-msg-list');
+  // Snapshot the DOM synchronously — "at least one bubble actually rendered,
+  // right now" — not a promise that one will render later.
+  if (!list || !list.querySelector('[data-msg-id]')) {
+    console.log('[READ][GC] Blocked (no rendered message bubble)'); // temporary
+    return;
+  }
+
+  console.log('[READ][GC] Eligible'); // temporary
+  console.log('[READ][GC] Sending (group watermark)', gid); // temporary
+
+  _gcReadInFlight = true;
+  try {
+    const res = await api('POST', `/api/member/groups/${gid}/read`, {});
+    const serverReadAt = res?.last_read_at || null;
+    console.log('[READ][GC] Server marked', gid, serverReadAt); // temporary
+    if (serverReadAt) {
+      const myId = gcMyId();
+      const existing = (GC.reads || []).find(r => r.member_id === myId);
+      if (existing) existing.last_read_at = serverReadAt;
+      else GC.reads = [...(GC.reads || []), { member_id: myId, last_read_at: serverReadAt }];
+      console.log('[READ][GC] Local state updated'); // temporary
+    }
+  } catch (e) {
+    console.log('[READ][GC] Retry scheduled', gid); // temporary
+  } finally {
+    _gcReadInFlight = false;
+    if (_gcReadRerunPending) {
+      _gcReadRerunPending = false;
+      _maybeMarkGcRead();
+    }
+  }
+}
+
+// Re-run both read checks whenever the tab regains visibility or focus — this
+// is what catches "messages arrived while backgrounded" the moment the person
+// actually comes back to look, per rule 6/7: hidden/minimized/unfocused never
+// sends a read request, but returning to focus immediately re-evaluates.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    _maybeMarkDmRead();
+    _maybeMarkGcRead();
+  }
+});
+window.addEventListener('focus', () => {
+  _maybeMarkDmRead();
+  _maybeMarkGcRead();
+});
 
 function gcScrollBottom() {
   const el = $id('gc-msgs');
