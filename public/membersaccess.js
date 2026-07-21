@@ -7148,6 +7148,7 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
 
   _markLastBubbleInGroups(container);
   if (_pendingDecrypts.length) {
+    console.log('[TRACE][DM] waiting on', _pendingDecrypts.length, 'pending decrypt(s) before running collapse check'); // temporary
     Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
   }
 }
@@ -7163,12 +7164,26 @@ function dmRenderMsgs(msgs, container, myId, lastSenderHint) {
  * keeping the last message's timestamp for context.
  */
 function _collapseFailedDecrypts(container) {
+  let _removedCount = 0; // temporary trace counter
   container.querySelectorAll('.dm-msg-group').forEach(group => {
     const children = Array.from(group.children); // alternating .dm-bubble-wrap, .dm-meta
     const runs = [];
     let i = 0;
     while (i < children.length) {
-      const isFailedWrap = n => n?.classList?.contains('dm-bubble-wrap') && n.querySelector('.dm-bubble.dm-e2ee-failed');
+      // IMPORTANT: exclude .dm-e2ee-not-ready. That class means "E2EE just
+      // isn't finished initializing yet" — a transient state that
+      // _dmRetryFailedDecrypts/_gcRetryFailedDecrypts will resolve in place
+      // moments later once E2EE.onReady() fires. It is NOT the same as a
+      // genuinely undecryptable message (wrong/rotated key, corrupted
+      // ciphertext). Collapsing+removing not-ready bubbles here deletes them
+      // from the DOM before the retry sweep ever gets a chance to run —
+      // which, on a fresh page load, happens on almost every conversation
+      // with 3+ consecutive messages, since E2EE.init() hasn't resolved yet
+      // at the moment the conversation is first opened. That was the actual
+      // cause of "messages missing / nothing renders": this function, not
+      // decrypt or network failure.
+      const isFailedWrap = n => n?.classList?.contains('dm-bubble-wrap')
+        && n.querySelector('.dm-bubble.dm-e2ee-failed:not(.dm-e2ee-not-ready)');
       if (!isFailedWrap(children[i])) { i++; continue; }
       const start = i;
       const nodes = [];
@@ -7193,8 +7208,11 @@ function _collapseFailedDecrypts(container) {
       });
       toRemove[0].parentNode.insertBefore(summary, toRemove[0]);
       toRemove.forEach(n => n.remove());
+      _removedCount += toRemove.length;
+      console.log('[TRACE][collapse] removed', toRemove.length, 'bubble(s) from DOM — genuinely-failed run of', count, '(not-ready bubbles are excluded from this path)'); // temporary
     });
   });
+  if (_removedCount) console.log('[TRACE][collapse] _collapseFailedDecrypts total removed:', _removedCount); // temporary
 }
 
 /**
@@ -10498,6 +10516,7 @@ function gcRenderMsgs(msgs, container, myId, lastSenderHint) {
   _markLastBubbleInGroups(container);
   _gcRenderSeenBy();
   if (_pendingDecrypts.length) {
+    console.log('[TRACE][GC] waiting on', _pendingDecrypts.length, 'pending decrypt(s) before running collapse check'); // temporary
     Promise.allSettled(_pendingDecrypts).then(() => _collapseFailedDecrypts(container));
   }
 }
