@@ -7286,6 +7286,16 @@ async function _dmFlushRead() {
     return;
   }
 
+  // Read receipts off = don't tell the other person you've read their
+  // message at all, not just "don't show me theirs". Bail out before the
+  // network call — the local unread badge is cleared separately (see
+  // loadMsgs' "Zero this conv's unread in local state" step) so this
+  // doesn't leave the conversation looking unread to the current user.
+  if (typeof window._kfsReadReceiptsEnabled === 'function' && !window._kfsReadReceiptsEnabled()) {
+    console.log('[READ] Blocked (read receipts off)'); // temporary
+    return;
+  }
+
   const myId = dmMyId();
   const convKey = DM.activeKey;
   const list = $id('dm-msg-list');
@@ -10762,6 +10772,13 @@ async function _gcFlushRead() {
   const blockedReason = _gcReadEligibleNow();
   if (blockedReason) {
     console.log('[READ][GC] Blocked (' + blockedReason + ')'); // temporary
+    return;
+  }
+
+  // Same privacy rule as DMs: receipts off means the group never learns
+  // you've seen the message either.
+  if (typeof window._kfsReadReceiptsEnabled === 'function' && !window._kfsReadReceiptsEnabled()) {
+    console.log('[READ][GC] Blocked (read receipts off)'); // temporary
     return;
   }
 
