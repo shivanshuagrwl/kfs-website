@@ -14213,7 +14213,7 @@ async function dmRefreshPinnedBanner() {
         position: fixed !important;
         inset: 0 !important;
         width: 100vw !important;
-        height: 100vh !important;
+        height: var(--kfs-vvh, 100dvh) !important;
         z-index: 100 !important;
         background: var(--bg) !important;
         transform: translateX(0) !important;
@@ -14227,7 +14227,7 @@ async function dmRefreshPinnedBanner() {
         position: fixed !important;
         inset: 0 !important;
         width: 100vw !important;
-        height: 100vh !important;
+        height: var(--kfs-vvh, 100dvh) !important;
         z-index: 100 !important;
         background: var(--bg) !important;
         transform: translateX(0) !important;
