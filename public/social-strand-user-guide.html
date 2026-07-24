@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KFS Social Strand — Member User Guide</title>
+<style>
+  :root{
+    --bg:#000000;
+    --surface:#111113;
+    --surface2:#1b1b1d;
+    --surface3:#2a2a2c;
+    --border: rgba(255,255,255,0.09);
+    --text:#f5f5f7;
+    --muted:#9a9aa0;
+    --dim:#5c5c60;
+    --hi:#ffffff;       /* neutral highlight, replaces the old blue accent */
+    --danger:#ff453a;
+    --success:#30d158;
+    --warn:#ff9f0a;
+    --radius:16px;
+    --font-sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{background:var(--bg);}
+  body{
+    font-family:var(--font-sans);
+    color:var(--text);
+    max-width:840px;
+    margin:0 auto;
+    padding:0 22px 100px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{ color:var(--text); text-decoration:underline; text-decoration-color:var(--border); text-underline-offset:3px; }
+  a:hover{ text-decoration-color:var(--text); }
+
+  /* ── Cover ─────────────────────────────────────────────────────────── */
+  header.cover{
+    text-align:center;
+    padding:120px 20px 60px;
+    margin-bottom:30px;
+    background:
+      radial-gradient(ellipse 620px 320px at 50% 10%, rgba(255,255,255,.05), transparent 70%);
+  }
+  header.cover .kicker{
+    display:block;
+    color:var(--dim);
+    font-size:.72rem;
+    font-weight:700;
+    letter-spacing:.28em;
+    text-transform:uppercase;
+    margin-bottom:26px;
+  }
+  header.cover h1{
+    display:block;
+    text-align:center;
+    border-bottom:none;
+    padding-bottom:0;
+    margin-top:0;
+    font-size:3rem;
+    font-weight:800;
+    letter-spacing:-.03em;
+    margin:0 0 14px;
+    background:linear-gradient(180deg, #ffffff 0%, #b9b9c0 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  header.cover .sub{
+    color:var(--muted);
+    font-weight:400;
+    font-size:1.1rem;
+    margin-bottom:26px;
+    max-width:480px;
+    margin-left:auto; margin-right:auto;
+  }
+  header.cover .scope{
+    color:var(--dim);
+    font-size:.82rem;
+    max-width:600px;
+    margin:0 auto;
+    line-height:1.9;
+    letter-spacing:.01em;
+  }
+  header.cover .rule{
+    width:44px; height:1px; background:var(--border);
+    margin:34px auto 22px;
+  }
+  header.cover .version{
+    color:var(--dim);
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
+  header.cover .valid-from{
+    color:var(--muted);
+    font-size:.74rem;
+    letter-spacing:.04em;
+    margin-bottom:10px;
+  }
+
+  /* ── Grouped-list style cards (iOS Settings look) ─────────────────── */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:4px 22px;
+    margin:18px 0 30px;
+  }
+  .card > p:first-child{ margin-top:18px; }
+  .card > p:last-child{ margin-bottom:18px; }
+  .card-row{
+    padding:15px 0;
+    border-bottom:1px solid var(--border);
+    color:#e4e4e7;
+    font-size:.94rem;
+  }
+  .card-row:last-child{ border-bottom:none; }
+
+  .legend{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:30px 30px 26px;
+    margin-bottom:56px;
+  }
+  .legend h2{ margin-top:0; font-size:.72rem; text-transform:uppercase; letter-spacing:.2em; color:var(--dim); font-weight:700;}
+  .legend-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+    gap:16px;
+    margin-top:22px;
+  }
+  .legend-term{ border-top:1px solid var(--border); padding-top:12px; }
+  .legend-term .lt-abbr{ color:var(--text); font-weight:700; font-size:.86rem; letter-spacing:.03em; }
+  .legend-term .lt-full{ color:var(--muted); font-size:.78rem; margin:2px 0 6px; }
+  .legend-term .lt-def{ color:#c7c7cc; font-size:.83rem; line-height:1.6; }
+
+  .privacy-banner{
+    position:relative;
+    display:flex;
+    gap:20px;
+    align-items:flex-start;
+    background:
+      radial-gradient(ellipse 460px 180px at 0% 0%, rgba(255,255,255,.045), transparent 65%),
+      var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:28px 30px;
+    margin-bottom:40px;
+    overflow:hidden;
+  }
+  .privacy-banner::before{
+    content:"";
+    position:absolute; inset:0 0 auto 0; height:1px;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+  }
+  .privacy-banner .pb-icon{
+    flex-shrink:0;
+    width:44px; height:44px;
+    border-radius:12px;
+    background:linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.02));
+    border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .privacy-banner .pb-icon svg{ width:21px; height:21px; }
+  .privacy-banner h2{
+    margin:0 0 8px;
+    font-size:1.02rem;
+    color:var(--text);
+    font-weight:800;
+    letter-spacing:-.01em;
+  }
+  .privacy-banner p{
+    margin:0;
+    color:var(--muted);
+    font-size:.89rem;
+    line-height:1.7;
+  }
+  .privacy-banner p + p{ margin-top:10px; }
+
+  nav.toc{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:28px 30px;
+    margin-bottom:56px;
+  }
+  nav.toc h2{ margin-top:0; font-size:.72rem; text-transform:uppercase; letter-spacing:.2em; color:var(--dim); font-weight:700;}
+  nav.toc ol{ list-style:none; counter-reset:toc; padding-left:0; margin:10px 0 0; }
+  nav.toc li{
+    counter-increment:toc;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+    font-size:.98rem;
+  }
+  nav.toc li:last-child{ border-bottom:none; }
+  nav.toc li::before{
+    content:counter(toc, decimal-leading-zero) "";
+    color:var(--dim);
+    font-weight:700;
+    margin-right:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  nav.toc a{ color:var(--text); text-decoration:none; }
+  nav.toc a:hover{ color:var(--muted); }
+
+  h1{
+    color:var(--text);
+    font-size:1.55rem;
+    font-weight:800;
+    letter-spacing:-.01em;
+    margin-top:70px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--border);
+    scroll-margin-top:24px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  h1 .num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:34px; height:34px;
+    border:1px solid var(--border);
+    border-radius:50%;
+    font-size:.85rem;
+    color:var(--muted);
+    flex-shrink:0;
+  }
+  h2{
+    color:var(--text);
+    font-size:1.12rem;
+    font-weight:700;
+    margin-top:32px;
+    margin-bottom:10px;
+  }
+  h3{ color:var(--text); font-size:.98rem; font-weight:700; margin-top:20px; opacity:.9; }
+  p{ margin:12px 0; color:var(--text); font-size:.98rem; }
+  ul{ padding-left:22px; }
+  li{ margin:7px 0; color:var(--text); font-size:.98rem; }
+  strong{ color:var(--text); }
+
+  .lede{ color:var(--muted); }
+
+  .do, .dont{ list-style:none; padding-left:0; }
+  .do li, .dont li{
+    padding:10px 14px 10px 40px;
+    position:relative;
+    margin:6px 0;
+    border-radius:10px;
+    font-size:.94rem;
+  }
+  .do li::before{
+    content:"✓";
+    position:absolute; left:14px; top:9px;
+    color:var(--success); font-weight:800;
+  }
+  .dont li::before{
+    content:"✗";
+    position:absolute; left:14px; top:9px;
+    color:var(--danger); font-weight:800;
+  }
+  .do li{ background:rgba(48,209,88,.07); border:1px solid rgba(48,209,88,.16); }
+  .dont li{ background:rgba(255,69,58,.07); border:1px solid rgba(255,69,58,.16); }
+
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    margin:20px 0;
+    font-size:.88rem;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+    background:var(--surface);
+  }
+  th, td{ padding:13px 15px; text-align:left; vertical-align:top; border-bottom:1px solid var(--border); }
+  th{
+    background:var(--surface3);
+    color:var(--text);
+    font-weight:700;
+    font-size:.76rem;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+  td{ color:#e4e4e7; }
+  tr:last-child td{ border-bottom:none; }
+  tr:nth-child(even) td{ background:var(--surface2); }
+
+  .note{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-left:3px solid var(--dim);
+    padding:14px 18px;
+    margin:18px 0;
+    color:var(--muted);
+    border-radius:0 10px 10px 0;
+    font-size:.9rem;
+  }
+  .note strong{ color:var(--text); }
+
+  .warn-box{
+    background:rgba(255,69,58,.06);
+    border:1px solid rgba(255,69,58,.28);
+    border-radius:var(--radius);
+    padding:18px 22px;
+    margin:20px 0;
+  }
+  .warn-box .title{
+    color:var(--danger);
+    font-weight:800;
+    font-size:.78rem;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    margin-bottom:8px;
+  }
+  .warn-box p{ color:#e9c9c7; font-size:.93rem; margin:8px 0; }
+
+  .final-box{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin:20px 0;
+  }
+  .final-box .title{
+    color:var(--text);
+    font-weight:800;
+    font-size:.78rem;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    margin-bottom:10px;
+  }
+
+  .divider{ height:1px; background:var(--border); margin:56px 0 0; }
+
+  .quicklinks{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));
+    gap:12px;
+    margin:22px 0 4px;
+  }
+  .quicklinks .qlink{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:15px 17px;
+  }
+  .quicklinks .qlink .qicon{
+    display:flex; align-items:center; justify-content:center;
+    width:32px; height:32px; flex-shrink:0;
+    border:1px solid var(--border);
+    border-radius:9px;
+    color:var(--muted);
+    font-size:.85rem;
+  }
+  .quicklinks .qlink .qtext{ display:flex; flex-direction:column; gap:2px; }
+  .quicklinks .qlink .qlabel{ color:var(--text); font-size:.88rem; font-weight:600; }
+  .quicklinks .qlink .qpath{ color:var(--dim); font-size:.76rem; }
+
+  .legal{
+    font-size:.86rem;
+    color:var(--muted);
+    line-height:1.8;
+  }
+  .legal strong{ color:var(--text); }
+
+  footer{
+    margin-top:74px;
+    padding-top:26px;
+    border-top:1px solid var(--border);
+    color:var(--dim);
+    font-size:.8rem;
+    font-style:italic;
+    text-align:center;
+  }
+
+  /* ── Print/PDF: avoid splitting blocks across page breaks ───────────── */
+  @media print{
+    body{ padding-bottom:0; }
+    .card, .legend, .privacy-banner, nav.toc, table, .note, .warn-box,
+    .final-box, .quicklinks, .do, .dont, .card-row, tr, .legend-term,
+    .qlink, header.cover{
+      page-break-inside:avoid;
+      -webkit-column-break-inside:avoid;
+      break-inside:avoid;
+    }
+    h1, h2, h3{
+      page-break-after:avoid;
+      break-after:avoid;
+    }
+    h1{ page-break-before:auto; }
+    .divider{ page-break-after:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <span class="kicker">Member User Guide</span>
+  <h1>KFS Social Strand</h1>
+  <div class="sub">No cookies, no data selling — just your conversations, kept yours.</div>
+  <div class="scope">
+    Feed &amp; Posts · Direct Messages &amp; Encryption · Group Chats<br>
+    Customization · Reporting &amp; Blocking · Community Guidelines<br>
+    Enforcement &amp; Finality · Grievance Redressal
+  </div>
+  <div class="rule"></div>
+  <div class="valid-from">Valid from 25 July 2026</div>
+  <div class="version">Version 2.1</div>
+  <div style="margin-top:22px;">
+    <a href="/social-strand" style="font-size:.78rem; letter-spacing:.02em; color:var(--muted);">&larr; Back to Social Strand</a>
+  </div>
+</header>
+
+<div class="privacy-banner">
+  <div class="pb-icon">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2.5L4.5 5.5V11c0 5.25 3.2 9.4 7.5 11 4.3-1.6 7.5-5.75 7.5-11V5.5L12 2.5z" stroke="var(--text)" stroke-width="1.3" stroke-linejoin="round"></path>
+      <rect x="8.7" y="11.2" width="6.6" height="5.4" rx="1.1" stroke="var(--text)" stroke-width="1.3"></rect>
+      <path d="M10.2 11.2v-1.6a1.8 1.8 0 013.6 0v1.6" stroke="var(--text)" stroke-width="1.3" stroke-linecap="round"></path>
+    </svg>
+  </div>
+  <div>
+    <h2>Privacy by design — your data stays yours</h2>
+    <p>Social Strand is provided exclusively for the private use of KFS members, entirely free of charge — please do not share access, this guide, or its contents with anyone outside KFS. We secure the platform using industry‑standard practices to the best of our ability.</p>
+  </div>
+</div>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#s1">What Is Social Strand?</a></li>
+    <li><a href="#s2">Feed &amp; Posts</a></li>
+    <li><a href="#s3">Your Data &amp; Message Security</a></li>
+    <li><a href="#s4">Direct Messages</a></li>
+    <li><a href="#s5">Group Chats</a></li>
+    <li><a href="#s6">Customization</a></li>
+    <li><a href="#s7">Reporting, Blocking &amp; Nicknames</a></li>
+    <li><a href="#s8">Content Ownership, Copyright &amp; Intellectual Property</a></li>
+    <li><a href="#s9">Community Guidelines &amp; Fair Use Policy</a></li>
+    <li><a href="#s10">Enforcement, Finality &amp; Grievance Redressal</a></li>
+    <li><a href="#s11">Getting Help</a></li>
+  </ol>
+</nav>
+
+<div class="legend">
+  <h2>Legend — Defined Terms</h2>
+  <p class="legal" style="margin-top:0;">For the purposes of this guide, the following capitalised and abbreviated terms bear the meanings set out below. Where a term is also defined in KFS's Terms of Use, the Terms of Use definition governs in the event of any inconsistency.</p>
+
+  <div class="legend-grid">
+    <div class="legend-term">
+      <div class="lt-abbr">KIIT</div>
+      <div class="lt-full">Kalinga Institute of Industrial Technology</div>
+      <div class="lt-def">The Deemed‑to‑be University under whose aegis KSAC, and by extension KFS, is constituted and operates. KIIT's disciplinary rules and code of conduct apply, in full, to all Social Strand activity.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">KSAC</div>
+      <div class="lt-full">KIIT Student Activity Centre</div>
+      <div class="lt-def">The University body that recognises, charters, and governs student societies at KIIT, including KFS. KSAC retains disciplinary jurisdiction over Members independent of, and in addition to, KFS's own enforcement action.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">KFS / "the Society"</div>
+      <div class="lt-full">KIIT Film Society</div>
+      <div class="lt-def">The Society that owns, operates, and administers Social Strand, the KFS members' portal, and all associated Digital Channels, and which holds sole and exclusive authority over the same as described in this guide.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Social Strand</div>
+      <div class="lt-full">The Platform</div>
+      <div class="lt-def">The feed, posting, reaction, comment, Direct Message, and Group Chat feature set documented in this guide, together with all associated infrastructure, accessible within the KFS members' portal.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Digital Channel</div>
+      <div class="lt-full">As defined in the Terms of Use</div>
+      <div class="lt-def">Social Strand is one Digital Channel among those operated by KFS; obligations applicable to Digital Channels generally under the Terms of Use apply equally to Social Strand.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Member / User</div>
+      <div class="lt-full">Account Holder</div>
+      <div class="lt-def">Any individual holding, or acting through, a Social Strand account. "Member" carries the additional obligations set out in the Terms of Use's Member Conduct provisions (Section 13 of the Terms of Use).</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">E2EE</div>
+      <div class="lt-full">End‑to‑End Encryption</div>
+      <div class="lt-def">The security model described in Section 3, under which DM and Group Chat content is encrypted (rendered into Ciphertext) on the sender's device and decrypted only on the recipient's device.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Ciphertext / Plaintext</div>
+      <div class="lt-full">Encrypted / readable content</div>
+      <div class="lt-def">Ciphertext is scrambled, unreadable data as stored and relayed by the server. Plaintext is the readable message, which exists only on the sending and receiving devices, and, where reported, on the reporting Member's device at the moment of submission (Section 3.3).</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Master Administrator</div>
+      <div class="lt-full">KFS Trust &amp; Safety Team</div>
+      <div class="lt-def">The small, accountable KFS personnel group authorised to view decrypted content of a reported message, and no more, subject to Section 3.3.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Report</div>
+      <div class="lt-full">A user‑initiated flag</div>
+      <div class="lt-def">The mechanism by which a Member submits content to KFS moderation for review, described in Section 7.1 and Section 3.3. A Report is the sole means by which KFS becomes aware of the plaintext content of a DM or Group Chat message.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Moderation Ladder</div>
+      <div class="lt-full">Standard enforcement track</div>
+      <div class="lt-def">The escalating sequence of warning, timed mutes, temporary suspension, and permanent disablement set out in Section 10.1, applied per account across all Social Strand features.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Sole Discretion</div>
+      <div class="lt-full">Unilateral determination by KFS</div>
+      <div class="lt-def">Indicates that the relevant decision, judgment, or action is reserved exclusively to KFS, is not subject to a fixed evidentiary standard, and is reviewable only through the grievance process in Section 10.4.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Suspension / Disablement</div>
+      <div class="lt-full">Access restrictions</div>
+      <div class="lt-def">A Suspension is a time‑bound restriction on account access; Disablement is a permanent restriction. Both are enforcement outcomes under Section 10 and do not, of themselves, terminate KFS membership, which is governed separately by KFS's Membership Terms.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Grievance Redressal</div>
+      <div class="lt-full">Internal appeal process</div>
+      <div class="lt-def">The Step 1–3 review procedure in Section 10.4, culminating in a binding decision by KFS leadership under Section 10.3.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Finality</div>
+      <div class="lt-full">Conclusiveness of a decision</div>
+      <div class="lt-def">The principle, set out in Section 10.3, that a KFS decision becomes binding and non‑appealable within KFS once the Grievance Redressal process has been exhausted or waived.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Submitted Work</div>
+      <div class="lt-full">Content you post or upload</div>
+      <div class="lt-def">Any post, comment, image, video, project, or Movie Submission a Member uploads to Social Strand or the KFS members' portal, as described in Section 8.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Platform Licence</div>
+      <div class="lt-full">Rights you grant KFS</div>
+      <div class="lt-def">The limited, non‑exclusive licence a Member grants KFS over their Submitted Work solely to operate, display, and promote Social Strand, described in Section 8.2.</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">KFS Marks</div>
+      <div class="lt-full">KFS's own IP</div>
+      <div class="lt-def">KFS's name, logo, branding, this guide's text and design, and any KFS‑produced film or promotional material, all of which remain KFS's exclusive property (Section 8.1).</div>
+    </div>
+    <div class="legend-term">
+      <div class="lt-abbr">Take‑Down Notice</div>
+      <div class="lt-full">Copyright removal request</div>
+      <div class="lt-def">A request made under Section 8.5 asking KFS to remove content that infringes a rights‑holder's copyright or other intellectual property.</div>
+    </div>
+  </div>
+</div>
+
+<h1 id="s1"><span class="num">01</span>What Is Social Strand?</h1>
+<p>Social Strand is the KFS members' community feed, built into the KFS members' portal. It's where you share your work, follow other members, react and comment on posts, and message each other directly or in groups — all in one place, alongside your KFS account tools (My Movies, My Works, Collaborate).</p>
+<p>This guide covers every feature currently available, how your data is protected, and the rules that keep Social Strand a place people want to be in — including what happens if those rules aren't followed.</p>
+<p class="legal">Social Strand is a Digital Channel operated by the KIIT Film Society (KFS), a society constituted under the KIIT Student Activity Centre (KSAC) at KIIT Deemed to be University (see Legend, above). Access to and use of Social Strand is governed, in all respects, by KFS's Terms of Use and Privacy Policy, together with any applicable KSAC and KIIT University rules, codes of conduct, and disciplinary policies, in addition to and without prejudice to this guide. By accessing or using Social Strand, you acknowledge and agree that you have read and are bound by this guide and the foregoing governing instruments. For the avoidance of doubt, where any provision of this guide conflicts with the Terms of Use, Privacy Policy, or applicable KSAC/KIIT rules, the latter shall prevail (see Section 10.5).</p>
+<p class="legal">Social Strand is provided exclusively for the private use of KFS members, entirely free of charge. Members must not share their access credentials, this guide, or its contents with any person who is not a KFS member. KFS secures the platform using industry‑standard practices to the best of its ability; however, as with any digital service, absolute security cannot be guaranteed, and use of Social Strand remains subject to the Disclaimer of Warranties and Limitation of Liability provisions of the Terms of Use.</p>
+
+<h1 id="s2"><span class="num">02</span>Feed &amp; Posts</h1>
+<p>The main Social Strand feed shows posts from members you follow and the wider community, newest first. New posts from other members appear as a small "↑ New posts" pill at the top of the feed rather than being inserted automatically — tap it whenever you're ready so you're never pulled away from something you're reading.</p>
+
+<h2>2.1 Post types</h2>
+<div class="card">
+  <div class="card-row"><strong>Project post</strong> — share a finished or in‑progress project with a caption, cover image, and optional collaborators.</div>
+  <div class="card-row"><strong>Text post</strong> — a caption‑only update with no attached media.</div>
+  <div class="card-row"><strong>Video post</strong> — a project post with an embedded video and its own caption field.</div>
+  <div class="card-row"><strong>Collab post</strong> — an open call for collaborators, posted from the Collaborate tab, with role, description and fulfillment date.</div>
+</div>
+
+<h2>2.2 Creating and editing a post</h2>
+<p>Use the composer to pick a post type, add a title, tags, description, and (for project/video posts) media. Text boxes grow automatically as you type, so long captions are never trapped in a tiny scrolling box.</p>
+<p>You can edit or delete your own posts at any time from the post's menu (⋯). Deleting a post removes it from the feed, your profile, and anyone's saved links to it.</p>
+
+<h2>2.3 Reactions &amp; comments</h2>
+<p>Tap and hold (or long‑press) the reaction icon on a post to choose from the reaction set (❤ 😂 😮 😢 😡 👏 🔥 😍 👍 🙂 😊), or tap once for a quick default reaction. Comments open in the post's detail view, support threaded replies, and refresh automatically every few seconds while the detail view is open — so you'll see new comments from others without needing to close and reopen the post.</p>
+<div class="note"><strong>Note —</strong> Comment auto‑refresh briefly pauses while your cursor is inside the reply box, so nothing you're typing gets overwritten.</div>
+
+<h2>2.4 Following &amp; analytics</h2>
+<p>Follow members from their posts to see more of their work in your feed. Your own profile shows a Followers / Following list and basic post analytics (views, reactions, comments) so you can see how your posts are performing.</p>
+
+<h2>2.5 My Movies / My Works</h2>
+<p>Movie submissions and your works portfolio live together under one panel with a tab switcher ("Submissions" / "My Works"), since both track the same thing — your film credits with KFS. From here you can submit new work and request edits to existing entries.</p>
+
+<div class="divider"></div>
+
+<h1 id="s3"><span class="num">03</span>Your Data &amp; Message Security</h1>
+<p class="lede">This is the part most members want a straight answer on, so here it is in plain language before we get into features.</p>
+
+<h2>3.1 How your DMs and group chats are protected</h2>
+<p>Every direct message and group chat on Social Strand is <strong>end‑to‑end encrypted (E2EE)</strong>. In practice, that means:</p>
+<div class="card">
+  <div class="card-row">Your device generates its own private encryption key when you first sign in. That private key <strong>never leaves your device</strong> — it is never uploaded, backed up, or transmitted to KFS in any form.</div>
+  <div class="card-row">Only the matching <em>public</em> key is shared with the server, so other members' devices can encrypt messages to you. A public key can encrypt messages for you but cannot be used to read them — decryption requires the private key sitting only on your device.</div>
+  <div class="card-row">Messages are encrypted on the sender's device before they ever leave it. The server stores and relays ciphertext — scrambled data it cannot itself read.</div>
+  <div class="card-row">Messages are decrypted only on the recipient's device, at the moment they're displayed. This applies equally to one‑to‑one DMs and group chats.</div>
+</div>
+
+<h2>3.2 What this means for you</h2>
+<ul class="do">
+  <li>Nobody at KFS can casually open your inbox and browse your conversations — there is nothing readable to browse on the server side.</li>
+  <li>A conversation only exists in plaintext on the screens of the people actually in it.</li>
+  <li>Turning off Read Receipts, setting a nickname, or customizing your chat appearance are all local, per‑device preferences layered on top of this — they don't affect encryption either way.</li>
+</ul>
+
+<h2>3.3 The one deliberate exception: reporting</h2>
+<p>Encryption is designed to protect you — not to protect someone who's harassing or abusing you. So there is exactly one narrow, user‑initiated exception, modelled on the same approach used by mainstream E2EE apps like Signal:</p>
+<div class="card">
+  <div class="card-row">When <em>you</em> choose to report a specific DM or group message, that single message is decrypted <strong>on your own device</strong>, at the moment you press submit.</div>
+  <div class="card-row">The decrypted copy is attached to your report so a moderator can review the exact content you flagged — not your whole conversation history, and not anything you haven't reported.</div>
+  <div class="card-row">Only KFS's master administrators — the small, accountable team responsible for trust &amp; safety — can view decrypted report content, and only for the message(s) included in that report.</div>
+</div>
+<div class="note"><strong>Note —</strong> KFS cannot proactively scan, read, or monitor the plaintext content of your DMs or group chats. The only way a message becomes visible to a moderator is if a participant in that conversation reports it.</div>
+
+<h2>3.4 Data KFS does and doesn't hold</h2>
+<table>
+  <tr><th>KFS can see / stores</th><th>KFS cannot see</th></tr>
+  <tr><td>That a conversation exists, and its participants</td><td>The plaintext content of your DMs or group messages</td></tr>
+  <tr><td>Encrypted (ciphertext) message data, needed to deliver it to the right device</td><td>Your private encryption key, at any point</td></tr>
+  <tr><td>Ordinary account data — profile, posts, comments, reactions (these are not E2EE, since they're public by design)</td><td>Messages you haven't reported, even during a moderation investigation</td></tr>
+  <tr><td>The specific content of a message once <em>you</em> report it</td><td>Anything beyond the exact message(s) included in a report</td></tr>
+</table>
+<div class="note"><strong>Note —</strong> Posts, comments, and reactions on the Social Strand feed are intentionally public‑facing content, not encrypted — they're visible to other members by design, the same way a public social feed works anywhere else. Encryption applies specifically to DMs and group chats.</div>
+
+<div class="divider"></div>
+
+<h1 id="s4"><span class="num">04</span>Direct Messages</h1>
+<p>DMs are one‑to‑one conversations, protected the way Section 3 describes.</p>
+
+<h2>4.1 Starting and managing conversations</h2>
+<div class="card">
+  <div class="card-row">Start a new DM from a member's profile, a post, or the member picker in the DM panel.</div>
+  <div class="card-row">Conversations are listed with a photo, name, message preview and time, Instagram‑style; unread conversations show a highlighted ring around the avatar.</div>
+  <div class="card-row">Swipe a bubble (on mobile) to quickly reply to it.</div>
+  <div class="card-row">Delete a message you sent from its context menu; this removes it for both participants.</div>
+</div>
+
+<h2>4.2 Read receipts</h2>
+<p>Read Receipts show a double‑tick on messages you've sent once the other person has seen them. You can turn this off for yourself in Settings → Customization → Privacy — this is a per‑device, local preference.</p>
+
+<h2>4.3 Blocking</h2>
+<p>Blocking a member immediately stops new DMs between you both in either direction and hides their group‑chat messages from you. Existing conversation history is preserved but new messages won't go through while the block is active. You can block someone from their profile, a message's context menu, or after reporting them.</p>
+
+<h1 id="s5"><span class="num">05</span>Group Chats</h1>
+<p>Group chats work like DMs but with multiple members, and share the same end‑to‑end encryption described in Section 3.</p>
+
+<h2>5.1 Pinning messages</h2>
+<p>Pin an important message from its context menu so it stays visible in the pinned banner at the top of the chat for everyone in the group. The pin/unpin label always reflects the message's real current state, and the banner updates immediately after you toggle it.</p>
+
+<h2>5.2 Moderation inside groups</h2>
+<p>The same community guidelines and profanity filter apply inside group chats as everywhere else on Social Strand (see Section 9). A muted or suspended member cannot send group messages until their cooldown ends.</p>
+
+<h1 id="s6"><span class="num">06</span>Customization</h1>
+<p>Settings → Customization lets you personalize how chats look and behave. Changes are saved per device.</p>
+
+<div class="card">
+  <div class="card-row"><strong>Chat Wallpaper &amp; App Background</strong> — choose a wallpaper for chat backgrounds, or set a colour/gradient app background, from the built‑in gradient builder.</div>
+  <div class="card-row"><strong>Message Bubble Color</strong> — set the colour used for your own outgoing message bubbles in DMs and group chats.</div>
+  <div class="card-row"><strong>Bubble Opacity</strong> — two sliders control how see‑through your own bubbles and received bubbles are, from 30% to fully opaque, with a live preview before you leave the screen.</div>
+  <div class="card-row"><strong>Privacy → Read Receipts</strong> — toggle the read‑receipt double‑tick on or off. "Reset All" also resets bubble opacity back to 100%/100% alongside every other customization option.</div>
+</div>
+
+<h1 id="s7"><span class="num">07</span>Reporting, Blocking &amp; Nicknames</h1>
+
+<h2>7.1 Reporting content</h2>
+<p>Every post, comment, DM message, group message, and member profile has a Report option in its context menu (⋯ or long‑press). Reports go to the KFS moderation team for review; you'll see a confirmation toast once a report is submitted. See Section 3.3 for exactly what a report on a DM or group message does and doesn't expose.</p>
+<table>
+  <tr><th>Reason</th><th>Use it for</th></tr>
+  <tr><td>Harassment or bullying</td><td>Repeated targeting, threats, or pile‑ons aimed at one member.</td></tr>
+  <tr><td>Hate speech or discrimination</td><td>Attacks based on identity, background, or protected traits.</td></tr>
+  <tr><td>Spam or misleading content</td><td>Fake engagement, scam links, repeated off‑topic posting.</td></tr>
+  <tr><td>Inappropriate or explicit content</td><td>Sexual, graphic, or otherwise NSFW material.</td></tr>
+  <tr><td>Impersonation</td><td>An account pretending to be another member, staff, or KFS itself.</td></tr>
+  <tr><td>Other</td><td>Anything that doesn't fit the categories above — use the details box.</td></tr>
+</table>
+
+<h2>7.2 Nicknames</h2>
+<p>You can set a private nickname for other members that only you see, from their profile or a conversation. Nicknames cannot be set for the official KFS account — this is enforced both in the interface and on the server, as a protection for the platform's own identity.</p>
+
+<h2>7.3 Blocking</h2>
+<p>See Section 4.3. Blocking is reversible at any time from the same menu.</p>
+
+<div class="divider"></div>
+
+<h1 id="s8"><span class="num">08</span>Content Ownership, Copyright &amp; Intellectual Property</h1>
+<p>This Section covers who owns what on Social Strand — your own posts and movies, KFS's own branding and productions, and other people's work — and the rules that protect all three from misuse, whether by a Member or by someone outside KFS entirely.</p>
+<p class="legal">This Section is a Social Strand‑specific application of the Intellectual Property provisions of KFS's Terms of Use. Nothing here narrows, waives, or replaces those provisions; where this Section is silent, the Terms of Use govern.</p>
+
+<h2>8.1 KFS's own content stays KFS's</h2>
+<p class="legal">The KFS name, logo, "Social Strand" branding, this guide's text and design, the Social Strand interface, and any film, trailer, poster, photograph, or promotional material produced or commissioned by KFS itself (<strong>KFS Marks</strong>) are the exclusive property of KFS. Nothing in this guide, and nothing about being a Member, grants you any right to copy, reproduce, modify, redistribute, or create derivative works from KFS Marks outside Social Strand, except where KFS gives you explicit written permission.</p>
+
+<h2>8.2 What you own when you post</h2>
+<div class="card">
+  <p>You keep full ownership of everything original you create and post — your photographs, videos, movies, scripts, artwork, and captions (<strong>Submitted Work</strong>). Posting to Social Strand does not transfer copyright to KFS, and it does not make your work available for anyone to reuse.</p>
+  <p>What you do grant KFS, automatically and for as long as your Submitted Work remains on the platform, is a limited licence — described in full below.</p>
+</div>
+
+<h2>8.3 The licence you grant KFS</h2>
+<p>By posting or uploading Submitted Work to Social Strand — including feed posts, comments, Collab posts, and Movie Submissions under My Movies / My Works — you grant KFS a <strong>non‑exclusive, royalty‑free, revocable licence</strong> to:</p>
+<ul class="do">
+  <li>Host, store, and display your Submitted Work within Social Strand and the KFS members' portal, to other Members.</li>
+  <li>Generate thumbnails, previews, and copies technically necessary to operate the feed, DMs, and notifications.</li>
+  <li>Screen or showcase your Submitted Work at official, KSAC‑sanctioned KFS events, internal screenings, or KFS's own promotional channels — with credit to you as the creator, unless you request otherwise.</li>
+</ul>
+<div class="note"><strong>Note —</strong> This licence is limited to the uses above. It does not let KFS sell your work, license it to third parties, use it in commercial advertising outside KFS, or alter its creative content without your consent. The licence ends when you delete the Submitted Work or your account, except for copies already made for an event or promotional use that occurred before deletion, and except where KFS is required to retain a copy as part of an active report or grievance under Sections 7 or 10.</div>
+
+<h2>8.4 Movie submissions &amp; collaborative works</h2>
+<p class="legal">Where a Movie Submission is a joint work of multiple credited collaborators (e.g. director, cast, editor), each collaborator is presumed to have consented to its submission and to the licence in Section 8.3 by virtue of being credited; a Member submitting a joint work on behalf of a team represents to KFS that they are authorised to do so. Disputes between collaborators over authorship, credit, or consent are a matter between those Members and are not resolved by KFS moderation, though KFS may suspend public display of a disputed submission pending resolution.</p>
+<p>If your movie uses licensed music, stock footage, or any third‑party material, you're responsible for making sure you have the rights to use it — including for a student screening. Sharing something on Social Strand does not, by itself, satisfy any licensing requirement that material may carry.</p>
+
+<h2>8.5 Respecting other people's rights</h2>
+<ul class="dont">
+  <li>Don't post or submit any movie, clip, photo, music, or other material you don't own and don't have permission to use — including pirated films, ripped soundtracks, or another creator's unlicensed footage.</li>
+  <li>Don't repost, re‑upload, screenshot, screen‑record, or otherwise redistribute another Member's Submitted Work outside Social Strand without their consent.</li>
+  <li>Don't remove, obscure, or falsify credit, watermarks, or authorship information on anyone's Submitted Work.</li>
+  <li>Don't claim authorship of, or pass off as your own, a work substantially created by someone else.</li>
+</ul>
+
+<h2>8.6 Reporting a copyright or IP concern</h2>
+<p>If you believe your copyright or another intellectual‑property right has been infringed by something posted on Social Strand — by a Member or by content that shouldn't be there — use the same Report option described in Section 7.1, or contact KFS leadership directly (Section 11) with:</p>
+<div class="card">
+  <div class="card-row"><strong>1. What was taken.</strong> A description or link to your original work.</div>
+  <div class="card-row"><strong>2. Where it appears.</strong> A link or clear description of the infringing post, comment, or Movie Submission.</div>
+  <div class="card-row"><strong>3. Your relationship to the work.</strong> A statement that you are the rights‑holder, or authorised to act on their behalf.</div>
+</div>
+<div class="note"><strong>Note —</strong> KFS may remove or restrict access to reported content while a Take‑Down Notice is under review, before a final determination is made, to prevent ongoing harm to the rights‑holder.</div>
+
+<h2>8.7 Outside access, scraping &amp; redistribution</h2>
+<div class="warn-box">
+  <div class="title">Not for anyone outside KFS</div>
+  <p>Social Strand, this guide, and everything posted on the platform — Members' Submitted Work and KFS Marks alike — are provided exclusively for the private use of current KFS Members and are not licensed for public or outside use. The following are prohibited for outsiders and Members alike:</p>
+  <ul style="margin:8px 0 0 18px;">
+    <li>Scraping, bulk‑downloading, mirroring, or automated harvesting of any content from Social Strand</li>
+    <li>Sharing your login, this guide, or platform content with anyone who is not a current KFS Member</li>
+    <li>Republishing, uploading, or distributing Members' movies, photos, or posts on any external site, service, or platform without the creator's and KFS's consent</li>
+    <li>Using KFS Marks or Members' Submitted Work to imply endorsement, affiliation, or sponsorship that does not exist</li>
+  </ul>
+  <p>KFS reserves the right to pursue takedown requests, disciplinary referral to KSAC/KIIT University, and civil or legal remedies against any person — Member or outsider — who infringes these rights, consistent with the Terms of Use.</p>
+</div>
+
+<h2>8.8 Consequences</h2>
+<p>Copyright or IP infringement by a Member is misconduct under Section 9 and is assessed under the moderation ladder in Section 10.1. Deliberate, repeated, or commercial‑scale infringement — including uploading pirated films or mass‑redistributing Members' work outside the platform — is treated as serious misconduct under Section 10.2 and may result in immediate suspension or permanent account disablement, independent of any separate legal claim the rights‑holder may have.</p>
+
+<h2>8.9 No guarantee, and your own responsibility</h2>
+<p class="legal">KFS does not pre‑screen Submitted Work for infringement before it is posted and cannot guarantee that content on Social Strand is free of third‑party rights issues; KFS acts on reports and Take‑Down Notices as described above rather than proactively monitoring content for this purpose. Each Member remains individually responsible for ensuring they hold the necessary rights to anything they post, and agrees to indemnify KFS in accordance with the indemnification provisions of the Terms of Use for any claim arising from their own Submitted Work.</p>
+
+<h1 id="s9"><span class="num">09</span>Community Guidelines &amp; Fair Use Policy</h1>
+<p>Social Strand exists so KFS members can share work, get feedback, and collaborate. Everything below applies across posts, comments, reactions, DMs, and group chats — including inside end‑to‑end‑encrypted conversations, since misuse there is just as reportable even though KFS can't proactively read the content (Section 3.3).</p>
+<p class="legal">These guidelines constitute a Social Strand‑specific application of the Community Standards, Member Conduct, and Prohibited Conduct provisions set out in KFS's Terms of Use, and of applicable KSAC and KIIT University rules. Nothing in this Section shall be construed to narrow, waive, or supersede those instruments; conduct that violates the Terms of Use or applicable KSAC/KIIT rules remains a violation notwithstanding its omission below.</p>
+
+<h2>9.1 What you can do</h2>
+<ul class="do">
+  <li>Share your own projects, work‑in‑progress, and behind‑the‑scenes content.</li>
+  <li>React to and comment constructively on other members' work.</li>
+  <li>Message and group‑chat with other members about collaboration, feedback, or general KFS community topics.</li>
+  <li>Post open collaboration calls describing a role you need filled.</li>
+  <li>Customize your own chat appearance and privacy settings (Section 6).</li>
+  <li>Report content or accounts that break these guidelines, and block anyone you don't want contacting you.</li>
+  <li>Raise a grievance or appeal a decision through the process in Section 10.4.</li>
+</ul>
+
+<h2>9.2 What you shouldn't do</h2>
+<ul class="dont">
+  <li>Post or send harassment, threats, hate speech, or discriminatory content.</li>
+  <li>Use profanity or explicit language in posts, comments, DMs, or group chats — this is filtered automatically and enforced by the moderation ladder in Section 10.</li>
+  <li>Share sexual, graphic, or otherwise explicit/NSFW material.</li>
+  <li>Impersonate another member, staff, or the official KFS account, or attempt to nickname/rename the KFS account.</li>
+  <li>Post spam, scam links, or repeatedly post misleading or off‑topic content to farm engagement.</li>
+  <li>Use group chats or DMs to circumvent a block or continue contact with someone who has blocked you.</li>
+  <li>Attempt to bypass moderation (e.g. spacing out banned words, alternate spellings) to get abusive content past the filter, or attempt to circumvent or interfere with the encryption or security systems described in Section 3.</li>
+  <li>Post or submit movies, images, music, or other material you don't have the rights to use, or redistribute a Member's work outside the platform without consent (Section 8).</li>
+  <li>Submit false reports as a way to harass or silence another member.</li>
+</ul>
+
+<h1 id="s10"><span class="num">10</span>Enforcement, Finality &amp; Grievance Redressal</h1>
+<p>This Section sets out, in unambiguous terms, the authority KFS exercises over Social Strand accounts, the manner in which that authority is exercised, and the procedure by which a member may seek redress.</p>
+
+<h2>10.1 Standard moderation ladder</h2>
+<p>Most violations — profanity, low‑level rule‑breaking flagged by an automated filter or a routine report — escalate through one shared ladder per account. Each additional violation moves you one step further, regardless of which feature (post, comment, DM, or group message) it happened in:</p>
+<table>
+  <tr><th>Violation #</th><th>Automatic action</th><th>What it affects</th></tr>
+  <tr><td>1st</td><td>Warning</td><td>Message is blocked; nothing else changes.</td></tr>
+  <tr><td>2nd</td><td>1‑minute mute</td><td>Posting, comments, DMs and group chat all pause for 1 minute.</td></tr>
+  <tr><td>3rd</td><td>2‑minute mute</td><td>Same as above, longer cooldown.</td></tr>
+  <tr><td>4th</td><td>5‑minute mute</td><td>Same as above, longer cooldown.</td></tr>
+  <tr><td>5th</td><td>Temporary account suspension</td><td>You cannot post, DM, or use Social Strand or Group Chats until the timer expires. An appeal link is shown on the lockout screen.</td></tr>
+  <tr><td>Continued after suspension</td><td>Permanent account disable</td><td>Account is permanently disabled. Only KFS leadership can review an appeal at that point.</td></tr>
+</table>
+<div class="note"><strong>Note —</strong> Timers are wall‑clock, not "active use" time — a 5‑minute mute expires 5 minutes after it's issued whether or not you're online.</div>
+
+<h2>10.2 Serious misconduct — immediate, harsher action</h2>
+<div class="warn-box">
+  <div class="title">Zero‑tolerance categories</div>
+  <p>Certain conduct is serious enough that KFS may act immediately and skip the standard ladder entirely — including an immediate temporary suspension or permanent account disablement on a first occurrence, at KFS's sole discretion. This includes, without limitation:</p>
+  <ul style="margin:8px 0 0 18px;">
+    <li>Threats of violence, or content that endangers the safety of any member or third party</li>
+    <li>Hate speech, discriminatory abuse, or targeted harassment</li>
+    <li>Sharing sexual, exploitative, or otherwise illegal content, including content involving minors</li>
+    <li>Impersonating KFS, KFS staff, or the official KFS account</li>
+    <li>Attempting to compromise, bypass, or interfere with Social Strand's encryption, authentication, or moderation systems</li>
+    <li>Doxxing, stalking, or sharing another member's private information without consent</li>
+    <li>Deliberate, repeated, or commercial‑scale copyright or intellectual‑property infringement (Section 8.8)</li>
+  </ul>
+  <p>KFS may preserve relevant account and report information and, where warranted, refer serious misconduct to KSAC, KIIT University disciplinary authorities, law enforcement, or other appropriate authorities, consistent with the Terms of Use.</p>
+</div>
+
+<h2>10.3 Authority &amp; finality of KFS decisions</h2>
+<div class="final-box">
+  <div class="title">KFS holds full authority</div>
+  <p class="legal">Social Strand is operated by KFS, and KFS holds <strong>full and exclusive authority</strong> over its administration, moderation, and enforcement, subject only to the Terms of Use and applicable KSAC/KIIT University rules. This authority includes, without limitation, the right to interpret and apply this guide, issue warnings, mutes, and suspensions, remove content, and permanently disable accounts.</p>
+  <p class="legal">All moderation and administrative decisions relating to Social Strand — including warnings, mutes, temporary suspensions, permanent account disablement, and content removal — are made <strong>at KFS's sole discretion</strong>. By using Social Strand, you agree that such decisions are <strong>final and binding</strong> once the applicable appeal process (Section 10.4) has been exhausted, and that continued or repeated misconduct may be weighed cumulatively, including conduct that occurred before this guide's most recent update.</p>
+  <p class="legal">KFS reserves the right to suspend or terminate access to Social Strand, DMs, and group chats for any account, at any time, where KFS reasonably determines a member has violated the Community Guidelines &amp; Fair Use Policy in Section 9, the Content Ownership, Copyright &amp; Intellectual Property provisions in Section 8, engaged in conduct described in Section 10.2, or breached the Terms of Use or applicable KSAC/KIIT rules — independent of, and in addition to, any other membership consequences under KFS's separate governing membership terms, and independent of any referral made under Section 10.2.</p>
+</div>
+
+<h2>10.4 How to raise a grievance or appeal</h2>
+<p>If you believe a moderation action was applied to you in error, or you want to raise a concern about how a report was handled, you have a direct path to a human review — not just an automated system:</p>
+<div class="card">
+  <div class="card-row"><strong>Step 1 — Appeal from the lockout screen.</strong> A temporary suspension shows a one‑tap "Request Review" option directly on the suspension screen. This routes straight to the KFS moderation team.</div>
+  <div class="card-row"><strong>Step 2 — Contact KFS leadership.</strong> If your account has been permanently disabled, or you disagree with the outcome of a Step 1 review, contact KFS leadership directly (Section 11) to request a final review.</div>
+  <div class="card-row"><strong>Step 3 — Decision.</strong> KFS leadership's review is the final stage of the grievance process for Social Strand account actions. Its outcome is binding, per Section 10.3.</div>
+</div>
+<div class="note"><strong>Note —</strong> Raising a grievance in good faith is always welcome and will never itself be treated as a violation. Submitting a report or appeal in bad faith — to harass, silence, or waste the moderation team's time — is itself a violation of Section 9.2.</div>
+
+<h2>10.5 A note on scope</h2>
+<p class="legal">This guide is an operational summary of how Social Strand works and how enforcement is carried out, written for members' day‑to‑day reference. It is issued under, and forms part of, KFS's <a href="/terms">Terms of Use</a> and does not replace KFS's official Membership Terms, <a href="/terms">Terms of Use</a>, <a href="/privacy">Privacy Policy</a>, or any applicable KSAC/KIIT University rule or code of conduct. Where this guide conflicts with any of those documents, the official governing document controls, and the official document's provisions on enforcement, indemnification, liability, and governing law apply in full to your use of Social Strand.</p>
+
+<h2>10.6 General legal provisions</h2>
+<div class="card">
+  <div class="card-row"><strong>No waiver.</strong> KFS's decision not to act on a particular violation, or delay in doing so, is not a waiver of KFS's right to act on that or any other violation, whether at the time or subsequently.</div>
+  <div class="card-row"><strong>Cumulative remedies.</strong> Enforcement action under this guide (Section 10) is independent of, and in addition to, any consequence under KFS's Membership Terms, referral to KSAC or KIIT University, or civil or criminal liability under applicable law — including for copyright or intellectual‑property infringement under Section 8.</div>
+  <div class="card-row"><strong>Severability.</strong> If any provision of this guide is found unenforceable, that finding shall not affect the enforceability of the remaining provisions, which shall continue in full force and effect.</div>
+  <div class="card-row"><strong>Survival.</strong> Provisions relating to confidentiality, intellectual property, enforcement, finality, indemnification, and limitation of liability under the Terms of Use survive the closure, suspension, or disablement of a Social Strand account.</div>
+  <div class="card-row"><strong>Electronic acceptance.</strong> Continued use of Social Strand after being presented with this guide, or after an update to it, constitutes acceptance of its terms in full, in the same manner as electronic acceptance of the Terms of Use.</div>
+  <div class="card-row"><strong>Amendment.</strong> KFS may amend this guide at any time; the version notice in the header reflects the guide currently in force. Material changes to Section 8, Section 9, or Section 10 will be reflected in an updated version number.</div>
+  <div class="card-row"><strong>Assumption of risk.</strong> Use of Social Strand, including its messaging and group‑chat features, is undertaken at the Member's own risk, subject to the Disclaimer of Warranties and Limitation of Liability provisions of the Terms of Use.</div>
+</div>
+
+<div class="divider"></div>
+
+<h1 id="s11"><span class="num">11</span>Getting Help</h1>
+<p>If something on Social Strand looks broken rather than against the rules, that's a bug report, not a content report — use the feedback option in Settings, or contact KFS support directly.</p>
+<p>If you believe a moderation action was applied to you in error, use the appeal link shown on the suspension screen, or follow the grievance process in Section 10.4. To report a copyright or intellectual‑property concern, see Section 8.6.</p>
+
+<div class="quicklinks">
+  <div class="qlink"><div class="qicon">⚙</div><div class="qtext"><span class="qlabel">Customization</span><span class="qpath">Settings → Customization</span></div></div>
+  <div class="qlink"><div class="qicon">⋯</div><div class="qtext"><span class="qlabel">Report content</span><span class="qpath">Context menu → Report</span></div></div>
+  <div class="qlink"><div class="qicon">©</div><div class="qtext"><span class="qlabel">Report copyright infringement</span><span class="qpath">Section 8.6 → KFS leadership</span></div></div>
+  <div class="qlink"><div class="qicon">↺</div><div class="qtext"><span class="qlabel">Appeal a suspension</span><span class="qpath">Lockout screen → Request Review</span></div></div>
+  <div class="qlink"><div class="qicon">⚑</div><div class="qtext"><span class="qlabel">Escalate a grievance</span><span class="qpath">Section 10.4 → KFS leadership</span></div></div>
+</div>
+
+<footer>
+  This guide reflects Social Strand's current feature set and enforcement policy at the time of writing. KFS may update features and policy over time; check Settings → Customization and this guide's latest version for changes.<br><br>
+  Issued by KIIT Film Society (KFS) under KSAC, KIIT Deemed to be University. Governed by KFS's <a href="/terms">Terms of Use</a> and <a href="/privacy">Privacy Policy</a>, and by the laws of India, subject to the jurisdiction of the courts of Bhubaneswar, Odisha.<br><br>
+  By continuing to use Social Strand, you agree to be bound by this guide and the Terms of Use in full, and you undertake to follow the rules set out within them.
+</footer>
+
+</body>
+</html>
