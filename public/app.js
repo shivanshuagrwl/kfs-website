@@ -10389,7 +10389,9 @@ function _isKiitEmail(email) {
   return e.endsWith('@kiit.ac.in') ||
          e.includes('.kiit.ac.in') ||
          e.endsWith('@ksom.ac.in') ||
-         e.endsWith('@kiitbiotech.ac.in');
+         e.endsWith('@kiitbiotech.ac.in') ||
+         e.endsWith('@kims.ac.in') ||
+         e.endsWith('@kls.ac.in');
 }
 
 async function verifyCollabMember() {
@@ -11972,9 +11974,10 @@ async function loadMemberAccounts() {
   // Cache combined rows so the search box can filter client-side without refetching
   window._allMemberAccounts = members.map((m, i) => ({ member: m, acc: accounts[i] }));
 
-  // Re-apply any active search term (keeps filter sticky across refreshes)
-  const q = (document.getElementById('member-accounts-search')?.value || '').trim();
-  if (q) { filterMemberAccounts(); return; }
+  // Re-apply any active search/filter (keeps filters sticky across refreshes)
+  const q      = (document.getElementById('member-accounts-search')?.value || '').trim();
+  const status = document.getElementById('ma-filter-status')?.value || '';
+  if (q || status) { filterMemberAccounts(); return; }
 
   renderMemberAccountsTable(window._allMemberAccounts);
 }
@@ -12019,26 +12022,44 @@ function renderMemberAccountsTable(rows) {
 }
 
 function filterMemberAccounts() {
-  const q = (document.getElementById('member-accounts-search')?.value || '').trim().toLowerCase();
+  const q      = (document.getElementById('member-accounts-search')?.value || '').trim().toLowerCase();
+  const status = document.getElementById('ma-filter-status')?.value || '';
 
   const clearBtn = document.getElementById('member-accounts-search-clear-btn');
   if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
 
+  const statusSel = document.getElementById('ma-filter-status');
+  if (statusSel) statusSel.classList.toggle('active', !!status);
+
   const all = window._allMemberAccounts || [];
-  const filtered = !q ? all : all.filter(({ member: m, acc }) => {
-    const hasAccount = acc && acc.username;
-    const haystack = [
-      m.name,
-      hasAccount ? acc.username : '',
-      hasAccount ? acc.account_status : 'no account'
-    ].filter(Boolean).join(' ').toLowerCase();
-    return haystack.includes(q);
-  });
+  let filtered = all;
+
+  if (q) {
+    filtered = filtered.filter(({ member: m, acc }) => {
+      const hasAccount = acc && acc.username;
+      const haystack = [
+        m.name,
+        hasAccount ? acc.username : '',
+        hasAccount ? acc.account_status : 'no account'
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  if (status) {
+    filtered = filtered.filter(({ acc }) => {
+      const hasAccount = acc && acc.username;
+      if (status === 'activated')     return !!hasAccount;
+      if (status === 'not_activated') return !hasAccount;
+      // active / suspended / disabled — match the account's actual status
+      return hasAccount && acc.account_status === status;
+    });
+  }
 
   renderMemberAccountsTable(filtered);
 
   const countEl = document.getElementById('ma-result-count');
-  if (countEl) countEl.textContent = q ? `${filtered.length} of ${all.length}` : '';
+  if (countEl) countEl.textContent = (q || status) ? `${filtered.length} of ${all.length}` : '';
 }
 
 function clearMemberAccountsSearch() {

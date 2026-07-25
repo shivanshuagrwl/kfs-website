@@ -3665,7 +3665,7 @@ app.post(
     if (!EMAIL_RE.test(emailTrim))
       return res.status(400).json({ error: "Invalid email address" });
     if (!isKiitEmail(emailTrim))
-      return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
+      return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in, @kims.ac.in, @kls.ac.in)." });
     if (mobileTrim && mobileTrim.replace(/\D/g, "").length < 10)
       return res.status(400).json({ error: "Invalid phone number" });
 
@@ -3732,7 +3732,7 @@ app.put(
       const emailTrim = (email || "").trim();
       const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (emailTrim && !EMAIL_RE.test(emailTrim)) return res.status(400).json({ error: "Invalid email address" });
-      if (emailTrim && !isKiitEmail(emailTrim)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
+      if (emailTrim && !isKiitEmail(emailTrim)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in, @kims.ac.in, @kls.ac.in)." });
       updates.email = emailTrim || null;
     }
     if (mobile !== undefined) {
@@ -4713,7 +4713,9 @@ function isKiitEmail(email) {
     emailLower.endsWith("@kiit.ac.in") ||
     emailLower.endsWith(".kiit.ac.in") ||
     emailLower.endsWith("@ksom.ac.in") ||
-    emailLower.endsWith("@kiitbiotech.ac.in")
+    emailLower.endsWith("@kiitbiotech.ac.in") ||
+    emailLower.endsWith("@kims.ac.in") ||
+    emailLower.endsWith("@kls.ac.in")
   );
 }
 
@@ -11179,7 +11181,7 @@ app.put("/api/member/contact-info", memberAuthMiddleware, async (req, res) => {
   if (email !== undefined) {
     const v = (email || "").trim();
     if (v && !EMAIL_RE.test(v)) return res.status(400).json({ error: "Invalid email address" });
-    if (v && !isKiitEmail(v)) return res.status(400).json({ error: "Email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
+    if (v && !isKiitEmail(v)) return res.status(400).json({ error: "Email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in, @kims.ac.in, @kls.ac.in)." });
     updates.email = v || null;
   }
   if (mobile !== undefined) {
@@ -11390,7 +11392,7 @@ app.post("/api/admin/members/:id/create-account", requireSection("members"), asy
   }
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (finalEmail && !EMAIL_RE.test(finalEmail)) return res.status(400).json({ error: "Invalid email address" });
-  if (finalEmail && !isKiitEmail(finalEmail)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in)." });
+  if (finalEmail && !isKiitEmail(finalEmail)) return res.status(400).json({ error: "Member email must be a KIIT institutional address (e.g. @kiit.ac.in, @ksom.ac.in, @kiitbiotech.ac.in, @kims.ac.in, @kls.ac.in)." });
   if (finalMobile && finalMobile.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Invalid phone number" });
 
   // Persist any newly-supplied contact info onto the member record itself.

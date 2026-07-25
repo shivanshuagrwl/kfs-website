@@ -5313,6 +5313,14 @@ KFS — KIIT Film Society"></textarea>
           <input class="member-search-input" id="member-accounts-search" placeholder="Search name, username, status…" data-oninput="filterMemberAccounts()">
           <button data-action="clearMemberAccountsSearch" class="member-search-clear" id="member-accounts-search-clear-btn">✕</button>
         </div>
+        <select class="mf-select" id="ma-filter-status" onchange="filterMemberAccounts()">
+          <option value="">All Members</option>
+          <option value="activated">✓ Activated (has account)</option>
+          <option value="not_activated">✗ Not Activated (no account)</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+          <option value="disabled">Disabled</option>
+        </select>
         <span id="ma-result-count" style="font-size:12px;color:var(--grey);align-self:center"></span>
       </div>
       <div class="admin-card">
