@@ -11701,6 +11701,49 @@
       .kfs-content-fade-in {
         animation: kfs-fade-in 0.25s ease;
       }
+
+      /* ── Mobile: make the "New message / New group" button impossible
+         to miss (previously a tiny 17px dim-gray icon with no mobile
+         sizing at all — present in the DOM but easy to lose against the
+         black header on a phone). Turns it into a bright, thumb-sized
+         pill on mobile only; desktop keeps the original compact icon. ── */
+      @media (max-width: 768px) {
+        #dm-new-btn-wrap {
+          position: relative !important;
+        }
+        #dm-new-btn {
+          min-width: 44px !important;
+          min-height: 44px !important;
+          width: 44px !important;
+          height: 44px !important;
+          color: var(--text) !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          border-radius: 50% !important;
+        }
+        #dm-new-btn:active {
+          background: rgba(255, 255, 255, 0.16) !important;
+        }
+        #dm-new-btn svg {
+          width: 20px !important;
+          height: 20px !important;
+        }
+        /* Anchor the dropdown to the viewport instead of the button so it
+           can never get clipped off the right edge of a narrow screen,
+           and sit it above the floating bottom pill nav (z-index 200). */
+        #dm-new-dropdown {
+          position: fixed !important;
+          top: max(64px, env(safe-area-inset-top) + 56px) !important;
+          right: 12px !important;
+          left: auto !important;
+          min-width: 190px !important;
+          z-index: 300 !important;
+        }
+        #dm-new-msg-btn,
+        #dm-new-grp-btn {
+          padding: 14px 16px !important;
+          font-size: 14px !important;
+        }
+      }
     </style>
   </body>
 </html>
