@@ -5305,6 +5305,14 @@ KFS — KIIT Film Society"></textarea>
           <button onclick="loadMemberAccounts()" class="btn" style="font-size:12px;padding:8px 16px;border-radius:20px;background:transparent;border:1px solid var(--border);color:var(--grey)">Refresh</button>
         </div>
       </div>
+      <div class="member-filter-bar" style="margin-bottom:14px">
+        <div class="member-search-wrap">
+          <svg class="member-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="member-search-input" id="member-accounts-search" placeholder="Search name, username, status…" data-oninput="filterMemberAccounts()">
+          <button data-action="clearMemberAccountsSearch" class="member-search-clear" id="member-accounts-search-clear-btn">✕</button>
+        </div>
+        <span id="ma-result-count" style="font-size:12px;color:var(--grey);align-self:center"></span>
+      </div>
       <div class="admin-card">
         <table class="admin-table">
           <thead><tr><th>Member</th><th>Username</th><th>Status</th><th>2FA</th><th>Last Login</th><th>Actions</th></tr></thead>

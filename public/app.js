@@ -11960,6 +11960,7 @@ async function loadMemberAccounts() {
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>`;
   const members = await apiFetch('/api/admin/members');
   if (!members || !members.length) {
+    window._allMemberAccounts = [];
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No members found.</td></tr>`;
     return;
   }
@@ -11967,8 +11968,23 @@ async function loadMemberAccounts() {
   const accounts = await Promise.all(
     members.map(m => apiFetch(`/api/admin/members/${m.id}/account`).catch(() => null))
   );
-  tbody.innerHTML = members.map((m, i) => {
-    const acc = accounts[i];
+  // Cache combined rows so the search box can filter client-side without refetching
+  window._allMemberAccounts = members.map((m, i) => ({ member: m, acc: accounts[i] }));
+
+  // Re-apply any active search term (keeps filter sticky across refreshes)
+  const q = (document.getElementById('member-accounts-search')?.value || '').trim();
+  if (q) { filterMemberAccounts(); return; }
+
+  renderMemberAccountsTable(window._allMemberAccounts);
+}
+
+function renderMemberAccountsTable(rows) {
+  const tbody = document.getElementById('admin-member-accounts-tbody');
+  if (!rows || !rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--grey)">No matching accounts found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(({ member: m, acc }) => {
     const hasAccount = acc && acc.username;
     const status = hasAccount ? acc.account_status : '—';
     const statusTag = hasAccount
@@ -11999,6 +12015,36 @@ async function loadMemberAccounts() {
       <td>${actionBtns}</td>
     </tr>`;
   }).join('');
+}
+
+function filterMemberAccounts() {
+  const q = (document.getElementById('member-accounts-search')?.value || '').trim().toLowerCase();
+
+  const clearBtn = document.getElementById('member-accounts-search-clear-btn');
+  if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
+
+  const all = window._allMemberAccounts || [];
+  const filtered = !q ? all : all.filter(({ member: m, acc }) => {
+    const hasAccount = acc && acc.username;
+    const haystack = [
+      m.name,
+      hasAccount ? acc.username : '',
+      hasAccount ? acc.account_status : 'no account'
+    ].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(q);
+  });
+
+  renderMemberAccountsTable(filtered);
+
+  const countEl = document.getElementById('ma-result-count');
+  if (countEl) countEl.textContent = q ? `${filtered.length} of ${all.length}` : '';
+}
+
+function clearMemberAccountsSearch() {
+  const searchEl = document.getElementById('member-accounts-search');
+  if (searchEl) searchEl.value = '';
+  filterMemberAccounts();
+  searchEl?.focus();
 }
 
 // Small inline prompt used when create-account is blocked because the member
