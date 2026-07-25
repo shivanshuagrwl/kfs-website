@@ -11483,6 +11483,7 @@ function renderDonorCard(d) {
 function scrollTo_don_form_wrap()      { document.getElementById('don-form-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }
 function scrollTo_don_donors_section() { document.getElementById('don-donors-section')?.scrollIntoView({behavior:'smooth',block:'start'}); }
 function triggerClick_member_xlsx_input()  { document.getElementById('member-xlsx-input')?.click(); }
+function triggerClick_portal_activate_input() { document.getElementById('portal-activate-input')?.click(); }
 function triggerClick_set_team_photo_file(){ document.getElementById('set-team-photo-file')?.click(); }
 function triggerClick_set_egg_img_file()   { document.getElementById('set-egg-img-file')?.click(); }
 function triggerClick_cegg_img_file()      { document.getElementById('cegg-img-file')?.click(); }
@@ -12045,6 +12046,170 @@ function clearMemberAccountsSearch() {
   if (searchEl) searchEl.value = '';
   filterMemberAccounts();
   searchEl?.focus();
+}
+
+// ── Bulk Portal Activation via Excel ───────────────────────────────────────
+// Sheet needs Name + Email columns (any order, header row optional). For each
+// row: match an existing member by name, set the given email as their official
+// KIIT mail, create their portal account, and email them the login details.
+// Members who already have an account, unmatched names, and duplicate rows
+// (within the sheet) are all skipped and reported rather than failing loudly.
+
+let _portalActivateRows = [];
+
+function previewPortalActivation(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    let rows = [];
+    if (file.name.endsWith('.csv')) {
+      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+      let start = 0, nameIdx = 0, emailIdx = 1;
+      if (lines.length && /name/i.test(lines[0]) && /e[-\s]?mail/i.test(lines[0])) {
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const ni = headers.findIndex(h => h.includes('name'));
+        const ei = headers.findIndex(h => h.includes('email') || h.includes('mail'));
+        if (ni > -1) nameIdx = ni;
+        if (ei > -1) emailIdx = ei;
+        start = 1;
+      }
+      for (let i = start; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const name = (cols[nameIdx] || '').trim();
+        const email = (cols[emailIdx] || '').trim();
+        if (name) rows.push({ name, email });
+      }
+    } else {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (json.length) {
+        const keys = Object.keys(json[0]);
+        const nameKey = keys.find(k => /name/i.test(k)) || keys[0];
+        const emailKey = keys.find(k => /e[-\s]?mail/i.test(k)) || keys[1];
+        rows = json
+          .map(r => ({ name: String(r[nameKey] || '').trim(), email: String(r[emailKey] || '').trim() }))
+          .filter(r => r.name);
+      }
+    }
+    _portalActivateRows = rows;
+    renderPortalActivatePreview();
+    document.getElementById('portal-activate-modal').style.display = 'flex';
+  };
+  file.name.endsWith('.csv') ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+}
+
+function renderPortalActivatePreview() {
+  const tbody = document.getElementById('portal-activate-tbody');
+  tbody.innerHTML = _portalActivateRows.map((r, i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:9px 14px;color:var(--grey)">${i + 1}</td>
+      <td style="padding:9px 14px;font-weight:500">${r.name}</td>
+      <td style="padding:9px 14px;color:var(--grey);font-size:12px">${r.email || '<span style="color:#f87171">missing</span>'}</td>
+      <td id="pa-status-${i}" style="padding:9px 14px;color:var(--grey)">—</td>
+    </tr>`).join('');
+  const n = _portalActivateRows.length;
+  document.getElementById('portal-activate-summary').textContent = `${n} row${n !== 1 ? 's' : ''} found — review and click Activate All.`;
+  const btn = document.getElementById('portal-activate-btn');
+  btn.disabled = false;
+  btn.textContent = `Activate ${n}`;
+}
+
+function closePortalActivation() {
+  document.getElementById('portal-activate-modal').style.display = 'none';
+  _portalActivateRows = [];
+}
+
+async function runPortalActivation() {
+  if (!_portalActivateRows.length) return;
+  const btn = document.getElementById('portal-activate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Loading members…';
+
+  // Pull the current member roster to match sheet names against
+  const members = await apiFetch('/api/admin/members');
+  if (!members) { btn.disabled = false; btn.textContent = 'Retry'; return; }
+
+  const byName = new Map();
+  members.forEach(m => {
+    const key = m.name.trim().toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(m);
+  });
+
+  const seenNames = new Set();
+  const seenEmails = new Set();
+  let created = 0, skipped = 0, failed = 0;
+
+  btn.textContent = 'Activating…';
+
+  for (let i = 0; i < _portalActivateRows.length; i++) {
+    const { name, email } = _portalActivateRows[i];
+    const statusEl = document.getElementById(`pa-status-${i}`);
+    const nameKey = name.trim().toLowerCase();
+    const emailKey = email.trim().toLowerCase();
+
+    if (!email) {
+      skipped++; statusEl.innerHTML = '<span style="color:#ff9800">No email — skipped</span>';
+      continue;
+    }
+    if (seenNames.has(nameKey) || (emailKey && seenEmails.has(emailKey))) {
+      skipped++; statusEl.innerHTML = '<span style="color:#ff9800">Duplicate in sheet</span>';
+      continue;
+    }
+
+    const matches = byName.get(nameKey);
+    if (!matches || !matches.length) {
+      failed++; statusEl.innerHTML = '<span style="color:#f44" title="No member record with this exact name">Member not found</span>';
+      continue;
+    }
+    if (matches.length > 1) {
+      failed++; statusEl.innerHTML = '<span style="color:#f44" title="Multiple members share this name — activate manually">Ambiguous name</span>';
+      continue;
+    }
+
+    const member = matches[0];
+    seenNames.add(nameKey);
+    if (emailKey) seenEmails.add(emailKey);
+
+    statusEl.innerHTML = '<span style="color:var(--grey)">Creating…</span>';
+    // Passing email here both sets it as the member's official KIIT mail and
+    // is required for account creation — server rejects already-existing
+    // accounts (409) and non-KIIT addresses on its own, so we just relay that.
+    const res = await apiFetch(`/api/admin/members/${member.id}/create-account`, 'POST', { email });
+
+    if (!res) { failed++; statusEl.innerHTML = '<span style="color:#f44">Error</span>'; continue; }
+
+    if (res.error) {
+      if (/already exists/i.test(res.error)) {
+        skipped++; statusEl.innerHTML = `<span style="color:#ff9800">Already active${res.username ? ' ('+res.username+')' : ''}</span>`;
+      } else {
+        failed++; statusEl.innerHTML = `<span style="color:#f44" title="${res.error}">${res.error}</span>`;
+      }
+      continue;
+    }
+
+    // Account created — email the login credentials to the same address
+    statusEl.innerHTML = '<span style="color:var(--grey)">Sending mail…</span>';
+    const sent = await apiFetch(`/api/admin/members/${member.id}/send-credentials`, 'POST', { toEmail: email, customPassword: res.tempPassword });
+
+    created++;
+    statusEl.innerHTML = (sent && sent.success)
+      ? `<span style="color:#4caf50">✓ Activated (${res.username})</span>`
+      : `<span style="color:#ff9800" title="Account created but the email failed to send — use Reset PW or Test Email to retry">✓ Created (${res.username}), mail failed</span>`;
+  }
+
+  let summary = `Done — ${created} activated`;
+  if (skipped) summary += `, ${skipped} skipped`;
+  if (failed) summary += `, ${failed} failed`;
+  document.getElementById('portal-activate-summary').textContent = summary;
+  btn.textContent = 'Done';
+  btn.disabled = false;
+
+  loadMemberAccounts();
+  localStorage.setItem('kfs_admin_data_change', Date.now().toString());
 }
 
 // Small inline prompt used when create-account is blocked because the member
