@@ -11708,31 +11708,42 @@
          black header on a phone). Turns it into a bright, thumb-sized
          pill on mobile only; desktop keeps the original compact icon. ── */
       @media (max-width: 768px) {
+        /* .btb-notif-fab (the notification bell) is `position:fixed;
+           top:~14px; right:16px; 38px` on every mobile panel — it was
+           sitting exactly on top of this in-flow header button. Pin this
+           one to the viewport too, immediately to the bell's left
+           (16px + 38px + 10px gap = 64px), so they read as a matched
+           pair of circular buttons instead of stacking. */
         #dm-new-btn-wrap {
-          position: relative !important;
+          position: fixed !important;
+          top: max(14px, calc(env(safe-area-inset-top) + 10px)) !important;
+          right: 64px !important;
+          z-index: 250 !important;
         }
         #dm-new-btn {
-          min-width: 44px !important;
-          min-height: 44px !important;
-          width: 44px !important;
-          height: 44px !important;
-          color: var(--text) !important;
-          background: rgba(255, 255, 255, 0.08) !important;
+          width: 38px !important;
+          height: 38px !important;
+          min-width: 38px !important;
+          min-height: 38px !important;
           border-radius: 50% !important;
+          background: rgba(20, 20, 20, 0.88) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          color: var(--text) !important;
+          backdrop-filter: blur(14px) !important;
+          -webkit-backdrop-filter: blur(14px) !important;
         }
         #dm-new-btn:active {
-          background: rgba(255, 255, 255, 0.16) !important;
+          background: #2c2c2e !important;
         }
         #dm-new-btn svg {
-          width: 20px !important;
-          height: 20px !important;
+          width: 18px !important;
+          height: 18px !important;
         }
-        /* Anchor the dropdown to the viewport instead of the button so it
-           can never get clipped off the right edge of a narrow screen,
-           and sit it above the floating bottom pill nav (z-index 200). */
+        /* Dropdown anchored to the viewport (not the button) so it can't
+           get clipped off the right edge, drops below the button row. */
         #dm-new-dropdown {
           position: fixed !important;
-          top: max(64px, env(safe-area-inset-top) + 56px) !important;
+          top: max(56px, calc(env(safe-area-inset-top) + 52px)) !important;
           right: 12px !important;
           left: auto !important;
           min-width: 190px !important;
