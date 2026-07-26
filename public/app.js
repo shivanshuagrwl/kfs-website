@@ -11654,7 +11654,7 @@ async function loadScannerSection() {
 // ══════════════════════════════════════════════════════════════════════════
 // SOCIAL STRAND ATTENDANCE — admin panel
 // Separate from the public event-ticket Scanner above: this marks members
-// present at GDMs/internal meetings via their permanent Strand QR, and DMs
+// present at GBMs/internal meetings via their permanent Strand QR, and DMs
 // them a confirmation automatically.
 // ══════════════════════════════════════════════════════════════════════════
 let _attendanceCurrentSessionId = null;
@@ -11704,7 +11704,7 @@ async function refreshAttendanceSessionsList() {
 }
 
 async function createAttendanceSession() {
-  const name = prompt('Meeting / GDM name (e.g. "GDM — 26 July"):');
+  const name = prompt('Meeting / GBM name (e.g. "GBM — 26 July"):');
   if (!name || !name.trim()) return;
   const result = await apiFetch('/api/admin/attendance/sessions', 'POST', { name: name.trim() });
   if (!result || result.error) return;
@@ -11869,6 +11869,10 @@ function handleAttendanceCameraError(e) {
     OverconstrainedError: 'This camera doesn\'t support the requested mode — use manual entry below.',
     SecurityError:       'Camera blocked by browser security settings for this page — use manual entry below.',
     AbortError:          'Camera access was interrupted — try again.',
+    // Not actually a camera error — the QR-scanning library failed to load
+    // from the CDN (network/firewall/ad-blocker), but the failure used to
+    // surface as a misleading "Could not access camera (unknown error)".
+    JsQrLoadError:       e.message || 'Failed to load the QR scanner library — check your internet connection, firewall, or ad blocker, then try again. You can also use manual entry below.',
   };
   const msg = messages[e.name] || `Could not access camera (${e.name || e.message || 'unknown error'}) — use manual entry below.`;
   showAttendanceScanResult(null, null, msg);
@@ -11913,7 +11917,15 @@ function ensureJsQrLoaded() {
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js';
     s.onload = resolve;
-    s.onerror = reject;
+    // s.onerror hands us a bare DOM Event (no .name/.message), which used to
+    // bubble up as a mystery "unknown error" and get blamed on the camera.
+    // Wrap it in a real Error with a name we can special-case below.
+    s.onerror = () => {
+      _jsQrLoadPromise = null; // allow retry next time instead of caching the failure forever
+      const err = new Error('Failed to load the QR scanner library — check your internet connection, firewall, or ad blocker.');
+      err.name = 'JsQrLoadError';
+      reject(err);
+    };
     document.head.appendChild(s);
   });
   return _jsQrLoadPromise;

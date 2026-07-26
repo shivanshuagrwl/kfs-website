@@ -10025,7 +10025,7 @@ app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req,
 // SOCIAL STRAND ATTENDANCE SYSTEM
 // Separate from the public event-ticket QR system above. Every member has one
 // permanent QR (members.qr_token, see /api/member/qr-code) that stays valid
-// for as long as the member exists. Admins create a named session (a GDM or
+// for as long as the member exists. Admins create a named session (a GBM or
 // internal meeting — not a public event), scan member QRs against it, and
 // each scan marks that member present + fires an automatic DM from the KFS
 // sentinel account confirming attendance. Uses the same "events" permission
@@ -10049,10 +10049,10 @@ app.get("/api/admin/attendance/sessions", requireSection("events"), async (req, 
   res.json((sessions || []).map(s => ({ ...s, present_count: countMap[s.id] || 0 })));
 });
 
-// POST /api/admin/attendance/sessions — create a new GDM/meeting to scan attendance for
+// POST /api/admin/attendance/sessions — create a new GBM/meeting to scan attendance for
 app.post("/api/admin/attendance/sessions", requireSection("events"), async (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 200);
-  if (!name) return res.status(400).json({ error: "Meeting/GDM name is required" });
+  if (!name) return res.status(400).json({ error: "Meeting/GBM name is required" });
 
   const { data: session, error } = await supabase
     .from("attendance_sessions")
@@ -11285,7 +11285,7 @@ app.post("/api/member/2fa/disable", memberAuthMiddleware, async (req, res) => {
 // One QR per member, generated once and reused forever (until an admin
 // deletes the member, which cascades the qr_token away with the row).
 // Used by the admin Attendance Scanner to mark members present at
-// GDMs/meetings (separate from the public event-ticket QR system).
+// GBMs/meetings (separate from the public event-ticket QR system).
 app.get("/api/member/qr-code", memberAuthMiddleware, async (req, res) => {
   const { data: member, error } = await supabase
     .from("members")
