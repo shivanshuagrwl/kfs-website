@@ -3770,6 +3770,63 @@ app.put(
   },
 );
 
+// Scrubs a member's Social Strand content when their account/member record
+// is deleted — wall posts, comments, 1:1 DMs, and group chat messages.
+// Uses the same soft-delete convention (deleted_at + redacted body) as the
+// member-facing delete routes above, so nothing hard-deletes and an undo of
+// the member record won't leave orphaned-but-still-visible content behind.
+// Best-effort: failures here are logged but never block the member deletion.
+async function purgeMemberSocialContent(memberId) {
+  const now = new Date().toISOString();
+  const results = await Promise.allSettled([
+    // Wall posts / studio projects
+    supabase.from("member_projects")
+      .update({ deleted_at: now })
+      .eq("member_id", memberId)
+      .is("deleted_at", null),
+    // Comments on others' posts
+    supabase.from("project_comments")
+      .update({ deleted_at: now })
+      .eq("member_id", memberId)
+      .is("deleted_at", null),
+    // 1:1 DMs (stored as member_notifications with link_type 'dm')
+    supabase.from("member_notifications")
+      .update({ body: "[deleted]", title: "Message deleted" })
+      .eq("actor_id", memberId)
+      .eq("link_type", "dm"),
+    // Group chat messages
+    supabase.from("dm_group_messages")
+      .update({ deleted_at: now, body: "[deleted]" })
+      .eq("sender_id", memberId)
+      .is("deleted_at", null),
+  ]);
+  results.forEach((r, i) => {
+    if (r.status === "rejected" || r.value?.error) {
+      console.error("[purgeMemberSocialContent]", ["projects", "comments", "dms", "group_messages"][i], r.reason || r.value?.error);
+    }
+  });
+}
+
+// Locks a deleted member out immediately: disables their login account
+// (reusing the same account_status === "disabled" check already enforced by
+// /api/member/login, /api/member/google-login, and /api/member/refresh) and
+// revokes any outstanding refresh tokens so an already-open session can't
+// silently renew. The short-lived (15min) access token they may still be
+// holding will die on its own shortly after; there's no persistent record of
+// individual access-token jtis to revoke those instantly.
+async function lockOutDeletedMember(memberId) {
+  const { data: account } = await supabase
+    .from("member_accounts")
+    .select("id")
+    .eq("member_id", memberId)
+    .maybeSingle();
+  if (!account) return; // member never had a portal login — nothing to do
+  await Promise.allSettled([
+    supabase.from("member_accounts").update({ account_status: "disabled" }).eq("id", account.id),
+    revokeAllMemberRefreshTokens(account.id),
+  ]);
+}
+
 app.delete(
   "/api/admin/members/:id",
   requireSection("members"),
@@ -3781,6 +3838,8 @@ app.delete(
       .single();
     await supabase.from("members").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
     memInvalidate("members:list");
+    purgeMemberSocialContent(req.params.id).catch(e => console.error("[purgeMemberSocialContent]", e.message));
+    lockOutDeletedMember(req.params.id).catch(e => console.error("[lockOutDeletedMember]", e.message));
     logActivity(
       req.admin.id,
       req.admin.name,
@@ -10734,7 +10793,7 @@ app.post(
 
     const { data: account } = await supabase
       .from("member_accounts")
-      .select("*, members(id, name, role, batch, domain, photo, email, mobile)")
+      .select("*, members(id, name, role, batch, domain, photo, email, mobile, deleted_at)")
       .eq("username", normalised)
       .maybeSingle();
 
@@ -10743,7 +10802,7 @@ app.post(
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    if (account.account_status === "disabled") {
+    if (account.account_status === "disabled" || !account.members || account.members.deleted_at) {
       return res.status(403).json({ error: "Account disabled. Contact admin." });
     }
 
@@ -11146,11 +11205,11 @@ app.post("/api/member/refresh", async (req, res) => {
 
   const { data: account } = await supabase
     .from("member_accounts")
-    .select("id, member_id, username, must_change_password, totp_enabled, account_status")
+    .select("id, member_id, username, must_change_password, totp_enabled, account_status, members(deleted_at)")
     .eq("id", stored.account_id)
     .maybeSingle();
 
-  if (!account || account.account_status === "disabled") {
+  if (!account || account.account_status === "disabled" || !account.members || account.members.deleted_at) {
     clearMemberRefreshCookie(res);
     return res.status(401).json({ error: "Account not found or disabled" });
   }
