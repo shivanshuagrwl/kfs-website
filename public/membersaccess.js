@@ -6651,7 +6651,7 @@ function _genTmpId() {
   return 'tmp-' + Date.now() + '-' + (++_tmpIdCounter);
 }
 
-const DM_POLL = 12000; // ms — raised from 5000; was a major contributor to the shared campus-IP rate-limit bucket filling up
+const DM_POLL = 20000; // ms — raised from 12000. Combined with the visibility-pause above, this is what actually cut Cached Egress once membership grew — was a major contributor to Supabase read volume.
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -8057,6 +8057,10 @@ async function _dmPollTyping() {
 }
 
 async function dmPollTick() {
+  // Skip entirely while the tab is backgrounded — a chat nobody is looking
+  // at doesn't need live updates, and this is a meaningful chunk of overall
+  // polling volume once left-open-in-a-background-tab is common.
+  if (document.visibilityState !== 'visible') return;
   // Always refresh visible reactions — even when we've gone "back" to the
   // sidebar, a reaction the other person added to a visible bubble should
   // update without a reload. The reaction endpoint is a cheap read-only call.
@@ -10044,7 +10048,7 @@ const GC = _instrumentMsgsOwner('GC', {
   reads:          [],      // cached [{member_id, last_read_at}] for "seen by" — see _gcRefreshSeenBy
 });
 
-const GC_POLL = 12000; // ms — raised from 5000, same reason as DM_POLL
+const GC_POLL = 20000; // ms — raised from 12000, same reasoning as DM_POLL (Cached Egress reduction)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -10856,6 +10860,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     _maybeMarkDmRead();
     _maybeMarkGcRead();
+    // Polling is paused entirely while hidden (see dmPollTick/gcPollTick) to
+    // cut needless backend/DB load from backgrounded tabs — fire one tick
+    // immediately on return so it doesn't cost freshness, instead of waiting
+    // up to a full poll interval.
+    try { dmPollTick(); } catch {}
+    try { gcPollTick(); } catch {}
   }
 });
 window.addEventListener('focus', () => {
@@ -11405,6 +11415,8 @@ async function _gcPollTyping() {
 }
 
 async function gcPollTick() {
+  // Same reasoning as dmPollTick — don't poll a backgrounded tab.
+  if (document.visibilityState !== 'visible') return;
   if (!GC.activeId) {
     // No group open. The _sidebarRefreshTimer (every 10s) already handles the
     // background group-list refresh, so we don't need to duplicate the API call
@@ -12595,6 +12607,10 @@ if (document.readyState === "loading") {
   function _startSidebarRefresh() {
     _stopSidebarRefresh();
     _sidebarRefreshTimer = setInterval(async () => {
+      // Skip entirely while tab is backgrounded — this was running every 3s
+      // regardless of visibility, which became a major Cached Egress driver
+      // once more members were active simultaneously.
+      if (document.visibilityState !== 'visible') return;
       // Only refresh groups in the background — DM conv list is already
       // handled by dmPollTick. Skip if no token (not logged in).
       if (!_token) return;
@@ -12628,7 +12644,7 @@ if (document.readyState === "loading") {
           } catch { /* ignore */ }
         }
       } catch { /* silent — transient network error, try again next tick */ }
-    }, 3000); // every 3s — faster detection when added to a new group
+    }, 15000); // every 15s — lowered from 3000. 3s was extreme for a background "was I added to a group" check and was a major Cached Egress contributor once membership grew; combined with the visibility-pause above.
   }
   function _stopSidebarRefresh() {
     if (_sidebarRefreshTimer) { clearInterval(_sidebarRefreshTimer); _sidebarRefreshTimer = null; }
@@ -17091,8 +17107,8 @@ function _tourEnd() {
 (function () {
   'use strict';
 
-  const FEED_POLL_MS    = 25000;
-  const COMMENTS_POLL_MS = 10000; // raised from 6000, same reason as DM_POLL/GC_POLL
+  const FEED_POLL_MS    = 45000; // raised from 25000 — Cached Egress reduction, combined with visibility-pause above
+  const COMMENTS_POLL_MS = 15000; // raised from 10000, same reason
 
   function ready(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
@@ -17146,6 +17162,7 @@ function _tourEnd() {
   }
 
   async function feedPollTick() {
+    if (document.visibilityState !== 'visible') return;
     if (!feedGridVisible()) return;
     if (window.SW && window.SW.feedLoading) return;
     if (_pillEl && _pillEl.style.display !== 'none') return; // already showing, don't re-check
@@ -17212,6 +17229,7 @@ function _tourEnd() {
   }
 
   async function commentsPollTick() {
+    if (document.visibilityState !== 'visible') return;
     const projectId = window.SW?.detailProjectId;
     const overlay = document.getElementById('studio-detail-modal-overlay');
     if (!projectId || !overlay || overlay.style.display !== 'flex') { stopCommentsPoll(); return; }

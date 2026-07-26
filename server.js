@@ -13248,46 +13248,59 @@ app.get("/api/member/studio/projects/:id/comments", memberAuthMiddleware, studio
   const limit = 30;
   const from  = (page - 1) * limit;
 
-  // Fetch top-level comments
-  const { data: topLevel, error } = await supabasePublic
-    .from("project_comments")
-    .select(`
-      id, body, is_pinned, created_at, parent_id,
-      member_id,
-      members!project_comments_member_id_fkey(id, name, photo)
-    `)
-    .eq("project_id", req.params.id)
-    .is("parent_id", null)
-    .is("deleted_at", null)
-    .order("is_pinned", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(from, from + limit - 1);
-
-  if (error) return res.status(500).json({ error: "Internal server error" });
-
-  // Fetch replies for these top-level comments
-  let replies = [];
-  if ((topLevel || []).length) {
-    const parentIds = topLevel.map(c => c.id);
-    const { data: r } = await supabasePublic
+  // Short shared cache: this endpoint is polled every 15s (commentsPollTick)
+  // and returns the exact same data to every viewer of a given project (no
+  // per-viewer personalization here — plain public read). A 6s TTL is short
+  // enough to still feel live, but means N students viewing the same post's
+  // comments at once share one Supabase query instead of one each.
+  // Invalidated on every write below (create/delete/pin) so nobody's own
+  // comment appears to "not post" while the cache is warm.
+  const cacheKey = `studio:comments:${req.params.id}:p${page}`;
+  const result = await memCache(cacheKey, 6, async () => {
+    // Fetch top-level comments
+    const { data: topLevel, error } = await supabasePublic
       .from("project_comments")
       .select(`
-        id, body, created_at, parent_id,
+        id, body, is_pinned, created_at, parent_id,
         member_id,
         members!project_comments_member_id_fkey(id, name, photo)
       `)
-      .in("parent_id", parentIds)
+      .eq("project_id", req.params.id)
+      .is("parent_id", null)
       .is("deleted_at", null)
-      .order("created_at", { ascending: true });
-    replies = r || [];
-  }
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, from + limit - 1);
 
-  // Nest replies under parents
-  const replyMap = {};
-  replies.forEach(r => { (replyMap[r.parent_id] = replyMap[r.parent_id] || []).push(r); });
-  const nested = (topLevel || []).map(c => ({ ...c, replies: replyMap[c.id] || [] }));
+    if (error) throw error;
 
-  res.json({ comments: nested, page, has_more: (topLevel || []).length === limit });
+    // Fetch replies for these top-level comments
+    let replies = [];
+    if ((topLevel || []).length) {
+      const parentIds = topLevel.map(c => c.id);
+      const { data: r } = await supabasePublic
+        .from("project_comments")
+        .select(`
+          id, body, created_at, parent_id,
+          member_id,
+          members!project_comments_member_id_fkey(id, name, photo)
+        `)
+        .in("parent_id", parentIds)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      replies = r || [];
+    }
+
+    // Nest replies under parents
+    const replyMap = {};
+    replies.forEach(r => { (replyMap[r.parent_id] = replyMap[r.parent_id] || []).push(r); });
+    const nested = (topLevel || []).map(c => ({ ...c, replies: replyMap[c.id] || [] }));
+
+    return { comments: nested, page, has_more: (topLevel || []).length === limit };
+  }).catch(() => null);
+
+  if (!result) return res.status(500).json({ error: "Internal server error" });
+  res.json(result);
 });
 
 // POST /api/member/studio/projects/:id/comments  { body, parent_id? }
@@ -13326,6 +13339,8 @@ app.post("/api/member/studio/projects/:id/comments", memberAuthMiddleware, comme
 
   if (error) { console.error("[studio:comment]", error.message); return res.status(500).json({ error: "Internal server error" }); }
 
+  memInvalidate(`studio:comments:${req.params.id}:`);
+
   // Notify project author (not if commenting on own post)
   if (proj.member_id !== req.member.memberId) {
     createMemberNotification(
@@ -13357,6 +13372,7 @@ app.delete("/api/member/studio/comments/:id", memberAuthMiddleware, commentWrite
 
   await supabase.from("project_comments")
     .update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
+  memInvalidate(`studio:comments:${comment.project_id}:`);
   res.json({ success: true });
 });
 
@@ -13372,6 +13388,7 @@ app.patch("/api/member/studio/comments/:id/pin", memberAuthMiddleware, studioWri
 
   await supabase.from("project_comments")
     .update({ is_pinned: !comment.is_pinned }).eq("id", req.params.id);
+  memInvalidate(`studio:comments:${comment.project_id}:`);
   res.json({ success: true, is_pinned: !comment.is_pinned });
 });
 
@@ -14273,6 +14290,7 @@ app.delete("/api/admin/wall/projects/:id", authMiddleware, async (req, res) => {
 app.patch("/api/admin/wall/comments/:commentId", authMiddleware, async (req, res) => {
   await supabase.from("project_comments")
     .update({ is_pinned: Boolean(req.body.is_pinned) }).eq("id", req.params.commentId);
+  memInvalidate("studio:comments:"); // rare admin action — full-prefix wipe is fine
   res.json({ ok: true });
 });
 
@@ -14300,6 +14318,7 @@ app.delete("/api/admin/wall/comments/:commentId", authMiddleware, async (req, re
       .update({ body: "[removed by admin]", deleted_at: new Date().toISOString() })
       .eq("id", req.params.commentId);
     if (error) throw error;
+    memInvalidate("studio:comments:"); // rare admin action — full-prefix wipe is fine
     logActivity(req.admin.id, req.admin.name, "delete_comment", "project_comment", req.params.commentId).catch(() => {});
     res.json({ ok: true });
   } catch (e) {
@@ -16002,6 +16021,7 @@ app.post("/api/admin/reports/:id/resolve", masterMiddleware, async (req, res) =>
       await supabase.from("project_comments")
         .update({ body: "[removed by admin]", deleted_at: new Date().toISOString() })
         .eq("id", report.content_id);
+      memInvalidate("studio:comments:"); // rare admin action — full-prefix wipe is fine
       logActivity(req.admin.id, req.admin.name, "delete_reported_comment", "project_comment", report.content_id).catch(() => {});
     }
     if (action === "reviewed" && report.content_type === "group_message" && delete_content) {
