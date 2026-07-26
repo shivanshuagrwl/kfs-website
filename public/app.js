@@ -11913,21 +11913,40 @@ let _jsQrLoadPromise = null;
 function ensureJsQrLoaded() {
   if (window.jsQR) return Promise.resolve();
   if (_jsQrLoadPromise) return _jsQrLoadPromise;
-  _jsQrLoadPromise = new Promise((resolve, reject) => {
+
+  // Load a script and resolve/reject with a real Error (not a bare Event).
+  const loadScript = (src) => new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js';
+    s.src = src;
     s.onload = resolve;
-    // s.onerror hands us a bare DOM Event (no .name/.message), which used to
-    // bubble up as a mystery "unknown error" and get blamed on the camera.
-    // Wrap it in a real Error with a name we can special-case below.
     s.onerror = () => {
-      _jsQrLoadPromise = null; // allow retry next time instead of caching the failure forever
-      const err = new Error('Failed to load the QR scanner library — check your internet connection, firewall, or ad blocker.');
+      const err = new Error(`Failed to load script: ${src}`);
       err.name = 'JsQrLoadError';
       reject(err);
     };
     document.head.appendChild(s);
   });
+
+  _jsQrLoadPromise = (async () => {
+    try {
+      // Self-hosted copy first — same-origin, so it isn't affected by
+      // campus/firewall/ad-blocker rules that target known CDN hostnames
+      // like cdnjs.cloudflare.com.
+      await loadScript('/jsQR.js');
+    } catch (e1) {
+      try {
+        // Fall back to the CDN in case the self-hosted file is missing
+        // (e.g. not deployed yet) — better than failing outright.
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js');
+      } catch (e2) {
+        _jsQrLoadPromise = null; // allow retry next time instead of caching the failure forever
+        const err = new Error('Failed to load the QR scanner library — check your internet connection, firewall, or ad blocker.');
+        err.name = 'JsQrLoadError';
+        throw err;
+      }
+    }
+  })();
+
   return _jsQrLoadPromise;
 }
 
