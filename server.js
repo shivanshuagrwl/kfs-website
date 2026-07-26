@@ -10021,6 +10021,204 @@ app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req,
 // END QR REGISTRATION SYSTEM ROUTES
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+// SOCIAL STRAND ATTENDANCE SYSTEM
+// Separate from the public event-ticket QR system above. Every member has one
+// permanent QR (members.qr_token, see /api/member/qr-code) that stays valid
+// for as long as the member exists. Admins create a named session (a GDM or
+// internal meeting — not a public event), scan member QRs against it, and
+// each scan marks that member present + fires an automatic DM from the KFS
+// sentinel account confirming attendance. Uses the same "events" permission
+// as the Scanner tab.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/admin/attendance/sessions — list all sessions with a live present-count
+app.get("/api/admin/attendance/sessions", requireSection("events"), async (req, res) => {
+  const { data: sessions, error } = await supabase
+    .from("attendance_sessions")
+    .select("id, name, created_by_name, created_at")
+    .order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  const { data: counts } = await supabase
+    .from("attendance_records")
+    .select("session_id");
+  const countMap = {};
+  (counts || []).forEach(r => { countMap[r.session_id] = (countMap[r.session_id] || 0) + 1; });
+
+  res.json((sessions || []).map(s => ({ ...s, present_count: countMap[s.id] || 0 })));
+});
+
+// POST /api/admin/attendance/sessions — create a new GDM/meeting to scan attendance for
+app.post("/api/admin/attendance/sessions", requireSection("events"), async (req, res) => {
+  const name = String(req.body?.name || "").trim().slice(0, 200);
+  if (!name) return res.status(400).json({ error: "Meeting/GDM name is required" });
+
+  const { data: session, error } = await supabase
+    .from("attendance_sessions")
+    .insert([{ name, created_by: req.admin.id, created_by_name: req.admin.name || req.admin.username }])
+    .select().single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  logActivity(req.admin.id, req.admin.name, "attendance_session_create", "attendance_sessions", name).catch(() => {});
+  res.json(session);
+});
+
+// DELETE /api/admin/attendance/sessions/:id
+app.delete("/api/admin/attendance/sessions/:id", requireSection("events"), async (req, res) => {
+  const { error } = await supabase.from("attendance_sessions").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "attendance_session_delete", "attendance_sessions", req.params.id).catch(() => {});
+  res.json({ success: true });
+});
+
+// GET /api/admin/attendance/sessions/:id — session detail + present members
+app.get("/api/admin/attendance/sessions/:id", requireSection("events"), async (req, res) => {
+  const { data: session, error: sessErr } = await supabase
+    .from("attendance_sessions").select("id, name, created_by_name, created_at")
+    .eq("id", req.params.id).maybeSingle();
+  if (sessErr || !session) return res.status(404).json({ error: "Session not found" });
+
+  const { data: records, error } = await supabase
+    .from("attendance_records")
+    .select("id, member_id, scanned_at, members(id, name, roll_no, batch, photo)")
+    .eq("session_id", req.params.id)
+    .order("scanned_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  res.json({
+    ...session,
+    records: (records || []).map(r => ({
+      id: r.id,
+      scanned_at: r.scanned_at,
+      member_id: r.member_id,
+      name: r.members?.name || "Unknown",
+      roll_no: r.members?.roll_no || null,
+      batch: r.members?.batch || null,
+      photo: r.members?.photo || null,
+    })),
+  });
+});
+
+// POST /api/admin/attendance/sessions/:id/scan — mark a scanned member present
+// Body: { qr_token } — the raw decoded QR string (either the bare token or
+// the "KFS-STRAND:<token>" form the QR image actually encodes).
+app.post("/api/admin/attendance/sessions/:id/scan", requireSection("events"), async (req, res) => {
+  const sessionId = req.params.id;
+  let raw = String(req.body?.qr_token || "").trim();
+  if (!raw) return res.status(400).json({ error: "Empty QR code." });
+  raw = raw.replace(/^KFS-STRAND:/i, "").trim();
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(raw)) return res.status(404).json({ error: "Not a valid KFS Strand QR." });
+
+  const { data: session } = await supabase
+    .from("attendance_sessions").select("id, name").eq("id", sessionId).maybeSingle();
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  const { data: member, error: memErr } = await supabase
+    .from("members")
+    .select("id, name, roll_no, batch, photo")
+    .eq("qr_token", raw.toLowerCase())
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (memErr) return res.status(500).json({ error: "Internal server error" });
+  if (!member) return res.status(404).json({ error: "QR not recognised — not a current KFS member." });
+
+  // Already marked for this session?
+  const { data: existing } = await supabase
+    .from("attendance_records")
+    .select("id, scanned_at")
+    .eq("session_id", sessionId).eq("member_id", member.id).maybeSingle();
+
+  if (existing) {
+    return res.json({ status: "already", member, scanned_at: existing.scanned_at });
+  }
+
+  const now = new Date().toISOString();
+  const { error: insErr } = await supabase
+    .from("attendance_records")
+    .insert([{ session_id: sessionId, member_id: member.id, scanned_at: now, scanned_by: req.admin.id }]);
+  if (insErr) {
+    // Unique constraint race — another scan beat us to it; treat as success.
+    if (insErr.code === "23505") return res.json({ status: "already", member });
+    console.error("[attendance/scan] insert error:", insErr.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+
+  // Auto-DM from the KFS sentinel account confirming attendance.
+  try {
+    const kfsMemberId = await getKfsSentinelId();
+    if (kfsMemberId && kfsMemberId !== member.id) {
+      const { data: kfsMember } = await supabase
+        .from("members").select("id, name, photo").eq("id", kfsMemberId).maybeSingle();
+      const whenStr = new Date(now).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+      await supabase.from("member_notifications").insert([{
+        member_id:   member.id,
+        type:        "dm",
+        title:       `Message from ${kfsMember?.name || "KFS"}`,
+        body:        `You were marked present for "${session.name}" on ${whenStr}.`,
+        actor_id:    kfsMemberId,
+        actor_name:  kfsMember?.name  || "KFS",
+        actor_photo: kfsMember?.photo || KFS_SENTINEL_LOGO_URL,
+        link_type:   "dm",
+        link_id:     dmConvKey(kfsMemberId, member.id),
+        is_read:     false,
+        created_at:  now,
+      }]);
+    }
+  } catch (e) {
+    console.error("[attendance/scan] auto-DM failed:", e.message);
+    // Attendance is already marked — don't fail the scan over a DM hiccup.
+  }
+
+  logActivity(req.admin.id, req.admin.name, "attendance_scan", "attendance_records", `${member.name} — ${session.name}`).catch(() => {});
+  res.json({ status: "marked", member, scanned_at: now });
+});
+
+// GET /api/admin/attendance/sessions/:id/export — download attendance as XLSX
+app.get("/api/admin/attendance/sessions/:id/export", requireSection("events"), async (req, res) => {
+  const { data: session } = await supabase
+    .from("attendance_sessions").select("id, name, created_at").eq("id", req.params.id).maybeSingle();
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  const { data: records, error } = await supabase
+    .from("attendance_records")
+    .select("scanned_at, members(name, roll_no, batch, email)")
+    .eq("session_id", req.params.id)
+    .order("scanned_at", { ascending: true });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  const XLSX = require("xlsx");
+  const rows = (records || []).map(r => ({
+    "Name":         r.members?.name || "—",
+    "Roll No":      r.members?.roll_no || "—",
+    "Batch":        r.members?.batch || "—",
+    "Email":        r.members?.email || "—",
+    "Marked Present At": new Date(r.scanned_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Note": "No members scanned yet" }]);
+  if (rows.length) {
+    ws["!cols"] = Object.keys(rows[0]).map(k => ({
+      wch: Math.max(k.length, ...rows.map(r => String(r[k] || "").length)) + 2,
+    }));
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, (session.name || "Attendance").slice(0, 31));
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+  const safeName = (session.name || "attendance").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  res.setHeader("Content-Disposition", `attachment; filename="kfs-attendance-${safeName}.xlsx"`);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.send(buf);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// END SOCIAL STRAND ATTENDANCE SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+
 
 // ── ADMIN MOVIES alias (dashboard + bulk ops use /api/admin/movies) ──────────
 app.get("/api/admin/movies", requireSection("movies"), async (req, res) => {
@@ -11082,6 +11280,38 @@ app.post("/api/member/2fa/disable", memberAuthMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION MA-14 — Member Profile
 // ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/member/qr-code — persistent Social Strand attendance QR.
+// One QR per member, generated once and reused forever (until an admin
+// deletes the member, which cascades the qr_token away with the row).
+// Used by the admin Attendance Scanner to mark members present at
+// GDMs/meetings (separate from the public event-ticket QR system).
+app.get("/api/member/qr-code", memberAuthMiddleware, async (req, res) => {
+  const { data: member, error } = await supabase
+    .from("members")
+    .select("id, name, qr_token")
+    .eq("id", req.member.memberId)
+    .maybeSingle();
+  if (error || !member) return res.status(404).json({ error: "Member not found" });
+
+  let token = member.qr_token;
+  if (!token) {
+    token = crypto.randomUUID();
+    const { error: updErr } = await supabase
+      .from("members").update({ qr_token: token }).eq("id", member.id);
+    if (updErr) return res.status(500).json({ error: "Could not generate QR code" });
+  }
+
+  try {
+    const qrDataUrl = await QRCode.toDataURL(`KFS-STRAND:${token}`, {
+      width: 400, margin: 3, errorCorrectionLevel: "M",
+    });
+    res.json({ qr_token: token, qr_data_url: qrDataUrl, name: member.name });
+  } catch (e) {
+    console.error("[member/qr-code] generation failed:", e.message);
+    res.status(500).json({ error: "Could not generate QR code" });
+  }
+});
 
 // GET /api/member/profile
 app.get("/api/member/profile", memberAuthMiddleware, async (req, res) => {

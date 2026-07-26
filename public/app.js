@@ -2823,6 +2823,7 @@ function showAdminSection(name) {
 async function loadAdminData(name) {
   if (name==='themes') { loadThemes(); return; }
   if (name==='scanner') { loadScannerSection(); return; }
+  if (name==='attendance') { loadAttendanceSection(); return; }
   if (name==='two-factor') { tfa_initSection(); return; }
   if (name==='dashboard') { loadDashboard(); return; }
   if (name==='blogs') {
@@ -11644,6 +11645,259 @@ async function loadScannerSection() {
     if (dataEvSel) dataEvSel.innerHTML = '<option value="">— Select event —</option>' + opts;
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// SOCIAL STRAND ATTENDANCE — admin panel
+// Separate from the public event-ticket Scanner above: this marks members
+// present at GDMs/internal meetings via their permanent Strand QR, and DMs
+// them a confirmation automatically.
+// ══════════════════════════════════════════════════════════════════════════
+let _attendanceCurrentSessionId = null;
+let _attendanceStream = null;
+let _attendanceScanLoopHandle = null;
+let _attendanceBarcodeDetector = null;
+let _attendanceScanCooldownUntil = 0;
+
+async function loadAttendanceSection() {
+  closeAttendanceSession();
+  await refreshAttendanceSessionsList();
+}
+
+async function refreshAttendanceSessionsList() {
+  const tbody = document.getElementById('attendance-sessions-tbody');
+  if (!tbody) return;
+  const sessions = await apiFetch('/api/admin/attendance/sessions');
+  if (sessions === null) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`;
+    return;
+  }
+  if (!sessions.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No meetings yet. Create one to start scanning attendance.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sessions.map(s => `
+    <tr>
+      <td style="font-weight:500;cursor:pointer" onclick="openAttendanceSession('${s.id}')">${escapeHtml(s.name)}</td>
+      <td style="color:var(--grey)">${new Date(s.created_at).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}</td>
+      <td style="color:var(--grey)">${escapeHtml(s.created_by_name || '—')}</td>
+      <td style="color:var(--grey);font-variant-numeric:tabular-nums">${s.present_count}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="openAttendanceSession('${s.id}')">Scan</button>
+        <button class="btn-sm" style="background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2)" onclick="downloadAttendanceExport('${s.id}')">↓ XLSX</button>
+        <button class="btn-sm danger" onclick="deleteAttendanceSession('${s.id}','${escapeHtml(s.name).replace(/'/g,"\\'")}')">Delete</button>
+      </div></td>
+    </tr>
+  `).join('');
+}
+
+async function createAttendanceSession() {
+  const name = prompt('Meeting / GDM name (e.g. "GDM — 26 July"):');
+  if (!name || !name.trim()) return;
+  const result = await apiFetch('/api/admin/attendance/sessions', 'POST', { name: name.trim() });
+  if (!result || result.error) return;
+  await refreshAttendanceSessionsList();
+  openAttendanceSession(result.id);
+}
+
+async function deleteAttendanceSession(id, name) {
+  if (!confirm(`Delete "${name}"? This removes its attendance records permanently.`)) return;
+  const result = await apiFetch(`/api/admin/attendance/sessions/${id}`, 'DELETE');
+  if (result && result.success) refreshAttendanceSessionsList();
+}
+
+async function openAttendanceSession(id) {
+  _attendanceCurrentSessionId = id;
+  document.getElementById('attendance-session-list-view').style.display = 'none';
+  document.getElementById('attendance-session-detail-view').style.display = 'block';
+  document.getElementById('attendance-scan-result').innerHTML = '';
+  await refreshAttendanceRoster();
+}
+
+function closeAttendanceSession() {
+  stopAttendanceCamera();
+  _attendanceCurrentSessionId = null;
+  const listView = document.getElementById('attendance-session-list-view');
+  const detailView = document.getElementById('attendance-session-detail-view');
+  if (listView) listView.style.display = 'block';
+  if (detailView) detailView.style.display = 'none';
+}
+
+async function refreshAttendanceRoster() {
+  if (!_attendanceCurrentSessionId) return;
+  const data = await apiFetch(`/api/admin/attendance/sessions/${_attendanceCurrentSessionId}`);
+  if (!data || data.error) return;
+  document.getElementById('attendance-detail-title').textContent = data.name;
+  document.getElementById('attendance-present-count').textContent = data.records.length;
+  const list = document.getElementById('attendance-roster-list');
+  if (!data.records.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--grey);font-size:13px">No one scanned yet</div>`;
+    return;
+  }
+  list.innerHTML = data.records.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border-subtle)">
+      ${r.photo
+        ? `<img src="${r.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:var(--faint);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${escapeHtml((r.name||'?')[0].toUpperCase())}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.name)}</div>
+        <div style="font-size:11px;color:var(--grey)">${escapeHtml(r.roll_no || r.batch || '')}</div>
+      </div>
+      <div style="font-size:11px;color:var(--grey);white-space:nowrap">${new Date(r.scanned_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>
+  `).join('');
+}
+
+function showAttendanceScanResult(status, member, error) {
+  const el = document.getElementById('attendance-scan-result');
+  if (!el) return;
+  if (error) {
+    el.innerHTML = `<div style="background:rgba(229,62,62,.1);color:#e53e3e;border:1px solid rgba(229,62,62,.25);border-radius:8px;padding:10px 12px">${escapeHtml(error)}</div>`;
+  } else if (status === 'already') {
+    el.innerHTML = `<div style="background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:10px 12px">${escapeHtml(member.name)} was already marked present.</div>`;
+  } else {
+    el.innerHTML = `<div style="background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:10px 12px">✓ ${escapeHtml(member.name)} marked present — confirmation DM sent.</div>`;
+  }
+}
+
+async function submitAttendanceScan(rawToken) {
+  if (!_attendanceCurrentSessionId || !rawToken) return;
+  const result = await apiFetch(`/api/admin/attendance/sessions/${_attendanceCurrentSessionId}/scan`, 'POST', { qr_token: rawToken });
+  if (!result || result.error) {
+    showAttendanceScanResult(null, null, result?.error || 'Scan failed.');
+    return;
+  }
+  showAttendanceScanResult(result.status, result.member, null);
+  refreshAttendanceRoster();
+  refreshAttendanceSessionsList();
+}
+
+function manualAttendanceScan(evt) {
+  evt.preventDefault();
+  const input = document.getElementById('attendance-manual-token');
+  const val = (input.value || '').trim();
+  if (!val) return false;
+  submitAttendanceScan(val);
+  input.value = '';
+  return false;
+}
+
+async function toggleAttendanceCamera() {
+  if (_attendanceStream) { stopAttendanceCamera(); return; }
+  await startAttendanceCamera();
+}
+
+async function startAttendanceCamera() {
+  const video = document.getElementById('attendance-camera-video');
+  const placeholder = document.getElementById('attendance-camera-placeholder');
+  const btn = document.getElementById('attendance-camera-toggle-btn');
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showAttendanceScanResult(null, null, 'Camera not supported in this browser — use manual entry below.');
+    return;
+  }
+  try {
+    _attendanceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = _attendanceStream;
+    video.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    if (btn) btn.textContent = 'Stop Camera';
+    await video.play();
+
+    if ('BarcodeDetector' in window) {
+      _attendanceBarcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+      attendanceScanLoopNative(video);
+    } else {
+      await ensureJsQrLoaded();
+      attendanceScanLoopJsQr(video);
+    }
+  } catch (e) {
+    console.error('[attendance] camera error:', e);
+    showAttendanceScanResult(null, null, 'Could not access camera — check permissions, or use manual entry below.');
+    stopAttendanceCamera();
+  }
+}
+
+function stopAttendanceCamera() {
+  if (_attendanceScanLoopHandle) { cancelAnimationFrame(_attendanceScanLoopHandle); _attendanceScanLoopHandle = null; }
+  if (_attendanceStream) { _attendanceStream.getTracks().forEach(t => t.stop()); _attendanceStream = null; }
+  const video = document.getElementById('attendance-camera-video');
+  const placeholder = document.getElementById('attendance-camera-placeholder');
+  const btn = document.getElementById('attendance-camera-toggle-btn');
+  if (video) { video.pause(); video.srcObject = null; video.style.display = 'none'; }
+  if (placeholder) placeholder.style.display = 'flex';
+  if (btn) btn.textContent = 'Start Camera';
+}
+
+function attendanceOnDecoded(text) {
+  const now = Date.now();
+  if (now < _attendanceScanCooldownUntil) return;
+  _attendanceScanCooldownUntil = now + 2500; // debounce repeat scans of the same QR
+  submitAttendanceScan(text.trim());
+}
+
+function attendanceScanLoopNative(video) {
+  const tick = async () => {
+    if (!_attendanceStream) return;
+    try {
+      const codes = await _attendanceBarcodeDetector.detect(video);
+      if (codes && codes.length) attendanceOnDecoded(codes[0].rawValue);
+    } catch { /* transient decode errors are expected between frames */ }
+    _attendanceScanLoopHandle = requestAnimationFrame(tick);
+  };
+  _attendanceScanLoopHandle = requestAnimationFrame(tick);
+}
+
+let _jsQrLoadPromise = null;
+function ensureJsQrLoaded() {
+  if (window.jsQR) return Promise.resolve();
+  if (_jsQrLoadPromise) return _jsQrLoadPromise;
+  _jsQrLoadPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return _jsQrLoadPromise;
+}
+
+function attendanceScanLoopJsQr(video) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const tick = () => {
+    if (!_attendanceStream) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA && window.jsQR) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = window.jsQR(imgData.data, imgData.width, imgData.height);
+      if (code && code.data) attendanceOnDecoded(code.data);
+    }
+    _attendanceScanLoopHandle = requestAnimationFrame(tick);
+  };
+  _attendanceScanLoopHandle = requestAnimationFrame(tick);
+}
+
+async function downloadAttendanceExport(sessionId) {
+  const id = sessionId || _attendanceCurrentSessionId;
+  if (!id) return;
+  try {
+    const r = await fetch(`/api/admin/attendance/sessions/${id}/export`, {
+      headers: { 'Authorization': `Bearer ${adminToken}`, 'x-csrf-token': _csrfToken || '' },
+    });
+    if (!r.ok) { showAdminError('Export failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kfs-attendance-${id}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    showAdminError('Export failed');
+  }
+}
+
 
 async function loadEventsWithRegs() {
   const events = await apiFetch('/api/events');

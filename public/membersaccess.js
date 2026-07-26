@@ -2494,6 +2494,37 @@ function btbSwitch(el) {
 // Keep bottom tab bar in sync when panel changes from sidebar/desktop nav
 const _origSwitchPanel = typeof switchPanel !== 'undefined' ? switchPanel : null;
 
+// ── My Social Strand QR (attendance) — loaded once per session; the QR
+// itself never changes for a given member, so there's no need to refetch it
+// every time the Profile panel is opened. ──────────────────────────────────
+let _strandQrLoaded = false;
+async function loadStrandQr() {
+  if (_strandQrLoaded) return;
+  const wrap = $id('strand-qr-img');
+  if (!wrap) return;
+  try {
+    const d = await api('GET', '/api/member/qr-code');
+    wrap.innerHTML = `<img src="${d.qr_data_url}" alt="My Social Strand QR" style="width:200px;height:200px;border-radius:8px" />`;
+    window._strandQrDataUrl = d.qr_data_url;
+    const dl = $id('strand-qr-download-btn');
+    if (dl) dl.style.display = 'inline-block';
+    _strandQrLoaded = true;
+  } catch (e) {
+    wrap.textContent = 'Could not load QR — try again later.';
+    console.error('loadStrandQr:', e);
+  }
+}
+
+function downloadStrandQr() {
+  if (!window._strandQrDataUrl) return;
+  const a = document.createElement('a');
+  a.href = window._strandQrDataUrl;
+  a.download = 'kfs-strand-qr.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 async function loadProfile() {
   try {
     const d = await api('GET', '/api/member/profile');
@@ -2527,6 +2558,7 @@ async function loadProfile() {
     }
 
     fillProfile(displayData);
+    loadStrandQr();
     renderStatusPicker(d.status);
     loadMySkills();
     setText('sidebar-name', displayData.name || '—');

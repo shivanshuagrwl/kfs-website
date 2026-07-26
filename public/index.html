@@ -4082,6 +4082,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <div data-action="showAdminSection" data-args='["blogs"]' class="admin-sidebar-item" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["events"]' data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["scanner"]' data-section="scanner"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="16" y1="11" x2="21" y2="11"/><line x1="11" y1="3" x2="11" y2="8"/><line x1="11" y1="11" x2="11" y2="16"/><line x1="3" y1="11" x2="8" y2="11"/></svg></span> Scanner</div>
+    <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["attendance"]' data-section="attendance"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> Attendance</div>
     <div data-action="showAdminSection" data-args='["members"]' class="admin-sidebar-item" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
     <div data-action="showAdminSection" data-args='["movies"]' class="admin-sidebar-item" data-section="movies"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span> Films</div>
     <div data-action="showAdminSection" data-args='["chitra-vichitra"]' class="admin-sidebar-item" data-section="chitra-vichitra"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span> Chitra Vichitra</div>
@@ -4271,6 +4272,70 @@ body.light-mode .psw-comment-gate a{color:#111}
         </div>
         <div id="scan-data-content" style="padding:20px">
           <div style="text-align:center;padding:48px;color:var(--grey);font-size:13px">Select an event to view registrations</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTENDANCE (Social Strand) -->
+    <div class="admin-section" id="section-attendance">
+      <div class="admin-header">
+        <div><h2>Attendance</h2><p style="color:var(--grey);font-size:13px;margin-top:4px">Scan member Social Strand QRs to mark attendance at GDMs and internal meetings</p></div>
+        <button class="btn btn-primary" onclick="createAttendanceSession()">+ New Meeting / GDM</button>
+      </div>
+
+      <!-- Session list -->
+      <div id="attendance-session-list-view">
+        <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle)">
+            <h3 style="font-size:14px;font-weight:700">Meetings &amp; GDMs</h3>
+          </div>
+          <table class="admin-table" style="width:100%">
+            <thead>
+              <tr><th>Name</th><th>Created</th><th>By</th><th>Present</th><th></th></tr>
+            </thead>
+            <tbody id="attendance-sessions-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Single-session scan + roster view -->
+      <div id="attendance-session-detail-view" style="display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <button class="btn-sm" onclick="closeAttendanceSession()">← Back</button>
+          <h3 id="attendance-detail-title" style="font-size:16px;font-weight:700"></h3>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <!-- Scanner -->
+          <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;padding:20px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Scan a Member QR</div>
+            <div id="attendance-camera-wrap" style="position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:1/1;max-width:320px;margin:0 auto 12px">
+              <video id="attendance-camera-video" playsinline muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
+              <div id="attendance-camera-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--grey);font-size:12px;text-align:center;padding:20px">Tap "Start Camera" to scan</div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px">
+              <button class="btn-sm" id="attendance-camera-toggle-btn" onclick="toggleAttendanceCamera()">Start Camera</button>
+            </div>
+            <div style="font-size:11px;color:var(--grey);text-align:center;margin-bottom:14px">Camera scanning needs a supported browser (Chrome/Edge/Android). No camera? Enter the code manually below.</div>
+            <form onsubmit="return manualAttendanceScan(event)" style="display:flex;gap:8px">
+              <input id="attendance-manual-token" type="text" placeholder="Paste QR code / token" style="flex:1;background:#0d0d0d;border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);outline:none">
+              <button class="btn-sm" type="submit">Mark</button>
+            </form>
+            <div id="attendance-scan-result" style="margin-top:14px;font-size:13px"></div>
+          </div>
+
+          <!-- Present roster -->
+          <div style="background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;padding:0;overflow:hidden;display:flex;flex-direction:column">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:13px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em">Marked Present (<span id="attendance-present-count">0</span>)</div>
+              <button class="btn-sm" style="background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2)" onclick="downloadAttendanceExport()">↓ Export XLSX</button>
+            </div>
+            <div id="attendance-roster-list" style="max-height:420px;overflow-y:auto;padding:8px 12px">
+              <div style="text-align:center;padding:40px;color:var(--grey);font-size:13px">No one scanned yet</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
