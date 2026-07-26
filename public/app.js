@@ -2813,6 +2813,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 function showAdminSection(name) {
+  // Camera stays running (and the browser's camera indicator stays lit) if
+  // the admin switches tabs mid-scan without hitting "← Back" first — stop
+  // it explicitly whenever we're navigating to any section other than
+  // Attendance.
+  if (name !== 'attendance' && typeof stopAttendanceCamera === 'function') stopAttendanceCamera();
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   document.getElementById('section-'+name).classList.add('active');
   document.querySelectorAll('.admin-sidebar-item').forEach(i=>i.classList.remove('active'));
@@ -11657,6 +11662,7 @@ let _attendanceStream = null;
 let _attendanceScanLoopHandle = null;
 let _attendanceBarcodeDetector = null;
 let _attendanceScanCooldownUntil = 0;
+let _attendanceSessionsCache = {}; // id -> session, so onclick handlers never need to embed free-text names
 
 async function loadAttendanceSection() {
   closeAttendanceSession();
@@ -11671,10 +11677,17 @@ async function refreshAttendanceSessionsList() {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.</td></tr>`;
     return;
   }
+  _attendanceSessionsCache = {};
+  sessions.forEach(s => { _attendanceSessionsCache[s.id] = s; });
   if (!sessions.length) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No meetings yet. Create one to start scanning attendance.</td></tr>`;
     return;
   }
+  // NOTE: only the UUID (never the free-text name) goes inside onclick="...".
+  // HTML attribute values get entity-decoded by the browser before the JS
+  // inside onclick runs, so an escaped apostrophe (&#39;) turns back into a
+  // literal ' and breaks out of a single-quoted JS string. Names are looked
+  // up from _attendanceSessionsCache instead of being interpolated inline.
   tbody.innerHTML = sessions.map(s => `
     <tr>
       <td style="font-weight:500;cursor:pointer" onclick="openAttendanceSession('${s.id}')">${escapeHtml(s.name)}</td>
@@ -11684,7 +11697,7 @@ async function refreshAttendanceSessionsList() {
       <td><div class="action-btns">
         <button class="btn-sm" onclick="openAttendanceSession('${s.id}')">Scan</button>
         <button class="btn-sm" style="background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2)" onclick="downloadAttendanceExport('${s.id}')">↓ XLSX</button>
-        <button class="btn-sm danger" onclick="deleteAttendanceSession('${s.id}','${escapeHtml(s.name).replace(/'/g,"\\'")}')">Delete</button>
+        <button class="btn-sm danger" onclick="deleteAttendanceSession('${s.id}')">Delete</button>
       </div></td>
     </tr>
   `).join('');
@@ -11699,10 +11712,14 @@ async function createAttendanceSession() {
   openAttendanceSession(result.id);
 }
 
-async function deleteAttendanceSession(id, name) {
+async function deleteAttendanceSession(id) {
+  const name = _attendanceSessionsCache[id]?.name || 'this meeting';
   if (!confirm(`Delete "${name}"? This removes its attendance records permanently.`)) return;
   const result = await apiFetch(`/api/admin/attendance/sessions/${id}`, 'DELETE');
-  if (result && result.success) refreshAttendanceSessionsList();
+  if (result && result.success) {
+    if (_attendanceCurrentSessionId === id) closeAttendanceSession();
+    refreshAttendanceSessionsList();
+  }
 }
 
 async function openAttendanceSession(id) {
@@ -11791,11 +11808,37 @@ async function startAttendanceCamera() {
   const placeholder = document.getElementById('attendance-camera-placeholder');
   const btn = document.getElementById('attendance-camera-toggle-btn');
   if (!navigator.mediaDevices?.getUserMedia) {
-    showAttendanceScanResult(null, null, 'Camera not supported in this browser — use manual entry below.');
+    if (!window.isSecureContext) {
+      // getUserMedia is only exposed on https:// (or localhost) — on plain
+      // http:// the API doesn't exist at all, which otherwise looks
+      // identical to "browser doesn't support cameras."
+      showAttendanceScanResult(null, null, 'Camera needs a secure (https://) connection. Open this admin panel over HTTPS, or use manual entry below.');
+    } else {
+      showAttendanceScanResult(null, null, 'Camera not supported in this browser — use manual entry below.');
+    }
     return;
   }
+
+  // Prefer the rear camera on phones, but don't hard-require it — a laptop
+  // webcam has no "environment" camera and some browsers throw
+  // OverconstrainedError rather than silently ignoring the preference.
+  let stream;
   try {
-    _attendanceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+  } catch (e1) {
+    if (e1.name === 'OverconstrainedError' || e1.name === 'ConstraintNotSatisfiedError') {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (e2) {
+        return handleAttendanceCameraError(e2);
+      }
+    } else {
+      return handleAttendanceCameraError(e1);
+    }
+  }
+
+  try {
+    _attendanceStream = stream;
     video.srcObject = _attendanceStream;
     video.style.display = 'block';
     if (placeholder) placeholder.style.display = 'none';
@@ -11810,10 +11853,26 @@ async function startAttendanceCamera() {
       attendanceScanLoopJsQr(video);
     }
   } catch (e) {
-    console.error('[attendance] camera error:', e);
-    showAttendanceScanResult(null, null, 'Could not access camera — check permissions, or use manual entry below.');
-    stopAttendanceCamera();
+    handleAttendanceCameraError(e);
   }
+}
+
+function handleAttendanceCameraError(e) {
+  console.error('[attendance] camera error:', e.name, e.message, e);
+  const messages = {
+    NotAllowedError:    'Camera access is blocked for this site. Check the camera icon in your browser\'s address bar (or your OS camera privacy settings), allow it, then try again.',
+    PermissionDeniedError: 'Camera access is blocked for this site. Check the camera icon in your browser\'s address bar (or your OS camera privacy settings), allow it, then try again.',
+    NotFoundError:       'No camera was found on this device — use manual entry below.',
+    DevicesNotFoundError: 'No camera was found on this device — use manual entry below.',
+    NotReadableError:    'The camera is already in use by another app or browser tab — close it and try again.',
+    TrackStartError:     'The camera is already in use by another app or browser tab — close it and try again.',
+    OverconstrainedError: 'This camera doesn\'t support the requested mode — use manual entry below.',
+    SecurityError:       'Camera blocked by browser security settings for this page — use manual entry below.',
+    AbortError:          'Camera access was interrupted — try again.',
+  };
+  const msg = messages[e.name] || `Could not access camera (${e.name || e.message || 'unknown error'}) — use manual entry below.`;
+  showAttendanceScanResult(null, null, msg);
+  stopAttendanceCamera();
 }
 
 function stopAttendanceCamera() {
