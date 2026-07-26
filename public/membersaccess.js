@@ -6620,7 +6620,7 @@ function _genTmpId() {
   return 'tmp-' + Date.now() + '-' + (++_tmpIdCounter);
 }
 
-const DM_POLL = 5000; // ms
+const DM_POLL = 12000; // ms — raised from 5000; was a major contributor to the shared campus-IP rate-limit bucket filling up
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -10013,7 +10013,7 @@ const GC = _instrumentMsgsOwner('GC', {
   reads:          [],      // cached [{member_id, last_read_at}] for "seen by" — see _gcRefreshSeenBy
 });
 
-const GC_POLL = 5000;
+const GC_POLL = 12000; // ms — raised from 5000, same reason as DM_POLL
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -17061,7 +17061,7 @@ function _tourEnd() {
   'use strict';
 
   const FEED_POLL_MS    = 25000;
-  const COMMENTS_POLL_MS = 6000;
+  const COMMENTS_POLL_MS = 10000; // raised from 6000, same reason as DM_POLL/GC_POLL
 
   function ready(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);

@@ -1108,12 +1108,28 @@ app.use((req, res, next) => {
 });
 const _consecutiveUnauthed = new Map(); // IP → count
 
+// Auth/session-bootstrap endpoints are exempt from the global polling budget
+// below. Campus WiFi (KIIT NAT) means dozens of members share one public IP —
+// their DM/group-chat/feed polling can exhaust the shared 500-req bucket, and
+// without this exemption the NEXT person on that IP gets blocked from even
+// logging in. These routes already have their own dedicated, stricter
+// rate limiters further down, so this does not weaken abuse protection.
+const GLOBAL_LIMIT_EXEMPT_PATHS = new Set([
+  "/api/csrf-token",
+  "/api/member/login",
+  "/api/member/refresh",
+  "/api/member/google-login",
+  "/api/admin/login",
+  "/api/admin/refresh",
+]);
+
 app.use(
   "/api/",
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 500, // raised from 100 — home page fires 7 requests at once, admin panel fires 20+
     message: { error: "Too many requests. Slow down." },
+    skip: (req) => GLOBAL_LIMIT_EXEMPT_PATHS.has(req.path),
   }),
 );
 
@@ -10503,7 +10519,11 @@ app.get("/membersaccess.js", (req, res) => {
 // POST /api/member/login
 app.post(
   "/api/member/login",
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many login attempts. Try again later." } }),
+  // raised from 10 — campus NAT means many members can share one public IP,
+  // so a strict per-IP cap here was locking out unrelated students, not just
+  // repeat offenders. Per-account lockout (checkMemberLockout, below) still
+  // catches real brute-force attempts against a single username.
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { error: "Too many login attempts. Try again later." } }),
   async (req, res) => {
     const { username, password, totp_code } = req.body;
     if (!username || !password)
