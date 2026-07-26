@@ -12004,7 +12004,8 @@ function renderMemberAccountsTable(rows) {
           <button class="btn-sm" onclick="toggleMemberAccountStatus('${m.id}','${acc.account_status}')">${acc.account_status === 'active' ? 'Disable' : (isSuspended ? 'Unsuspend' : 'Enable')}</button>
           ${acc.account_status === 'active' ? `<button class="btn-sm" style="background:rgba(229,62,62,.12);color:#e53e3e;border-color:#e53e3e33" onclick="openSuspendModal('${m.id}')">Suspend</button>` : ''}
           ${isSuspended ? `<button class="btn-sm" style="background:rgba(56,161,105,.12);color:#38a169;border-color:#38a16933" onclick="unsuspendMember('${m.id}')">Lift</button>` : ''}
-          <button class="btn-sm" onclick="resetMemberPassword('${m.id}')">Reset PW</button>
+          <button class="btn-sm" onclick="resetMemberPassword('${m.id}','${(m.email||'').replace(/'/g,"\\'")}')">Reset PW</button>
+          <button class="btn-sm" title="Resend the login credentials email" onclick="resendMemberPasswordEmail('${m.id}','${(m.email||'').replace(/'/g,"\\'")}')">Resend Email</button>
           <button class="btn-sm danger" onclick="forceMember2FAReset('${m.id}')">Clear 2FA</button>
         </div>`
       : `<div class="action-btns">
@@ -12647,6 +12648,7 @@ async function openMemberPortalModal(member) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px" onclick="mpmResetPassword('${memberId}')">Reset Password</button>
+        <button class="mpm-btn-secondary" title="Resend the login credentials email" style="font-size:12px;padding:8px 14px" onclick="mpmResendPasswordEmail('${memberId}')">Resend Email</button>
         <button class="mpm-btn-secondary" style="font-size:12px;padding:8px 14px;color:#f87171;border-color:rgba(239,68,68,.3)" onclick="mpmClear2FA('${memberId}')">Clear 2FA</button>
       </div>
 
@@ -12749,10 +12751,41 @@ async function mpmSave(memberId) {
 }
 
 async function mpmResetPassword(memberId) {
-  if (!await kfsConfirm({ title: 'Reset Password?', msg: 'Member will need to set a new password on next login.', okLabel: 'Reset' })) return;
+  const memberEmail = document.getElementById('mpm-email')?.value?.trim() || '';
+  const msg = memberEmail
+    ? `Member will need to set a new password on next login.
+       <div style="margin-top:10px;display:flex;align-items:flex-start;gap:8px;text-align:left">
+         <input type="checkbox" id="mpm-reset-resend-email" checked style="margin-top:3px">
+         <label for="mpm-reset-resend-email" style="font-size:13px;color:var(--grey);cursor:pointer">
+           Also email the new temporary password to <strong>${memberEmail}</strong>
+         </label>
+       </div>`
+    : 'Member will need to set a new password on next login. (No email saved — the temp password can\'t be sent automatically.)';
+
+  if (!await kfsConfirm({ title: 'Reset Password?', msg, okLabel: 'Reset' })) return;
+  const wantsResend = !!document.getElementById('mpm-reset-resend-email')?.checked;
   try {
-    await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
-    mpmShowMsg('Password reset — member must change on next login', true);
+    const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
+    if (wantsResend && memberEmail && res?.tempPassword) {
+      const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', {
+        toEmail: memberEmail, customPassword: res.tempPassword
+      });
+      mpmShowMsg(sent ? 'Password reset — new password emailed to member' : 'Password reset, but the email failed to send', !!sent);
+    } else {
+      mpmShowMsg('Password reset — member must change on next login', true);
+    }
+  } catch(e) { mpmShowMsg(e.message, false); }
+}
+
+// Resend the current credentials email without forcing a new password reset —
+// handy when the reset already happened but the email bounced or was missed.
+async function mpmResendPasswordEmail(memberId) {
+  const memberEmail = document.getElementById('mpm-email')?.value?.trim() || '';
+  if (!memberEmail) { mpmShowMsg('No email saved for this member', false); return; }
+  if (!await kfsConfirm({ title: 'Resend Email?', msg: `Resend the login credentials email to <strong>${memberEmail}</strong>?`, okLabel: 'Resend' })) return;
+  try {
+    const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', { toEmail: memberEmail });
+    mpmShowMsg(sent ? 'Email resent' : 'Failed to resend email', !!sent);
   } catch(e) { mpmShowMsg(e.message, false); }
 }
 
@@ -12847,12 +12880,51 @@ async function toggleMemberAccountStatus(memberId, currentStatus) {
   if (result !== null) { loadMemberAccounts(); localStorage.setItem('kfs_admin_data_change', Date.now().toString()); }
 }
 
-async function resetMemberPassword(memberId) {
-  showConfirmModal('Force a password reset for this member? They will be required to set a new password on next login.', async () => {
-    const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
-    if (res) showToast('Password reset — member must change password on next login');
-    loadMemberAccounts();
-  });
+async function resetMemberPassword(memberId, memberEmail) {
+  const emailHint = memberEmail
+    ? `<div style="margin-top:12px;display:flex;align-items:flex-start;gap:8px;text-align:left">
+        <input type="checkbox" id="reset-pw-resend-email" checked style="margin-top:3px">
+        <label for="reset-pw-resend-email" style="font-size:13px;color:var(--grey);cursor:pointer">
+          Also email the new temporary password to <strong style="color:#f0f0f0">${memberEmail}</strong>
+        </label>
+      </div>`
+    : `<div style="margin-top:12px;font-size:12px;color:#f87171">No email saved for this member — the temporary password won't be sent automatically. Use "Send Credentials" separately if needed.</div>`;
+
+  showConfirmModal(
+    `Force a password reset for this member? They will be required to set a new password on next login.${emailHint}`,
+    async () => {
+      const wantsResend = !!document.getElementById('reset-pw-resend-email')?.checked;
+      const res = await apiFetch(`/api/admin/members/${memberId}/account/reset-password`, 'POST');
+      if (!res) return;
+
+      if (wantsResend && memberEmail && res.tempPassword) {
+        const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', {
+          toEmail: memberEmail, customPassword: res.tempPassword
+        });
+        showToast(sent
+          ? 'Password reset — new password emailed to member'
+          : 'Password reset, but the email failed to send — use "Resend Email" to retry');
+      } else {
+        showToast('Password reset — member must change password on next login');
+      }
+      loadMemberAccounts();
+    }
+  );
+}
+
+// Standalone "resend" action — re-sends the current temp password email without
+// forcing a new reset. Useful when the reset succeeded but the earlier email
+// bounced, or the member says they never received it.
+async function resendMemberPasswordEmail(memberId, memberEmail) {
+  if (!memberEmail) { showToast('No email saved for this member', 'error'); return; }
+  showConfirmModal(
+    `Resend the login credentials email to <strong style="color:#f0f0f0">${memberEmail}</strong>?`,
+    async () => {
+      const sent = await apiFetch(`/api/admin/members/${memberId}/send-credentials`, 'POST', { toEmail: memberEmail });
+      showToast(sent ? 'Email resent' : 'Failed to resend email', sent ? 'success' : 'error');
+    },
+    null, 'Resend', 'Cancel'
+  );
 }
 
 async function forceMember2FAReset(memberId) {
