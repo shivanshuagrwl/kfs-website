@@ -2592,9 +2592,8 @@ async function saveProfile() {
 
   try {
     const form = new FormData();
-    // NOTE: domain and role are admin-only — intentionally not sent.
+    // NOTE: name, email, domain and role are admin-only — intentionally not sent.
     const fields = {
-      name:      $id('pf-name').value,
       roll_no:   $id('pf-roll').value,
       mobile:    $id('pf-mobile').value,
       batch:     $id('pf-batch').value,

@@ -11100,9 +11100,9 @@ app.put(
   memberAuthMiddleware,
   upload.single("photo"),
   async (req, res) => {
-    const { name, roll_no, mobile, batch, bio,
+    const { roll_no, mobile, batch, bio,
             instagram, linkedin, github, twitter, youtube, website, custom_links } = req.body;
-    // NOTE: 'domain' and 'role' are intentionally excluded — admin-only fields.
+    // NOTE: 'name', 'email', 'domain' and 'role' are intentionally excluded — admin-only fields.
 
     // ── Server-side URL sanitizer: only allow http/https, reject javascript:/data: etc. ──
     function sanitizeSocialUrl(raw) {
@@ -11131,7 +11131,6 @@ app.put(
     if (!current) return res.status(404).json({ error: "Member not found" });
 
     const newValues = {};
-    if (name      !== undefined) newValues.name      = name.trim();
     if (roll_no   !== undefined) newValues.roll_no   = roll_no;
     if (mobile    !== undefined) newValues.mobile    = mobile;
     if (batch     !== undefined) newValues.batch     = batch;

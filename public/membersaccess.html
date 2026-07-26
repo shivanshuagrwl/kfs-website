@@ -3605,8 +3605,25 @@
               <div class="card-title">Basic Info</div>
               <div class="form-grid">
                 <div class="form-group">
-                  <label>Name</label>
-                  <input id="pf-name" type="text" />
+                  <label
+                    >Name
+                    <span
+                      style="
+                        color: var(--muted);
+                        font-weight: 400;
+                        text-transform: none;
+                        letter-spacing: 0;
+                      "
+                      >(set by admin)</span
+                    ></label
+                  >
+                  <input
+                    id="pf-name"
+                    type="text"
+                    readonly
+                    style="opacity: 0.5; cursor: not-allowed"
+                    title="Contact an admin to update your name"
+                  />
                 </div>
                 <div class="form-group">
                   <label>Roll Number</label>
@@ -3617,11 +3634,25 @@
                   <input id="pf-mobile" type="text" />
                 </div>
                 <div class="form-group">
-                  <label>Email</label>
+                  <label
+                    >Email
+                    <span
+                      style="
+                        color: var(--muted);
+                        font-weight: 400;
+                        text-transform: none;
+                        letter-spacing: 0;
+                      "
+                      >(set by admin)</span
+                    ></label
+                  >
                   <input
                     id="pf-email"
                     type="email"
                     placeholder="your@kiit.ac.in"
+                    readonly
+                    style="opacity: 0.5; cursor: not-allowed"
+                    title="Contact an admin to update your email"
                   />
                 </div>
                 <div class="form-group">
