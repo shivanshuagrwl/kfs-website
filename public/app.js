@@ -275,10 +275,24 @@ function _aboutUsTeamCardHTML(m) {
 }
 
 async function loadAboutUsPage() {
-  const [settings, team] = await Promise.all([
+  const [settings, team, gallery] = await Promise.all([
     apiFetch('/api/settings').catch(() => null),
     apiFetch('/api/aboutus-team').catch(() => []),
+    apiFetch('/api/aboutus-gallery').catch(() => []),
   ]);
+
+  const scroller = document.getElementById('aboutus-scroller');
+  const track = document.getElementById('aboutus-scroller-track');
+  if (scroller && track) {
+    if (gallery && gallery.length) {
+      // Duplicate the list so the CSS animation (translateX -50%) loops seamlessly.
+      const imgs = gallery.map(g => `<img src="${g.photo}" alt="" loading="lazy">`).join('');
+      track.innerHTML = imgs + imgs;
+      scroller.style.display = 'block';
+    } else {
+      scroller.style.display = 'none';
+    }
+  }
 
   const textEl = document.getElementById('aboutus-text');
   if (textEl) {
@@ -3034,6 +3048,7 @@ async function loadAdminData(name) {
       document.getElementById('set-about').value = settings.about_text||'';
       document.getElementById('set-aboutus-text').value = settings.aboutus_text||'';
       loadAboutTeamAdmin();
+      loadAboutGalleryAdmin();
       if (settings.team_photo) {
         document.getElementById('set-team-photo-url').value = settings.team_photo;
         document.getElementById('team-photo-img').src = settings.team_photo;
@@ -4008,6 +4023,46 @@ async function deleteAboutTeamMember(id) {
     row.style.transition = 'opacity .2s'; row.style.opacity = '0';
     setTimeout(() => { row.remove(); }, 200);
   }
+}
+
+// ── ABOUT US IMAGE SCROLLER — admin-managed gallery, top of /aboutus page ───
+async function loadAboutGalleryAdmin() {
+  const grid = document.getElementById('admin-aboutus-gallery-grid');
+  if (!grid) return;
+  const list = await apiFetch('/api/aboutus-gallery').catch(() => []);
+  if (!list || !list.length) {
+    grid.innerHTML = `<span style="color:var(--grey);font-size:13px">No images yet — add a few to start the scroller.</span>`;
+    return;
+  }
+  grid.innerHTML = list.map(g => `
+    <div style="position:relative;width:110px;height:80px" data-gid="${g.id}">
+      <img src="${g.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      <button type="button" onclick="deleteAboutGalleryImage('${g.id}')" title="Remove"
+        style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:#e53935;color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+    </div>`).join('');
+}
+
+async function uploadAboutGalleryImage(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('photo', file);
+  try {
+    const res = await fetch('/api/admin/aboutus-gallery', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
+      body: fd,
+    });
+    if (!res.ok) { alert('Error uploading image'); return; }
+    inputEl.value = '';
+    loadAboutGalleryAdmin();
+  } catch (e) { alert('Error uploading image'); }
+}
+
+async function deleteAboutGalleryImage(id) {
+  if (!confirm('Remove this image from the scroller?')) return;
+  await apiFetch('/api/admin/aboutus-gallery/'+id, 'DELETE');
+  loadAboutGalleryAdmin();
 }
 
 function openAchievementModal(a=null) {
@@ -11612,6 +11667,7 @@ function scrollTo_don_donors_section() { document.getElementById('don-donors-sec
 function triggerClick_member_xlsx_input()  { document.getElementById('member-xlsx-input')?.click(); }
 function triggerClick_portal_activate_input() { document.getElementById('portal-activate-input')?.click(); }
 function triggerClick_set_team_photo_file(){ document.getElementById('set-team-photo-file')?.click(); }
+function triggerClick_aboutus_gallery_file(){ document.getElementById('aboutus-gallery-file')?.click(); }
 function triggerClick_set_egg_img_file()   { document.getElementById('set-egg-img-file')?.click(); }
 function triggerClick_cegg_img_file()      { document.getElementById('cegg-img-file')?.click(); }
 function focusEl_movie_genre_input()       { document.getElementById('movie-genre-input')?.focus(); }

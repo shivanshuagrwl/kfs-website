@@ -962,6 +962,36 @@ body.light-mode .aboutus-partner-card:hover{border-color:#111}
 .aboutus-team-name{font-size:15px;font-weight:700;margin-top:14px;padding:0 12px}
 .aboutus-team-role{font-size:12px;color:var(--grey);margin-top:4px;padding:0 12px;letter-spacing:.04em;text-transform:uppercase}
 
+/* "More About Us" CTA — filled, animated arrow, subtle glow on hover */
+.btn-more-about{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:14px 26px;border-radius:999px;
+  background:var(--white);color:var(--black);
+  font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  text-decoration:none;border:1px solid var(--white);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,gap .25s ease;
+  box-shadow:0 0 0 0 rgba(255,255,255,0);
+}
+.btn-more-about svg{transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.btn-more-about:hover{
+  gap:14px;transform:translateY(-2px);
+  box-shadow:0 8px 28px -6px rgba(255,255,255,.35);
+}
+.btn-more-about:hover svg{transform:translateX(3px)}
+body.light-mode .btn-more-about{background:#111;color:#f5f5f5;border-color:#111}
+body.light-mode .btn-more-about:hover{box-shadow:0 8px 28px -6px rgba(0,0,0,.25)}
+
+/* Infinite image scroller — admin-managed gallery on the About Us page */
+.aboutus-scroller{width:100%;overflow:hidden;position:relative;
+  mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+}
+.aboutus-scroller-track{display:flex;gap:16px;width:max-content;animation:aboutusScroll 40s linear infinite}
+.aboutus-scroller:hover .aboutus-scroller-track{animation-play-state:paused}
+.aboutus-scroller-track img{height:220px;width:320px;object-fit:cover;border-radius:10px;flex-shrink:0;background:var(--card)}
+@keyframes aboutusScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (max-width:640px){.aboutus-scroller-track img{height:140px;width:200px}}
+
 /* ── ACHIEVEMENTS ─────────────────────────────────────────────────────── */
 .achievements-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border);margin-top:60px}
 @media(max-width:768px){.achievements-grid{grid-template-columns:1fr}}
@@ -3126,7 +3156,10 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div>
           <h2 class="section-title">We are the<br><em style="color:var(--grey);font-style:normal">cinephiles</em><br>of KIIT.</h2>
           <p class="about-text" style="margin-top:32px" id="about-text">Loading...</p>
-          <a data-action="navigate" data-args='["aboutus"]' class="btn btn-secondary" style="margin-top:24px;display:inline-block">About KFS, KSAC &amp; KIIT →</a>
+          <a data-action="navigate" data-args='["aboutus"]' class="btn-more-about" style="margin-top:24px">
+            <span>More About Us</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
         </div>
         <div class="about-visual" id="about-visual-box">
           <img id="about-team-photo" src="" alt="KFS Team" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:3px;display:none">
@@ -3266,6 +3299,9 @@ body.light-mode .psw-comment-gate a{color:#111}
 
 <!-- ── ABOUT US PAGE ── -->
 <div class="page" id="page-aboutus">
+  <div class="aboutus-scroller" id="aboutus-scroller" style="display:none;padding:60px 0 0">
+    <div class="aboutus-scroller-track" id="aboutus-scroller-track"></div>
+  </div>
   <section class="section">
     <div class="section-inner">
       <p class="section-label">About Us</p>
@@ -4592,6 +4628,15 @@ body.light-mode .psw-comment-gate a{color:#111}
         <p class="settings-section-title">About Us Page (/aboutus)</p>
         <p class="settings-section-desc">Content for the "under KSAC &amp; KIIT" page, linked from the homepage About Us section</p>
         <div class="form-group"><label>Intro Text</label><textarea id="set-aboutus-text" style="min-height:100px" placeholder="A few lines on being part of KSAC and KIIT..."></textarea></div>
+
+        <div class="form-group">
+          <label>Top Image Scroller <span style="font-weight:400;color:var(--grey)">(auto-scrolling strip shown before any text on the About Us page)</span></label>
+          <div style="margin-bottom:10px">
+            <input type="file" id="aboutus-gallery-file" accept="image/*" style="display:none" data-onchange="uploadAboutGalleryImage(this)">
+            <button data-action="triggerClick_aboutus_gallery_file" type="button" class="btn btn-secondary">+ Add Image</button>
+          </div>
+          <div id="admin-aboutus-gallery-grid" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        </div>
 
         <div class="form-group">
           <label>Deans, Assistant Deans &amp; Faculty in Charge</label>

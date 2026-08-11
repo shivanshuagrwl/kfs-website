@@ -4055,6 +4055,71 @@ app.delete(
   },
 );
 
+// ── ABOUT US IMAGE SCROLLER — admin-managed gallery, top of /aboutus page ────
+// Supabase migration — run once:
+// CREATE TABLE IF NOT EXISTS aboutus_gallery (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   photo text NOT NULL,
+//   sort_order int DEFAULT 99,
+//   created_at timestamptz DEFAULT now()
+// );
+// Same RLS pattern as aboutus_team: public SELECT only, writes via service_role.
+app.get("/api/aboutus-gallery", async (req, res) => {
+  cacheFor(res, 120);
+  const data = await memCache("aboutus-gallery:list", 300, async () => {
+    const { data } = await supabasePublic
+      .from("aboutus_gallery")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
+});
+
+app.post(
+  "/api/admin/aboutus-gallery",
+  requireSection("settings"),
+  upload.single("photo"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Image is required" });
+    const photoUrl = await uploadImage(req.file, "aboutus");
+    if (!photoUrl) return res.status(500).json({ error: "Image upload failed" });
+    const { data, error } = await supabase
+      .from("aboutus_gallery")
+      .insert([{ photo: photoUrl, sort_order: 99 }])
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    memInvalidate("aboutus-gallery:list");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "create",
+      "aboutus_gallery",
+      "Gallery image",
+    ).catch(e => console.error("[activity]", e.message));
+    res.json(data);
+  },
+);
+
+app.delete(
+  "/api/admin/aboutus-gallery/:id",
+  requireSection("settings"),
+  async (req, res) => {
+    await supabase.from("aboutus_gallery").delete().eq("id", req.params.id);
+    memInvalidate("aboutus-gallery:list");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "delete",
+      "aboutus_gallery",
+      req.params.id,
+    ).catch(e => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
+
 // ── SITE CREDITS ─────────────────────────────────────────────────────────────
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
