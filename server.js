@@ -3940,18 +3940,26 @@ app.delete(
   },
 );
 
-// ── ABOUT US TEAM — KSAC Deans / Assistant Deans / Faculty in Charge (FIC) ────
-// Supabase migration — run once:
+// ── ABOUT US TEAM — Founder / Deans / Deputy Director / Associate Deans / FIC ─
+// Supabase migration — run once (fresh install):
 // CREATE TABLE IF NOT EXISTS aboutus_team (
 //   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 //   name text NOT NULL,
-//   role text NOT NULL CHECK (role IN ('dean','assistant_dean','fic')),
+//   role text NOT NULL CHECK (role IN ('founder','dean','deputy_director','assistant_dean','fic')),
 //   photo text,
 //   sort_order int DEFAULT 99,
 //   created_at timestamptz DEFAULT now()
 // );
+// If the table already exists (adding founder/deputy_director to an existing
+// install), run this instead:
+// ALTER TABLE aboutus_team DROP CONSTRAINT IF EXISTS aboutus_team_role_check;
+// ALTER TABLE aboutus_team ADD CONSTRAINT aboutus_team_role_check
+//   CHECK (role IN ('founder','dean','deputy_director','assistant_dean','fic'));
+// NOTE: 'assistant_dean' is kept as the stored value for backward compatibility
+// with existing rows — it's displayed as "Associate Dean" in the UI.
 // Gated behind the existing "settings" admin permission — no new permission
 // section needed. Public reads go through supabasePublic (RLS: anon select only).
+const ABOUTUS_TEAM_ROLES = ["founder", "dean", "deputy_director", "assistant_dean", "fic"];
 app.get("/api/aboutus-team", async (req, res) => {
   cacheFor(res, 120);
   const data = await memCache("aboutus-team:list", 300, async () => {
@@ -3973,7 +3981,7 @@ app.post(
     const { name, role, sort_order } = req.body;
     if (!name || !name.trim())
       return res.status(400).json({ error: "Name is required" });
-    if (!["dean", "assistant_dean", "fic"].includes(role))
+    if (!ABOUTUS_TEAM_ROLES.includes(role))
       return res.status(400).json({ error: "Invalid role" });
     const photoUrl = await uploadImage(req.file, "aboutus");
     const { data, error } = await supabase
@@ -4008,7 +4016,7 @@ app.put(
     const updates = {};
     if (name) updates.name = name.trim();
     if (role) {
-      if (!["dean", "assistant_dean", "fic"].includes(role))
+      if (!ABOUTUS_TEAM_ROLES.includes(role))
         return res.status(400).json({ error: "Invalid role" });
       updates.role = role;
     }

@@ -961,6 +961,11 @@ body.light-mode .aboutus-partner-card:hover{border-color:#111}
 .aboutus-team-photo-placeholder{width:100%;aspect-ratio:1/1;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--grey)}
 .aboutus-team-name{font-size:15px;font-weight:700;margin-top:14px;padding:0 12px}
 .aboutus-team-role{font-size:12px;color:var(--grey);margin-top:4px;padding:0 12px;letter-spacing:.04em;text-transform:uppercase}
+.aboutus-founder-grid{grid-template-columns:repeat(auto-fit,minmax(260px,320px));justify-content:center}
+.aboutus-founder-card{padding-bottom:26px;background:var(--card)}
+.aboutus-founder-photo{aspect-ratio:1/1}
+.aboutus-founder-card .aboutus-team-name{font-size:20px;margin-top:20px}
+.aboutus-founder-card .aboutus-team-role{font-size:13px;margin-top:6px}
 
 /* "More About Us" CTA — filled, animated arrow, subtle glow on hover */
 .btn-more-about{
@@ -3329,6 +3334,16 @@ body.light-mode .psw-comment-gate a{color:#111}
 
   <div class="section-divider"></div>
 
+  <section class="section" id="aboutus-founder-section" style="display:none">
+    <div class="section-inner">
+      <p class="section-label">Founder</p>
+      <h2 class="section-title">Where it all began</h2>
+      <div class="aboutus-team-grid aboutus-founder-grid" id="aboutus-founder-grid"></div>
+    </div>
+  </section>
+
+  <div class="section-divider" id="aboutus-founder-divider"></div>
+
   <section class="section">
     <div class="section-inner">
       <p class="section-label">Leadership</p>
@@ -3336,6 +3351,26 @@ body.light-mode .psw-comment-gate a{color:#111}
       <div class="aboutus-team-grid" id="aboutus-deans-grid">
         <div class="loading">Loading...</div>
       </div>
+    </div>
+  </section>
+
+  <div class="section-divider" id="aboutus-deputy-divider" style="display:none"></div>
+
+  <section class="section" id="aboutus-deputy-wrap" style="display:none">
+    <div class="section-inner">
+      <p class="section-label">Leadership</p>
+      <h2 class="section-title">Deputy Director</h2>
+      <div class="aboutus-team-grid" id="aboutus-deputy-grid"></div>
+    </div>
+  </section>
+
+  <div class="section-divider" id="aboutus-associate-divider" style="display:none"></div>
+
+  <section class="section" id="aboutus-associate-wrap" style="display:none">
+    <div class="section-inner">
+      <p class="section-label">Leadership</p>
+      <h2 class="section-title">Associate Deans</h2>
+      <div class="aboutus-team-grid" id="aboutus-associate-grid"></div>
     </div>
   </section>
 
@@ -6090,8 +6125,10 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Name</label><input type="text" id="aboutus-team-name"></div>
     <div class="form-group"><label>Role</label>
       <select id="aboutus-team-role">
+        <option value="founder">Founder</option>
         <option value="dean">Dean</option>
-        <option value="assistant_dean">Assistant Dean</option>
+        <option value="deputy_director">Deputy Director</option>
+        <option value="assistant_dean">Associate Dean</option>
         <option value="fic">Faculty in Charge (FIC)</option>
       </select>
     </div>

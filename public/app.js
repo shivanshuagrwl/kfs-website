@@ -263,11 +263,15 @@ function loadPageData(page) {
 }
 
 // ── ABOUT US PAGE (KSAC / KIIT affiliation, deans & FIC) ────────────────────
-function _aboutUsTeamCardHTML(m) {
+function _aboutUsTeamCardHTML(m, isFounder) {
+  const photoClass = isFounder ? 'aboutus-team-photo aboutus-founder-photo' : 'aboutus-team-photo';
+  const placeholderClass = isFounder ? 'aboutus-team-photo-placeholder aboutus-founder-photo' : 'aboutus-team-photo-placeholder';
+  const iconSize = isFounder ? 56 : 32;
   const photo = m.photo
-    ? `<img class="aboutus-team-photo" src="${m.photo}" alt="${m.name}">`
-    : `<div class="aboutus-team-photo-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
-  return `<div class="aboutus-team-card">
+    ? `<img class="${photoClass}" src="${m.photo}" alt="${m.name}">`
+    : `<div class="${placeholderClass}"><svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+  const cardClass = isFounder ? 'aboutus-team-card aboutus-founder-card' : 'aboutus-team-card';
+  return `<div class="${cardClass}">
     ${photo}
     <div class="aboutus-team-name">${m.name}</div>
     <div class="aboutus-team-role">${m.role_label || m.role || ''}</div>
@@ -300,20 +304,54 @@ async function loadAboutUsPage() {
       'KFS — KIIT Film Society operates under the KIIT Student Activity Centre (KSAC) and KIIT University, drawing on their guidance, resources, and support to bring cinema to campus.';
   }
 
+  const founderGrid = document.getElementById('aboutus-founder-grid');
+  const founderSection = document.getElementById('aboutus-founder-section');
+  const founderDivider = document.getElementById('aboutus-founder-divider');
   const deansGrid = document.getElementById('aboutus-deans-grid');
+  const deputyGrid = document.getElementById('aboutus-deputy-grid');
+  const deputyWrap = document.getElementById('aboutus-deputy-wrap');
+  const deputyDivider = document.getElementById('aboutus-deputy-divider');
+  const associateGrid = document.getElementById('aboutus-associate-grid');
+  const associateWrap = document.getElementById('aboutus-associate-wrap');
+  const associateDivider = document.getElementById('aboutus-associate-divider');
   const ficGrid = document.getElementById('aboutus-fic-grid');
+
   const list = team || [];
-  const deans = list.filter(m => m.role === 'dean' || m.role === 'assistant_dean');
+  const founder = list.filter(m => m.role === 'founder');
+  const deans = list.filter(m => m.role === 'dean');
+  const deputy = list.filter(m => m.role === 'deputy_director');
+  const associate = list.filter(m => m.role === 'assistant_dean');
   const fic = list.filter(m => m.role === 'fic');
 
-  const roleLabels = { dean: 'Dean', assistant_dean: 'Assistant Dean', fic: 'Faculty in Charge' };
-  const withLabel = m => Object.assign({}, m, { role_label: roleLabels[m.role] || m.role });
+  const withLabel = m => Object.assign({}, m, { role_label: ABOUTUS_ROLE_LABELS[m.role] || m.role });
+
+  // Founder — special larger card, section + divider hidden entirely if none set.
+  if (founderGrid) {
+    founderGrid.innerHTML = founder.map(m => _aboutUsTeamCardHTML(withLabel(m), true)).join('');
+  }
+  if (founderSection) founderSection.style.display = founder.length ? '' : 'none';
+  if (founderDivider) founderDivider.style.display = founder.length ? '' : 'none';
 
   if (deansGrid) {
     deansGrid.innerHTML = deans.length
       ? deans.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
       : '<div style="color:var(--grey)">No deans listed yet.</div>';
   }
+
+  // Deputy Director — section + divider hidden entirely if none are set.
+  if (deputyGrid) {
+    deputyGrid.innerHTML = deputy.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('');
+  }
+  if (deputyWrap) deputyWrap.style.display = deputy.length ? '' : 'none';
+  if (deputyDivider) deputyDivider.style.display = deputy.length ? '' : 'none';
+
+  // Associate Deans — section + divider hidden entirely if none are set.
+  if (associateGrid) {
+    associateGrid.innerHTML = associate.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('');
+  }
+  if (associateWrap) associateWrap.style.display = associate.length ? '' : 'none';
+  if (associateDivider) associateDivider.style.display = associate.length ? '' : 'none';
+
   if (ficGrid) {
     ficGrid.innerHTML = fic.length
       ? fic.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
@@ -3955,8 +3993,16 @@ async function deleteTestimonial(id) {
   }
 }
 
-// ── ABOUT US TEAM (KSAC Deans / Assistant Deans / FIC) — admin CRUD ─────────
-const ABOUTUS_ROLE_LABELS = { dean: 'Dean', assistant_dean: 'Assistant Dean', fic: 'Faculty in Charge' };
+// ── ABOUT US TEAM (Founder / Deans / Deputy Director / Associate Deans / FIC) — admin CRUD ─
+const ABOUTUS_ROLE_LABELS = {
+  founder: 'Founder',
+  dean: 'Dean',
+  deputy_director: 'Deputy Director',
+  assistant_dean: 'Associate Dean',
+  fic: 'Faculty in Charge',
+};
+// Display order for the /aboutus page and any role-ordered admin view.
+const ABOUTUS_ROLE_ORDER = ['founder', 'dean', 'deputy_director', 'assistant_dean', 'fic'];
 
 function _aboutTeamAdminRowHTML(m) {
   const mJson = JSON.stringify(m).replace(/"/g,'&quot;');
@@ -3979,7 +4025,12 @@ async function loadAboutTeamAdmin() {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--grey)">No one added yet.</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(_aboutTeamAdminRowHTML).join('');
+  const sorted = [...list].sort((a, b) => {
+    const ra = ABOUTUS_ROLE_ORDER.indexOf(a.role), rb = ABOUTUS_ROLE_ORDER.indexOf(b.role);
+    if (ra !== rb) return ra - rb;
+    return (a.sort_order ?? 99) - (b.sort_order ?? 99);
+  });
+  tbody.innerHTML = sorted.map(_aboutTeamAdminRowHTML).join('');
 }
 
 function openAboutTeamModal(m=null) {
