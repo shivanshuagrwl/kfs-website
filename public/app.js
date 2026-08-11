@@ -208,7 +208,7 @@ function _doNavigate(page, pushState=true) {
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
   // Reset meta tags to site defaults on section navigation
-  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'team' || page === 'strand') {
+  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'aboutus' || page === 'team' || page === 'strand') {
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
@@ -259,6 +259,52 @@ function loadPageData(page) {
   else if (page==='strand') loadStudio();
   else if (page==='donations') loadDonationsPage();
   else if (page==='credits') loadCreditsPage();
+  else if (page==='aboutus') loadAboutUsPage();
+}
+
+// ── ABOUT US PAGE (KSAC / KIIT affiliation, deans & FIC) ────────────────────
+function _aboutUsTeamCardHTML(m) {
+  const photo = m.photo
+    ? `<img class="aboutus-team-photo" src="${m.photo}" alt="${m.name}">`
+    : `<div class="aboutus-team-photo-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+  return `<div class="aboutus-team-card">
+    ${photo}
+    <div class="aboutus-team-name">${m.name}</div>
+    <div class="aboutus-team-role">${m.role_label || m.role || ''}</div>
+  </div>`;
+}
+
+async function loadAboutUsPage() {
+  const [settings, team] = await Promise.all([
+    apiFetch('/api/settings').catch(() => null),
+    apiFetch('/api/aboutus-team').catch(() => []),
+  ]);
+
+  const textEl = document.getElementById('aboutus-text');
+  if (textEl) {
+    textEl.textContent = (settings && settings.aboutus_text) ||
+      'KFS — KIIT Film Society operates under the KIIT Student Activity Centre (KSAC) and KIIT University, drawing on their guidance, resources, and support to bring cinema to campus.';
+  }
+
+  const deansGrid = document.getElementById('aboutus-deans-grid');
+  const ficGrid = document.getElementById('aboutus-fic-grid');
+  const list = team || [];
+  const deans = list.filter(m => m.role === 'dean' || m.role === 'assistant_dean');
+  const fic = list.filter(m => m.role === 'fic');
+
+  const roleLabels = { dean: 'Dean', assistant_dean: 'Assistant Dean', fic: 'Faculty in Charge' };
+  const withLabel = m => Object.assign({}, m, { role_label: roleLabels[m.role] || m.role });
+
+  if (deansGrid) {
+    deansGrid.innerHTML = deans.length
+      ? deans.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
+      : '<div style="color:var(--grey)">No deans listed yet.</div>';
+  }
+  if (ficGrid) {
+    ficGrid.innerHTML = fic.length
+      ? fic.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
+      : '<div style="color:var(--grey)">No faculty in charge listed yet.</div>';
+  }
 }
 
 function toggleMenu() {
@@ -2986,6 +3032,8 @@ async function loadAdminData(name) {
     if (settings) {
       document.getElementById('set-tagline').value = settings.site_tagline||'';
       document.getElementById('set-about').value = settings.about_text||'';
+      document.getElementById('set-aboutus-text').value = settings.aboutus_text||'';
+      loadAboutTeamAdmin();
       if (settings.team_photo) {
         document.getElementById('set-team-photo-url').value = settings.team_photo;
         document.getElementById('team-photo-img').src = settings.team_photo;
@@ -3892,6 +3940,76 @@ async function deleteTestimonial(id) {
   }
 }
 
+// ── ABOUT US TEAM (KSAC Deans / Assistant Deans / FIC) — admin CRUD ─────────
+const ABOUTUS_ROLE_LABELS = { dean: 'Dean', assistant_dean: 'Assistant Dean', fic: 'Faculty in Charge' };
+
+function _aboutTeamAdminRowHTML(m) {
+  const mJson = JSON.stringify(m).replace(/"/g,'&quot;');
+  return `<tr data-id="${m.id}">
+      <td>${m.photo?`<img src="${m.photo}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:50%">`:svgPerson(16)}</td>
+      <td style="font-weight:500">${m.name}</td>
+      <td style="color:var(--grey)">${ABOUTUS_ROLE_LABELS[m.role]||m.role}</td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick="editAboutTeamMember(${mJson})">Edit</button>
+        <button class="btn-sm danger" onclick="deleteAboutTeamMember('${m.id}')">Delete</button>
+      </div></td>
+    </tr>`;
+}
+
+async function loadAboutTeamAdmin() {
+  const tbody = document.getElementById('admin-aboutus-team-tbody');
+  if (!tbody) return;
+  const list = await apiFetch('/api/aboutus-team').catch(() => []);
+  if (!list || !list.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--grey)">No one added yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(_aboutTeamAdminRowHTML).join('');
+}
+
+function openAboutTeamModal(m=null) {
+  document.getElementById('aboutus-team-modal').classList.add('open');
+  document.getElementById('aboutus-team-modal-title').textContent = m ? 'Edit Person' : 'Add Person';
+  document.getElementById('aboutus-team-edit-id').value = m?.id||'';
+  document.getElementById('aboutus-team-name').value = m?.name||'';
+  document.getElementById('aboutus-team-role').value = m?.role||'dean';
+  document.getElementById('aboutus-team-sort').value = (m && m.sort_order!=null) ? m.sort_order : '';
+  document.getElementById('aboutus-team-photo').value='';
+}
+function editAboutTeamMember(m) { openAboutTeamModal(m); }
+function closeAboutTeamModal() { document.getElementById('aboutus-team-modal').classList.remove('open'); }
+
+async function saveAboutTeamMember() {
+  const id = document.getElementById('aboutus-team-edit-id').value;
+  const btn = document.querySelector('button[data-action="saveAboutTeamMember"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const fd = new FormData();
+  fd.append('name', document.getElementById('aboutus-team-name').value);
+  fd.append('role', document.getElementById('aboutus-team-role').value);
+  fd.append('sort_order', document.getElementById('aboutus-team-sort').value);
+  const photo = document.getElementById('aboutus-team-photo').files[0];
+  if (photo) fd.append('photo', photo);
+  const url = id ? '/api/admin/aboutus-team/'+id : '/api/admin/aboutus-team';
+  try {
+    const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
+    if (!res.ok) { alert('Error saving — check name and photo (a photo is required when first adding someone).'); return; }
+    closeAboutTeamModal();
+    loadAboutTeamAdmin();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+async function deleteAboutTeamMember(id) {
+  if (!confirm('Remove this person?')) return;
+  await apiFetch('/api/admin/aboutus-team/'+id,'DELETE');
+  const row = document.querySelector(`#admin-aboutus-team-tbody tr[data-id="${id}"]`);
+  if (row) {
+    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+    setTimeout(() => { row.remove(); }, 200);
+  }
+}
+
 function openAchievementModal(a=null) {
   document.getElementById('achievement-modal').classList.add('open');
   document.getElementById('achievement-modal-title').textContent = a ? 'Edit Achievement' : 'Add Achievement';
@@ -3963,6 +4081,7 @@ async function saveSettings() {
     // Text fields
     fd.append('site_tagline', document.getElementById('set-tagline').value);
     fd.append('about_text', document.getElementById('set-about').value);
+    fd.append('aboutus_text', document.getElementById('set-aboutus-text').value);
     fd.append('stat_members', document.getElementById('set-stat-members').value);
     fd.append('stat_events', document.getElementById('set-stat-events').value);
     fd.append('stat_films', document.getElementById('set-stat-films').value);

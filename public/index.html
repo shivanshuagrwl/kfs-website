@@ -723,10 +723,16 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 40px;
   display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
   background:rgba(10,10,10,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid rgba(255,255,255,.04);transition:background .3s var(--ease),border-color .3s var(--ease)}
-.nav-logo{display:flex;align-items:center;text-decoration:none;justify-self:start}
+.nav-logo-group{display:flex;align-items:center;gap:14px;justify-self:start}
+.nav-logo{display:flex;align-items:center;text-decoration:none}
 .nav-logo-text{font-size:20px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--white)}
 .nav-logo-img{width:32px;height:32px;object-fit:contain;transition:opacity .2s;content:url('/images/kfs-logo-transparent.png')}
 .nav-logo-img:hover{opacity:.75}
+.nav-partner-logo{display:flex;align-items:center;text-decoration:none;padding-left:14px;border-left:1px solid rgba(255,255,255,.14)}
+body.light-mode .nav-partner-logo{border-left-color:rgba(0,0,0,.14)}
+.nav-partner-logo img{width:26px;height:26px;object-fit:contain;transition:opacity .2s;border-radius:4px}
+.nav-partner-logo:hover img{opacity:.75}
+@media (max-width:640px){.nav-logo-group{gap:8px}.nav-partner-logo{padding-left:8px}.nav-partner-logo img{width:22px;height:22px}}
 body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 .nav-links{display:flex;gap:32px;list-style:none;justify-self:center}
 .nav-links a{color:var(--grey);text-decoration:none;font-size:13px;letter-spacing:.06em;
@@ -942,6 +948,19 @@ body.light-mode .section-title{background:linear-gradient(160deg,#111111 0%,#555
   display:flex;align-items:center;justify-content:center;overflow:hidden}
 .about-logo-large{width:120px;height:120px;object-fit:contain;filter:invert(1);opacity:.15}
 body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
+.aboutus-partners{display:flex;flex-wrap:wrap;gap:16px;margin-top:36px}
+.aboutus-partner-card{display:flex;align-items:center;gap:16px;padding:18px 24px;border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:border-color .2s,transform .2s;flex:1 1 260px;min-width:220px}
+.aboutus-partner-card:hover{border-color:var(--white);transform:translateY(-2px)}
+body.light-mode .aboutus-partner-card:hover{border-color:#111}
+.aboutus-partner-card img{width:44px;height:44px;object-fit:contain;flex-shrink:0}
+.aboutus-partner-name{font-size:16px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--white)}
+.aboutus-partner-sub{font-size:13px;color:var(--grey);margin-top:2px}
+.aboutus-team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:24px;margin-top:32px}
+.aboutus-team-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;text-align:center;padding-bottom:18px}
+.aboutus-team-photo{width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--card);display:block}
+.aboutus-team-photo-placeholder{width:100%;aspect-ratio:1/1;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--grey)}
+.aboutus-team-name{font-size:15px;font-weight:700;margin-top:14px;padding:0 12px}
+.aboutus-team-role{font-size:12px;color:var(--grey);margin-top:4px;padding:0 12px;letter-spacing:.04em;text-transform:uppercase}
 
 /* ── ACHIEVEMENTS ─────────────────────────────────────────────────────── */
 .achievements-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border);margin-top:60px}
@@ -3019,9 +3038,17 @@ body.light-mode .psw-comment-gate a{color:#111}
 
 <!-- NAV -->
 <nav id="main-nav">
-  <a data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
-    <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
-  </a>
+  <div class="nav-logo-group">
+    <a data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
+      <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
+    </a>
+    <a href="https://ksac.kiit.ac.in/" target="_blank" rel="noopener" class="nav-partner-logo" title="KSAC">
+      <img src="/images/ksac-logo.png" alt="KSAC" onerror="this.style.display='none'">
+    </a>
+    <a href="https://kiit.ac.in/" target="_blank" rel="noopener" class="nav-partner-logo" title="KIIT">
+      <img src="/images/kiit-logo.png" alt="KIIT" onerror="this.style.display='none'">
+    </a>
+  </div>
   <ul class="nav-links" id="nav-links">
     <li><a data-nav-page="home" class="active" data-page="home">Home</a></li>
     <li><a data-nav-page="events" data-page="events">Events</a></li>
@@ -3099,6 +3126,7 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div>
           <h2 class="section-title">We are the<br><em style="color:var(--grey);font-style:normal">cinephiles</em><br>of KIIT.</h2>
           <p class="about-text" style="margin-top:32px" id="about-text">Loading...</p>
+          <a data-action="navigate" data-args='["aboutus"]' class="btn btn-secondary" style="margin-top:24px;display:inline-block">About KFS, KSAC &amp; KIIT →</a>
         </div>
         <div class="about-visual" id="about-visual-box">
           <img id="about-team-photo" src="" alt="KFS Team" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:3px;display:none">
@@ -3234,6 +3262,58 @@ body.light-mode .psw-comment-gate a{color:#111}
       <a href="/Social-Strand">Social Strand</a>
     </div>
   </footer>
+</div>
+
+<!-- ── ABOUT US PAGE ── -->
+<div class="page" id="page-aboutus">
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">About Us</p>
+      <h2 class="section-title">Under the wings of<br><em style="color:var(--grey);font-style:normal">KSAC</em> &amp; <em style="color:var(--grey);font-style:normal">KIIT</em>.</h2>
+      <p class="about-text" style="margin-top:24px;max-width:720px" id="aboutus-text">Loading...</p>
+
+      <div class="aboutus-partners">
+        <a href="https://ksac.kiit.ac.in/" target="_blank" rel="noopener" class="aboutus-partner-card">
+          <img src="/images/ksac-logo.png" alt="KSAC" onerror="this.style.display='none'">
+          <div>
+            <div class="aboutus-partner-name">KSAC</div>
+            <div class="aboutus-partner-sub">KIIT Student Activity Centre</div>
+          </div>
+        </a>
+        <a href="https://kiit.ac.in/" target="_blank" rel="noopener" class="aboutus-partner-card">
+          <img src="/images/kiit-logo.png" alt="KIIT" onerror="this.style.display='none'">
+          <div>
+            <div class="aboutus-partner-name">KIIT</div>
+            <div class="aboutus-partner-sub">Kalinga Institute of Industrial Technology</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">Leadership</p>
+      <h2 class="section-title">KSAC Deans</h2>
+      <div class="aboutus-team-grid" id="aboutus-deans-grid">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <section class="section">
+    <div class="section-inner">
+      <p class="section-label">Guidance</p>
+      <h2 class="section-title">Faculty in Charge</h2>
+      <div class="aboutus-team-grid" id="aboutus-fic-grid">
+        <div class="loading">Loading...</div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- ── EVENTS PAGE ── -->
@@ -4505,6 +4585,23 @@ body.light-mode .psw-comment-gate a{color:#111}
             <button data-action="clearTeamPhoto" type="button" class="btn btn-secondary" id="team-photo-clear-btn" style="display:none">Remove</button>
           </div>
           <input type="hidden" id="set-team-photo-url" value="">
+        </div>
+
+        <!-- ── SECTION 1B: About Us page (KSAC / KIIT) ── -->
+        <div class="settings-divider"></div>
+        <p class="settings-section-title">About Us Page (/aboutus)</p>
+        <p class="settings-section-desc">Content for the "under KSAC &amp; KIIT" page, linked from the homepage About Us section</p>
+        <div class="form-group"><label>Intro Text</label><textarea id="set-aboutus-text" style="min-height:100px" placeholder="A few lines on being part of KSAC and KIIT..."></textarea></div>
+
+        <div class="form-group">
+          <label>Deans, Assistant Deans &amp; Faculty in Charge</label>
+          <div style="margin-bottom:10px">
+            <button data-action="openAboutTeamModal" type="button" class="btn btn-secondary">+ Add Person</button>
+          </div>
+          <table class="admin-table" style="width:100%">
+            <thead><tr><th>Photo</th><th>Name</th><th>Role</th><th></th></tr></thead>
+            <tbody id="admin-aboutus-team-tbody"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--grey)">Loading...</td></tr></tbody>
+          </table>
         </div>
 
         <!-- ── SECTION 2: Stats Counter ── -->
@@ -5936,6 +6033,27 @@ KFS — KIIT Film Society"></textarea>
     <div class="modal-actions">
       <button data-action="closeTestimonialModal" class="btn-sm">Cancel</button>
       <button data-action="saveTestimonial" class="btn-sm btn-success">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="aboutus-team-modal">
+  <div class="modal">
+    <h3 id="aboutus-team-modal-title">Add Person</h3>
+    <input type="hidden" id="aboutus-team-edit-id">
+    <div class="form-group"><label>Photo</label><input type="file" id="aboutus-team-photo" accept="image/*" style="border:none;padding:0;background:transparent"></div>
+    <div class="form-group"><label>Name</label><input type="text" id="aboutus-team-name"></div>
+    <div class="form-group"><label>Role</label>
+      <select id="aboutus-team-role">
+        <option value="dean">Dean</option>
+        <option value="assistant_dean">Assistant Dean</option>
+        <option value="fic">Faculty in Charge (FIC)</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Sort Order <span style="font-weight:400;color:var(--grey)">(lower shows first)</span></label><input type="number" id="aboutus-team-sort" placeholder="1"></div>
+    <div class="modal-actions">
+      <button data-action="closeAboutTeamModal" class="btn-sm">Cancel</button>
+      <button data-action="saveAboutTeamMember" class="btn-sm btn-success">Save</button>
     </div>
   </div>
 </div>

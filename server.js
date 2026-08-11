@@ -3940,6 +3940,121 @@ app.delete(
   },
 );
 
+// ── ABOUT US TEAM — KSAC Deans / Assistant Deans / Faculty in Charge (FIC) ────
+// Supabase migration — run once:
+// CREATE TABLE IF NOT EXISTS aboutus_team (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   name text NOT NULL,
+//   role text NOT NULL CHECK (role IN ('dean','assistant_dean','fic')),
+//   photo text,
+//   sort_order int DEFAULT 99,
+//   created_at timestamptz DEFAULT now()
+// );
+// Gated behind the existing "settings" admin permission — no new permission
+// section needed. Public reads go through supabasePublic (RLS: anon select only).
+app.get("/api/aboutus-team", async (req, res) => {
+  cacheFor(res, 120);
+  const data = await memCache("aboutus-team:list", 300, async () => {
+    const { data } = await supabasePublic
+      .from("aboutus_team")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
+});
+
+app.post(
+  "/api/admin/aboutus-team",
+  requireSection("settings"),
+  upload.single("photo"),
+  async (req, res) => {
+    const { name, role, sort_order } = req.body;
+    if (!name || !name.trim())
+      return res.status(400).json({ error: "Name is required" });
+    if (!["dean", "assistant_dean", "fic"].includes(role))
+      return res.status(400).json({ error: "Invalid role" });
+    const photoUrl = await uploadImage(req.file, "aboutus");
+    const { data, error } = await supabase
+      .from("aboutus_team")
+      .insert([{
+        name: name.trim(),
+        role,
+        photo: photoUrl,
+        sort_order: parseInt(sort_order) || 99,
+      }])
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    memInvalidate("aboutus-team:list");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "create",
+      "aboutus_team",
+      name,
+    ).catch(e => console.error("[activity]", e.message));
+    res.json(data);
+  },
+);
+
+app.put(
+  "/api/admin/aboutus-team/:id",
+  requireSection("settings"),
+  upload.single("photo"),
+  async (req, res) => {
+    const { name, role, sort_order } = req.body;
+    const updates = {};
+    if (name) updates.name = name.trim();
+    if (role) {
+      if (!["dean", "assistant_dean", "fic"].includes(role))
+        return res.status(400).json({ error: "Invalid role" });
+      updates.role = role;
+    }
+    if (sort_order !== undefined && sort_order !== "") updates.sort_order = parseInt(sort_order) || 99;
+    if (req.file) updates.photo = await uploadImage(req.file, "aboutus");
+    const { data, error } = await supabase
+      .from("aboutus_team")
+      .update(updates)
+      .eq("id", req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    memInvalidate("aboutus-team:list");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "update",
+      "aboutus_team",
+      name || req.params.id,
+    ).catch(e => console.error("[activity]", e.message));
+    res.json(data);
+  },
+);
+
+app.delete(
+  "/api/admin/aboutus-team/:id",
+  requireSection("settings"),
+  async (req, res) => {
+    const { data: t } = await supabase
+      .from("aboutus_team")
+      .select("name")
+      .eq("id", req.params.id)
+      .single();
+    await supabase.from("aboutus_team").delete().eq("id", req.params.id);
+    memInvalidate("aboutus-team:list");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "delete",
+      "aboutus_team",
+      t?.name || req.params.id,
+    ).catch(e => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
+
 // ── SITE CREDITS ─────────────────────────────────────────────────────────────
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
