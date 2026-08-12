@@ -5949,6 +5949,16 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Time</label><input type="time" id="event-time"></div>
     <div class="form-group"><label>Location</label><textarea id="event-location" rows="3" style="resize:vertical;min-height:70px"></textarea></div>
     <div class="form-group"><label>Location Link <span style="font-weight:400;color:var(--grey);font-size:12px">(Google Maps URL — shown to attendees after registration)</span></label><input type="url" id="event-location-link" placeholder="https://maps.google.com/..."></div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+        <input type="checkbox" id="event-show-whatsapp" onchange="toggleEventWhatsappField()" style="width:auto">
+        <span>Show a "Join WhatsApp Group" button for this event?</span>
+      </label>
+    </div>
+    <div class="form-group" id="event-whatsapp-link-wrap" style="display:none">
+      <label>WhatsApp Group Link <span style="font-weight:400;color:var(--grey);font-size:12px">(shown on the success screen and as a button in the ticket email)</span></label>
+      <input type="url" id="event-whatsapp-link" placeholder="https://chat.whatsapp.com/...">
+    </div>
     <div class="form-group"><label>Cover Image</label><input type="file" id="event-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
       <label>Status</label>

@@ -3439,6 +3439,7 @@ app.post(
       event_time,
       location,
       location_link,
+      whatsapp_group_link,
       is_upcoming,
     } = req.body;
     const coverUrl = await uploadImage(req.file, "events");
@@ -3452,6 +3453,7 @@ app.post(
           event_time,
           location,
           location_link: location_link || null,
+          whatsapp_group_link: whatsapp_group_link || null,
           cover_image: coverUrl,
           is_upcoming: is_upcoming === "true",
         },
@@ -3477,6 +3479,7 @@ app.put(
       event_time,
       location,
       location_link,
+      whatsapp_group_link,
       is_upcoming,
     } = req.body;
     const updates = {
@@ -3486,6 +3489,7 @@ app.put(
       event_time,
       location,
       location_link: location_link || null,
+      whatsapp_group_link: whatsapp_group_link || null,
       is_upcoming: is_upcoming === "true",
     };
     if (req.file) updates.cover_image = await uploadImage(req.file, "events");
@@ -5939,7 +5943,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
       // Fetch event details for the email
       const { data: ev } = await supabasePublic
         .from("events")
-        .select("id,title,event_date,location,location_link,is_upcoming")
+        .select("id,title,event_date,location,location_link,whatsapp_group_link,is_upcoming")
         .eq("id", req.params.id)
         .maybeSingle();
 
@@ -9664,9 +9668,15 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
                   📍 View Location
                 </a>
               </td>` : ""}
+              ${event.whatsapp_group_link ? `
+              <td style="padding-right:8px">
+                <a href="${event.whatsapp_group_link.replace(/"/g,"&quot;")}" style="display:inline-block;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.28);border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#25d366;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
+                  💬 Join this group for details and communication
+                </a>
+              </td>` : ""}
               <td>
-                <a href="${waUrl}" style="display:inline-block;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.28);border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#25d366;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
-                  💬 Share on WhatsApp
+                <a href="${waUrl}" style="display:inline-block;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:20px;padding:8px 16px;font-size:11px;font-weight:600;color:#aeaeb2;text-decoration:none;letter-spacing:.02em;white-space:nowrap">
+                  🔗 Share on WhatsApp
                 </a>
               </td>
             </tr>
@@ -9705,7 +9715,7 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
 </body>
 </html>`;
 
-  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}${event.location_link ? "Location: " + event.location_link + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR ticket is attached to this email as a PDF.\nOpen the PDF attachment and show the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
+  const textContent = `Your KFS Ticket — ${event.title || "Event"}\n\n${eventDate ? eventDate + "\n" : ""}${event.location ? event.location + "\n" : ""}${event.location_link ? "Location: " + event.location_link + "\n" : ""}${event.whatsapp_group_link ? "Join this group for details and communication: " + event.whatsapp_group_link + "\n" : ""}\nName: ${reg.name}\nEmail: ${reg.email}${reg.roll_no ? "\nRoll No: " + reg.roll_no : ""}\n\nYour QR ticket is attached to this email as a PDF.\nOpen the PDF attachment and show the QR code at the entry gate.\n\nSee you there!\nFor queries: filmsocietykiit@gmail.com`;
 
   // ── Generate PDF ticket attachment ─────────────────────────────────────────
   let pdfAttachment = null;
@@ -9870,7 +9880,7 @@ app.post("/api/events/:id/register", registrationRateLimit, async (req, res) => 
   // 1. Check event exists
   const { data: event, error: evErr } = await supabasePublic
     .from("events")
-    .select("id,title,event_date,location,location_link,is_upcoming")
+    .select("id,title,event_date,location,location_link,whatsapp_group_link,is_upcoming")
     .eq("id", eventId)
     .maybeSingle();
   if (evErr || !event) return res.status(404).json({ error: "Event not found" });
