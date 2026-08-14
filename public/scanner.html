@@ -508,6 +508,32 @@ body {
   margin-top: -8px;
 }
 
+/* ── Manual search fallback ─────────────────────────────────────────────────── */
+.manual-toggle-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 0 20px;
+  cursor: pointer;
+}
+.manual-toggle-btn:active { opacity: 0.6; }
+
+#manual-search-wrap { margin-bottom: 16px; }
+.manual-search-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.manual-search-header .search-wrap { margin-bottom: 0; flex: 1; }
+#manual-search-results { border-radius: var(--r-md); overflow: hidden; }
+
 /* ── QR Camera ───────────────────────────────────────────────────────────────── */
 #qr-reader-wrap {
   border-radius: var(--r-2xl);
@@ -1176,6 +1202,22 @@ body.flash-red   { animation: flashR 0.5s ease forwards; }
       <span class="scan-label">Tap to start camera</span>
       <span class="scan-sub">Point at a KFS ticket QR code</span>
     </button>
+
+    <!-- Manual fallback: search + mark present without scanning -->
+    <button class="manual-toggle-btn" id="manual-toggle-btn" onclick="toggleManualSearch()">Can't scan? Search by name or roll no</button>
+
+    <div id="manual-search-wrap" style="display:none">
+      <div class="manual-search-header">
+        <div class="search-wrap">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="manual-search-input" placeholder="Search name, email, roll no…" autocomplete="off" oninput="onManualSearchInput(this.value)">
+        </div>
+        <button class="btn btn-ghost" onclick="closeManualSearch()">Cancel</button>
+      </div>
+      <div id="manual-search-results"></div>
+    </div>
 
     <!-- Camera view -->
     <div id="qr-reader-wrap" style="display:none">
