@@ -253,9 +253,156 @@ function onEventChange() {
   const ev  = _events.find(e => String(e.id) === String(sel.value));
   document.getElementById('topbar-event').textContent = ev ? ev.title : 'Select event';
   hideResult();
+  closeManualSearch();
   _scanCooldown = false;
   _lastScanned  = null;
   log('event-select', `selected event_id=${sel.value} "${ev?.title || 'none'}"`);
+}
+
+// ── MANUAL SEARCH FALLBACK (search name/roll, mark present without QR) ────────
+function toggleManualSearch() {
+  const wrap = document.getElementById('manual-search-wrap');
+  if (wrap.style.display === 'none') openManualSearch();
+  else closeManualSearch();
+}
+
+async function openManualSearch() {
+  const eventId = document.getElementById('event-select').value;
+  if (!eventId) { toast('Select an event first'); return; }
+
+  // If camera is running, stop it — manual search takes over the panel.
+  if (_scanner && _scanning) {
+    try { await _scanner.stop(); } catch {}
+    _scanner = null;
+    _scanning = false;
+    document.getElementById('start-scan-btn').style.display = 'flex';
+    document.getElementById('qr-reader-wrap').style.display = 'none';
+  }
+  hideResult();
+
+  const wrap = document.getElementById('manual-search-wrap');
+  const input = document.getElementById('manual-search-input');
+  wrap.style.display = 'block';
+  input.value = '';
+  input.focus();
+
+  const results = document.getElementById('manual-search-results');
+  results.innerHTML = `<div class="state-box" style="padding:28px 12px"><div class="spinner spinner-dark" style="width:24px;height:24px;border-width:3px"></div></div>`;
+
+  log('manual-search', `opened for event_id=${eventId}`);
+  await ensureRegsLoaded(eventId);
+  renderManualResults('');
+}
+
+function closeManualSearch() {
+  const wrap = document.getElementById('manual-search-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+async function ensureRegsLoaded(eventId, force = false) {
+  if (!force && _regsCache[eventId]) return;
+  const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations`);
+  _regsCache[eventId] = ok ? (data || []) : (_regsCache[eventId] || []);
+  if (!ok) warn('manual-search', 'failed to load registrations for event', eventId);
+}
+
+function onManualSearchInput(q) {
+  renderManualResults(q);
+}
+
+function renderManualResults(q) {
+  const eventId = document.getElementById('event-select').value;
+  const regs    = _regsCache[eventId] || [];
+  const ql      = q.trim().toLowerCase();
+
+  const filtered = !ql ? regs : regs.filter(r =>
+    (r.name    || '').toLowerCase().includes(ql) ||
+    (r.roll_no || '').toLowerCase().includes(ql) ||
+    (r.email   || '').toLowerCase().includes(ql)
+  );
+
+  const list = document.getElementById('manual-search-results');
+
+  if (!filtered.length) {
+    list.innerHTML = `
+      <div class="state-box" style="padding:32px 12px">
+        <div class="state-icon">${ql ? '🔍' : '👤'}</div>
+        <div class="state-title">${ql ? 'No matches' : 'Search for a name or roll no'}</div>
+        <div class="state-sub">${ql ? 'Try a different search' : 'Results will appear here as you type'}</div>
+      </div>`;
+    return;
+  }
+
+  const LIMIT = 30;
+  const shown = filtered.slice(0, LIMIT);
+
+  list.innerHTML = shown.map((r, i) => {
+    const isFirst = i === 0, isLast = i === shown.length - 1;
+    const br = isFirst && isLast ? 'var(--r-md)'
+      : isFirst ? 'var(--r-md) var(--r-md) 0 0'
+      : isLast  ? '0 0 var(--r-md) var(--r-md)'
+      : '0';
+    return `
+    <div class="reg-item" style="border-radius:${br};cursor:${r.checked_in ? 'default' : 'pointer'}"
+      ${r.checked_in ? '' : `onclick="manualMarkPresent(${r.id})"`}>
+      <div class="reg-status-dot ${r.checked_in ? 'present' : ''}"></div>
+      <div class="reg-info">
+        <div class="reg-name">${esc(r.name)}</div>
+        <div class="reg-email">${esc(r.email)}${r.roll_no ? ' · ' + esc(r.roll_no) : ''}</div>
+      </div>
+      <div class="reg-time ${r.checked_in ? 'present' : ''}">
+        ${r.checked_in ? '✓ Present' : 'Mark present'}
+      </div>
+    </div>`;
+  }).join('');
+
+  if (filtered.length > shown.length) {
+    list.innerHTML += `<div class="state-sub" style="text-align:center;padding:12px">+${filtered.length - shown.length} more — refine your search</div>`;
+  }
+}
+
+async function manualMarkPresent(regId) {
+  const eventId = document.getElementById('event-select').value;
+  const regs    = _regsCache[eventId] || [];
+  const r       = regs.find(x => x.id === regId);
+  if (!r || r.checked_in) return;
+
+  log('manual-search', `marking present reg_id=${regId} name="${r.name}" event_id=${eventId}`);
+
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/confirm', {
+    registration_id: regId,
+    event_id: eventId,
+  });
+
+  if (!ok) {
+    flashBody('red');
+    vibrateDevice([100, 50, 100]);
+    playError();
+    if (data?.status === 'already_used') {
+      r.checked_in = true;
+      renderManualResults(document.getElementById('manual-search-input').value);
+    }
+    toast(data?.error || 'Could not mark present — try again');
+    err('manual-search', 'confirm failed:', data?.error);
+    return;
+  }
+
+  flashBody('green');
+  vibrateDevice([60, 40, 60, 40, 100]);
+  playSuccess();
+  toast(`${r.name} marked present`);
+  log('manual-search', `✓ ${r.name} checked in (manual)`);
+
+  r.checked_in    = true;
+  r.checked_in_at = new Date().toISOString();
+  r.checked_in_by = _adminName;
+
+  // Keep Data tab in sync if it's showing the same event
+  if (String(document.getElementById('data-event-select').value) === String(eventId)) {
+    _allRegs = regs;
+  }
+
+  renderManualResults(document.getElementById('manual-search-input').value);
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
@@ -267,6 +414,7 @@ async function startCamera() {
   // browsers block AudioContext until one occurs.
   ensureAudioCtx();
 
+  closeManualSearch();
   document.getElementById('start-scan-btn').style.display = 'none';
   document.getElementById('qr-reader-wrap').style.display = 'block';
 
