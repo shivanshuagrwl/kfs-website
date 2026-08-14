@@ -70,11 +70,14 @@ async function sbQuery(fn, retries = 3) {
 
 // Shared HTML builder — used by both sendConfirmationEmail and the live preview
 // endpoint, so admins see exactly what lands in inboxes.
-function buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue) {
+function buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue, eventId) {
   const dateLine = eventDate
     ? `\n\nDate: ${new Date(eventDate).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
     : "";
   const venueLine = eventVenue ? `\nVenue: ${eventVenue}` : "";
+  const editLine = eventId
+    ? `<p style="font-size:12px;color:#666;margin:0 0 8px"><a href="https://kiitfilmsociety.in/?editReg=${eventId}" style="color:#8ab4f8;text-decoration:none">Need to fix something? Edit your registration →</a></p>`
+    : "";
 
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px">
@@ -97,6 +100,7 @@ function buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue)
     }
   </td></tr>
   <tr><td style="padding:20px 36px 28px;border-top:1px solid #1e1e1e">
+    ${editLine}
     <p style="font-size:12px;color:#444;margin:0">This is an automated confirmation from <a href="https://kiitfilmsociety.in" style="color:#666;text-decoration:none">kiitfilmsociety.in</a>. Please do not reply to this email.</p>
   </td></tr>
 </table>
@@ -111,6 +115,7 @@ async function sendConfirmationEmail({
   eventTitle,
   eventDate,
   eventVenue,
+  eventId,
 }) {
   const { data: rows } = await memCache("settings:email", 300, () =>
     supabase
@@ -145,7 +150,7 @@ async function sendConfirmationEmail({
     .replace(/{{date_line}}/g, dateLine)
     .replace(/{{venue_line}}/g, venueLine);
 
-  const bodyHtml = buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue);
+  const bodyHtml = buildConfirmationEmailHtml(bodyText, eventTitle, eventDate, eventVenue, eventId);
 
   const fromName = s.smtp_from_name || "KFS — KIIT Film Society";
 
@@ -5989,7 +5994,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
               if (insErr) {
                 console.error("[form-submit] event_registrations insert failed:", insErr.message);
                 // Fall back to plain confirmation email
-                sendConfirmationEmail({ toEmail, toName, eventTitle: ev.title || "", eventDate: ev.event_date || null, eventVenue: ev.location || null })
+                sendConfirmationEmail({ toEmail, toName, eventTitle: ev.title || "", eventDate: ev.event_date || null, eventVenue: ev.location || null, eventId: ev.id })
                   .catch(e => console.error("[email] confirmation fallback failed:", e.message));
                 return;
               }
@@ -6028,7 +6033,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           } catch (e) {
             console.error("[form-submit] registration+ticket flow error:", e.message);
             // Fallback: send plain confirmation
-            sendConfirmationEmail({ toEmail, toName, eventTitle: ev?.title || "", eventDate: ev?.event_date || null, eventVenue: ev?.location || null })
+            sendConfirmationEmail({ toEmail, toName, eventTitle: ev?.title || "", eventDate: ev?.event_date || null, eventVenue: ev?.location || null, eventId: ev?.id })
               .catch(err => console.error("[email] send failed:", err.message));
           }
         })();
@@ -6041,6 +6046,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
           eventTitle: ev?.title || "",
           eventDate: ev?.event_date || null,
           eventVenue: ev?.location || null,
+          eventId: ev?.id,
         }).catch((e) => console.error("[email] send failed:", e.message));
 
         // Paid but ticket-less form (e.g. a paid workshop feedback/entry
@@ -6067,6 +6073,317 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   res.json({ success: true, id: response.id, amount_paise: paymentRecord?.amount_paise || 0 });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION EF — Edit My Registration: OTP-gated, one-time edit of a form response
+//
+// SQL migration (run once in Supabase):
+//
+//   ALTER TABLE form_responses ADD COLUMN IF NOT EXISTS edit_locked BOOLEAN NOT NULL DEFAULT FALSE;
+//   ALTER TABLE form_responses ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+//
+//   CREATE TABLE IF NOT EXISTS form_response_edit_otps (
+//     id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     form_response_id       UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
+//     event_id               UUID NOT NULL,
+//     email_norm             TEXT NOT NULL,
+//     otp_hash               TEXT NOT NULL,
+//     attempts                INT NOT NULL DEFAULT 0,
+//     max_attempts            INT NOT NULL DEFAULT 5,
+//     expires_at              TIMESTAMPTZ NOT NULL,
+//     verified_at             TIMESTAMPTZ,
+//     edit_token_hash         TEXT,
+//     edit_token_expires_at   TIMESTAMPTZ,
+//     used_at                 TIMESTAMPTZ,
+//     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_edit_otps_response ON form_response_edit_otps(form_response_id);
+//   ALTER TABLE form_response_edit_otps DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EDIT_OTP_TTL_MS   = 10 * 60 * 1000; // 10 min to enter the OTP
+const EDIT_TOKEN_TTL_MS = 20 * 60 * 1000; // 20 min to finish editing once verified
+
+function hashEditToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// ids of every question whose value must NEVER change during an edit —
+// email-type questions, plus any text/textarea question whose label mentions
+// "name". Enforced server-side regardless of what the client submits.
+function locateUneditableQuestionIds(questions) {
+  const ids = new Set();
+  for (const q of questions) {
+    if (q.type === "email") ids.add(q.id);
+    if (["text", "textarea"].includes(q.type) && /\bname\b/i.test(q.label || "")) ids.add(q.id);
+  }
+  return ids;
+}
+
+const editOtpLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait 15 minutes and try again." },
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+});
+
+// PUBLIC: Step 1 — name + any ONE registered email -> OTP sent if a match
+// exists. Always returns the same generic message either way, so this can't
+// be used to enumerate who registered for an event.
+app.post("/api/events/:id/form/edit/request-otp", editOtpLimit, async (req, res) => {
+  const GENERIC = { success: true, message: "If those details match a registration, we've sent a verification code to the registered email." };
+  try {
+    const name = (req.body.name || "").trim();
+    const email = (req.body.email || "").trim().toLowerCase();
+    if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
+
+    const { data: form } = await supabasePublic
+      .from("event_forms")
+      .select("id,questions")
+      .eq("event_id", req.params.id)
+      .maybeSingle();
+    if (!form) return res.json(GENERIC);
+
+    const { sections } = parseFormSchema(form.questions);
+    const allQuestions = sections.flatMap((s) => s.questions || []);
+    const emailQIds = allQuestions.filter((q) => q.type === "email").map((q) => q.id);
+    const nameQIds = allQuestions
+      .filter((q) => ["text", "textarea"].includes(q.type) && /\bname\b/i.test(q.label || ""))
+      .map((q) => q.id);
+    if (!emailQIds.length) return res.json(GENERIC);
+
+    const { data: responses } = await supabase
+      .from("form_responses")
+      .select("id, answers")
+      .eq("event_id", req.params.id);
+
+    let match = null;
+    for (const row of responses || []) {
+      let ans;
+      try { ans = JSON.parse(row.answers || "{}"); } catch { continue; }
+      // "we have taken multiple mails, check any one is fine" — a hit on ANY
+      // email-type question for this response counts as a match.
+      const emailHit = emailQIds.some((qid) => (ans[qid] || "").trim().toLowerCase() === email);
+      if (!emailHit) continue;
+      const nameHit = nameQIds.length
+        ? nameQIds.some((qid) => (ans[qid] || "").trim().toLowerCase() === name.toLowerCase())
+        : true; // form has no explicit name question — email match alone is enough
+      if (nameHit) { match = row; break; }
+    }
+    if (!match) return res.json(GENERIC);
+
+    const otp = generateOtp();
+    const { error: insErr } = await supabase.from("form_response_edit_otps").insert([{
+      form_response_id: match.id,
+      event_id: req.params.id,
+      email_norm: email,
+      otp_hash: hashOtp(otp),
+      expires_at: new Date(Date.now() + EDIT_OTP_TTL_MS).toISOString(),
+    }]);
+    if (insErr) { console.error("[edit/request-otp] insert:", insErr.message); return res.json(GENERIC); }
+
+    sendOtpViaEmail(email, name, otp).catch((e) => console.error("[edit/request-otp] send:", e.message));
+    res.json(GENERIC);
+  } catch (e) {
+    console.error("[edit/request-otp]", e.message);
+    res.json(GENERIC);
+  }
+});
+
+// PUBLIC: Step 2 — verify the OTP -> returns an edit token + the previously
+// submitted answers so the client can pre-fill the form.
+app.post("/api/events/:id/form/edit/verify-otp", editOtpLimit, async (req, res) => {
+  try {
+    const email = (req.body.email || "").trim().toLowerCase();
+    const code = (req.body.otp || "").trim();
+    if (!email || !code) return res.status(400).json({ error: "Email and code are required" });
+
+    const { data: otpRow } = await supabase
+      .from("form_response_edit_otps")
+      .select("*")
+      .eq("event_id", req.params.id)
+      .eq("email_norm", email)
+      .is("used_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!otpRow) return res.status(400).json({ error: "Invalid or expired code. Please request a new one." });
+    if (new Date(otpRow.expires_at) < new Date())
+      return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    if (otpRow.attempts >= otpRow.max_attempts)
+      return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
+
+    if (hashOtp(code) !== otpRow.otp_hash) {
+      await supabase.from("form_response_edit_otps").update({ attempts: otpRow.attempts + 1 }).eq("id", otpRow.id);
+      return res.status(400).json({ error: "Incorrect code." });
+    }
+
+    const { data: response } = await supabase
+      .from("form_responses")
+      .select("id, answers, edit_locked")
+      .eq("id", otpRow.form_response_id)
+      .maybeSingle();
+    if (!response) return res.status(404).json({ error: "Registration not found." });
+
+    const editToken = crypto.randomBytes(24).toString("hex");
+    await supabase.from("form_response_edit_otps").update({
+      verified_at: new Date().toISOString(),
+      edit_token_hash: hashEditToken(editToken),
+      edit_token_expires_at: new Date(Date.now() + EDIT_TOKEN_TTL_MS).toISOString(),
+    }).eq("id", otpRow.id);
+
+    if (response.edit_locked) {
+      return res.json({
+        success: true,
+        locked: true,
+        message: "This registration has already been edited once. Please contact the organisers if you need further changes.",
+      });
+    }
+
+    const { data: form } = await supabasePublic
+      .from("event_forms")
+      .select("questions")
+      .eq("event_id", req.params.id)
+      .maybeSingle();
+    const { sections } = parseFormSchema(form?.questions);
+    const allQuestions = sections.flatMap((s) => s.questions || []);
+    const uneditableIds = Array.from(locateUneditableQuestionIds(allQuestions));
+
+    let prevAnswers = {};
+    try { prevAnswers = JSON.parse(response.answers || "{}"); } catch {}
+
+    res.json({
+      success: true,
+      locked: false,
+      edit_token: editToken,
+      answers: prevAnswers,
+      uneditable_question_ids: uneditableIds,
+    });
+  } catch (e) {
+    console.error("[edit/verify-otp]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUBLIC: Step 3 — submit edited answers using the edit token from step 2.
+// Name/email fields are always forced back to their original values
+// server-side, no matter what the client sends. One successful edit
+// permanently locks the response (edit_locked) — an admin can clear the
+// lock from the dashboard if the registrant needs to edit again.
+app.post("/api/events/:id/form/edit/submit", strictWriteLimit, upload.any(), async (req, res) => {
+  try {
+    const editToken = (req.body.edit_token || "").trim();
+    if (!editToken) return res.status(400).json({ error: "Missing edit session. Please verify your email again." });
+
+    const { data: otpRow } = await supabase
+      .from("form_response_edit_otps")
+      .select("*")
+      .eq("event_id", req.params.id)
+      .eq("edit_token_hash", hashEditToken(editToken))
+      .is("used_at", null)
+      .maybeSingle();
+    if (!otpRow) return res.status(400).json({ error: "Edit session not found. Please verify your email again." });
+    if (!otpRow.verified_at) return res.status(400).json({ error: "Please verify the code first." });
+    if (new Date(otpRow.edit_token_expires_at) < new Date())
+      return res.status(400).json({ error: "Edit session expired. Please verify your email again." });
+
+    const { data: response } = await supabase
+      .from("form_responses")
+      .select("id, answers, edit_locked")
+      .eq("id", otpRow.form_response_id)
+      .maybeSingle();
+    if (!response) return res.status(404).json({ error: "Registration not found." });
+    if (response.edit_locked)
+      return res.status(409).json({ error: "This registration has already been edited once. Contact the organisers for further changes." });
+
+    let answers = {};
+    try { answers = JSON.parse(req.body.answers || "{}"); } catch { return res.status(400).json({ error: "Invalid answers payload" }); }
+
+    const { data: form } = await supabasePublic
+      .from("event_forms")
+      .select("id,questions")
+      .eq("event_id", req.params.id)
+      .maybeSingle();
+    if (!form) return res.status(404).json({ error: "Form not found" });
+    const { sections } = parseFormSchema(form.questions);
+
+    let prevAnswers = {};
+    try { prevAnswers = JSON.parse(response.answers || "{}"); } catch {}
+
+    // Name/email are locked — whatever was previously stored always wins.
+    const allQuestions = sections.flatMap((s) => s.questions || []);
+    const uneditableIds = locateUneditableQuestionIds(allQuestions);
+    for (const qid of uneditableIds) answers[qid] = prevAnswers[qid];
+
+    const { questions } = computeSectionPath(sections, answers);
+    for (const q of questions) {
+      if (!q.required) continue;
+      if (q.type === "image") {
+        const hasFile = (req.files || []).some((f) => f.fieldname === q.id);
+        const hasExisting = !!prevAnswers[q.id];
+        if (!hasFile && !hasExisting) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+      } else {
+        const val = answers[q.id];
+        const isEmpty = val === undefined || val === null || val === "" || (Array.isArray(val) && val.length === 0);
+        if (isEmpty) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+      }
+    }
+
+    const imageUrls = {};
+    for (const file of req.files || []) {
+      try {
+        imageUrls[file.fieldname] = await uploadImage(file, `form-responses/${req.params.id}`);
+      } catch (e) {
+        return res.status(500).json({ error: "Image upload failed: " + e.message });
+      }
+    }
+
+    const finalAnswers = { ...prevAnswers, ...answers, ...imageUrls };
+    for (const qid of uneditableIds) finalAnswers[qid] = prevAnswers[qid];
+
+    const { error: updErr } = await supabase
+      .from("form_responses")
+      .update({
+        answers: JSON.stringify(finalAnswers),
+        edit_locked: true,
+        edited_at: new Date().toISOString(),
+      })
+      .eq("id", response.id);
+    if (updErr) return res.status(500).json({ error: "Internal server error" });
+
+    await supabase.from("form_response_edit_otps").update({ used_at: new Date().toISOString() }).eq("id", otpRow.id);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[edit/submit]", e.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ADMIN: Reset the edit lock on a single response so the registrant can edit again
+app.post(
+  "/api/admin/events/:id/form/responses/:responseId/reset-edit-lock",
+  requireSection("events"),
+  async (req, res) => {
+    const { error } = await supabase
+      .from("form_responses")
+      .update({ edit_locked: false, edited_at: null })
+      .eq("id", req.params.responseId)
+      .eq("event_id", req.params.id);
+    if (error) return res.status(500).json({ error: "Internal server error" });
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "update",
+      "form_response_edit_lock",
+      `Reset edit lock for response ${req.params.responseId}`,
+    ).catch((e) => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
 
 // ADMIN: Download responses as server-side JSON (client does XLSX conversion)
 // This is an alias for the GET responses endpoint used by the download button
@@ -9706,6 +10023,9 @@ async function sendTicketEmail({ event, reg, qrDataUrl }) {
       <p style="font-size:11px;color:#3a3a3c;text-align:center;line-height:1.6;margin:0">
         This ticket is personal and non-transferable. Do not share your QR code.
       </p>
+      ${event.id ? `<p style="font-size:11px;color:#5b8ef2;text-align:center;line-height:1.6;margin:8px 0 0">
+        <a href="https://kiitfilmsociety.in/?editReg=${event.id}" style="color:#5b8ef2;text-decoration:none">Need to fix a typo? Edit your registration →</a>
+      </p>` : ""}
     </td></tr>
 
   </table>
