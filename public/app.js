@@ -694,6 +694,7 @@ function renderEventItem(e, full=false) {
     ${imgCol}
     <div class="event-action-row">
       ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventFormById('${e.id}')">Register →<\/button>` : ''}
+      ${e.is_upcoming ? `<button class="btn-sm" style="margin-left:8px" onclick="openEditRegModal('${e.id}','${(e.title||'').replace(/'/g,"\\'")}')">Edit Registration<\/button>` : ''}
       ${shareHtml}
     <\/div>
     <div class="event-location">${e.location||''}<br><span class="event-time-display">${fmtTime(e.event_time||'')}<\/span><\/div>
@@ -4779,6 +4780,16 @@ async function checkRoute() {
   const wp = document.getElementById('page-wrapped');
   if (wp && _wrappedConfig?.enabled !== false) wp.style.display = '';
 
+  // Emailed "Edit your registration" links carry ?editReg=<eventId> and can
+  // land on any path (root, /events, a slugged event link, etc.) — handle it
+  // first, independent of path routing, then fall through to normal routing.
+  const editRegId = new URLSearchParams(window.location.search).get('editReg');
+  if (editRegId) {
+    navigate('events', false);
+    setTimeout(() => openEditRegModalById(editRegId), 400);
+    return;
+  }
+
   const path = window.location.pathname.replace(/^\//, '');
   if (!path || path === 'home') { navigate('home', false); return; }
   if (path === 'admin') { navigate('admin', false); return; }
@@ -7923,6 +7934,10 @@ async function openResponseViewer() {
       const paidBadge = r.amount_paise > 0
         ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.25);color:#34c759;border-radius:20px;font-size:10.5px;font-weight:700" title="${r.razorpay_payment_id || ''}">₹${Math.round(r.amount_paise / 100).toLocaleString('en-IN')} paid</span>`
         : '';
+      const editBadge = r.edit_locked
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.3);color:#f0b429;border-radius:20px;font-size:10.5px;font-weight:700" title="${r.edited_at ? 'Edited ' + new Date(r.edited_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}">Edited — locked</span>
+           <button class="btn-sm" style="padding:2px 8px;font-size:10.5px" onclick="adminResetEditLock('${r.id}', this)">Unlock</button>`
+        : '';
       const answerRows = questions.map(q => {
         const val = answers[q.id] || answers[q.label] || '';
         const display = Array.isArray(val) ? val.join(', ') : String(val);
@@ -7938,6 +7953,7 @@ async function openResponseViewer() {
           <div class="fb-rv-num">${i + 1}</div>
           <div style="display:flex;align-items:center;gap:8px">
             ${paidBadge}
+            ${editBadge}
             <div class="fb-rv-time">${time}</div>
           </div>
         </div>
@@ -7947,6 +7963,24 @@ async function openResponseViewer() {
 
   } catch(e) {
     body.innerHTML = '<div class="fb-rv-empty"><span>Error: ' + e.message + '</span></div>';
+  }
+}
+
+// Clears a response's one-time edit lock so the registrant can submit the
+// "Edit My Registration" flow again. Requires the "events" admin section.
+async function adminResetEditLock(responseId, btnEl) {
+  if (!_fbEventId) return;
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  try {
+    const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses/' + responseId + '/reset-edit-lock', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + adminToken },
+    });
+    if (!res.ok) { alert('Could not reset the edit lock. Please try again.'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Unlock'; } return; }
+    openResponseViewer(); // refresh the list so the badge disappears
+  } catch (e) {
+    alert('Network error. Please try again.');
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Unlock'; }
   }
 }
 
@@ -8883,6 +8917,295 @@ document.getElementById('rf-tc-checkbox')?.addEventListener('change', function()
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   document.head.appendChild(s);
 })();
+
+// ════════════════════════════════════════════════════════════════════════════
+// EDIT MY REGISTRATION (Public, OTP-gated, once per person)
+// name+email lookup → OTP → pre-filled form (name/email locked) → one-time save
+// ════════════════════════════════════════════════════════════════════════════
+let _erfEventId = null;
+let _erfEventTitle = '';
+let _erfQuestions = [];       // flattened questions across all sections, in order
+let _erfPrevAnswers = {};     // answers as they were before this edit
+let _erfUneditableIds = [];   // question ids the server will always force back to their old value
+let _erfEditToken = null;
+let _erfImageFiles = {};      // qid -> File, for any re-uploaded images during edit
+
+function openEditRegModal(eventId, eventTitle) {
+  _erfEventId = eventId;
+  _erfEventTitle = eventTitle || '';
+  _erfEditToken = null;
+  _erfImageFiles = {};
+  document.getElementById('erf-event-label').textContent = _erfEventTitle;
+  document.getElementById('erf-name').value = '';
+  document.getElementById('erf-email').value = '';
+  document.getElementById('erf-otp').value = '';
+  ['erf-lookup-error', 'erf-otp-error', 'erf-edit-error'].forEach(id => {
+    const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; }
+  });
+  _erfShowStep('lookup');
+  document.getElementById('edit-reg-modal').style.display = 'flex';
+}
+
+// Entry point from emailed links: /?editReg=<eventId> — fetch the event first
+// so we can show its title, then open the modal at step 1.
+async function openEditRegModalById(eventId) {
+  try {
+    const events = await apiFetch('/api/events');
+    const ev = (events || []).find(x => String(x.id) === String(eventId));
+    openEditRegModal(eventId, ev ? ev.title : '');
+  } catch (e) {
+    openEditRegModal(eventId, '');
+  }
+}
+
+function closeEditRegModal() {
+  document.getElementById('edit-reg-modal').style.display = 'none';
+}
+
+function _erfShowStep(step) {
+  ['lookup', 'otp', 'edit', 'success'].forEach(s => {
+    const el = document.getElementById('erf-step-' + s);
+    if (el) el.style.display = (s === step) ? 'block' : 'none';
+  });
+}
+
+function erfBackToLookup() {
+  _erfShowStep('lookup');
+}
+
+async function erfRequestOtp(isResend) {
+  const name = document.getElementById('erf-name').value.trim();
+  const email = document.getElementById('erf-email').value.trim();
+  const errEl = document.getElementById('erf-lookup-error');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!name || !email) {
+    if (errEl) { errEl.textContent = 'Please enter both your name and email.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const btn = document.getElementById('erf-lookup-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Sending…'; }
+
+  try {
+    const res = await fetch('/api/events/' + _erfEventId + '/form/edit/request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = data.error || 'Something went wrong. Please try again.'; errEl.style.display = 'block'; }
+      return;
+    }
+    _erfShowStep('otp');
+    document.getElementById('erf-otp').value = '';
+    document.getElementById('erf-otp').focus();
+  } catch (e) {
+    if (errEl) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+  }
+}
+
+async function erfVerifyOtp() {
+  const email = document.getElementById('erf-email').value.trim();
+  const otp = document.getElementById('erf-otp').value.trim();
+  const errEl = document.getElementById('erf-otp-error');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!otp || otp.length !== 6) {
+    if (errEl) { errEl.textContent = 'Enter the 6-digit code.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const btn = document.getElementById('erf-otp-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Verifying…'; }
+
+  try {
+    const res = await fetch('/api/events/' + _erfEventId + '/form/edit/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, otp }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = data.error || 'Incorrect or expired code.'; errEl.style.display = 'block'; }
+      return;
+    }
+
+    if (data.locked) {
+      _erfShowStep('edit');
+      document.getElementById('erf-edit-fields').innerHTML = '';
+      document.getElementById('erf-edit-btn').style.display = 'none';
+      const lockedMsg = document.getElementById('erf-locked-msg');
+      lockedMsg.textContent = data.message || 'This registration has already been edited once. Please contact the organisers if you need further changes.';
+      lockedMsg.style.display = 'block';
+      return;
+    }
+
+    _erfEditToken = data.edit_token;
+    _erfPrevAnswers = data.answers || {};
+    _erfUneditableIds = data.uneditable_question_ids || [];
+    _erfImageFiles = {};
+
+    // Fetch the form schema fresh so field types/labels/branching are current.
+    const formRes = await fetch('/api/events/' + _erfEventId + '/form');
+    const form = await formRes.json();
+    const { sections } = clientParseFormSchema(form.questions);
+    // Resolve the same branch path the registrant originally took, using
+    // their previous answers — so we show exactly the fields relevant to them.
+    const path = clientComputeSectionPath(sections, _erfPrevAnswers);
+    _erfQuestions = path.questions;
+
+    erfRenderEditForm();
+    document.getElementById('erf-edit-btn').style.display = '';
+    document.getElementById('erf-locked-msg').style.display = 'none';
+    _erfShowStep('edit');
+  } catch (e) {
+    if (errEl) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+  }
+}
+
+function erfRenderEditForm() {
+  const container = document.getElementById('erf-edit-fields');
+  container.innerHTML = _erfQuestions.map(q => erfBuildField(q)).join('');
+  // Pre-fill + lock name/email fields, pre-fill everything else editable.
+  for (const q of _erfQuestions) {
+    const isLocked = _erfUneditableIds.includes(q.id);
+    const val = _erfPrevAnswers[q.id];
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = container.querySelector(`[data-eqid="${q.id}"] input, [data-eqid="${q.id}"] textarea`);
+      if (el) {
+        el.value = val || '';
+        if (isLocked) { el.disabled = true; el.classList.add('erf-locked-field'); }
+      }
+    } else if (q.type === 'radio') {
+      container.querySelectorAll(`input[name="eq_${q.id}"]`).forEach(inp => {
+        if (inp.value === val) inp.checked = true;
+        if (isLocked) inp.disabled = true;
+      });
+    } else if (q.type === 'checkbox') {
+      const vals = Array.isArray(val) ? val : [];
+      container.querySelectorAll(`input[data-eqid="${q.id}"]`).forEach(inp => {
+        if (vals.includes(inp.value)) inp.checked = true;
+        if (isLocked) inp.disabled = true;
+      });
+    } else if (q.type === 'image' && val) {
+      const prev = document.getElementById('erf-img-preview-' + q.id);
+      if (prev) { prev.src = val; prev.style.display = 'block'; }
+    }
+  }
+}
+
+function erfBuildField(q) {
+  const isLocked = _erfUneditableIds.includes(q.id);
+  const req = q.required ? `<span class="req-dot">*</span>` : '';
+  const lockNote = isLocked ? `<span style="font-size:11px;color:var(--grey);font-weight:400"> (locked)</span>` : '';
+  const label = `<div class="reg-field-label">${q.label || 'Question'}${req}${lockNote}</div>`;
+
+  if (q.type === 'text' || q.type === 'email' || q.type === 'phone') {
+    const t = q.type === 'email' ? 'email' : q.type === 'phone' ? 'tel' : 'text';
+    return `<div class="reg-field" data-eqid="${q.id}">${label}
+      <input class="reg-input" type="${t}" data-eqid-input ${q.required ? 'required' : ''}>
+    </div>`;
+  }
+  if (q.type === 'textarea') {
+    return `<div class="reg-field" data-eqid="${q.id}">${label}
+      <textarea class="reg-textarea" data-eqid-input ${q.required ? 'required' : ''}></textarea>
+    </div>`;
+  }
+  if (q.type === 'radio') {
+    const opts = (q.options || []).map(opt => `
+      <label class="reg-radio-item" onclick="if(!this.querySelector('input').disabled) this.parentNode.querySelectorAll('.reg-radio-item').forEach(l=>l.classList.remove('selected')), this.classList.add('selected')">
+        <input type="radio" name="eq_${q.id}" value="${(opt||'').replace(/"/g,'&quot;')}" data-eqid="${q.id}"> ${opt}
+      </label>`).join('');
+    return `<div class="reg-field" data-eqid="${q.id}">${label}<div class="reg-radio-group">${opts}</div></div>`;
+  }
+  if (q.type === 'checkbox') {
+    const opts = (q.options || []).map(opt => `
+      <label class="reg-check-item" onclick="setTimeout(()=>this.classList.toggle('selected', this.querySelector('input').checked),0)">
+        <input type="checkbox" value="${(opt||'').replace(/"/g,'&quot;')}" data-eqid="${q.id}"> ${opt}
+      </label>`).join('');
+    return `<div class="reg-field" data-eqid="${q.id}">${label}<div class="reg-check-group">${opts}</div></div>`;
+  }
+  if (q.type === 'image') {
+    return `<div class="reg-field" data-eqid="${q.id}">${label}
+      <div class="reg-image-upload" id="erf-img-upload-${q.id}">
+        <input type="file" accept="image/*" onchange="erfPreviewImage(this,'${q.id}')">
+        <div class="reg-image-upload-text">Click to replace image (optional)<br><span style="font-size:11px;opacity:.6">Leave blank to keep the current one</span></div>
+        <img class="reg-image-preview" id="erf-img-preview-${q.id}" src="" alt="" style="display:none">
+      </div>
+    </div>`;
+  }
+  return `<div class="reg-field" data-eqid="${q.id}">${label}<input class="reg-input" type="text" data-eqid-input></div>`;
+}
+
+function erfPreviewImage(input, qid) {
+  const file = input.files[0];
+  if (!file) return;
+  _erfImageFiles[qid] = file;
+  const prev = document.getElementById('erf-img-preview-' + qid);
+  if (prev) { prev.src = URL.createObjectURL(file); prev.style.display = 'block'; }
+}
+
+function erfCollectAnswers() {
+  const container = document.getElementById('erf-edit-fields');
+  const answers = {};
+  for (const q of _erfQuestions) {
+    if (_erfUneditableIds.includes(q.id)) { answers[q.id] = _erfPrevAnswers[q.id]; continue; }
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = container.querySelector(`[data-eqid="${q.id}"] [data-eqid-input]`);
+      answers[q.id] = el ? el.value.trim() : (_erfPrevAnswers[q.id] || '');
+    } else if (q.type === 'radio') {
+      const checked = container.querySelector(`input[name="eq_${q.id}"]:checked`);
+      answers[q.id] = checked ? checked.value : (_erfPrevAnswers[q.id] || '');
+    } else if (q.type === 'checkbox') {
+      const checked = [...container.querySelectorAll(`input[data-eqid="${q.id}"]:checked`)].map(i => i.value);
+      answers[q.id] = checked.length ? checked : (_erfPrevAnswers[q.id] || []);
+    }
+    // image: only included via _erfImageFiles (multipart) when re-uploaded; otherwise server keeps the old URL.
+  }
+  return answers;
+}
+
+async function erfSubmitEdit() {
+  const errEl = document.getElementById('erf-edit-error');
+  if (errEl) errEl.style.display = 'none';
+  if (!_erfEditToken) return;
+
+  const btn = document.getElementById('erf-edit-btn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving…'; }
+
+  try {
+    const answers = erfCollectAnswers();
+    const fd = new FormData();
+    fd.append('edit_token', _erfEditToken);
+    fd.append('answers', JSON.stringify(answers));
+    for (const [qid, file] of Object.entries(_erfImageFiles)) fd.append(qid, file);
+
+    const res = await fetch('/api/events/' + _erfEventId + '/form/edit/submit', {
+      method: 'POST', credentials: 'include', body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = data.error || 'Could not save changes. Please try again.'; errEl.style.display = 'block'; }
+      return;
+    }
+    _erfShowStep('success');
+  } catch (e) {
+    if (errEl) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SMART RECOMMENDATIONS — tag/genre/director-based engine
