@@ -694,7 +694,7 @@ function renderEventItem(e, full=false) {
     ${imgCol}
     <div class="event-action-row">
       ${e.is_upcoming ? `<button class="event-register-btn" onclick="openEventFormById('${e.id}')">Register →<\/button>` : ''}
-      ${e.is_upcoming ? `<button class="btn-sm" style="margin-left:8px" onclick="openEditRegModal('${e.id}','${(e.title||'').replace(/'/g,"\\'")}')">Edit Registration<\/button>` : ''}
+      ${e.is_upcoming ? `<button class="event-edit-reg-btn" title="Edit Registration" aria-label="Edit Registration" onclick="openEditRegModal('${e.id}','${(e.title||'').replace(/'/g,"\\'")}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/><\/svg><\/button>` : ''}
       ${shareHtml}
     <\/div>
     <div class="event-location">${e.location||''}<br><span class="event-time-display">${fmtTime(e.event_time||'')}<\/span><\/div>
@@ -15621,4 +15621,3 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ap?.classList.contains('active') && adminToken) loadModerationBadge();
   }, 90000);
 });
-
