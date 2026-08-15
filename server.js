@@ -10385,6 +10385,49 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
   res.json({ success: true, name: reg.name });
 });
 
+// ── ADMIN: Undo a check-in (revert accidental "mark present") ─────────────────
+app.post("/api/admin/scan-qr/undo", authMiddleware, async (req, res) => {
+  const { registration_id, event_id } = req.body;
+  if (!registration_id) return res.status(400).json({ error: "registration_id required" });
+
+  const { data: reg } = await supabase
+    .from("event_registrations")
+    .select("id, name, email, checked_in, event_id")
+    .eq("id", registration_id)
+    .maybeSingle();
+
+  if (!reg) return res.status(404).json({ error: "Registration not found" });
+
+  if (event_id && String(reg.event_id) !== String(event_id)) {
+    return res.status(400).json({ error: "Registration does not belong to the selected event." });
+  }
+
+  if (!reg.checked_in) {
+    return res.status(409).json({ error: "This ticket isn't marked present.", status: "not_checked_in" });
+  }
+
+  console.log(`[scan-undo] Reverting check-in for reg_id=${registration_id} event_id=${event_id} by ${req.admin?.username}`);
+
+  const { error: updateErr } = await supabase
+    .from("event_registrations")
+    .update({
+      checked_in: false,
+      checked_in_at: null,
+      checked_in_by: null,
+    })
+    .eq("id", registration_id);
+
+  if (updateErr) {
+    console.error(`[scan-undo] DB update failed for reg_id=${registration_id}:`, updateErr.message, updateErr.code);
+    return res.status(500).json({ error: "Failed to undo check-in", detail: updateErr.message });
+  }
+
+  logActivity(req.admin.id, req.admin.name, "undo_scan", "event_registration", `${reg.name} — event ${reg.event_id}`).catch(() => {});
+
+  console.log(`[scan-undo] ✓ ${reg.name} (id=${registration_id}) check-in reverted by ${req.admin.username} for event ${reg.event_id}`);
+  res.json({ success: true, name: reg.name });
+});
+
 // ── ADMIN: Get all registrations for an event ─────────────────────────────────
 app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) => {
   const _rawId = req.params.id || req.params.eventId;
@@ -18882,4 +18925,3 @@ async function toggleMessageReaction(messageId, chatType, myId, emoji) {
     await supabase.from("message_reactions").insert([{ chat_type: chatType, message_id: messageId, member_id: myId, emoji }]);
   }
 }
-
