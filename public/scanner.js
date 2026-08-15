@@ -343,15 +343,15 @@ function renderManualResults(q) {
       : isLast  ? '0 0 var(--r-md) var(--r-md)'
       : '0';
     return `
-    <div class="reg-item" style="border-radius:${br};cursor:${r.checked_in ? 'default' : 'pointer'}"
-      ${r.checked_in ? '' : `onclick="manualMarkPresent(${r.id})"`}>
+    <div class="reg-item" style="border-radius:${br};cursor:pointer"
+      onclick="${r.checked_in ? `manualUndoPresent(${r.id})` : `manualMarkPresent(${r.id})`}">
       <div class="reg-status-dot ${r.checked_in ? 'present' : ''}"></div>
       <div class="reg-info">
         <div class="reg-name">${esc(r.name)}</div>
         <div class="reg-email">${esc(r.email)}${r.roll_no ? ' · ' + esc(r.roll_no) : ''}</div>
       </div>
       <div class="reg-time ${r.checked_in ? 'present' : ''}">
-        ${r.checked_in ? '✓ Present' : 'Mark present'}
+        ${r.checked_in ? '✓ Present · tap to undo' : 'Mark present'}
       </div>
     </div>`;
   }).join('');
@@ -398,6 +398,41 @@ async function manualMarkPresent(regId) {
   r.checked_in_by = _adminName;
 
   // Keep Data tab in sync if it's showing the same event
+  if (String(document.getElementById('data-event-select').value) === String(eventId)) {
+    _allRegs = regs;
+  }
+
+  renderManualResults(document.getElementById('manual-search-input').value);
+}
+
+async function manualUndoPresent(regId) {
+  const eventId = document.getElementById('event-select').value;
+  const regs    = _regsCache[eventId] || [];
+  const r       = regs.find(x => x.id === regId);
+  if (!r || !r.checked_in) return;
+
+  if (!confirm(`Undo check-in for ${r.name}? They will show as pending again.`)) return;
+
+  log('manual-search', `undoing reg_id=${regId} name="${r.name}" event_id=${eventId}`);
+
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/undo', {
+    registration_id: regId,
+    event_id: eventId,
+  });
+
+  if (!ok) {
+    toast(data?.error || 'Undo failed — try again');
+    err('manual-search', 'undo failed:', data?.error);
+    return;
+  }
+
+  toast(`${r.name} reverted to pending`);
+  log('manual-search', `✓ ${r.name} check-in undone (manual)`);
+
+  r.checked_in    = false;
+  r.checked_in_at = null;
+  r.checked_in_by = null;
+
   if (String(document.getElementById('data-event-select').value) === String(eventId)) {
     _allRegs = regs;
   }
@@ -871,11 +906,35 @@ function openRegDetail(id) {
     <div class="sheet-email">${esc(r.email)}</div>
     <div class="sheet-fields">${fields}</div>
     <div class="sheet-actions">
+      ${r.checked_in ? `<button class="btn btn-ghost" style="width:auto" onclick="undoCheckin(${r.id}, '${evId}')">Undo check-in</button>` : ''}
       <button class="btn btn-danger" style="width:auto" onclick="deleteReg(${r.id}, '${evId}')">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal()">Close</button>
     </div>
   `;
   document.getElementById('modal-overlay').classList.add('visible');
+}
+
+async function undoCheckin(id, eventId) {
+  if (!confirm('Undo this check-in? They will show as pending again.')) return;
+  const { ok, data } = await api('POST', '/api/admin/scan-qr/undo', {
+    registration_id: id,
+    event_id: eventId,
+  });
+  if (!ok) { toast(data?.error || 'Undo failed'); return; }
+  closeModal();
+  toast(`${data?.name || 'Registration'} reverted to pending`);
+  log('undo', `reg_id=${id} event_id=${eventId} reverted`);
+
+  // Update local caches so lists reflect the change immediately
+  const r1 = _allRegs.find(x => x.id === id);
+  if (r1) { r1.checked_in = false; r1.checked_in_at = null; r1.checked_in_by = null; }
+  const cached = _regsCache[eventId];
+  if (cached) {
+    const r2 = cached.find(x => x.id === id);
+    if (r2) { r2.checked_in = false; r2.checked_in_at = null; r2.checked_in_by = null; }
+  }
+
+  renderDataTab(eventId);
 }
 
 async function deleteReg(id, eventId) {
