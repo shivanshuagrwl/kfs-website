@@ -4180,7 +4180,11 @@ async function deleteAboutGalleryImage(id) {
 async function loadHomeAboutGalleryAdmin() {
   const grid = document.getElementById('admin-home-about-gallery-grid');
   if (!grid) return;
-  const list = await apiFetch('/api/home-about-gallery').catch(() => []);
+  // Cache-bust — the public GET route is browser-cacheable (Cache-Control:
+  // max-age=120) so the homepage stays fast, but that means without a
+  // cache-busting param the admin panel can show a stale list right after
+  // an upload/delete. Timestamp param forces a fresh network request.
+  const list = await apiFetch('/api/home-about-gallery?_=' + Date.now());
   if (!list || !list.length) {
     grid.innerHTML = `<span style="color:var(--grey);font-size:13px">No photos yet — add at least 2 for the auto-fade slideshow to appear on the homepage.</span>`;
     return;
@@ -4205,16 +4209,40 @@ async function uploadHomeAboutGalleryImage(inputEl) {
       body: fd,
     });
     if (!res.ok) { alert('Error uploading image'); return; }
+    const saved = await res.json().catch(() => null);
     inputEl.value = '';
-    loadHomeAboutGalleryAdmin();
+    // Optimistically drop the new photo straight into the grid so it shows
+    // up instantly, instead of waiting on a re-fetch that might still hit
+    // a cached response.
+    if (saved && saved.id && saved.photo) {
+      const grid = document.getElementById('admin-home-about-gallery-grid');
+      if (grid) {
+        if (grid.querySelector('span')) grid.innerHTML = ''; // clear "no photos yet" placeholder
+        grid.insertAdjacentHTML('beforeend', `
+          <div style="position:relative;width:110px;height:80px" data-gid="${saved.id}">
+            <img src="${saved.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+            <button type="button" onclick="deleteHomeAboutGalleryImage('${saved.id}')" title="Remove"
+              style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:#e53935;color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+          </div>`);
+      }
+    } else {
+      loadHomeAboutGalleryAdmin();
+    }
   } catch (e) { alert('Error uploading image'); }
 }
 
 async function deleteHomeAboutGalleryImage(id) {
   if (!confirm('Remove this photo from the homepage slideshow?')) return;
   await apiFetch('/api/admin/home-about-gallery/'+id, 'DELETE');
-  loadHomeAboutGalleryAdmin();
+  // Remove it from the DOM directly rather than re-fetching (same cache issue).
+  const grid = document.getElementById('admin-home-about-gallery-grid');
+  const card = grid?.querySelector(`[data-gid="${id}"]`);
+  if (card) card.remove();
+  if (grid && !grid.children.length) {
+    grid.innerHTML = `<span style="color:var(--grey);font-size:13px">No photos yet — add at least 2 for the auto-fade slideshow to appear on the homepage.</span>`;
+  }
 }
+
 
 function openAchievementModal(a=null) {
   document.getElementById('achievement-modal').classList.add('open');
