@@ -425,17 +425,60 @@ function animateCounters() {
   });
 }
 
+// ── Homepage About visual — Apple-style auto-advancing crossfade slideshow ──
+let _aboutFadeTimer = null;
+function initAboutFadeSlideshow(images) {
+  const vb = document.getElementById('about-visual-box');
+  const stack = document.getElementById('about-fade-stack');
+  const dotsWrap = document.getElementById('about-fade-dots');
+  const lb = document.getElementById('about-logo-fallback');
+  const tp = document.getElementById('about-team-photo');
+  if (!vb || !stack || !images || !images.length) return;
+
+  if (_aboutFadeTimer) { clearInterval(_aboutFadeTimer); _aboutFadeTimer = null; }
+  if (tp) tp.style.display = 'none';
+  if (lb) lb.style.display = 'none';
+  vb.classList.add('has-photo');
+
+  stack.innerHTML = images.map((g, i) =>
+    `<img class="about-fade-img${i === 0 ? ' active' : ''}" src="${g.photo}" alt="KFS" loading="${i === 0 ? 'eager' : 'lazy'}">`
+  ).join('');
+
+  if (images.length > 1) {
+    dotsWrap.style.display = 'flex';
+    dotsWrap.innerHTML = images.map((_, i) =>
+      `<span class="about-fade-dot${i === 0 ? ' active' : ''}"></span>`
+    ).join('');
+  } else {
+    dotsWrap.style.display = 'none';
+  }
+
+  let idx = 0;
+  const imgEls = stack.querySelectorAll('.about-fade-img');
+  const dotEls = dotsWrap.querySelectorAll('.about-fade-dot');
+  if (images.length <= 1) return;
+
+  _aboutFadeTimer = setInterval(() => {
+    imgEls[idx].classList.remove('active');
+    if (dotEls[idx]) dotEls[idx].classList.remove('active');
+    idx = (idx + 1) % imgEls.length;
+    imgEls[idx].classList.add('active');
+    if (dotEls[idx]) dotEls[idx].classList.add('active');
+  }, 4200);
+}
+
 async function loadHomeData() {
   // Fetch everything in parallel — no more sequential awaits causing content
   // to pop in one section at a time (the "numbers/links coming and going" bug).
-  const [settings, achievements, events, blogs, testimonials, movies, allReviews] = await Promise.all([
+  const [settings, achievements, events, blogs, testimonials, movies, allReviews, aboutGallery] = await Promise.all([
     apiFetch('/api/settings').catch(() => null),
     apiFetch('/api/achievements').catch(() => []),
     apiFetch('/api/events').catch(() => []),
     apiFetch('/api/blogs').catch(() => []),
     apiFetch('/api/testimonials').catch(() => []),
     apiFetch('/api/movies').catch(() => []),
-    fetch('/api/reviews/all').then(r => r.ok ? r.json() : []).catch(() => [])
+    fetch('/api/reviews/all').then(r => r.ok ? r.json() : []).catch(() => []),
+    apiFetch('/api/home-about-gallery').catch(() => [])
   ]);
 
   // ── Settings / hero / footer ──────────────────────────────────────────────
@@ -455,7 +498,9 @@ async function loadHomeData() {
       if(window.glowUpdate) window.glowUpdate();
     }
     document.getElementById('about-text').textContent = settings.about_text || '';
-    if (settings.team_photo) {
+    if (aboutGallery && aboutGallery.length) {
+      initAboutFadeSlideshow(aboutGallery);
+    } else if (settings.team_photo) {
       const tp = document.getElementById('about-team-photo');
       const lb = document.getElementById('about-logo-fallback');
       if (tp) { tp.src = settings.team_photo; tp.style.display = 'block'; }
@@ -3088,6 +3133,7 @@ async function loadAdminData(name) {
       document.getElementById('set-aboutus-text').value = settings.aboutus_text||'';
       loadAboutTeamAdmin();
       loadAboutGalleryAdmin();
+      loadHomeAboutGalleryAdmin();
       if (settings.team_photo) {
         document.getElementById('set-team-photo-url').value = settings.team_photo;
         document.getElementById('team-photo-img').src = settings.team_photo;
@@ -4128,6 +4174,46 @@ async function deleteAboutGalleryImage(id) {
   if (!confirm('Remove this image from the scroller?')) return;
   await apiFetch('/api/admin/aboutus-gallery/'+id, 'DELETE');
   loadAboutGalleryAdmin();
+}
+
+// ── HOMEPAGE ABOUT FADE SLIDESHOW — admin-managed, homepage About visual box ──
+async function loadHomeAboutGalleryAdmin() {
+  const grid = document.getElementById('admin-home-about-gallery-grid');
+  if (!grid) return;
+  const list = await apiFetch('/api/home-about-gallery').catch(() => []);
+  if (!list || !list.length) {
+    grid.innerHTML = `<span style="color:var(--grey);font-size:13px">No photos yet — add at least 2 for the auto-fade slideshow to appear on the homepage.</span>`;
+    return;
+  }
+  grid.innerHTML = list.map(g => `
+    <div style="position:relative;width:110px;height:80px" data-gid="${g.id}">
+      <img src="${g.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      <button type="button" onclick="deleteHomeAboutGalleryImage('${g.id}')" title="Remove"
+        style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:#e53935;color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+    </div>`).join('');
+}
+
+async function uploadHomeAboutGalleryImage(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('photo', file);
+  try {
+    const res = await fetch('/api/admin/home-about-gallery', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
+      body: fd,
+    });
+    if (!res.ok) { alert('Error uploading image'); return; }
+    inputEl.value = '';
+    loadHomeAboutGalleryAdmin();
+  } catch (e) { alert('Error uploading image'); }
+}
+
+async function deleteHomeAboutGalleryImage(id) {
+  if (!confirm('Remove this photo from the homepage slideshow?')) return;
+  await apiFetch('/api/admin/home-about-gallery/'+id, 'DELETE');
+  loadHomeAboutGalleryAdmin();
 }
 
 function openAchievementModal(a=null) {
@@ -12057,6 +12143,7 @@ function triggerClick_member_xlsx_input()  { document.getElementById('member-xls
 function triggerClick_portal_activate_input() { document.getElementById('portal-activate-input')?.click(); }
 function triggerClick_set_team_photo_file(){ document.getElementById('set-team-photo-file')?.click(); }
 function triggerClick_aboutus_gallery_file(){ document.getElementById('aboutus-gallery-file')?.click(); }
+function triggerClick_home_about_gallery_file(){ document.getElementById('home-about-gallery-file')?.click(); }
 function triggerClick_set_egg_img_file()   { document.getElementById('set-egg-img-file')?.click(); }
 function triggerClick_cegg_img_file()      { document.getElementById('cegg-img-file')?.click(); }
 function focusEl_movie_genre_input()       { document.getElementById('movie-genre-input')?.focus(); }
