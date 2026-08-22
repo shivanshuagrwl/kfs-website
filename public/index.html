@@ -950,9 +950,23 @@ body.light-mode .section-title{background:linear-gradient(160deg,#111111 0%,#555
 @media(max-width:768px){.about-layout{grid-template-columns:1fr;gap:40px}}
 .about-text{font-size:clamp(1rem,2vw,1.25rem);line-height:1.75;color:var(--grey)}
 .about-visual{position:relative;aspect-ratio:4/3;background:var(--card);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;overflow:hidden}
+  display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:3px}
 .about-logo-large{width:120px;height:120px;object-fit:contain;filter:invert(1);opacity:.15}
 body.light-mode .about-logo-large{filter:invert(0);opacity:.1}
+
+/* Homepage About — auto-advancing crossfade slideshow, admin-managed */
+.about-fade-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  opacity:0;transform:scale(1.06);
+  transition:opacity 1.6s cubic-bezier(.4,0,.2,1),transform 7s cubic-bezier(.16,1,.3,1);
+  will-change:opacity,transform}
+.about-fade-img.active{opacity:1;transform:scale(1)}
+.about-fade-dots{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;z-index:5}
+.about-fade-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.35);
+  transition:background .3s ease,width .3s ease}
+.about-fade-dot.active{background:#fff;width:16px;border-radius:3px}
+body.light-mode .about-fade-dot{background:rgba(0,0,0,.2)}
+body.light-mode .about-fade-dot.active{background:#111}
 .aboutus-partners{display:flex;flex-wrap:wrap;gap:16px;margin-top:36px}
 .aboutus-partner-card{display:flex;align-items:center;gap:16px;padding:18px 24px;border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:border-color .2s,transform .2s;flex:1 1 260px;min-width:220px}
 .aboutus-partner-card:hover{border-color:var(--white);transform:translateY(-2px)}
@@ -3174,6 +3188,8 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div class="about-visual" id="about-visual-box">
           <img id="about-team-photo" src="" alt="KFS Team" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:3px;display:none">
           <img class="about-logo-large" id="about-logo-fallback" src="/images/kfs-logo.png" alt="KFS" onerror="this.style.display='none'">
+          <div id="about-fade-stack" style="position:absolute;inset:0"></div>
+          <div class="about-fade-dots" id="about-fade-dots" style="display:none"></div>
         </div>
       </div>
     </div>
@@ -4661,6 +4677,16 @@ body.light-mode .psw-comment-gate a{color:#111}
             <button data-action="clearTeamPhoto" type="button" class="btn btn-secondary" id="team-photo-clear-btn" style="display:none">Remove</button>
           </div>
           <input type="hidden" id="set-team-photo-url" value="">
+          <p style="font-size:12px;color:var(--grey);opacity:.7;margin-top:6px">Used as a static fallback only when the slideshow below has no images.</p>
+        </div>
+
+        <div class="form-group">
+          <label>About Photo Slideshow <span style="font-weight:400;color:var(--grey)">(auto-fade slideshow shown in the About Us visual box on the homepage — add 2 or more photos)</span></label>
+          <div style="margin-bottom:10px">
+            <input type="file" id="home-about-gallery-file" accept="image/*" style="display:none" data-onchange="uploadHomeAboutGalleryImage(this)">
+            <button data-action="triggerClick_home_about_gallery_file" type="button" class="btn btn-secondary">+ Add Photo</button>
+          </div>
+          <div id="admin-home-about-gallery-grid" style="display:flex;flex-wrap:wrap;gap:10px"></div>
         </div>
 
         <!-- ── SECTION 1B: About Us page (KSAC / KIIT) ── -->
