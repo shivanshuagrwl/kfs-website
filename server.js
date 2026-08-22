@@ -4137,87 +4137,6 @@ app.delete(
   },
 );
 
-// ── HOMEPAGE ABOUT FADE GALLERY — admin-managed slideshow, homepage About Us visual ──
-// Supabase migration — run once:
-// CREATE TABLE IF NOT EXISTS home_about_gallery (
-//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   photo text NOT NULL,
-//   sort_order int DEFAULT 99,
-//   created_at timestamptz DEFAULT now()
-// );
-// Same RLS pattern as aboutus_gallery: public SELECT only, writes via service_role.
-app.get("/api/home-about-gallery", async (req, res) => {
-  cacheFor(res, 120);
-  const data = await memCache("home-about-gallery:list", 300, async () => {
-    const { data } = await supabasePublic
-      .from("home_about_gallery")
-      .select("*")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true });
-    return data || [];
-  });
-  res.json(data);
-});
-
-app.post(
-  "/api/admin/home-about-gallery",
-  requireSection("settings"),
-  upload.single("photo"),
-  async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "Image is required" });
-    const photoUrl = await uploadImage(req.file, "home-about");
-    if (!photoUrl) return res.status(500).json({ error: "Image upload failed" });
-    const { data, error } = await supabase
-      .from("home_about_gallery")
-      .insert([{ photo: photoUrl, sort_order: 99 }])
-      .select()
-      .single();
-    if (error) return res.status(500).json({ error: "Internal server error" });
-    memInvalidate("home-about-gallery:list");
-    logActivity(
-      req.admin.id,
-      req.admin.name,
-      "create",
-      "home_about_gallery",
-      "About slideshow image",
-    ).catch(e => console.error("[activity]", e.message));
-    res.json(data);
-  },
-);
-
-app.delete(
-  "/api/admin/home-about-gallery/:id",
-  requireSection("settings"),
-  async (req, res) => {
-    await supabase.from("home_about_gallery").delete().eq("id", req.params.id);
-    memInvalidate("home-about-gallery:list");
-    logActivity(
-      req.admin.id,
-      req.admin.name,
-      "delete",
-      "home_about_gallery",
-      req.params.id,
-    ).catch(e => console.error("[activity]", e.message));
-    res.json({ success: true });
-  },
-);
-
-app.post(
-  "/api/admin/home-about-gallery/reorder",
-  requireSection("settings"),
-  async (req, res) => {
-    const { ids } = req.body;
-    if (!Array.isArray(ids)) return res.status(400).json({ error: "ids must be an array" });
-    await Promise.all(
-      ids.map((id, i) =>
-        supabase.from("home_about_gallery").update({ sort_order: i }).eq("id", id),
-      ),
-    );
-    memInvalidate("home-about-gallery:list");
-    res.json({ success: true });
-  },
-);
-
 // ── SITE CREDITS ─────────────────────────────────────────────────────────────
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS site_credits (
@@ -14228,7 +14147,12 @@ app.get("/api/studio/feed", publicStudioLimit, async (req, res) => {
 
     res.json({ feed: data, page, has_more: data.length === limit });
   } catch (e) {
-    console.error("[studio:public:feed]", e.message);
+    console.error("[studio:public:feed]", e.message, "| code:", e.code, "| details:", e.details, "| hint:", e.hint);
+    // Studio Wall tables not migrated yet on this Supabase project — fail soft
+    // with an empty feed instead of a 500 so the public page still renders.
+    if (e.code === "42P01") {
+      return res.json({ feed: [], page, has_more: false });
+    }
     res.status(500).json({ error: "Internal server error" });
   }
 });
