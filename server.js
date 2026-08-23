@@ -14424,7 +14424,7 @@ app.get("/api/member/network/followers/:memberId", memberAuthMiddleware, network
     .from("member_follows")
     .select(`
       created_at, follower_id,
-      members!member_follows_follower_id_fkey(id, name, photo, role, domain, status, followers_count, following_count)
+      members!fk_member_follows_follower_id(id, name, photo, role, domain, status, followers_count, following_count)
     `)
     .eq("following_id", targetId)
     .order("created_at", { ascending: false })
@@ -14462,7 +14462,7 @@ app.get("/api/member/network/following/:memberId", memberAuthMiddleware, network
     .from("member_follows")
     .select(`
       created_at, following_id,
-      members!member_follows_following_id_fkey(id, name, photo, role, domain, status, followers_count, following_count)
+      members!fk_member_follows_following_id(id, name, photo, role, domain, status, followers_count, following_count)
     `)
     .eq("follower_id", targetId)
     .order("created_at", { ascending: false })
@@ -14688,7 +14688,7 @@ app.get("/api/member/network/leaderboard", memberAuthMiddleware, networkReadLimi
     const rows = await memCache(cKey, 120, async () => {
       let q = supabase
         .from("weekly_leaderboard")
-        .select("rank, wows_received, member_id, members!weekly_leaderboard_member_id_fkey(id, name, photo, role, domain, status)")
+        .select("rank, wows_received, member_id, members!fk_weekly_leaderboard_member_id(id, name, photo, role, domain, status)")
         .eq("period_type", period)
         .order("rank", { ascending: true })
         .limit(50);
@@ -14833,7 +14833,7 @@ app.get("/api/member/network/new-joiners", memberAuthMiddleware, networkReadLimi
     const data = await memCache("network:new-joiners", 300, async () => {
       const { data: rows, error } = await supabase
         .from("member_accounts")
-        .select("created_at, members!member_accounts_member_id_fkey(id, name, photo, role, domain, batch, is_past, deleted_at)")
+        .select("created_at, members!fk_member_accounts_member_id(id, name, photo, role, domain, batch, is_past, deleted_at)")
         .eq("account_status", "active")
         .order("created_at", { ascending: false })
         .limit(20);
