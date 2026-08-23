@@ -13863,7 +13863,7 @@ app.get("/api/member/studio/projects/:id/comments", memberAuthMiddleware, studio
       .select(`
         id, body, is_pinned, created_at, parent_id,
         member_id,
-        members!project_comments_member_id_fkey(id, name, photo)
+        members!fk_project_comments_member_id(id, name, photo)
       `)
       .eq("project_id", req.params.id)
       .is("parent_id", null)
@@ -13883,7 +13883,7 @@ app.get("/api/member/studio/projects/:id/comments", memberAuthMiddleware, studio
         .select(`
           id, body, created_at, parent_id,
           member_id,
-          members!project_comments_member_id_fkey(id, name, photo)
+          members!fk_project_comments_member_id(id, name, photo)
         `)
         .in("parent_id", parentIds)
         .is("deleted_at", null)
@@ -14277,7 +14277,7 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
       .select(`
         id, body, created_at, is_pinned,
         member_id,
-        members!project_comments_member_id_fkey(id, name, photo, role)
+        members!fk_project_comments_member_id(id, name, photo, role)
       `)
       .eq("project_id", id)
       .is("parent_id", null)
@@ -14296,7 +14296,7 @@ app.get("/api/studio/projects/:id/comments", publicStudioLimit, async (req, res)
         .select(`
           id, body, created_at, parent_id,
           member_id,
-          members!project_comments_member_id_fkey(id, name, photo, role)
+          members!fk_project_comments_member_id(id, name, photo, role)
         `)
         .in("parent_id", topIds)
         .is("deleted_at", null)
@@ -14617,7 +14617,7 @@ app.get("/api/member/skills/:tagId/members", memberAuthMiddleware, networkReadLi
 
   const { data: rows, error } = await supabase
     .from("member_skills")
-    .select(`member_id, members!member_skills_member_id_fkey(${NETWORK_PROFILE_FIELDS})`)
+    .select(`member_id, members!fk_member_skills_member_id(${NETWORK_PROFILE_FIELDS})`)
     .eq("skill_tag_id", tagId)
     .range(from, from + limit - 1);
   if (error) { console.error("[skills:tag-members]", error.message); return res.status(500).json({ error: "Internal server error" }); }
@@ -14905,7 +14905,7 @@ app.get("/api/admin/wall/projects/:id/comments", authMiddleware, async (req, res
   try {
     const { data, error } = await supabase
       .from("project_comments")
-      .select("id, body, is_pinned, created_at, parent_id, member_id, members!project_comments_member_id_fkey(id, name, photo)")
+      .select("id, body, is_pinned, created_at, parent_id, member_id, members!fk_project_comments_member_id(id, name, photo)")
       .eq("project_id", req.params.id)
       .is("deleted_at", null)
       .order("created_at", { ascending: true });
@@ -16527,7 +16527,7 @@ app.get("/api/admin/reports", masterMiddleware, async (req, res) => {
         } else if (r.content_type === "comment") {
           const { data: comment } = await supabase
             .from("project_comments")
-            .select("id, body, member_id, project_id, created_at, members!project_comments_member_id_fkey(id, name)")
+            .select("id, body, member_id, project_id, created_at, members!fk_project_comments_member_id(id, name)")
             .eq("id", r.content_id)
             .maybeSingle();
           snapshot = comment;
