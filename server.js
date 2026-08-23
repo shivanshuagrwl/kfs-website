@@ -13424,13 +13424,14 @@ app.get("/api/member/studio/projects/:id", memberAuthMiddleware, studioFeedLimit
       members!member_projects_member_id_fkey(id, name, photo, role, domain),
       project_collaborators(
         member_id,
-        members!project_collaborators_member_id_fkey(id, name, photo, role)
+        members!fk_project_collaborators_member_id(id, name, photo, role)
       )
     `)
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
 
+  if (error) console.error("[studio:project:detail]", error.message);
   if (error || !project) return res.status(404).json({ error: "Project not found" });
 
   // Increment view (deduped by viewer_key+day via RPC) — fire and forget for latency
@@ -14251,13 +14252,14 @@ app.get("/api/studio/projects/:id", publicStudioLimit, async (req, res) => {
         members!member_projects_member_id_fkey(id, name, photo, role, domain),
         project_collaborators(
           member_id,
-          members!project_collaborators_member_id_fkey(id, name, photo, role)
+          members!fk_project_collaborators_member_id(id, name, photo, role)
         )
       `)
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
 
+    if (error) console.error("[studio:public:project]", error.message);
     if (error || !project) return res.status(404).json({ error: "Project not found" });
     res.json({ ...project, my_reaction: null, is_saved: false });
   } catch (e) {
