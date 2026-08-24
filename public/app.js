@@ -1026,42 +1026,43 @@ async function renderBlogDetail(blog, id) {
     authorEl.style.display = 'none';
   }
   // Render content: clean up contenteditable editor artifacts into proper paragraphs
+  // while PRESERVING inline formatting (links, bold, italic, etc.) — the previous
+  // version of this flattened everything to plain text via textContent, which
+  // silently deleted every <a href> in blog posts.
   let content = blog.content || '';
-  // Step 1: extract plain text from whatever HTML the editor produced
   const tmp = document.createElement('div');
   tmp.innerHTML = content;
-  // Treat block-level elements as paragraph separators
-  tmp.querySelectorAll('p,div,br,h1,h2,h3,h4,h5,h6,li').forEach(el => {
-    const tag = el.tagName.toLowerCase();
-    if (tag === 'br') { el.replaceWith(' '); }
-    else {
-      const txt = el.innerText || el.textContent || '';
-      el.replaceWith(txt.trim() + '\n\n');
-    }
-  });
-  let plainText = (tmp.textContent || tmp.innerText || '')
-    .replace(/\u00a0/g, ' ')       // &nbsp; → space
-    .replace(/[ \t]+/g, ' ')       // collapse inline spaces
-    .replace(/\n[ \t]+/g, '\n')    // trim leading space per line
-    .replace(/[ \t]+\n/g, '\n')    // trim trailing space per line
-    .replace(/\n{3,}/g, '\n\n')    // max 2 newlines
-    .trim();
-  // Step 2: split into paragraphs on double newlines, then rejoin fragments
-  // that don't end a sentence (no . ! ? at end) with the next fragment
-  const rawBlocks = plainText.split(/\n\n+/).map(b => b.replace(/\n/g, ' ').trim()).filter(Boolean);
+  // Normalize <br> to a simple space; it doesn't start a new paragraph on its own.
+  tmp.querySelectorAll('br').forEach(el => el.replaceWith(' '));
+  const plainOf = (html) => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent || d.innerText || '').trim(); };
+  // Step 1: gather top-level block elements as paragraph candidates, keeping
+  // their inner HTML (so <a>, <strong>, <em>, etc. survive) instead of flattening to text.
+  const blockTags = ['P','DIV','H1','H2','H3','H4','H5','H6','LI','BLOCKQUOTE'];
+  const topBlocks = Array.from(tmp.children).filter(el => blockTags.includes(el.tagName));
+  const rawBlocks = (topBlocks.length ? topBlocks.map(el => el.innerHTML.trim()) : [tmp.innerHTML.trim()])
+    .filter(html => plainOf(html).length > 0);
+  // Step 2: rejoin fragments that don't end a sentence (no . ! ? at end) with the
+  // next fragment — judged on the plain-text version, but the HTML (with links
+  // and formatting intact) is what actually gets kept.
   const paragraphs = [];
   let current = '';
   for (const block of rawBlocks) {
     current = current ? current + ' ' + block : block;
-    // If this block ends with sentence-closing punctuation, commit it
-    if (/[.!?'"\u2019\u201d]\s*$/.test(current)) {
+    if (/[.!?'"\u2019\u201d]\s*$/.test(plainOf(current))) {
       paragraphs.push(current);
       current = '';
     }
   }
   if (current) paragraphs.push(current); // flush remainder
   content = paragraphs.map(p => `<p>${p}</p>`).join('');
-  document.getElementById('blog-detail-body').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(content) : content;
+  document.getElementById('blog-detail-body').innerHTML = (typeof DOMPurify !== 'undefined')
+    ? DOMPurify.sanitize(content, { ADD_ATTR: ['target', 'rel'] })
+    : content;
+  // Make sure any links inside the post open safely in a new tab.
+  document.querySelectorAll('#blog-detail-body a[href]').forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
   // Show section tags as pills below the title (tags only, no content switching)
   const navWrap = document.getElementById('blog-section-nav-wrap');
   let parsedSections = [];
@@ -4682,8 +4683,13 @@ function execCmd(cmd, val=null) {
   document.execCommand(cmd, false, val);
 }
 function insertLink() {
-  const url = prompt('Enter URL:');
-  if (url) execCmd('createLink', url);
+  let url = prompt('Enter URL:');
+  if (!url) return;
+  url = url.trim();
+  // Auto-prepend https:// if no protocol was given, so "example.com" doesn't
+  // resolve as a relative link on this site (e.g. kiitfilmsociety.in/example.com).
+  if (!/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url)) url = 'https://' + url;
+  execCmd('createLink', url);
 }
 
 function previewTeamPhoto(input) {
