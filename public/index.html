@@ -1418,6 +1418,28 @@ body.light-mode .member-special-tag.tag-developer{
   background:rgba(0,0,0,.07);color:#111;border-color:rgba(0,0,0,.25);
 }
 
+/* ── HALL OF FAME ─────────────────────────────────────────────────────── */
+.member-card-hof{
+  border-color:rgba(224,176,74,.45);
+  background:linear-gradient(180deg,rgba(224,176,74,.07),var(--card) 60%);
+}
+.member-card-hof:hover{
+  border-color:rgba(224,176,74,.8);
+  box-shadow:0 8px 28px rgba(224,176,74,.14);
+}
+.hof-badge{
+  color:#e0b04a;
+  font-size:11px;
+  letter-spacing:0;
+}
+.members-section-title-hof{
+  color:#e0b04a;
+  display:flex;align-items:center;gap:8px;
+}
+body.light-mode .member-card-hof{
+  background:linear-gradient(180deg,rgba(224,176,74,.10),var(--card) 60%);
+}
+
 /* Plain member list */
 .members-list-plain{
   display:grid;
@@ -3521,6 +3543,7 @@ body.light-mode .psw-comment-gate a{color:#111}
       <div class="events-tabs" style="margin-top:32px">
         <div data-action="filterMembers" data-args='["current", "__this__"]' class="events-tab active">Current</div>
         <div data-action="filterMembers" data-args='["past", "__this__"]' class="events-tab">Alumni</div>
+        <div data-action="filterMembers" data-args='["hof", "__this__"]' class="events-tab">Hall of Fame</div>
       </div>
       <div id="members-content" style="margin-top:48px"></div>
     </div>
@@ -6136,6 +6159,10 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-top:8px">
       <input type="checkbox" id="member-is-past" style="width:18px;height:18px;border:1px solid var(--border);background:var(--black);accent-color:var(--white);cursor:pointer">
       <label for="member-is-past" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);cursor:pointer;margin-bottom:0">Past Member / Alumni</label>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-top:8px">
+      <input type="checkbox" id="member-hall-of-fame" style="width:18px;height:18px;border:1px solid var(--border);background:var(--black);accent-color:#e0b04a;cursor:pointer">
+      <label for="member-hall-of-fame" style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--grey);cursor:pointer;margin-bottom:0">\u2605 Hall of Fame (most prestigious)</label>
     </div>
     <div class="modal-actions">
       <button data-action="closeMemberModal" class="btn-sm">Cancel</button>
