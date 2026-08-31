@@ -1188,6 +1188,12 @@ function filterMembers(type, tabEl) {
 
 function renderMemberSections(type) {
   const container = document.getElementById('members-content');
+
+  if (type === 'hof') {
+    renderHallOfFameSection();
+    return;
+  }
+
   const members = allMembers.filter(m => type === 'past' ? m.is_past === true : m.is_past !== true);
 
   if (!members.length) {
@@ -1220,12 +1226,12 @@ function renderMemberSections(type) {
   function photoCard(m) {
     const subtitle = m.domain ? m.domain : (m.role === 'Member' ? '' : (m.role||''));
     const idx = _memberIdx(m);
-    return `<div class="member-card-photo" data-member-idx="${idx}" style="cursor:pointer">
+    return `<div class="member-card-photo${m.hall_of_fame ? ' member-card-hof' : ''}" data-member-idx="${idx}" style="cursor:pointer">
       ${m.photo
         ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
         : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
       <div class="member-info-sq">
-        <div class="member-name-sq">${m.name}<\/div>
+        <div class="member-name-sq">${m.name}${m.hall_of_fame ? ' <span class="hof-badge" title="Hall of Fame">\u2605<\/span>' : ''}<\/div>
         ${m.special_tag ? `<div class="member-special-tag tag-${m.special_tag}">${m.special_tag === 'admin-developer' ? '</> Admin-Dev' : '</> Developer'}<\/div>` : ''}
         ${subtitle ? `<div class="member-role-sq">${subtitle}<\/div>` : ''}
         ${m.batch ? `<div class="member-batch-sq">${m.batch}<\/div>` : ''}
@@ -1262,6 +1268,39 @@ function renderMemberSections(type) {
   });
 
   container.innerHTML = html || `<div class="empty-state"><p>No members yet.<\/p><\/div>`;
+}
+
+function renderHallOfFameSection() {
+  const container = document.getElementById('members-content');
+  const members = [...allMembers.filter(m => m.hall_of_fame === true)]
+    .sort((a,b) => (a.sort_order||99) - (b.sort_order||99));
+
+  if (!members.length) {
+    container.innerHTML = `<div class="empty-state"><p>No Hall of Fame members yet.<\/p><\/div>`;
+    return;
+  }
+
+  function hofCard(m) {
+    const subtitle = m.domain ? m.domain : (m.role||'');
+    const idx = _memberIdx(m);
+    return `<div class="member-card-photo member-card-hof" data-member-idx="${idx}" style="cursor:pointer">
+      ${m.photo
+        ? `<img class="member-photo-sq" src="${m.photo}" alt="${m.name}">`
+        : `<div class="member-photo-sq-placeholder"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><\/svg><\/div>`}
+      <div class="member-info-sq">
+        <div class="member-name-sq">${m.name} <span class="hof-badge" title="Hall of Fame">\u2605<\/span><\/div>
+        ${subtitle ? `<div class="member-role-sq">${subtitle}<\/div>` : ''}
+        ${m.batch ? `<div class="member-batch-sq">${m.batch}<\/div>` : ''}
+        ${m.is_past ? `<div class="member-batch-sq" style="opacity:.75">Alumni<\/div>` : ''}
+      <\/div>
+    <\/div>`;
+  }
+
+  container.innerHTML = `<div class="members-section">
+      <div class="members-section-title members-section-title-hof">\u2605 Hall of Fame<\/div>
+      <p style="color:var(--grey);font-size:13.5px;margin:-10px 0 24px;max-width:580px;line-height:1.6">Our most prestigious members — recognised across current members and alumni alike for exceptional contribution to KFS.<\/p>
+      <div class="members-grid-photo">${members.map(hofCard).join('')}<\/div>
+    <\/div>`;
 }
 
 function autoMemberSort() {
@@ -3692,6 +3731,7 @@ function openMemberModal(m=null) {
   document.getElementById('member-bio').value = m?.bio||'';
   document.getElementById('member-special-tag').value = m?.special_tag||'';
   document.getElementById('member-is-past').checked = m?.is_past||false;
+  document.getElementById('member-hall-of-fame').checked = m?.hall_of_fame||false;
   document.getElementById('member-domain').value = m?.domain||'';
   // Email is REQUIRED for brand-new members (used for account recovery),
   // but optional when editing an existing member — we don't force older records to backfill.
@@ -3727,6 +3767,7 @@ async function saveMember() {
   fd.append('special_tag', document.getElementById('member-special-tag').value);
   fd.append('sort_order', document.getElementById('member-sort').value);
   fd.append('is_past', document.getElementById('member-is-past').checked ? 'true' : 'false');
+  fd.append('hall_of_fame', document.getElementById('member-hall-of-fame').checked ? 'true' : 'false');
   const photo = document.getElementById('member-photo').files[0];
   if (photo) fd.append('photo', photo);
   const url = id ? '/api/admin/members/'+id : '/api/admin/members';
@@ -5416,7 +5457,7 @@ function renderAdminMembersTable(members) {
       <td style="font-weight:500">${m.name}<\/td>
       <td style="color:var(--grey)">${m.role||'—'}<\/td>
       <td style="color:var(--grey)">${m.batch||'—'}<\/td>
-      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span><\/td>
+      <td><span class="tag ${m.is_past?'':'upcoming'}">${m.is_past?'Alumni':'Current'}<\/span>${m.hall_of_fame?' <span class="hof-badge" title="Hall of Fame">\u2605<\/span>':''}<\/td>
       <td><div class="action-btns">
         <button class="btn-sm" onclick="editMember(${mJson})">Edit<\/button>
         <button class="btn-sm" onclick="openMemberPortalModal(${mJson})" style="background:rgba(99,102,241,.15);color:#818cf8;border-color:#4f46e533">Portal<\/button>
