@@ -1298,7 +1298,7 @@ function renderHallOfFameSection() {
 
   container.innerHTML = `<div class="members-section">
       <div class="members-section-title members-section-title-hof">\u2605 Hall of Fame<\/div>
-      <p style="color:var(--grey);font-size:13.5px;margin:-10px 0 24px;max-width:580px;line-height:1.6">Our most prestigious members — recognised across current members and alumni alike for exceptional contribution to KFS.<\/p>
+      <p style="color:var(--grey);font-size:13.5px;margin:-10px 0 24px;max-width:580px;line-height:1.6">Some people become a part of KFS. Others become a part of its story — remembered for the moments they created, the people they inspired, and the legacy they left behind.<\/p>
       <div class="members-grid-photo">${members.map(hofCard).join('')}<\/div>
     <\/div>`;
 }
