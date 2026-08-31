@@ -1454,11 +1454,18 @@ async function initDB() {
     const defaultPw = process.env.MASTER_DEFAULT_PW;
 
     // ── Seed kfsmaster ────────────────────────────────────────────────────────
-    const { data: master1, error: masterErr } = await supabase
-      .from("admins")
-      .select("id")
-      .eq("username", "kfsmaster")
-      .maybeSingle();
+    // Wrapped in sbQuery: this is the very first outbound network call the
+    // process makes on cold start, which is exactly when a transient DNS/
+    // connection blip (raw "fetch failed", not a real Postgres error) is most
+    // likely — retrying a couple times avoids aborting the whole init sequence
+    // over a race that resolves itself within milliseconds.
+    const { data: master1, error: masterErr } = await sbQuery(() =>
+      supabase
+        .from("admins")
+        .select("id")
+        .eq("username", "kfsmaster")
+        .maybeSingle(),
+    );
     if (masterErr)
       throw new Error("admins table query failed: " + masterErr.message);
 
@@ -1488,11 +1495,13 @@ async function initDB() {
     }
 
     // ── Seed kfsmaster2 ───────────────────────────────────────────────────────
-    const { data: master2, error: master2Err } = await supabase
-      .from("admins")
-      .select("id")
-      .eq("username", "kfsmaster2")
-      .maybeSingle();
+    const { data: master2, error: master2Err } = await sbQuery(() =>
+      supabase
+        .from("admins")
+        .select("id")
+        .eq("username", "kfsmaster2")
+        .maybeSingle(),
+    );
     if (master2Err)
       throw new Error("admins table query failed (master2): " + master2Err.message);
 
