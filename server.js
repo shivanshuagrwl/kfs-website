@@ -3542,7 +3542,7 @@ app.get("/api/members", async (req, res) => {
     const { data, error } = await supabasePublic
       .from("members")
       .select(
-        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
+        "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,hall_of_fame,instagram,github,linkedin,twitter,youtube,website,custom_links",
       )
       .is("deleted_at", null)
       .order("sort_order", { ascending: true });
@@ -3565,7 +3565,7 @@ app.get("/api/members", async (req, res) => {
       const { data: fallback } = await supabase
         .from("members")
         .select(
-          "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links",
+          "id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,hall_of_fame,instagram,github,linkedin,twitter,youtube,website,custom_links",
         )
         .is("deleted_at", null)
         .order("sort_order", { ascending: true });
@@ -3588,7 +3588,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
   // Try full column list first; fall back to base columns if social/portal columns don't exist yet
   let { data, error } = await supabase
     .from("members")
-    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,instagram,github,linkedin,twitter,youtube,website,custom_links,email,mobile")
+    .select("id,name,role,batch,bio,domain,photo,special_tag,sort_order,is_past,hall_of_fame,instagram,github,linkedin,twitter,youtube,website,custom_links,email,mobile")
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
 
@@ -3611,7 +3611,7 @@ app.get("/api/admin/members", requireSection("members"), async (req, res) => {
 app.get("/api/admin/members/export", requireSection("members"), async (req, res) => {
   const { data: members, error: mErr } = await supabase
     .from("members")
-    .select("id,name,roll_no,mobile,email,batch,domain,role,bio,special_tag,sort_order,is_past,instagram,linkedin,github,twitter,youtube,website,custom_links")
+    .select("id,name,roll_no,mobile,email,batch,domain,role,bio,special_tag,sort_order,is_past,hall_of_fame,instagram,linkedin,github,twitter,youtube,website,custom_links")
     .order("sort_order", { ascending: true });
   if (mErr) return res.status(500).json({ error: "Internal server error" });
 
@@ -3635,6 +3635,7 @@ app.get("/api/admin/members/export", requireSection("members"), async (req, res)
       "Role/Title":    m.role || "",
       "Bio":           m.bio || "",
       "Type":          m.is_past ? "Alumni" : "Current",
+      "Hall of Fame":  m.hall_of_fame ? "Yes" : "No",
       "Special Tag":   m.special_tag || "",
       "Sort Order":    m.sort_order ?? "",
       "Instagram":     m.instagram || "",
@@ -3674,7 +3675,7 @@ app.post(
   requireSection("members"),
   upload.single("photo"),
   async (req, res) => {
-    const { name, role, batch, bio, sort_order, is_past, domain, special_tag, email, mobile } =
+    const { name, role, batch, bio, sort_order, is_past, hall_of_fame, domain, special_tag, email, mobile } =
       req.body;
     if (!name || !name.trim())
       return res.status(400).json({ error: "Name is required" });
@@ -3719,6 +3720,7 @@ app.post(
           special_tag: special_tag || null,
           sort_order: parseInt(sort_order) || 99,
           is_past: is_past === "true",
+          hall_of_fame: hall_of_fame === "true" || hall_of_fame === true,
           email: emailTrim || null,
           mobile: mobileTrim || null,
         },
@@ -3737,7 +3739,7 @@ app.put(
   requireSection("members"),
   upload.single("photo"),
   async (req, res) => {
-    const { name, role, batch, bio, sort_order, is_past, domain, special_tag, email, mobile } =
+    const { name, role, batch, bio, sort_order, is_past, hall_of_fame, domain, special_tag, email, mobile } =
       req.body;
     if (!name || !name.trim())
       return res.status(400).json({ error: "Name is required" });
@@ -3750,6 +3752,7 @@ app.put(
       special_tag: special_tag || null,
       sort_order: parseInt(sort_order) || 99,
       is_past: is_past === "true" || is_past === true,
+      hall_of_fame: hall_of_fame === "true" || hall_of_fame === true,
     };
     // Email/phone are optional on edit (existing members aren't forced to backfill),
     // but validate format if the admin does supply them.
