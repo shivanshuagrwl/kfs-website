@@ -1250,20 +1250,24 @@ function renderMemberSections(type) {
   function tagRank(m){return m.special_tag==='admin-developer'?0:m.special_tag==='developer'?1:2;}
   function sortByTag(arr){return [...arr].sort((a,b)=>tagRank(a)-tagRank(b));}
 
-  // Cluster members of the same domain together (e.g. all Editing folks
-  // next to each other, all Design folks next to each other) instead of
-  // them being scattered around in raw sort_order. Domains keep their
-  // first-appearance order so the overall ordering still roughly follows
-  // sort_order; within a domain, dev-badge tag rank still applies.
+  // Dev-badge members (admin-dev, then dev) come first overall; within each
+  // of those tiers — and within the remaining normal members — cluster by
+  // domain so people from the same domain sit together. Domains keep their
+  // first-appearance order within each tier.
   function sortByDomainAndTag(arr) {
-    const domainOrder = [];
-    const groups = {};
-    arr.forEach(m => {
-      const key = m.domain || '';
-      if (!groups[key]) { groups[key] = []; domainOrder.push(key); }
-      groups[key].push(m);
-    });
-    return domainOrder.flatMap(key => sortByTag(groups[key]));
+    function clusterByDomain(list) {
+      const domainOrder = [];
+      const groups = {};
+      list.forEach(m => {
+        const key = m.domain || '';
+        if (!groups[key]) { groups[key] = []; domainOrder.push(key); }
+        groups[key].push(m);
+      });
+      return domainOrder.flatMap(key => groups[key]);
+    }
+    const tiers = [[], [], []]; // admin-developer, developer, everyone else
+    arr.forEach(m => tiers[tagRank(m)].push(m));
+    return tiers.flatMap(clusterByDomain);
   }
 
   photoGroups.forEach(group => {
