@@ -1144,13 +1144,41 @@ const GLOBAL_LIMIT_EXEMPT_PATHS = new Set([
   "/api/admin/refresh",
 ]);
 
+// Key the global budget by logged-in identity when we can, not just IP.
+// Campus NAT means dozens of members share one public IP, and once they're
+// logged in their DM/feed/notification polling all used to count against
+// that ONE shared 500-req bucket — so during busy hours everyone behind
+// that IP started tripping "Too many requests. Slow down.", including
+// people who'd barely made any requests themselves. Decoding the bearer
+// token here (cheap — same jwt.verify used by the real auth middleware,
+// just without failing the request if it's missing/expired) lets each
+// logged-in member/admin get their own bucket. Genuinely anonymous traffic
+// (no token, e.g. public members page, home page) still shares the per-IP
+// bucket, which is far lighter traffic and where IP-based abuse protection
+// still matters.
+function apiRateLimitKeyGenerator(req, res) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, MEMBER_JWT_SECRET, { algorithms: ["HS256"] });
+      if (decoded?.id) return `member:${decoded.id}`;
+    } catch {}
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+      if (decoded?.id) return `admin:${decoded.id}`;
+    } catch {}
+  }
+  return ipKeyGenerator(req, res);
+}
+
 app.use(
   "/api/",
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500, // raised from 100 — home page fires 7 requests at once, admin panel fires 20+
+    max: 1000, // raised from 500 — extra headroom on top of the per-identity keying above
     message: { error: "Too many requests. Slow down." },
     skip: (req) => GLOBAL_LIMIT_EXEMPT_PATHS.has(req.path),
+    keyGenerator: apiRateLimitKeyGenerator,
   }),
 );
 
