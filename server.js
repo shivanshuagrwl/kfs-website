@@ -12,6 +12,22 @@ const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
+
+// Campus WiFi (KIIT NAT) means many unrelated users share one public IP.
+// Keying login limiters on IP alone means one person's failed/retried
+// attempts (or just simultaneous traffic) can lock out everyone else behind
+// the same router. Real brute-force protection already lives in the
+// per-account lockouts (checkLoginLockout / checkMemberLockout, DB-backed).
+// This keyGenerator turns the IP-level limiter into a per-(IP, account)
+// bucket instead of a per-IP bucket, so it still throttles repeated attempts
+// against one account from one IP, but stops punishing unrelated students on
+// the same network. Falls back to IP-only when no username is present.
+function loginKeyGenerator(req, res) {
+  const ipPart = ipKeyGenerator(req, res);
+  const raw = req.body && req.body.username;
+  if (!raw || typeof raw !== "string") return ipPart;
+  return `${ipPart}:${raw.trim().toLowerCase()}`;
+}
 const helmet = require("helmet");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
@@ -1961,6 +1977,9 @@ app.post(
     windowMs: 15 * 60 * 1000,
     max: 10,
     message: { error: "Too many login attempts. Try again later." },
+    // per-(IP, username) — see loginKeyGenerator comment above. Prevents
+    // campus NAT from letting one admin's retries lock out another admin.
+    keyGenerator: loginKeyGenerator,
   }),
   async (req, res) => {
     const { username, password, totp_code } = req.body;
@@ -11387,11 +11406,18 @@ app.get("/membersaccess.js", (req, res) => {
 // POST /api/member/login
 app.post(
   "/api/member/login",
-  // raised from 10 — campus NAT means many members can share one public IP,
-  // so a strict per-IP cap here was locking out unrelated students, not just
-  // repeat offenders. Per-account lockout (checkMemberLockout, below) still
-  // catches real brute-force attempts against a single username.
-  rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { error: "Too many login attempts. Try again later." } }),
+  // per-(IP, username) instead of per-IP — campus NAT means many members
+  // share one public IP, so a pure per-IP cap locks out unrelated students,
+  // not just repeat offenders. Per-account lockout (checkMemberLockout,
+  // below) still catches real brute-force attempts against a single
+  // username; this limiter just stops one person's retries from burning
+  // through the whole shared-IP quota for everyone else on the wifi.
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { error: "Too many login attempts. Try again later." },
+    keyGenerator: loginKeyGenerator,
+  }),
   async (req, res) => {
     const { username, password, totp_code } = req.body;
     if (!username || !password)
