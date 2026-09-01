@@ -1250,8 +1250,25 @@ function renderMemberSections(type) {
   function tagRank(m){return m.special_tag==='admin-developer'?0:m.special_tag==='developer'?1:2;}
   function sortByTag(arr){return [...arr].sort((a,b)=>tagRank(a)-tagRank(b));}
 
+  // Cluster members of the same domain together (e.g. all Editing folks
+  // next to each other, all Design folks next to each other) instead of
+  // them being scattered around in raw sort_order. Domains keep their
+  // first-appearance order so the overall ordering still roughly follows
+  // sort_order; within a domain, dev-badge tag rank still applies.
+  function sortByDomainAndTag(arr) {
+    const domainOrder = [];
+    const groups = {};
+    arr.forEach(m => {
+      const key = m.domain || '';
+      if (!groups[key]) { groups[key] = []; domainOrder.push(key); }
+      groups[key].push(m);
+    });
+    return domainOrder.flatMap(key => sortByTag(groups[key]));
+  }
+
   photoGroups.forEach(group => {
-    const combined = sortByTag(group.roles.flatMap(r => sections[r] || []));
+    const flat = group.roles.flatMap(r => sections[r] || []);
+    const combined = group.label === 'Core & Leads' ? sortByDomainAndTag(flat) : sortByTag(flat);
     if (!combined.length) return;
     html += `<div class="members-section">
       <div class="members-section-title">${group.label}<\/div>
