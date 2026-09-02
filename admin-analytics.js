@@ -16,30 +16,10 @@
 module.exports = function mountAnalytics(app, deps) {
   const { supabase, requireSection, masterMiddleware, authMiddleware, memCache, memInvalidate, logActivity } = deps;
 
-  // New granular permission strings — add these to your admin permission
-  // editor UI (same place ALL_SECTIONS / the permissions checkbox list lives).
-  // 'trust_safety.investigate' and 'investigations.access_dm' should be
-  // treated as master-only until you decide to hand them to trusted non-master
-  // admins — masterMiddleware is used below for anything DM-related.
-  const PERMS = {
-    ANALYTICS_VIEW: "analytics.view",              // viral content, overview, influencer stats
-    TRUST_SAFETY_VIEW: "trust_safety.view",         // read detection logs
-    TRUST_SAFETY_INVESTIGATE: "trust_safety.investigate", // change detection status
-    AUDIT_LOGS_VIEW: "audit_logs.view",
-  };
-
-  // ── Small helper: OR-permission middleware (mirrors requireGrievanceAccess pattern) ──
-  function requireAnyPermission(...sections) {
-    return (req, res, next) => {
-      // req.admin is already populated by an upstream authMiddleware-style check;
-      // if this router is mounted standalone, run authMiddleware first via app.use.
-      if (!req.admin) return res.status(401).json({ error: "No token" });
-      if (req.admin.role === "master") return next();
-      const perms = req.admin.permissions || [];
-      if (sections.some(s => perms.includes(s))) return next();
-      return res.status(403).json({ error: `No permission for: ${sections.join(" or ")}` });
-    };
-  }
+  // Master-only feature. No granular permissions — every route below uses
+  // masterMiddleware directly, same as your existing /api/admin/reports and
+  // /api/admin/investigations design. Nothing here is exposed to
+  // non-master admins via the permissions editor.
 
   // ═══════════════════════════════════════════════════════════════════════
   // 1. VIRAL CONTENT TRACKER
@@ -47,7 +27,7 @@ module.exports = function mountAnalytics(app, deps) {
 
   // GET /api/admin/analytics/viral-content?window=24h&sort=viral_score&page=0
   app.get("/api/admin/analytics/viral-content",
-    authMiddleware, requireSection(PERMS.ANALYTICS_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const page  = Math.max(0, parseInt(req.query.page) || 0);
       const limit = 30;
@@ -104,7 +84,7 @@ module.exports = function mountAnalytics(app, deps) {
 
   // GET /api/admin/analytics/viral-content/:id — drill-down
   app.get("/api/admin/analytics/viral-content/:id",
-    authMiddleware, requireSection(PERMS.ANALYTICS_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const { data: post, error } = await supabase
         .from("member_projects")
@@ -150,7 +130,7 @@ module.exports = function mountAnalytics(app, deps) {
   // ═══════════════════════════════════════════════════════════════════════
 
   app.get("/api/admin/analytics/top-creators",
-    authMiddleware, requireSection(PERMS.ANALYTICS_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const by = ["followers", "engagement", "growth"].includes(req.query.by) ? req.query.by : "followers";
       const data = await memCache(`analytics:top-creators:${by}`, 120, async () => {
@@ -250,7 +230,7 @@ module.exports = function mountAnalytics(app, deps) {
   // upsert results, rather than only on-demand — that's a background-job wire-up
   // outside what an HTTP handler should own.)
   app.post("/api/admin/trust-safety/scan/:memberId",
-    authMiddleware, requireSection(PERMS.TRUST_SAFETY_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const memberId = req.params.memberId;
       const results = [];
@@ -273,7 +253,7 @@ module.exports = function mountAnalytics(app, deps) {
 
   // GET /api/admin/trust-safety/detections?status=OPEN&severity=HIGH&page=0
   app.get("/api/admin/trust-safety/detections",
-    authMiddleware, requireSection(PERMS.TRUST_SAFETY_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const page = Math.max(0, parseInt(req.query.page) || 0);
       const limit = 30;
@@ -294,7 +274,7 @@ module.exports = function mountAnalytics(app, deps) {
 
   // PATCH /api/admin/trust-safety/detections/:id — update status (never auto-ban)
   app.patch("/api/admin/trust-safety/detections/:id",
-    authMiddleware, requireSection(PERMS.TRUST_SAFETY_INVESTIGATE), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const { status, resolution } = req.body || {};
       if (!["OPEN","INVESTIGATING","CONFIRMED","DISMISSED","RESOLVED"].includes(status))
@@ -463,7 +443,7 @@ module.exports = function mountAnalytics(app, deps) {
   // ═══════════════════════════════════════════════════════════════════════
 
   app.get("/api/admin/analytics/overview",
-    authMiddleware, requireSection(PERMS.ANALYTICS_VIEW), async (req, res) => {
+    masterMiddleware, async (req, res) => {
     try {
       const data = await memCache("analytics:overview", 60, async () => {
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -491,7 +471,7 @@ module.exports = function mountAnalytics(app, deps) {
   // 6. AUDIT LOGS — thin read view over your existing admin_activity table
   // ═══════════════════════════════════════════════════════════════════════
 
-  app.get("/api/admin/audit-logs", authMiddleware, requireSection(PERMS.AUDIT_LOGS_VIEW), async (req, res) => {
+  app.get("/api/admin/audit-logs", masterMiddleware, async (req, res) => {
     try {
       const page = Math.max(0, parseInt(req.query.page) || 0);
       const limit = 50;
