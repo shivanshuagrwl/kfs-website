@@ -34,6 +34,7 @@ const QRCode = require("qrcode");
 const cookieParser = require("cookie-parser");
 
 const app = express();
+const mountAnalytics = require("./admin-analytics"); // Engagement & Network Analytics + Trust & Safety suite
 app.set('trust proxy', 1); // Render reverse-proxy ke peeche
 app.set('case sensitive routing', true); // /Social-Strand (member portal) ≠ /social-strand (public feed)
 // Disable auto-ETag/conditional-GET for dynamic JSON responses (res.json/res.send).
@@ -1483,6 +1484,16 @@ async function logActivity(adminId, adminName, action, entity, entityName, entit
     console.error("Activity log error:", e);
   }
 }
+
+// ── Engagement & Network Analytics + Trust & Safety suite ──────────────────────
+// Mounted here: after authMiddleware/masterMiddleware/requireSection/memCache/
+// memInvalidate/logActivity are all defined above, before any route handlers
+// below that might otherwise shadow the new /api/admin/analytics|trust-safety|
+// investigations paths.
+mountAnalytics(app, {
+  supabase, requireSection, masterMiddleware, authMiddleware,
+  memCache, memInvalidate, logActivity,
+});
 
 // Tables that support soft-delete + undo (must have a `deleted_at` column).
 const UNDOABLE_TABLES = {
@@ -18828,6 +18839,79 @@ app.listen(PORT, async () => {
   // aggregate reaction history live.
   await refreshLeaderboards();
   setInterval(refreshLeaderboards, 30 * 60 * 1000);
+
+  // ── Engagement Analytics: recompute post momentum + daily creator metrics ──
+  // Keeps /api/admin/analytics/viral-content fast (reads a precomputed table
+  // instead of aggregating reactions/comments live on every dashboard hit).
+  async function refreshEngagementAnalytics() {
+    try {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const since1h  = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+      const { data: recentPosts, error: postsErr } = await supabase
+        .from("member_projects")
+        .select("id, member_id, created_at")
+        .is("deleted_at", null)
+        .gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()) // only score posts from the last 14 days
+        .limit(500);
+      if (postsErr) { console.error("[engagement-analytics] posts query error:", postsErr.message); return; }
+      if (!recentPosts || !recentPosts.length) return;
+
+      const postIds = recentPosts.map(p => p.id);
+      const [{ data: reactions24h }, { data: reactions1h }, { data: comments24h }, { data: comments1h }] = await Promise.all([
+        supabase.from("project_reactions").select("project_id, created_at").in("project_id", postIds).gte("created_at", since24h),
+        supabase.from("project_reactions").select("project_id").in("project_id", postIds).gte("created_at", since1h),
+        supabase.from("project_comments").select("project_id, created_at").in("project_id", postIds).is("deleted_at", null).gte("created_at", since24h),
+        supabase.from("project_comments").select("project_id").in("project_id", postIds).is("deleted_at", null).gte("created_at", since1h),
+      ]);
+
+      const countBy = (rows, key = "project_id") => {
+        const m = {};
+        for (const r of rows || []) m[r[key]] = (m[r[key]] || 0) + 1;
+        return m;
+      };
+      const r24 = countBy(reactions24h), r1 = countBy(reactions1h);
+      const c24 = countBy(comments24h), c1 = countBy(comments1h);
+
+      const rows = recentPosts.map(p => {
+        const reactions_last_24h = r24[p.id] || 0;
+        const reactions_last_1h  = r1[p.id]  || 0;
+        const comments_last_24h  = c24[p.id] || 0;
+        const comments_last_1h   = c1[p.id]  || 0;
+        const ageHours = Math.max(1, (Date.now() - new Date(p.created_at).getTime()) / 3600000);
+        const baseline_per_hour = (reactions_last_24h + comments_last_24h) / Math.min(24, ageHours);
+        const velocity = reactions_last_1h + comments_last_1h; // engagement in the last hour
+        const velocity_change_pct = baseline_per_hour > 0
+          ? Math.round(((velocity - baseline_per_hour) / baseline_per_hour) * 100)
+          : (velocity > 0 ? 100 : 0);
+        // Viral/momentum score: weighted blend of velocity, acceleration (change %), and raw 24h engagement.
+        const viral_score = Math.min(100, Math.round(
+          velocity * 8 +
+          Math.max(0, velocity_change_pct) * 0.15 +
+          (reactions_last_24h + comments_last_24h) * 0.5
+        ));
+        // Anomaly score is DELIBERATELY separate from viral_score — a legitimately
+        // viral post should not be flagged. This only rises when velocity is both
+        // extreme AND wildly discontinuous from the post's own recent baseline.
+        const anomaly_score = baseline_per_hour > 0.5 && velocity > baseline_per_hour * 15
+          ? Math.min(100, Math.round((velocity / baseline_per_hour) * 2))
+          : 0;
+        return {
+          project_id: p.id, reactions_last_1h, reactions_last_24h, comments_last_1h, comments_last_24h,
+          baseline_per_hour: Number(baseline_per_hour.toFixed(3)), velocity: Number(velocity.toFixed(3)),
+          velocity_change_pct, viral_score, anomaly_score, updated_at: new Date().toISOString(),
+        };
+      });
+
+      const { error: upsertErr } = await supabase.from("post_momentum").upsert(rows, { onConflict: "project_id" });
+      if (upsertErr) console.error("[engagement-analytics] upsert error:", upsertErr.message);
+      else console.log(`[engagement-analytics] Refreshed momentum for ${rows.length} posts`);
+    } catch (e) {
+      console.error("[engagement-analytics] error:", e.message);
+    }
+  }
+  await refreshEngagementAnalytics();
+  setInterval(refreshEngagementAnalytics, 10 * 60 * 1000); // every 10 min — dashboard reads are cached 60s on top of this
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
