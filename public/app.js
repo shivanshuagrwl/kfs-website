@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances','trust-safety'];
+const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -68,12 +68,6 @@ function hasPermission(section) {
   // or the broader 'members' permission (mirrors server-side requireGrievanceAccess)
   if (effectiveSection === 'grievances') {
     return currentAdminPermissions.includes('grievances') || currentAdminPermissions.includes('members');
-  }
-  // 'trust-safety' sidebar item is visible with EITHER the analytics or the
-  // trust-safety view permission — the page itself hides/shows individual
-  // cards (investigations stay master-only regardless, enforced server-side).
-  if (effectiveSection === 'trust-safety') {
-    return currentAdminPermissions.includes('analytics.view') || currentAdminPermissions.includes('trust_safety.view');
   }
   return currentAdminPermissions.includes(effectiveSection);
 }
@@ -3159,6 +3153,21 @@ async function loadAdminData(name) {
   }
   else if (name==='analytics') {
     loadTrafficAnalytics(currentAnalyticsRange);
+    // Engagement & Network Analytics / Trust & Safety — folded into this same
+    // page, master-only (not a separate sidebar item, not permission-gated).
+    const tsBlock = document.getElementById('section-trust-safety');
+    if (tsBlock) {
+      if (currentAdminRole === 'master') {
+        tsBlock.style.display = '';
+        loadTrustSafetyOverview();
+        loadTrustSafetyViral();
+        loadTrustSafetyCreators('followers');
+        loadTrustSafetyDetections();
+        loadTrustSafetyInvestigations();
+      } else {
+        tsBlock.style.display = 'none';
+      }
+    }
   }
   else if (name==='review-analytics') {
     loadReviewAnalytics();
@@ -3168,13 +3177,6 @@ async function loadAdminData(name) {
   }
   else if (name==='payment-analytics') {
     loadPaymentAnalytics();
-  }
-  else if (name==='trust-safety') {
-    loadTrustSafetyOverview();
-    loadTrustSafetyViral();
-    loadTrustSafetyCreators('followers');
-    loadTrustSafetyDetections();
-    loadTrustSafetyInvestigations();
   }
   else if (name==='notifications') {
     renderNotifTable();
