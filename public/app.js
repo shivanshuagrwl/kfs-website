@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances'];
+const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances','trust-safety'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -68,6 +68,12 @@ function hasPermission(section) {
   // or the broader 'members' permission (mirrors server-side requireGrievanceAccess)
   if (effectiveSection === 'grievances') {
     return currentAdminPermissions.includes('grievances') || currentAdminPermissions.includes('members');
+  }
+  // 'trust-safety' sidebar item is visible with EITHER the analytics or the
+  // trust-safety view permission — the page itself hides/shows individual
+  // cards (investigations stay master-only regardless, enforced server-side).
+  if (effectiveSection === 'trust-safety') {
+    return currentAdminPermissions.includes('analytics.view') || currentAdminPermissions.includes('trust_safety.view');
   }
   return currentAdminPermissions.includes(effectiveSection);
 }
@@ -3162,6 +3168,13 @@ async function loadAdminData(name) {
   }
   else if (name==='payment-analytics') {
     loadPaymentAnalytics();
+  }
+  else if (name==='trust-safety') {
+    loadTrustSafetyOverview();
+    loadTrustSafetyViral();
+    loadTrustSafetyCreators('followers');
+    loadTrustSafetyDetections();
+    loadTrustSafetyInvestigations();
   }
   else if (name==='notifications') {
     renderNotifTable();
@@ -6941,6 +6954,137 @@ async function loadReviewAnalytics() {
       <div class="leaderboard-bar-wrap"><div class="leaderboard-bar-fill" style="width:${f.avg/5*100}%"><\/div><\/div>
       <span class="leaderboard-score">${f.avg.toFixed(1)}<\/span>
     <\/div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// ENGAGEMENT & NETWORK ANALYTICS / TRUST & SAFETY
+// ══════════════════════════════════════════════════════════
+
+function tsEsc(s) { return String(s ?? '').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function tsSeverityColor(sev) {
+  return { LOW:'#3fb950', MEDIUM:'#d2a22a', HIGH:'#f59e0b', CRITICAL:'#f85149' }[sev] || 'var(--grey)';
+}
+function tsStatusColor(st) {
+  return { OPEN:'#f85149', INVESTIGATING:'#d2a22a', CONFIRMED:'#f59e0b', DISMISSED:'var(--grey)',
+            RESOLVED:'#3fb950', ESCALATED:'#f85149', CLOSED:'var(--grey)' }[st] || 'var(--grey)';
+}
+
+async function loadTrustSafetyOverview() {
+  const d = await apiFetch('/api/admin/analytics/overview');
+  if (!d) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
+  set('ts-kpi-active-members', d.activeMembers?.toLocaleString());
+  set('ts-kpi-posts-today', d.postsToday?.toLocaleString());
+  set('ts-kpi-open-detections', d.openDetections?.toLocaleString());
+  set('ts-kpi-open-investigations', d.openInvestigations?.toLocaleString());
+}
+
+async function loadTrustSafetyViral() {
+  const tbody = document.getElementById('ts-viral-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>';
+  const d = await apiFetch('/api/admin/analytics/viral-content?sort=viral_score');
+  if (!d) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#e74c3c">Failed to load.</td></tr>'; return; }
+  if (!d.items || !d.items.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--grey);padding:40px">No trending posts in the current window.</td></tr>'; return; }
+  tbody.innerHTML = d.items.map(p => `<tr>
+    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${tsEsc(p.title)}">${tsEsc(p.title || p.caption_preview || '—')}</td>
+    <td>${p.author ? `<span style="display:flex;align-items:center;gap:6px">${p.author.photo?`<img src="${p.author.photo}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">`:''}${tsEsc(p.author.name)}</span>` : '—'}</td>
+    <td style="font-variant-numeric:tabular-nums">${(p.reactions_24h||0)+(p.comments_24h||0)}</td>
+    <td style="font-variant-numeric:tabular-nums">${(p.velocity||0).toFixed(1)}</td>
+    <td style="color:${(p.velocity_change_pct||0) >= 0 ? '#3fb950' : '#f85149'}">${(p.velocity_change_pct||0) >= 0 ? '+' : ''}${p.velocity_change_pct||0}%</td>
+    <td><span class="tag" style="background:rgba(88,166,255,.12);color:#58a6ff">${(p.viral_score||0).toFixed(0)}</span></td>
+    <td>${p.anomaly_score > 0 ? `<span class="tag" style="background:rgba(248,81,73,.12);color:#f85149">${p.anomaly_score.toFixed(0)}</span>` : '<span style="color:var(--grey)">—</span>'}</td>
+  </tr>`).join('');
+}
+
+async function loadTrustSafetyCreators(by) {
+  const tbody = document.getElementById('ts-creators-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>';
+  const d = await apiFetch(`/api/admin/analytics/top-creators?by=${by || 'followers'}`);
+  if (!d) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:#e74c3c">Failed to load.</td></tr>'; return; }
+  const items = d.items || [];
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--grey);padding:40px">No data yet.</td></tr>'; return; }
+  tbody.innerHTML = items.map((row, i) => {
+    const m = row.member || row; // 'growth' shape wraps {member, growth}; 'followers' shape is the member row itself
+    return `<tr>
+      <td style="color:var(--grey)">${i+1}</td>
+      <td><span style="display:flex;align-items:center;gap:8px">${m.photo?`<img src="${m.photo}" style="width:24px;height:24px;border-radius:50%;object-fit:cover">`:''}${tsEsc(m.name)}</span></td>
+      <td style="font-variant-numeric:tabular-nums">${(m.followers_count ?? 0).toLocaleString()}${row.growth !== undefined ? ` <span style="color:#3fb950;font-size:11px">(+${row.growth}/7d)</span>` : ''}</td>
+      <td style="font-variant-numeric:tabular-nums">${(m.following_count ?? 0).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadTrustSafetyDetections() {
+  const tbody = document.getElementById('ts-detections-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>';
+  const status = document.getElementById('ts-det-status')?.value || '';
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  const d = await apiFetch(`/api/admin/trust-safety/detections${qs}`);
+  if (!d) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check permissions.</td></tr>'; return; }
+  if (!d.items || !d.items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey);padding:40px">No detections.</td></tr>'; return; }
+  tbody.innerHTML = d.items.map(row => `<tr data-id="${row.id}">
+    <td>${row.members ? tsEsc(row.members.name) : row.member_id}</td>
+    <td>${tsEsc(row.rule_id)}</td>
+    <td><span class="tag" style="background:${tsSeverityColor(row.severity)}22;color:${tsSeverityColor(row.severity)}">${row.severity}</span></td>
+    <td style="font-variant-numeric:tabular-nums">${row.risk_score}</td>
+    <td style="max-width:260px;white-space:normal;font-size:12px;color:var(--grey)">${tsEsc(row.reason)}</td>
+    <td style="color:var(--grey);font-size:12px">${row.detected_at ? new Date(row.detected_at).toLocaleString() : ''}</td>
+    <td><span class="tag" style="background:${tsStatusColor(row.status)}22;color:${tsStatusColor(row.status)}">${row.status}</span></td>
+    <td><div class="action-btns">
+      <button class="btn-sm" onclick="tsResolveDetection('${row.id}','INVESTIGATING')" title="Mark investigating">Investigate</button>
+      <button class="btn-sm" onclick="tsResolveDetection('${row.id}','DISMISSED')" title="Dismiss">Dismiss</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+async function tsResolveDetection(id, status) {
+  const resolution = status === 'DISMISSED' ? prompt('Optional note for dismissing this detection:') : null;
+  const d = await apiFetch(`/api/admin/trust-safety/detections/${id}`, 'PATCH', { status, resolution });
+  if (d) loadTrustSafetyDetections();
+}
+
+async function loadTrustSafetyInvestigations() {
+  const card = document.getElementById('ts-investigations-card');
+  const tbody = document.getElementById('ts-investigations-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--grey);padding:40px">Loading…</td></tr>';
+  const d = await apiFetch('/api/admin/investigations');
+  // Master-only endpoint — a non-master admin will get a clean 403 here and
+  // we just hide the whole card rather than showing an error.
+  if (!d) { if (card) card.style.display = 'none'; return; }
+  if (card) card.style.display = '';
+  if (!d.items || !d.items.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--grey);padding:40px">No open cases.</td></tr>'; return; }
+  tbody.innerHTML = d.items.map(row => `<tr data-id="${row.id}">
+    <td style="font-family:monospace;font-size:11px;color:var(--grey)">${row.id.slice(0,8)}</td>
+    <td><span class="tag" style="background:${tsStatusColor(row.status)}22;color:${tsStatusColor(row.status)}">${row.status}</span></td>
+    <td>${row.priority}</td>
+    <td>${tsEsc(row.assigned_to || '—')}</td>
+    <td style="color:var(--grey);font-size:12px">${row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</td>
+    <td><button class="btn-sm" onclick="tsOpenInvestigation('${row.id}')">Open case</button></td>
+  </tr>`).join('');
+}
+
+// Opening a case always goes through /access with a required reason — this is
+// the ONLY path in the whole admin UI that can surface a DM's decrypted
+// content, and every call is written to investigation_access_log server-side
+// before the response returns.
+async function tsOpenInvestigation(caseId) {
+  const reason = prompt('Access reason (required, logged against this case):');
+  if (!reason || reason.trim().length < 5) { alert('A specific reason (5+ characters) is required to view case content.'); return; }
+  const d = await apiFetch(`/api/admin/investigations/${caseId}/access`, 'POST', { reason: reason.trim() });
+  if (!d) return;
+  const notes = (d.notes || []).map(n => `${tsEsc(n.author)} (${new Date(n.at).toLocaleString()}): ${tsEsc(n.text)}`).join('\n') || '(no notes yet)';
+  alert(
+    `Case ${d.case_id}\nStatus: ${d.status} · Priority: ${d.priority}\n\n` +
+    `Report reason: ${tsEsc(d.report_context?.reason || '—')}\n` +
+    `Reported message content:\n${tsEsc(d.message_content || '(no decrypted snapshot available — the reporter did not submit a plaintext copy)')}\n\n` +
+    `Notes:\n${notes}`
+  );
+  const note = prompt('Add an investigator note (optional, leave blank to skip):');
+  if (note && note.trim()) await apiFetch(`/api/admin/investigations/${caseId}/notes`, 'POST', { text: note.trim() });
 }
 
 // ══════════════════════════════════════════════════════════
