@@ -1279,7 +1279,7 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 .et-recap-hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:12px;
   font-weight:600;letter-spacing:.04em;color:var(--white);opacity:.75;transition:opacity .2s}
 .et-item.et-past.et-clickable:hover .et-recap-hint{opacity:1}
-.et-cover{flex-shrink:0;width:120px;height:120px;border-radius:10px;overflow:hidden}
+.et-cover{flex-shrink:0;width:170px;aspect-ratio:16/10;border-radius:10px;overflow:hidden;align-self:center}
 .et-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .et-action-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 @media(max-width:640px){
@@ -1287,7 +1287,7 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
   .et-dot{left:-26px}
   .et-year-divider::before{left:-26px}
   .et-card{flex-direction:column-reverse;gap:14px}
-  .et-cover{width:100%;height:170px}
+  .et-cover{width:100%;aspect-ratio:16/9;align-self:auto}
 }
 
 /* Recap + gallery inside past-event / CV detail view */
