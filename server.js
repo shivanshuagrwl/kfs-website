@@ -4912,7 +4912,7 @@ app.post(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order, recap } = req.body;
+    const { year, sort_order, recap, is_upcoming } = req.body;
     if (!year) return res.status(400).json({ error: "Year is required" });
     const coverUrl = await uploadImage(req.file, "chitra-vichitra");
     const { data, error } = await supabase
@@ -4923,6 +4923,7 @@ app.post(
           cover_image: coverUrl,
           sort_order: parseInt(sort_order) || 99,
           recap: recap || null,
+          is_upcoming: is_upcoming === "true",
         },
       ])
       .select()
@@ -4951,11 +4952,12 @@ app.put(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order, recap } = req.body;
+    const { year, sort_order, recap, is_upcoming } = req.body;
     const updates = {
       year: year?.trim(),
       sort_order: parseInt(sort_order) || 99,
       recap: recap || null,
+      is_upcoming: is_upcoming === "true",
     };
     if (req.file)
       updates.cover_image = await uploadImage(req.file, "chitra-vichitra");
@@ -5069,13 +5071,14 @@ app.get("/api/gallery/:type/:entityId", async (req, res) => {
   cacheFor(res, 120);
   const cacheKey = `gallery:${entityType}:${req.params.entityId}`;
   const data = await memCache(cacheKey, 300, async () => {
-    const { data } = await supabasePublic
+    const { data, error } = await supabasePublic
       .from("gallery_images")
       .select("id, image_url, caption, sort_order")
       .eq("entity_type", entityType)
       .eq("entity_id", req.params.entityId)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
+    if (error) console.error("[gallery fetch]", error.message);
     return data || [];
   });
   res.json(data);
@@ -5105,7 +5108,10 @@ app.post(
         .from("gallery_images")
         .insert(rows)
         .select();
-      if (error) return res.status(500).json({ error: "Internal server error" });
+      if (error) {
+        console.error("[gallery insert]", error.message);
+        return res.status(500).json({ error: error.message || "Failed to save photos" });
+      }
       memInvalidate(`gallery:${entityType}:${req.params.entityId}`);
       logActivity(
         req.admin.id,
@@ -5133,7 +5139,11 @@ app.delete(
       .select("entity_id")
       .eq("id", req.params.imageId)
       .single();
-    await supabase.from("gallery_images").delete().eq("id", req.params.imageId);
+    const { error } = await supabase.from("gallery_images").delete().eq("id", req.params.imageId);
+    if (error) {
+      console.error("[gallery delete]", error.message);
+      return res.status(500).json({ error: error.message || "Failed to delete photo" });
+    }
     if (img) memInvalidate(`gallery:${entityType}:${img.entity_id}`);
     res.json({ success: true });
   },
