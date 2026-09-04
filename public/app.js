@@ -691,7 +691,7 @@ function renderTimeline() {
       ? cv.recap
       : `Our annual film festival — ${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened.`,
     cover_image: cv.cover_image,
-    event_date: cvSortDate(cv.year),
+    event_date: cv.event_date || cvSortDate(cv.year),
     is_upcoming: !!cv.is_upcoming,
   }));
   const combined = [...allEvents, ...cvItems];
@@ -723,6 +723,11 @@ function renderTimelineCVNode(cv) {
   const pill = cv.is_upcoming
     ? `<span class="et-pill et-pill-upcoming">Upcoming<\/span>`
     : `<span class="et-pill et-pill-past">Past<\/span>`;
+  let dateStr = '';
+  if (cv.event_date) {
+    const d = new Date(cv.event_date + 'T00:00:00+05:30');
+    dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
   const coverHtml = cv.cover_image
     ? `<div class="et-cover"><img src="${cv.cover_image}" alt="${cv.title}" loading="lazy"><\/div>`
     : '';
@@ -731,7 +736,7 @@ function renderTimelineCVNode(cv) {
     <div class="et-dot"><\/div>
     <div class="et-card">
       <div class="et-card-body">
-        <div class="et-badges">${pill}<span class="et-pill et-pill-cd">🎬 Chitra Vichitra<\/span><\/div>
+        <div class="et-badges">${pill}<span class="et-pill et-pill-cd">🎬 Chitra Vichitra<\/span>${dateStr?`<span class="et-date">${dateStr}<\/span>`:''}<\/div>
         <div class="et-title">${cv.title}<\/div>
         <div class="et-desc">${cv.description}<\/div>
         <div class="et-recap-hint">View festival & photos →<\/div>
@@ -6939,6 +6944,7 @@ function openCVModal(cv=null) {
   document.getElementById('cv-edit-id').value = cv ? cv.id : '';
   document.getElementById('cv-year').value = cv ? cv.year : '';
   document.getElementById('cv-sort').value = cv ? cv.sort_order : 99;
+  document.getElementById('cv-date').value = cv?.event_date || '';
   document.getElementById('cv-upcoming').value = cv?.is_upcoming ? 'true' : 'false';
   document.getElementById('cv-recap').value = cv?.recap || '';
   const prev = document.getElementById('cv-cover-preview');
@@ -6977,6 +6983,7 @@ async function saveCV() {
   fd.append('sort_order', sort);
   fd.append('recap', recap);
   fd.append('is_upcoming', document.getElementById('cv-upcoming').value);
+  fd.append('event_date', document.getElementById('cv-date').value);
   if (file) fd.append('cover', file);
 
   const method = _cvEditId ? 'PUT' : 'POST';
@@ -7033,11 +7040,31 @@ async function uploadGalleryPhotos(type, entityId, inputEl, gridId) {
       headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
       body: fd,
     });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); alert(e.error||'Upload failed'); grid.innerHTML = prevHtml; return; }
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok) {
+      let detail = '';
+      if (ct.includes('application/json')) {
+        const e = await res.json().catch(()=>({}));
+        detail = e.error || '';
+      } else {
+        detail = (await res.text().catch(()=>'')).slice(0, 200);
+      }
+      console.error('[gallery upload]', res.status, detail);
+      alert(`Upload failed (HTTP ${res.status})${detail ? ': '+detail : ''}\n\nOpen DevTools → Console for the full detail.`);
+      grid.innerHTML = prevHtml;
+      return;
+    }
+    if (!ct.includes('application/json')) {
+      console.error('[gallery upload] non-JSON success response — server likely not redeployed with the gallery routes yet.');
+      alert('Upload seemed to succeed but the server response looked wrong. The server may need to be redeployed with the latest server.js.');
+      grid.innerHTML = prevHtml;
+      return;
+    }
     inputEl.value = '';
     loadAdminGalleryThumbs(type, entityId, gridId);
   } catch (err) {
-    alert('Upload failed');
+    console.error('[gallery upload] network/fetch error:', err);
+    alert('Upload failed — network error: ' + (err?.message || err));
     grid.innerHTML = prevHtml;
   }
 }
