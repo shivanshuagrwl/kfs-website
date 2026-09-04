@@ -667,9 +667,10 @@ async function loadEvents() {
 }
 
 // CV editions only store a `year`, not an exact date — so we place them at
-// mid-year for sorting purposes among that year's regular events.
+// mid-year for sorting purposes among that year's regular events. Whether
+// a CV edition is upcoming or past is an explicit admin-set field though
+// (not guessed from the year), same as regular events.
 function cvSortDate(year) { return `${year}-06-15`; }
-function cvIsUpcoming(year) { return parseInt(year, 10) >= new Date().getFullYear(); }
 
 // Unified timeline: upcoming events first (soonest first), then past events
 // in reverse-chronological order — a single continuous scroll with a year
@@ -691,7 +692,7 @@ function renderTimeline() {
       : `Our annual film festival — ${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened.`,
     cover_image: cv.cover_image,
     event_date: cvSortDate(cv.year),
-    is_upcoming: cvIsUpcoming(cv.year),
+    is_upcoming: !!cv.is_upcoming,
   }));
   const combined = [...allEvents, ...cvItems];
 
@@ -6808,7 +6809,7 @@ async function loadCVCards() {
         : `<div class="cv-year-card-placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.82 2H4.18A2.18 2.18 0 0 0 2 4.18v15.64A2.18 2.18 0 0 0 4.18 22h15.64A2.18 2.18 0 0 0 22 19.82V4.18A2.18 2.18 0 0 0 19.82 2z"/><circle cx="7" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/><circle cx="17" cy="7" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="17" cy="12" r="1.5"/><circle cx="7" cy="17" r="1.5"/><circle cx="12" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/><\/svg><\/div>`}
       <div class="cv-year-card-overlay"><\/div>
       <div class="cv-year-card-info">
-        <div class="cv-year-badge">Chitra Vichitra<\/div>
+        <div class="cv-year-badge">Chitra Vichitra ${cv.is_upcoming ? '<span style="color:#34c759">• Upcoming<\/span>' : ''}<\/div>
         <div class="cv-year-num">${cv.year}<\/div>
         <div class="cv-year-meta">${movieCount} film${movieCount!==1?'s':''} screened<\/div>
         <div class="cv-year-arrow">View Films →<\/div>
@@ -6938,6 +6939,7 @@ function openCVModal(cv=null) {
   document.getElementById('cv-edit-id').value = cv ? cv.id : '';
   document.getElementById('cv-year').value = cv ? cv.year : '';
   document.getElementById('cv-sort').value = cv ? cv.sort_order : 99;
+  document.getElementById('cv-upcoming').value = cv?.is_upcoming ? 'true' : 'false';
   document.getElementById('cv-recap').value = cv?.recap || '';
   const prev = document.getElementById('cv-cover-preview');
   const wrap = document.getElementById('cv-cover-preview-wrap');
@@ -6974,6 +6976,7 @@ async function saveCV() {
   fd.append('year', year);
   fd.append('sort_order', sort);
   fd.append('recap', recap);
+  fd.append('is_upcoming', document.getElementById('cv-upcoming').value);
   if (file) fd.append('cover', file);
 
   const method = _cvEditId ? 'PUT' : 'POST';
