@@ -1246,6 +1246,78 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 @media(max-width:900px){.cv-movies-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.cv-movies-grid{grid-template-columns:1fr}}
 
+/* ── EVENTS TIMELINE ──────────────────────────────────────────────────── */
+.events-timeline{position:relative;margin-top:36px;padding-left:34px}
+.events-timeline::before{content:'';position:absolute;left:5px;top:10px;bottom:10px;width:2px;
+  background:linear-gradient(to bottom,var(--border) 0%,var(--border) 100%)}
+.et-year-divider{position:relative;margin:8px 0 28px;font-size:12px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--grey)}
+.et-year-divider::before{content:'';position:absolute;left:-34px;top:5px;width:12px;height:12px;
+  border-radius:50%;background:var(--black);border:2px solid var(--border)}
+.et-item{position:relative;padding-bottom:36px;cursor:default}
+.et-item:last-child{padding-bottom:4px}
+.et-dot{position:absolute;left:-34px;top:22px;width:13px;height:13px;border-radius:50%;
+  background:var(--black);border:2px solid var(--grey);transition:all .25s var(--ease);z-index:1}
+.et-item.et-upcoming .et-dot{border-color:#34c759;box-shadow:0 0 0 4px rgba(52,199,89,.14)}
+.et-item.et-past.et-clickable{cursor:pointer}
+.et-item.et-past.et-clickable:hover .et-dot{border-color:var(--white);box-shadow:0 0 0 4px rgba(255,255,255,.1)}
+.et-card{display:flex;gap:20px;align-items:flex-start;padding:20px;border:1px solid var(--border);
+  border-radius:14px;background:var(--card);transition:border-color .25s var(--ease),transform .25s var(--ease)}
+.et-item.et-past.et-clickable:hover .et-card{border-color:rgba(255,255,255,.22);transform:translateX(2px)}
+.et-card-body{flex:1;min-width:0}
+.et-badges{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.et-pill{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:20px}
+.et-pill-upcoming{background:rgba(52,199,89,.12);color:#34c759}
+.et-pill-past{background:rgba(255,255,255,.08);color:var(--grey)}
+.et-pill-cd{background:rgba(255,255,255,.06);color:var(--white);display:inline-flex;align-items:center;gap:5px}
+.et-date{font-size:12px;letter-spacing:.04em;color:var(--grey)}
+.et-title{font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;line-height:1.25}
+.et-desc{font-size:13.5px;color:var(--grey);line-height:1.6;margin-bottom:10px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.et-meta-row{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--grey);margin-top:4px}
+.et-meta-row span{display:inline-flex;align-items:center;gap:5px}
+.et-recap-hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:12px;
+  font-weight:600;letter-spacing:.04em;color:var(--white);opacity:.75;transition:opacity .2s}
+.et-item.et-past.et-clickable:hover .et-recap-hint{opacity:1}
+.et-cover{flex-shrink:0;width:120px;height:120px;border-radius:10px;overflow:hidden}
+.et-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.et-action-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+@media(max-width:640px){
+  .events-timeline{padding-left:26px}
+  .et-dot{left:-26px}
+  .et-year-divider::before{left:-26px}
+  .et-card{flex-direction:column-reverse;gap:14px}
+  .et-cover{width:100%;height:170px}
+}
+
+/* Recap + gallery inside past-event / CV detail view */
+.ed-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:48px}
+.ed-gallery-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer;
+  transition:opacity .2s,transform .2s}
+.ed-gallery-grid img:hover{opacity:.85;transform:scale(1.02)}
+.ed-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:9999;display:none;
+  align-items:center;justify-content:center}
+.ed-lightbox.open{display:flex}
+.ed-lightbox-img{max-width:88vw;max-height:84vh;object-fit:contain;border-radius:4px}
+.ed-lightbox-close{position:absolute;top:24px;right:28px;background:none;border:none;color:#fff;
+  font-size:22px;cursor:pointer;opacity:.7;transition:opacity .2s;padding:8px}
+.ed-lightbox-close:hover{opacity:1}
+.ed-lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:none;border:none;
+  color:#fff;font-size:44px;line-height:1;cursor:pointer;opacity:.6;transition:opacity .2s;padding:12px 18px}
+.ed-lightbox-nav:hover{opacity:1}
+.ed-lightbox-prev{left:8px}
+.ed-lightbox-next{right:8px}
+@media(max-width:640px){.ed-lightbox-nav{font-size:32px;padding:8px 12px}}
+
+/* Admin gallery uploader — reused for both event & CV edition modals */
+.ed-admin-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:12px}
+.ed-admin-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.ed-admin-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.ed-admin-thumb-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+  background:rgba(0,0,0,.75);color:#fff;border:none;font-size:13px;cursor:pointer;line-height:1;
+  display:flex;align-items:center;justify-content:center}
+.ed-admin-thumb-del:hover{background:#e5484d}
+
 /* ── BLOG GRID ────────────────────────────────────────────────────────── */
 .blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:transparent}
 @media(max-width:768px){.blog-grid{grid-template-columns:1fr}}
@@ -3437,42 +3509,65 @@ body.light-mode .psw-comment-gate a{color:#111}
 <div class="page" id="page-events">
   <section class="section">
     <div class="section-inner" id="events-main-view">
+      <p class="section-label">The Timeline</p>
       <h2 class="section-title">Events</h2>
-      <div class="events-tabs">
-        <div data-action="filterEvents" data-args='["upcoming", "__this__"]' class="events-tab active">Upcoming</div>
-        <div data-action="filterEvents" data-args='["past", "__this__"]' class="events-tab">Past</div>
-      </div>
-      <!-- CV section — shown only in past tab -->
-      <div id="cv-section-wrap" style="display:none">
-        <div class="cv-section" style="margin-top:48px">
-          <p class="cv-section-label">Flagship Event</p>
-          <h3 class="cv-section-title">Chitra Vichitra</h3>
-          <p class="cv-section-subtitle">Our annual film screening festival — celebrating cinema one frame at a time.</p>
-          <div class="cv-cards-row" id="cv-cards-row">
-            <div class="loading" style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card)">Loading...</div>
-          </div>
-        </div>
-        <div style="margin-bottom:48px;border-bottom:1px solid var(--border);padding-bottom:48px">
-          <p class="section-label" style="margin-bottom:8px">Other Past Events</p>
+      <p style="color:var(--grey);font-size:14px;margin-top:10px;max-width:520px;line-height:1.6">What's coming up, and a running record of everything we've done — with photos and how it actually went.</p>
+
+      <!-- CV strip — flagship editions, always visible above the general timeline -->
+      <div class="cv-section" id="cv-section-wrap" style="margin-top:40px">
+        <p class="cv-section-label">Flagship Event</p>
+        <h3 class="cv-section-title">Chitra Vichitra</h3>
+        <p class="cv-section-subtitle">Our annual film screening festival — celebrating cinema one frame at a time.</p>
+        <div class="cv-cards-row" id="cv-cards-row">
+          <div class="loading" style="grid-column:1/-1;padding:40px;text-align:center;background:var(--card)">Loading...</div>
         </div>
       </div>
-      <div class="events-list" id="events-list">
+
+      <div style="display:flex;align-items:center;gap:14px;margin:56px 0 8px">
+        <p class="section-label" style="margin:0">Everything Else</p>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <!-- Vertical timeline: upcoming events on top (with countdown), then past
+           events below in reverse-chronological order. A single continuous
+           line runs through every node. -->
+      <div class="events-timeline" id="events-timeline">
         <div class="loading">Loading events...</div>
       </div>
     </div>
 
-    <!-- CV Detail view -->
+    <!-- Past event / CV edition detail view — recap write-up + photo gallery -->
     <div class="section-inner" id="cv-detail-view" style="display:none">
       <a data-action="closeCVDetail" class="cv-detail-back">← Back to Events</a>
       <div class="cv-detail-header">
-        <p class="cv-detail-label">Chitra Vichitra</p>
+        <p class="cv-detail-label" id="ed-detail-label">Chitra Vichitra</p>
         <h2 class="cv-detail-title" id="cv-detail-year-title">CV 2026</h2>
       </div>
-      <div class="cv-movies-grid" id="cv-movies-grid">
-        <div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading films...</div>
+
+      <!-- CV: film grid (hidden for regular events) -->
+      <div class="cv-movies-grid" id="cv-movies-grid"></div>
+
+      <!-- Recap write-up -->
+      <div id="ed-recap-wrap" style="display:none;max-width:720px;margin:8px 0 48px">
+        <p class="section-label" style="margin-bottom:14px">How It Went</p>
+        <div id="ed-recap-text" style="color:var(--white);font-size:15.5px;line-height:1.8;white-space:pre-wrap"></div>
+      </div>
+
+      <!-- Photo gallery -->
+      <div id="ed-gallery-wrap" style="display:none">
+        <p class="section-label" style="margin-bottom:14px">Gallery</p>
+        <div class="ed-gallery-grid" id="ed-gallery-grid"></div>
       </div>
     </div>
   </section>
+</div>
+
+<!-- Gallery lightbox — shared by event + CV detail views -->
+<div class="ed-lightbox" id="ed-lightbox" onclick="closeGalleryLightbox(event)">
+  <button class="ed-lightbox-close" onclick="closeGalleryLightbox(event)" aria-label="Close">✕</button>
+  <button class="ed-lightbox-nav ed-lightbox-prev" onclick="navGalleryLightbox(event,-1)" aria-label="Previous">‹</button>
+  <img class="ed-lightbox-img" id="ed-lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+  <button class="ed-lightbox-nav ed-lightbox-next" onclick="navGalleryLightbox(event,1)" aria-label="Next">›</button>
 </div>
 
 <!-- ── BLOG PAGE ── -->
@@ -6094,7 +6189,16 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Cover Image</label><input type="file" id="event-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
       <label>Status</label>
-      <select id="event-upcoming"><option value="true">Upcoming</option><option value="false">Past</option></select>
+      <select id="event-upcoming" onchange="toggleEventRecapField()"><option value="true">Upcoming</option><option value="false">Past</option></select>
+    </div>
+    <div class="form-group" id="event-recap-wrap" style="display:none">
+      <label>How did it go? <span style="font-weight:400;color:var(--grey);font-size:12px">(shown on the public timeline for this past event)</span></label>
+      <textarea id="event-recap" rows="5" style="resize:vertical;min-height:110px" placeholder="Turnout, highlights, what worked, what to improve next time…"></textarea>
+    </div>
+    <div class="form-group" id="event-gallery-wrap" style="display:none">
+      <label>Gallery <span style="font-weight:400;color:var(--grey);font-size:12px">(save the event once before adding photos)</span></label>
+      <input type="file" id="event-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('event', document.getElementById('event-edit-id').value, this, 'event-gallery-grid')">
+      <div class="ed-admin-gallery-grid" id="event-gallery-grid"></div>
     </div>
     <div class="modal-actions">
       <button data-action="closeEventModal" class="btn-sm">Cancel</button>
@@ -6378,6 +6482,15 @@ KFS — KIIT Film Society"></textarea>
       <img id="cv-cover-preview" src="" alt="" style="width:100%;max-width:280px;aspect-ratio:3/2;object-fit:cover;border:1px solid var(--border);border-radius:4px">
     </div>
     <div class="form-group"><label>Sort Order <span style="font-weight:400;color:var(--grey)">(lower = shown first)</span></label><input type="number" id="cv-sort" value="99"></div>
+    <div class="form-group">
+      <label>How did it go? <span style="font-weight:400;color:var(--grey);font-size:12px">(shown on this edition's public detail page)</span></label>
+      <textarea id="cv-recap" rows="5" style="resize:vertical;min-height:110px" placeholder="Turnout, highlights, standout films…"></textarea>
+    </div>
+    <div class="form-group" id="cv-gallery-wrap" style="display:none">
+      <label>Gallery <span style="font-weight:400;color:var(--grey);font-size:12px">(save the edition once before adding photos)</span></label>
+      <input type="file" id="cv-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('chitra-vichitra', document.getElementById('cv-edit-id').value, this, 'cv-gallery-grid')">
+      <div class="ed-admin-gallery-grid" id="cv-gallery-grid"></div>
+    </div>
     <div class="modal-actions">
       <button data-action="closeCVModal" class="btn-sm">Cancel</button>
       <button data-action="saveCV" class="btn-sm btn-success">Save Edition</button>
