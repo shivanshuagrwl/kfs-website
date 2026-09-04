@@ -658,24 +658,50 @@ async function loadHomeData() {
 async function loadEvents() {
   const list = document.getElementById('events-timeline');
   if (list) list.innerHTML = '<div class="empty-state"><p>Loading events…</p></div>';
-  allEvents = await apiFetch('/api/events') || [];
-  loadCVCards(); // flagship strip loads independently, always visible
+  const [events] = await Promise.all([
+    apiFetch('/api/events'),
+    loadCVCards(), // fetches into _cvData AND renders the flagship strip above
+  ]);
+  allEvents = events || [];
   renderTimeline();
 }
 
+// CV editions only store a `year`, not an exact date — so we place them at
+// mid-year for sorting purposes among that year's regular events.
+function cvSortDate(year) { return `${year}-06-15`; }
+function cvIsUpcoming(year) { return parseInt(year, 10) >= new Date().getFullYear(); }
+
 // Unified timeline: upcoming events first (soonest first), then past events
 // in reverse-chronological order — a single continuous scroll with a year
-// divider whenever the year changes.
+// divider whenever the year changes. Chitra Vichitra editions are merged in
+// alongside regular events (they also still get their own flagship strip
+// above, since CV is the flagship — this is just so they show up in the
+// full chronological record too).
 function renderTimeline() {
   const wrap = document.getElementById('events-timeline');
   if (!wrap) return;
-  if (!allEvents.length) {
+
+  const cvItems = (_cvData || []).map(cv => ({
+    _type: 'cv',
+    id: cv.id,
+    year: cv.year,
+    title: `Chitra Vichitra ${cv.year}`,
+    description: cv.recap
+      ? cv.recap
+      : `Our annual film festival — ${cv.movie_count || 0} film${(cv.movie_count||0)!==1?'s':''} screened.`,
+    cover_image: cv.cover_image,
+    event_date: cvSortDate(cv.year),
+    is_upcoming: cvIsUpcoming(cv.year),
+  }));
+  const combined = [...allEvents, ...cvItems];
+
+  if (!combined.length) {
     wrap.innerHTML = `<div class="empty-state"><p>No events yet.<\/p><\/div>`;
     return;
   }
-  const upcoming = allEvents.filter(e=>e.is_upcoming)
+  const upcoming = combined.filter(e=>e.is_upcoming)
     .sort((a,b)=> new Date(a.event_date) - new Date(b.event_date));
-  const past = allEvents.filter(e=>!e.is_upcoming)
+  const past = combined.filter(e=>!e.is_upcoming)
     .sort((a,b)=> new Date(b.event_date) - new Date(a.event_date));
   const ordered = [...upcoming, ...past];
 
@@ -687,9 +713,31 @@ function renderTimeline() {
       html += `<div class="et-year-divider">${y}<\/div>`;
       lastYear = y;
     }
-    html += renderTimelineNode(e);
+    html += e._type === 'cv' ? renderTimelineCVNode(e) : renderTimelineNode(e);
   });
   wrap.innerHTML = html;
+}
+
+function renderTimelineCVNode(cv) {
+  const pill = cv.is_upcoming
+    ? `<span class="et-pill et-pill-upcoming">Upcoming<\/span>`
+    : `<span class="et-pill et-pill-past">Past<\/span>`;
+  const coverHtml = cv.cover_image
+    ? `<div class="et-cover"><img src="${cv.cover_image}" alt="${cv.title}" loading="lazy"><\/div>`
+    : '';
+  return `<div class="et-item ${cv.is_upcoming?'et-upcoming':'et-past'} et-clickable" data-cv-id="${cv.id}"
+      onclick="openCVDetail('${cv.id}','${cv.year}')">
+    <div class="et-dot"><\/div>
+    <div class="et-card">
+      <div class="et-card-body">
+        <div class="et-badges">${pill}<span class="et-pill et-pill-cd">🎬 Chitra Vichitra<\/span><\/div>
+        <div class="et-title">${cv.title}<\/div>
+        <div class="et-desc">${cv.description}<\/div>
+        <div class="et-recap-hint">View festival & photos →<\/div>
+      <\/div>
+      ${coverHtml}
+    <\/div>
+  <\/div>`;
 }
 
 function renderTimelineNode(e) {
@@ -3767,26 +3815,40 @@ function openEventModal(ev=null) {
   document.getElementById('event-upcoming').value = ev?.is_upcoming ? 'true':'false';
   document.getElementById('event-cover').value='';
   document.getElementById('event-recap').value = ev?.recap || '';
-  toggleEventRecapField();
-  const galleryWrap = document.getElementById('event-gallery-wrap');
-  if (ev && ev.id) {
-    galleryWrap.style.display = 'block';
-    loadAdminGalleryThumbs('event', ev.id, 'event-gallery-grid');
-  } else {
-    galleryWrap.style.display = 'none';
-    document.getElementById('event-gallery-grid').innerHTML = '';
-  }
+  window._eventModalCurrent = ev; // so togglePastFields knows the id even after dropdown changes
+  toggleEventPastFields();
 }
 function toggleEventWhatsappField() {
   const cb = document.getElementById('event-show-whatsapp');
   const wrap = document.getElementById('event-whatsapp-link-wrap');
   if (wrap) wrap.style.display = (cb && cb.checked) ? 'block' : 'none';
 }
-// Recap only makes sense once the event is marked Past
-function toggleEventRecapField() {
+// Recap + Gallery both only make sense once the event is marked Past.
+// Runs on modal open AND every time the Status dropdown changes.
+function toggleEventPastFields() {
   const isPast = document.getElementById('event-upcoming').value === 'false';
-  const wrap = document.getElementById('event-recap-wrap');
-  if (wrap) wrap.style.display = isPast ? 'block' : 'none';
+  const ev = window._eventModalCurrent;
+  const recapWrap = document.getElementById('event-recap-wrap');
+  if (recapWrap) recapWrap.style.display = isPast ? 'block' : 'none';
+
+  const galleryWrap = document.getElementById('event-gallery-wrap');
+  const galleryInputWrap = document.getElementById('event-gallery-input-wrap');
+  const gallerySaveFirstMsg = document.getElementById('event-gallery-savefirst');
+  if (isPast) {
+    galleryWrap.style.display = 'block';
+    if (ev && ev.id) {
+      galleryInputWrap.style.display = 'block';
+      gallerySaveFirstMsg.style.display = 'none';
+      loadAdminGalleryThumbs('event', ev.id, 'event-gallery-grid');
+    } else {
+      galleryInputWrap.style.display = 'none';
+      gallerySaveFirstMsg.style.display = 'block';
+      document.getElementById('event-gallery-grid').innerHTML = '';
+    }
+  } else {
+    galleryWrap.style.display = 'none';
+    document.getElementById('event-gallery-grid').innerHTML = '';
+  }
 }
 function editEvent(ev) { openEventModal(ev); }
 function closeEventModal() { document.getElementById('event-modal').classList.remove('open'); }
@@ -3815,7 +3877,10 @@ async function saveEvent() {
     const res = await fetch(url,{method:id?'PUT':'POST', credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd});
     if (!res.ok) { let msg='Error saving event'; try{const e=await res.json();msg=e.error||msg;}catch(_){} alert(msg); return; }
     const saved = await res.json();
-    closeEventModal();
+    // New event — reopen the same modal now populated with its id, so the
+    // gallery uploader unlocks immediately instead of forcing a re-open.
+    if (!id) { openEventModal(saved); }
+    else { closeEventModal(); }
     // Instant DOM update — no re-fetch needed
     const tbody = document.getElementById('admin-events-tbody');
     const eJson = JSON.stringify(saved).replace(/"/g,'&quot;');
@@ -6763,7 +6828,7 @@ async function openCVDetail(cvId, year) {
   grid.style.display = 'grid';
   grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading...<\/div>`;
 
-  const cv = (window._cvData||[]).find(c=>c.id===cvId);
+  const cv = (_cvData||[]).find(c=>c.id===cvId);
   const recapWrap = document.getElementById('ed-recap-wrap');
   const recapText = document.getElementById('ed-recap-text');
   if (cv && cv.recap) {
@@ -6880,11 +6945,16 @@ function openCVModal(cv=null) {
   else { prev.src=''; wrap.style.display='none'; }
   document.getElementById('cv-cover').value = '';
   const galleryWrap = document.getElementById('cv-gallery-wrap');
+  const galleryInputWrap = document.getElementById('cv-gallery-input-wrap');
+  const gallerySaveFirstMsg = document.getElementById('cv-gallery-savefirst');
+  galleryWrap.style.display = 'block';
   if (cv && cv.id) {
-    galleryWrap.style.display = 'block';
+    galleryInputWrap.style.display = 'block';
+    gallerySaveFirstMsg.style.display = 'none';
     loadAdminGalleryThumbs('chitra-vichitra', cv.id, 'cv-gallery-grid');
   } else {
-    galleryWrap.style.display = 'none';
+    galleryInputWrap.style.display = 'none';
+    gallerySaveFirstMsg.style.display = 'block';
     document.getElementById('cv-gallery-grid').innerHTML = '';
   }
   document.getElementById('cv-modal').style.display = 'flex';
@@ -6910,7 +6980,9 @@ async function saveCV() {
   const url = _cvEditId ? `/api/admin/chitra-vichitra/${_cvEditId}` : '/api/admin/chitra-vichitra';
   const res = await fetch(url, { method, credentials:'include', headers:{'Authorization':'Bearer '+adminToken,'X-CSRF-Token':_csrfToken||''}, body:fd });
   if (!res.ok) { const e=await res.json(); alert(e.error||'Error'); return; }
-  closeCVModal();
+  const saved = await res.json();
+  if (!_cvEditId) { openCVModal(saved); } // reopen so gallery uploader unlocks immediately
+  else { closeCVModal(); }
   loadAdminCV();
 }
 
