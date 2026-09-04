@@ -3513,6 +3513,7 @@ app.post(
       location_link,
       whatsapp_group_link,
       is_upcoming,
+      recap,
     } = req.body;
     const coverUrl = await uploadImage(req.file, "events");
     const { data, error } = await supabase
@@ -3528,6 +3529,7 @@ app.post(
           whatsapp_group_link: whatsapp_group_link || null,
           cover_image: coverUrl,
           is_upcoming: is_upcoming === "true",
+          recap: recap || null,
         },
       ])
       .select()
@@ -3553,6 +3555,7 @@ app.put(
       location_link,
       whatsapp_group_link,
       is_upcoming,
+      recap,
     } = req.body;
     const updates = {
       title,
@@ -3563,6 +3566,7 @@ app.put(
       location_link: location_link || null,
       whatsapp_group_link: whatsapp_group_link || null,
       is_upcoming: is_upcoming === "true",
+      recap: recap || null,
     };
     if (req.file) updates.cover_image = await uploadImage(req.file, "events");
     const { data, error } = await supabase
@@ -3588,7 +3592,9 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("events").update({ deleted_at: new Date().toISOString() }).eq("id", req.params.id);
-    memInvalidate("events:list");
+    // Soft-deleted, so we keep gallery rows around in case of undo — they're
+    // just orphaned from the UI since the event itself won't be fetched anymore.
+    memInvalidate("events:list", "gallery:event:" + req.params.id);
     logActivity(
       req.admin.id,
       req.admin.name,
@@ -4906,7 +4912,7 @@ app.post(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order } = req.body;
+    const { year, sort_order, recap } = req.body;
     if (!year) return res.status(400).json({ error: "Year is required" });
     const coverUrl = await uploadImage(req.file, "chitra-vichitra");
     const { data, error } = await supabase
@@ -4916,6 +4922,7 @@ app.post(
           year: year.trim(),
           cover_image: coverUrl,
           sort_order: parseInt(sort_order) || 99,
+          recap: recap || null,
         },
       ])
       .select()
@@ -4944,10 +4951,11 @@ app.put(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order } = req.body;
+    const { year, sort_order, recap } = req.body;
     const updates = {
       year: year?.trim(),
       sort_order: parseInt(sort_order) || 99,
+      recap: recap || null,
     };
     if (req.file)
       updates.cover_image = await uploadImage(req.file, "chitra-vichitra");
@@ -4981,7 +4989,9 @@ app.delete(
       .eq("id", req.params.id)
       .single();
     await supabase.from("chitra_vichitra").delete().eq("id", req.params.id);
-    memInvalidate("cv:list");
+    // CV rows hard-delete (unlike events), so clean up orphaned gallery rows too
+    await supabase.from("gallery_images").delete().eq("entity_type", "chitra_vichitra").eq("entity_id", req.params.id);
+    memInvalidate("cv:list", "gallery:chitra_vichitra:" + req.params.id);
     logActivity(
       req.admin.id,
       req.admin.name,
@@ -5034,6 +5044,97 @@ app.delete(
       .delete()
       .eq("id", req.params.cvMovieId);
     memInvalidate("cv:list");
+    res.json({ success: true });
+  },
+);
+
+// ── EVENT / CV GALLERY ────────────────────────────────────────────────────────
+// Shared table (gallery_images) backs both regular events ("memories" of a past
+// event) and Chitra Vichitra editions. :type in the URL is either "event" or
+// "chitra-vichitra" (hyphenated for the URL, mapped to the DB's entity_type
+// which uses an underscore).
+const GALLERY_TYPES = { event: "event", "chitra-vichitra": "chitra_vichitra" };
+const GALLERY_SECTION = { event: "events", "chitra-vichitra": "chitra-vichitra" };
+
+function requireGallerySection(req, res, next) {
+  const entityType = GALLERY_TYPES[req.params.type];
+  if (!entityType) return res.status(400).json({ error: "Invalid gallery type" });
+  return requireSection(GALLERY_SECTION[req.params.type])(req, res, next);
+}
+
+// Public — fetch the gallery for one event or CV edition
+app.get("/api/gallery/:type/:entityId", async (req, res) => {
+  const entityType = GALLERY_TYPES[req.params.type];
+  if (!entityType) return res.status(400).json({ error: "Invalid gallery type" });
+  cacheFor(res, 120);
+  const cacheKey = `gallery:${entityType}:${req.params.entityId}`;
+  const data = await memCache(cacheKey, 300, async () => {
+    const { data } = await supabasePublic
+      .from("gallery_images")
+      .select("id, image_url, caption, sort_order")
+      .eq("entity_type", entityType)
+      .eq("entity_id", req.params.entityId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    return data || [];
+  });
+  res.json(data);
+});
+
+// Admin — upload one or more photos to an event/CV edition's gallery
+app.post(
+  "/api/admin/gallery/:type/:entityId",
+  requireGallerySection,
+  upload.array("images", 20),
+  async (req, res) => {
+    const entityType = GALLERY_TYPES[req.params.type];
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: "No images provided" });
+    const folder = entityType === "event" ? "event-gallery" : "chitra-vichitra-gallery";
+    try {
+      const uploaded = await Promise.all(
+        files.map((f) => uploadImage(f, folder)),
+      );
+      const rows = uploaded.map((url, i) => ({
+        entity_type: entityType,
+        entity_id: req.params.entityId,
+        image_url: url,
+        sort_order: i,
+      }));
+      const { data, error } = await supabase
+        .from("gallery_images")
+        .insert(rows)
+        .select();
+      if (error) return res.status(500).json({ error: "Internal server error" });
+      memInvalidate(`gallery:${entityType}:${req.params.entityId}`);
+      logActivity(
+        req.admin.id,
+        req.admin.name,
+        "update",
+        entityType,
+        `Added ${data.length} gallery photo(s)`,
+      ).catch((e) => console.error("[activity]", e.message));
+      res.json(data);
+    } catch (e) {
+      console.error("[gallery upload]", e.message);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  },
+);
+
+// Admin — delete a single gallery photo
+app.delete(
+  "/api/admin/gallery/:type/:imageId",
+  requireGallerySection,
+  async (req, res) => {
+    const entityType = GALLERY_TYPES[req.params.type];
+    const { data: img } = await supabase
+      .from("gallery_images")
+      .select("entity_id")
+      .eq("id", req.params.imageId)
+      .single();
+    await supabase.from("gallery_images").delete().eq("id", req.params.imageId);
+    if (img) memInvalidate(`gallery:${entityType}:${img.entity_id}`);
     res.json({ success: true });
   },
 );
