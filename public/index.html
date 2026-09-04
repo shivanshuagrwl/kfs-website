@@ -1261,8 +1261,9 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 .et-item.et-upcoming .et-dot{border-color:#34c759;box-shadow:0 0 0 4px rgba(52,199,89,.14)}
 .et-item.et-past.et-clickable{cursor:pointer}
 .et-item.et-past.et-clickable:hover .et-dot{border-color:var(--white);box-shadow:0 0 0 4px rgba(255,255,255,.1)}
-.et-card{display:flex;gap:20px;align-items:flex-start;padding:20px;border:1px solid var(--border);
-  border-radius:14px;background:var(--card);transition:border-color .25s var(--ease),transform .25s var(--ease)}
+.et-card{display:flex;gap:20px;align-items:stretch;padding:20px;border:1px solid var(--border);
+  border-radius:14px;background:var(--card);transition:border-color .25s var(--ease),transform .25s var(--ease);
+  overflow:hidden;position:relative}
 .et-item.et-past.et-clickable:hover .et-card{border-color:rgba(255,255,255,.22);transform:translateX(2px)}
 .et-card-body{flex:1;min-width:0}
 .et-badges{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
@@ -1279,7 +1280,7 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
 .et-recap-hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:12px;
   font-weight:600;letter-spacing:.04em;color:var(--white);opacity:.75;transition:opacity .2s}
 .et-item.et-past.et-clickable:hover .et-recap-hint{opacity:1}
-.et-cover{flex-shrink:0;width:170px;aspect-ratio:16/10;border-radius:10px;overflow:hidden;align-self:center}
+.et-cover{flex-shrink:0;width:220px;margin:-20px -20px -20px 0;overflow:hidden;min-height:100%}
 .et-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .et-action-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 @media(max-width:640px){
@@ -1287,7 +1288,7 @@ body.light-mode .cv-year-badge,.cv-year-meta{color:rgba(255,255,255,.6)}
   .et-dot{left:-26px}
   .et-year-divider::before{left:-26px}
   .et-card{flex-direction:column-reverse;gap:14px}
-  .et-cover{width:100%;aspect-ratio:16/9;align-self:auto}
+  .et-cover{width:100%;aspect-ratio:16/9;margin:0}
 }
 
 /* Recap + gallery inside past-event / CV detail view */
@@ -6189,16 +6190,19 @@ KFS — KIIT Film Society"></textarea>
     <div class="form-group"><label>Cover Image</label><input type="file" id="event-cover" accept="image/*" style="border:none;padding:0;background:transparent"></div>
     <div class="form-group">
       <label>Status</label>
-      <select id="event-upcoming" onchange="toggleEventRecapField()"><option value="true">Upcoming</option><option value="false">Past</option></select>
+      <select id="event-upcoming" onchange="toggleEventPastFields()"><option value="true">Upcoming</option><option value="false">Past</option></select>
     </div>
     <div class="form-group" id="event-recap-wrap" style="display:none">
       <label>How did it go? <span style="font-weight:400;color:var(--grey);font-size:12px">(shown on the public timeline for this past event)</span></label>
       <textarea id="event-recap" rows="5" style="resize:vertical;min-height:110px" placeholder="Turnout, highlights, what worked, what to improve next time…"></textarea>
     </div>
     <div class="form-group" id="event-gallery-wrap" style="display:none">
-      <label>Gallery <span style="font-weight:400;color:var(--grey);font-size:12px">(save the event once before adding photos)</span></label>
-      <input type="file" id="event-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('event', document.getElementById('event-edit-id').value, this, 'event-gallery-grid')">
-      <div class="ed-admin-gallery-grid" id="event-gallery-grid"></div>
+      <label>Gallery</label>
+      <p id="event-gallery-savefirst" style="display:none;font-size:12.5px;color:var(--grey);margin:0 0 4px">Save the event first — the photo uploader unlocks right after.</p>
+      <div id="event-gallery-input-wrap" style="display:none">
+        <input type="file" id="event-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('event', document.getElementById('event-edit-id').value, this, 'event-gallery-grid')">
+        <div class="ed-admin-gallery-grid" id="event-gallery-grid"></div>
+      </div>
     </div>
     <div class="modal-actions">
       <button data-action="closeEventModal" class="btn-sm">Cancel</button>
@@ -6487,9 +6491,12 @@ KFS — KIIT Film Society"></textarea>
       <textarea id="cv-recap" rows="5" style="resize:vertical;min-height:110px" placeholder="Turnout, highlights, standout films…"></textarea>
     </div>
     <div class="form-group" id="cv-gallery-wrap" style="display:none">
-      <label>Gallery <span style="font-weight:400;color:var(--grey);font-size:12px">(save the edition once before adding photos)</span></label>
-      <input type="file" id="cv-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('chitra-vichitra', document.getElementById('cv-edit-id').value, this, 'cv-gallery-grid')">
-      <div class="ed-admin-gallery-grid" id="cv-gallery-grid"></div>
+      <label>Gallery</label>
+      <p id="cv-gallery-savefirst" style="display:none;font-size:12.5px;color:var(--grey);margin:0 0 4px">Save this edition first — the photo uploader unlocks right after.</p>
+      <div id="cv-gallery-input-wrap" style="display:none">
+        <input type="file" id="cv-gallery-input" accept="image/*" multiple style="border:none;padding:0;background:transparent" onchange="uploadGalleryPhotos('chitra-vichitra', document.getElementById('cv-edit-id').value, this, 'cv-gallery-grid')">
+        <div class="ed-admin-gallery-grid" id="cv-gallery-grid"></div>
+      </div>
     </div>
     <div class="modal-actions">
       <button data-action="closeCVModal" class="btn-sm">Cancel</button>
