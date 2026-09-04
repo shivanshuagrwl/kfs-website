@@ -4912,7 +4912,7 @@ app.post(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order, recap, is_upcoming } = req.body;
+    const { year, sort_order, recap, is_upcoming, event_date } = req.body;
     if (!year) return res.status(400).json({ error: "Year is required" });
     const coverUrl = await uploadImage(req.file, "chitra-vichitra");
     const { data, error } = await supabase
@@ -4924,6 +4924,7 @@ app.post(
           sort_order: parseInt(sort_order) || 99,
           recap: recap || null,
           is_upcoming: is_upcoming === "true",
+          event_date: event_date || null,
         },
       ])
       .select()
@@ -4952,12 +4953,13 @@ app.put(
   requireSection("chitra-vichitra"),
   upload.single("cover"),
   async (req, res) => {
-    const { year, sort_order, recap, is_upcoming } = req.body;
+    const { year, sort_order, recap, is_upcoming, event_date } = req.body;
     const updates = {
       year: year?.trim(),
       sort_order: parseInt(sort_order) || 99,
       recap: recap || null,
       is_upcoming: is_upcoming === "true",
+      event_date: event_date || null,
     };
     if (req.file)
       updates.cover_image = await uploadImage(req.file, "chitra-vichitra");
