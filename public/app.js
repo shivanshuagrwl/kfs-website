@@ -656,27 +656,122 @@ async function loadHomeData() {
 }
 
 async function loadEvents() {
-  const list = document.getElementById('events-list');
+  const list = document.getElementById('events-timeline');
   if (list) list.innerHTML = '<div class="empty-state"><p>Loading events…</p></div>';
   allEvents = await apiFetch('/api/events') || [];
-  filterEvents('upcoming', document.querySelector('#page-events .events-tab'));
+  loadCVCards(); // flagship strip loads independently, always visible
+  renderTimeline();
 }
 
-function filterEvents(type, tabEl) {
-  document.querySelectorAll('#page-events .events-tab').forEach(t=>t.classList.remove('active'));
-  if (tabEl) tabEl.classList.add('active');
-  const filtered = allEvents.filter(e=> type==='upcoming' ? e.is_upcoming : !e.is_upcoming);
-  const list = document.getElementById('events-list');
-  if (filtered.length) {
-    list.innerHTML = filtered.map(e=>renderEventItem(e,true)).join('');
+// Unified timeline: upcoming events first (soonest first), then past events
+// in reverse-chronological order — a single continuous scroll with a year
+// divider whenever the year changes.
+function renderTimeline() {
+  const wrap = document.getElementById('events-timeline');
+  if (!wrap) return;
+  if (!allEvents.length) {
+    wrap.innerHTML = `<div class="empty-state"><p>No events yet.<\/p><\/div>`;
+    return;
+  }
+  const upcoming = allEvents.filter(e=>e.is_upcoming)
+    .sort((a,b)=> new Date(a.event_date) - new Date(b.event_date));
+  const past = allEvents.filter(e=>!e.is_upcoming)
+    .sort((a,b)=> new Date(b.event_date) - new Date(a.event_date));
+  const ordered = [...upcoming, ...past];
+
+  let html = '';
+  let lastYear = null;
+  ordered.forEach(e => {
+    const y = e.event_date ? new Date(e.event_date+'T00:00:00+05:30').getFullYear() : null;
+    if (y && y !== lastYear) {
+      html += `<div class="et-year-divider">${y}<\/div>`;
+      lastYear = y;
+    }
+    html += renderTimelineNode(e);
+  });
+  wrap.innerHTML = html;
+}
+
+function renderTimelineNode(e) {
+  if (!window._eventRegistry) window._eventRegistry = {};
+  window._eventRegistry[e.id] = e;
+
+  const d = e.event_date ? new Date(e.event_date + 'T00:00:00+05:30') : null;
+  const dateStr = d ? d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+  const clickable = !e.is_upcoming;
+
+  const pill = e.is_upcoming
+    ? `<span class="et-pill et-pill-upcoming">Upcoming<\/span>`
+    : `<span class="et-pill et-pill-past">Past<\/span>`;
+
+  let countdownPill = '';
+  if (e.is_upcoming && d) {
+    const diff = d.getTime() - Date.now();
+    if (diff > 0) {
+      const days = Math.floor(diff/(1000*60*60*24));
+      countdownPill = `<span class="et-pill et-pill-cd">⏱ ${days>0?days+'d left':'today'}<\/span>`;
+    }
+  }
+
+  const coverHtml = e.cover_image
+    ? `<div class="et-cover"><img src="${e.cover_image}" alt="${(e.title||'').replace(/"/g,'&quot;')}" loading="lazy"><\/div>`
+    : '';
+
+  const actionRow = e.is_upcoming
+    ? `<div class="et-action-row">
+        <button class="event-register-btn" onclick="event.stopPropagation();openEventFormById('${e.id}')">Register →<\/button>
+        <button class="event-edit-reg-btn" title="Edit Registration" onclick="event.stopPropagation();openEditRegModal('${e.id}','${(e.title||'').replace(/'/g,"\\'")}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="M15 5l4 4"/><\/svg><\/button>
+        <button class="event-share-btn" onclick="event.stopPropagation();shareEventById('${e.id}')">Share<\/button>
+      <\/div>`
+    : `<div class="et-action-row">
+        <button class="event-share-btn" onclick="event.stopPropagation();shareEventById('${e.id}')">Share<\/button>
+      <\/div>`;
+
+  const recapHint = clickable
+    ? `<div class="et-recap-hint">${e.recap ? 'Read recap & see photos' : 'View memories'} →<\/div>`
+    : '';
+
+  return `<div class="et-item ${e.is_upcoming?'et-upcoming':'et-past'}${clickable?' et-clickable':''}" data-event-id="${e.id}"
+      ${clickable ? `onclick="openEventDetail('${e.id}')"` : ''}>
+    <div class="et-dot"><\/div>
+    <div class="et-card">
+      <div class="et-card-body">
+        <div class="et-badges">${pill}${countdownPill}<span class="et-date">${dateStr}<\/span><\/div>
+        <div class="et-title">${e.title||''}<\/div>
+        <div class="et-desc">${e.description||''}<\/div>
+        <div class="et-meta-row">${e.location?`<span>📍 ${e.location}<\/span>`:''}${e.event_time?`<span>🕐 ${e.event_time}<\/span>`:''}<\/div>
+        ${actionRow}
+        ${recapHint}
+      <\/div>
+      ${coverHtml}
+    <\/div>
+  <\/div>`;
+}
+
+// Opens the shared detail view for a PAST regular event (recap + gallery,
+// no film grid — that's the CV-only branch of openCVDetail below).
+async function openEventDetail(id) {
+  const e = (window._eventRegistry && window._eventRegistry[id]) || allEvents.find(x=>x.id===id);
+  if (!e) return;
+  const mainView = document.getElementById('events-main-view');
+  const detailView = document.getElementById('cv-detail-view');
+  mainView.style.display = 'none';
+  detailView.style.display = 'block';
+  document.getElementById('ed-detail-label').textContent = 'Past Event';
+  document.getElementById('cv-detail-year-title').textContent = e.title || '';
+  document.getElementById('cv-movies-grid').style.display = 'none';
+  document.getElementById('cv-movies-grid').innerHTML = '';
+
+  const recapWrap = document.getElementById('ed-recap-wrap');
+  const recapText = document.getElementById('ed-recap-text');
+  if (e.recap) {
+    recapText.textContent = e.recap;
+    recapWrap.style.display = 'block';
   } else {
-    list.innerHTML = `<div class="empty-state"><p>No ${type} events.<\/p><\/div>`;
+    recapWrap.style.display = 'none';
   }
-  const cvWrap = document.getElementById('cv-section-wrap');
-  if (cvWrap) {
-    if (type === 'past') { cvWrap.style.display = 'block'; loadCVCards(); }
-    else { cvWrap.style.display = 'none'; }
-  }
+
+  await loadEntityGallery('event', id);
 }
 
 function renderEventItem(e, full=false) {
@@ -3671,11 +3766,27 @@ function openEventModal(ev=null) {
   toggleEventWhatsappField();
   document.getElementById('event-upcoming').value = ev?.is_upcoming ? 'true':'false';
   document.getElementById('event-cover').value='';
+  document.getElementById('event-recap').value = ev?.recap || '';
+  toggleEventRecapField();
+  const galleryWrap = document.getElementById('event-gallery-wrap');
+  if (ev && ev.id) {
+    galleryWrap.style.display = 'block';
+    loadAdminGalleryThumbs('event', ev.id, 'event-gallery-grid');
+  } else {
+    galleryWrap.style.display = 'none';
+    document.getElementById('event-gallery-grid').innerHTML = '';
+  }
 }
 function toggleEventWhatsappField() {
   const cb = document.getElementById('event-show-whatsapp');
   const wrap = document.getElementById('event-whatsapp-link-wrap');
   if (wrap) wrap.style.display = (cb && cb.checked) ? 'block' : 'none';
+}
+// Recap only makes sense once the event is marked Past
+function toggleEventRecapField() {
+  const isPast = document.getElementById('event-upcoming').value === 'false';
+  const wrap = document.getElementById('event-recap-wrap');
+  if (wrap) wrap.style.display = isPast ? 'block' : 'none';
 }
 function editEvent(ev) { openEventModal(ev); }
 function closeEventModal() { document.getElementById('event-modal').classList.remove('open'); }
@@ -3696,6 +3807,7 @@ async function saveEvent() {
   const waLinkInput = document.getElementById('event-whatsapp-link');
   fd.append('whatsapp_group_link', (waChecked && waLinkInput) ? waLinkInput.value.trim() : '');
   fd.append('is_upcoming', document.getElementById('event-upcoming').value);
+  fd.append('recap', document.getElementById('event-recap').value);
   const cover = document.getElementById('event-cover').files[0];
   if (cover) fd.append('cover', cover);
   const url = id ? '/api/admin/events/'+id : '/api/admin/events';
@@ -6645,21 +6757,81 @@ async function openCVDetail(cvId, year) {
   const detailView = document.getElementById('cv-detail-view');
   mainView.style.display = 'none';
   detailView.style.display = 'block';
+  document.getElementById('ed-detail-label').textContent = 'Chitra Vichitra';
   document.getElementById('cv-detail-year-title').textContent = `Chitra Vichitra ${year}`;
   const grid = document.getElementById('cv-movies-grid');
+  grid.style.display = 'grid';
   grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:40px;text-align:center">Loading...<\/div>`;
+
+  const cv = (window._cvData||[]).find(c=>c.id===cvId);
+  const recapWrap = document.getElementById('ed-recap-wrap');
+  const recapText = document.getElementById('ed-recap-text');
+  if (cv && cv.recap) {
+    recapText.textContent = cv.recap;
+    recapWrap.style.display = 'block';
+  } else {
+    recapWrap.style.display = 'none';
+  }
+
   const data = await apiFetch(`/api/chitra-vichitra/${cvId}/movies`);
   if (!data || !data.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No films added to CV ${year} yet.<\/p><\/div>`;
-    return;
+  } else {
+    grid.innerHTML = data.map(m => renderMovieCard(m, true)).join('');
   }
-  grid.innerHTML = data.map(m => renderMovieCard(m, true)).join('');
+
+  await loadEntityGallery('chitra-vichitra', cvId);
 }
 
 function closeCVDetail() {
   document.getElementById('events-main-view').style.display = 'block';
   document.getElementById('cv-detail-view').style.display = 'none';
 }
+
+// ══════════════════════════════════════════════════════════
+// SHARED GALLERY — works for both past events and CV editions
+// ══════════════════════════════════════════════════════════
+let _galleryImages = [];
+let _galleryLightboxIdx = 0;
+
+async function loadEntityGallery(type, entityId) {
+  const wrap = document.getElementById('ed-gallery-wrap');
+  const grid = document.getElementById('ed-gallery-grid');
+  grid.innerHTML = `<div class="loading" style="grid-column:1/-1;padding:20px;text-align:center">Loading photos...<\/div>`;
+  wrap.style.display = 'block';
+  const images = await apiFetch(`/api/gallery/${type}/${entityId}`) || [];
+  _galleryImages = images;
+  if (!images.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  grid.innerHTML = images.map((img,i) =>
+    `<img src="${img.image_url}" alt="${(img.caption||'').replace(/"/g,'&quot;')}" loading="lazy" onclick="openGalleryLightbox(${i})">`
+  ).join('');
+}
+
+function openGalleryLightbox(idx) {
+  _galleryLightboxIdx = idx;
+  document.getElementById('ed-lightbox-img').src = _galleryImages[idx].image_url;
+  document.getElementById('ed-lightbox').classList.add('open');
+}
+function closeGalleryLightbox(evt) {
+  if (evt && evt.target.closest('.ed-lightbox-img')) return;
+  document.getElementById('ed-lightbox').classList.remove('open');
+}
+function navGalleryLightbox(evt, dir) {
+  evt.stopPropagation();
+  if (!_galleryImages.length) return;
+  _galleryLightboxIdx = (_galleryLightboxIdx + dir + _galleryImages.length) % _galleryImages.length;
+  document.getElementById('ed-lightbox-img').src = _galleryImages[_galleryLightboxIdx].image_url;
+}
+document.addEventListener('keydown', (e) => {
+  const lb = document.getElementById('ed-lightbox');
+  if (!lb || !lb.classList.contains('open')) return;
+  if (e.key === 'Escape') closeGalleryLightbox();
+  if (e.key === 'ArrowLeft') navGalleryLightbox({stopPropagation(){}}, -1);
+  if (e.key === 'ArrowRight') navGalleryLightbox({stopPropagation(){}}, 1);
+});
 
 // ══════════════════════════════════════════════════════════
 // CHITRA VICHITRA — ADMIN
@@ -6701,11 +6873,20 @@ function openCVModal(cv=null) {
   document.getElementById('cv-edit-id').value = cv ? cv.id : '';
   document.getElementById('cv-year').value = cv ? cv.year : '';
   document.getElementById('cv-sort').value = cv ? cv.sort_order : 99;
+  document.getElementById('cv-recap').value = cv?.recap || '';
   const prev = document.getElementById('cv-cover-preview');
   const wrap = document.getElementById('cv-cover-preview-wrap');
   if (cv && cv.cover_image) { prev.src=cv.cover_image; wrap.style.display='block'; }
   else { prev.src=''; wrap.style.display='none'; }
   document.getElementById('cv-cover').value = '';
+  const galleryWrap = document.getElementById('cv-gallery-wrap');
+  if (cv && cv.id) {
+    galleryWrap.style.display = 'block';
+    loadAdminGalleryThumbs('chitra-vichitra', cv.id, 'cv-gallery-grid');
+  } else {
+    galleryWrap.style.display = 'none';
+    document.getElementById('cv-gallery-grid').innerHTML = '';
+  }
   document.getElementById('cv-modal').style.display = 'flex';
 }
 
@@ -6715,12 +6896,14 @@ function closeCVModal() { document.getElementById('cv-modal').style.display = 'n
 async function saveCV() {
   const year = document.getElementById('cv-year').value.trim();
   const sort = document.getElementById('cv-sort').value;
+  const recap = document.getElementById('cv-recap').value;
   const file = document.getElementById('cv-cover').files[0];
   if (!year) { alert('Year is required'); return; }
 
   const fd = new FormData();
   fd.append('year', year);
   fd.append('sort_order', sort);
+  fd.append('recap', recap);
   if (file) fd.append('cover', file);
 
   const method = _cvEditId ? 'PUT' : 'POST';
@@ -6735,6 +6918,61 @@ async function deleteCV(id, year) {
   if (!confirm(`Delete Chitra Vichitra ${year}? This will also remove all film associations.`)) return;
   await apiFetch(`/api/admin/chitra-vichitra/${id}`, 'DELETE');
   loadAdminCV();
+}
+
+// ══════════════════════════════════════════════════════════
+// SHARED ADMIN GALLERY UPLOADER — used by both the Event modal
+// and the CV edition modal. type is 'event' or 'chitra-vichitra'.
+// ══════════════════════════════════════════════════════════
+async function loadAdminGalleryThumbs(type, entityId, gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  grid.innerHTML = `<div style="grid-column:1/-1;font-size:12px;color:var(--grey);padding:8px">Loading…<\/div>`;
+  const images = await apiFetch(`/api/gallery/${type}/${entityId}`) || [];
+  renderAdminGalleryThumbs(images, type, gridId);
+}
+
+function renderAdminGalleryThumbs(images, type, gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  if (!images.length) { grid.innerHTML = ''; return; }
+  grid.innerHTML = images.map(img => `
+    <div class="ed-admin-thumb" data-img-id="${img.id}">
+      <img src="${img.image_url}" alt="">
+      <button class="ed-admin-thumb-del" title="Remove photo" onclick="deleteGalleryPhoto('${type}','${img.id}','${gridId}')">✕<\/button>
+    <\/div>`).join('');
+}
+
+async function uploadGalleryPhotos(type, entityId, inputEl, gridId) {
+  if (!entityId) { alert('Save it first, then you can add photos.'); inputEl.value=''; return; }
+  const files = Array.from(inputEl.files || []);
+  if (!files.length) return;
+  const fd = new FormData();
+  files.forEach(f => fd.append('images', f));
+  const grid = document.getElementById(gridId);
+  const prevHtml = grid.innerHTML;
+  grid.innerHTML += `<div style="grid-column:1/-1;font-size:12px;color:var(--grey);padding:8px">Uploading ${files.length} photo(s)…<\/div>`;
+  try {
+    const res = await fetch(`/api/admin/gallery/${type}/${entityId}`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
+      body: fd,
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); alert(e.error||'Upload failed'); grid.innerHTML = prevHtml; return; }
+    inputEl.value = '';
+    loadAdminGalleryThumbs(type, entityId, gridId);
+  } catch (err) {
+    alert('Upload failed');
+    grid.innerHTML = prevHtml;
+  }
+}
+
+async function deleteGalleryPhoto(type, imageId, gridId) {
+  if (!confirm('Remove this photo?')) return;
+  const thumb = document.querySelector(`#${gridId} [data-img-id="${imageId}"]`);
+  if (thumb) thumb.style.opacity = '.4';
+  await apiFetch(`/api/admin/gallery/${type}/${imageId}`, 'DELETE');
+  if (thumb) thumb.remove();
 }
 
 async function openCVMoviesModal(cvId, year) {
