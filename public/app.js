@@ -7010,7 +7010,13 @@ async function loadAdminGalleryThumbs(type, entityId, gridId) {
   const grid = document.getElementById(gridId);
   if (!grid) return;
   grid.innerHTML = `<div style="grid-column:1/-1;font-size:12px;color:var(--grey);padding:8px">Loading…<\/div>`;
-  const images = await apiFetch(`/api/gallery/${type}/${entityId}`) || [];
+  const images = await apiFetch(`/api/gallery/${type}/${entityId}`);
+  if (images === null) {
+    // apiFetch already surfaced the real error via the red admin error bar
+    grid.innerHTML = `<div style="grid-column:1/-1;font-size:12px;color:#e5484d;padding:8px">Couldn't load gallery — see error banner above.<\/div>`;
+    return;
+  }
+  console.log(`[gallery] ${type}/${entityId}:`, images.length, 'photo(s)');
   renderAdminGalleryThumbs(images, type, gridId);
 }
 
@@ -7060,7 +7066,12 @@ async function uploadGalleryPhotos(type, entityId, inputEl, gridId) {
       grid.innerHTML = prevHtml;
       return;
     }
+    const inserted = await res.json().catch(()=>[]);
     inputEl.value = '';
+    if (!Array.isArray(inserted) || inserted.length !== files.length) {
+      console.warn('[gallery upload] expected', files.length, 'rows back, got', inserted);
+      alert(`Uploaded, but the server only confirmed ${Array.isArray(inserted)?inserted.length:0} of ${files.length} photo(s) saved. Check the gallery below — if some are missing, try re-uploading just those.`);
+    }
     loadAdminGalleryThumbs(type, entityId, gridId);
   } catch (err) {
     console.error('[gallery upload] network/fetch error:', err);
