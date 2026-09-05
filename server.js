@@ -5066,13 +5066,17 @@ function requireGallerySection(req, res, next) {
   return requireSection(GALLERY_SECTION[req.params.type])(req, res, next);
 }
 
-// Public — fetch the gallery for one event or CV edition
+// Public — fetch the gallery for one event or CV edition.
+// No browser-level Cache-Control here on purpose: right after an admin
+// uploads new photos, viewers' browsers must not keep serving an old
+// cached (possibly empty) response. The server-side memCache below still
+// keeps DB load low, and it's correctly invalidated on every write.
 app.get("/api/gallery/:type/:entityId", async (req, res) => {
   const entityType = GALLERY_TYPES[req.params.type];
   if (!entityType) return res.status(400).json({ error: "Invalid gallery type" });
-  cacheFor(res, 120);
+  noStore(res);
   const cacheKey = `gallery:${entityType}:${req.params.entityId}`;
-  const data = await memCache(cacheKey, 300, async () => {
+  const data = await memCache(cacheKey, 60, async () => {
     const { data, error } = await supabasePublic
       .from("gallery_images")
       .select("id, image_url, caption, sort_order")
