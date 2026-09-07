@@ -55,7 +55,7 @@ let _csrfToken = null;
 let currentAdminRole = localStorage.getItem('kfs_role') || 'admin';
 let currentAdminName = localStorage.getItem('kfs_admin_name') || '';
 let currentAdminPermissions = (() => { try { return JSON.parse(localStorage.getItem('kfs_permissions') || '[]'); } catch { return []; } })();
-const ALL_SECTIONS = ['dashboard','blogs','events','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances'];
+const ALL_SECTIONS = ['dashboard','blogs','events','forms','members','movies','chitra-vichitra','testimonials','achievements','settings','analytics','review-analytics','reg-analytics','payment-analytics','wrapped','comments','broadcast','themes','change-password','easter-eggs','scanner','grievances'];
 function hasPermission(section) {
   if (currentAdminRole === 'master') return true;
   // change-password and two-factor are always accessible (not section-gated)
@@ -3227,6 +3227,9 @@ async function loadAdminData(name) {
   else if (name==='events') {
     loadEventsWithRegs();
   }
+  else if (name==='forms') {
+    loadStandaloneFormsList();
+  }
   else if (name==='members') {
     const members = await apiFetch('/api/admin/members');
     const tbody = document.getElementById('admin-members-tbody');
@@ -3391,7 +3394,7 @@ async function loadAdminData(name) {
     const admins = await apiFetch('/api/master/admins');
     const tbody = document.getElementById('admins-tbody');
     if (!admins || !admins.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--grey)">No admins found.<\/td><\/tr>`; return; }
-    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate','easter-eggs':'Easter Eggs','grievances':'Grievances'};
+    const SECTION_LABELS = {'blogs':'Blogs','events':'Events','forms':'Forms','members':'Members','movies':'Films','chitra-vichitra':'CV','testimonials':'Testimonials','achievements':'Achievements','settings':'Settings','analytics':'Analytics','review-analytics':'Rev. Analytics','wrapped':'Wrapped','collaborate':'Collaborate','easter-eggs':'Easter Eggs','grievances':'Grievances'};
     window._adminPermsMap = {};
     admins.forEach(a => { window._adminPermsMap[a.id] = Array.isArray(a.permissions) ? a.permissions : []; });
     tbody.innerHTML = admins.map(a => {
@@ -5181,6 +5184,7 @@ async function checkRoute() {
   const strandMatch = path.match(/^(?:strand|social-strand)\/[^/]+\/([^/]+)/) ||
                       path.match(/^strand\/([^/]+)/);
   const eventMatch = path.match(/^events\/(.+)/);
+  const formMatch = path.match(/^forms\/([^/]+)/);
   // legacy /movies/ URLs redirect to films
   const movieLegacy = path.match(/^movies\/(.+)/);
   // collaborate edit link
@@ -5253,6 +5257,12 @@ async function checkRoute() {
       } catch(e) {}
     }
     navigate('strand', false);
+    return;
+  }
+
+  if (formMatch) {
+    navigate('form-fill', false);
+    loadStandaloneFormPage(formMatch[1]);
     return;
   }
 
@@ -8026,6 +8036,12 @@ let _fbEventTitle = '';
 let _fbSections = [];
 let _fbQuestions = []; // kept as a flattened mirror of _fbSections for the response viewer/export below
 let _fbResponseCount = 0;
+// 'event' (tied to an event, original behavior) or 'standalone' (its own
+// shareable form, not attached to any event).
+let _fbMode = 'event';
+let _fbFormId = null;   // standalone_forms.id — only set in standalone mode
+let _fbSlug = null;     // shareable slug — only set in standalone mode
+let _fbTargetEmailQId = null; // chosen "send confirmation to" question id
 
 const FB_SUBMIT_END = '__submit__';
 
@@ -8042,13 +8058,146 @@ function clientParseFormSchema(rawQuestions) {
     }
   } catch (e) { parsed = []; }
   if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sections)) {
-    return { version: 2, sections: parsed.sections };
+    return { version: 2, sections: parsed.sections, targetEmailQuestionId: parsed.target_email_question_id || null };
   }
   const flat = Array.isArray(parsed) ? parsed : [];
   return {
     version: 1,
     sections: [{ id: '_legacy', title: '', description: '', questions: flat, next_section: FB_SUBMIT_END, is_paid: false, amount_paise: null }],
+    targetEmailQuestionId: null,
   };
+}
+
+// Every email-type question across every section, with a label that includes
+// its section title for disambiguation in the picker.
+function fbCollectEmailQuestions() {
+  const out = [];
+  _fbSections.forEach((s, si) => {
+    (s.questions || []).forEach(q => {
+      if (q.type === 'email') out.push({ id: q.id, label: (q.label || 'Email') + (s.title ? ' — ' + s.title : ' — Section ' + (si + 1)) });
+    });
+  });
+  return out;
+}
+
+function syncFBTargetEmail(val) { _fbTargetEmailQId = val || null; }
+
+// ── Drag & drop reordering (sections + questions) ───────────────────────────
+let _fbDragSection = null;          // index of section being dragged, or null
+let _fbDragQuestion = null;         // { sIdx, qIdx } of question being dragged, or null
+
+function fbSectionDragStart(e, sIdx) {
+  e.stopPropagation();
+  syncFBState();
+  _fbDragSection = sIdx;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', 'section:' + sIdx); } catch (err) {}
+  const card = e.target.closest('.fb-section-card');
+  if (card) setTimeout(() => card.classList.add('fb-dragging'), 0);
+}
+function fbSectionDragOver(e, sIdx) {
+  if (_fbDragSection === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.fb-section-card.fb-drag-over').forEach(el => el.classList.remove('fb-drag-over'));
+  if (sIdx !== _fbDragSection) {
+    const card = document.querySelector(`.fb-section-card[data-sidx="${sIdx}"]`);
+    if (card) card.classList.add('fb-drag-over');
+  }
+}
+function fbSectionDrop(e, sIdx) {
+  if (_fbDragSection === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const from = _fbDragSection;
+  document.querySelectorAll('.fb-section-card.fb-drag-over').forEach(el => el.classList.remove('fb-drag-over'));
+  _fbDragSection = null;
+  if (from === sIdx) return;
+  syncFBState();
+  const [moved] = _fbSections.splice(from, 1);
+  let insertAt = sIdx;
+  if (from < insertAt) insertAt -= 1;
+  _fbSections.splice(insertAt, 0, moved);
+  renderFBSections();
+}
+function fbSectionDragEnd() {
+  _fbDragSection = null;
+  document.querySelectorAll('.fb-section-card.fb-dragging,.fb-section-card.fb-drag-over').forEach(el => el.classList.remove('fb-dragging', 'fb-drag-over'));
+}
+
+function fbQuestionDragStart(e, sIdx, qIdx) {
+  e.stopPropagation();
+  syncFBState();
+  _fbDragQuestion = { sIdx, qIdx };
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', 'question:' + sIdx + ':' + qIdx); } catch (err) {}
+  const card = e.target.closest('.fb-question-card');
+  if (card) setTimeout(() => card.classList.add('fb-dragging'), 0);
+}
+function fbQuestionDragOver(e, sIdx, qIdx) {
+  if (!_fbDragQuestion) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.fb-question-card.fb-drag-over').forEach(el => el.classList.remove('fb-drag-over'));
+  const card = e.currentTarget;
+  if (card && !(_fbDragQuestion.sIdx === sIdx && _fbDragQuestion.qIdx === qIdx)) card.classList.add('fb-drag-over');
+}
+function fbQuestionDrop(e, sIdx, qIdx) {
+  if (!_fbDragQuestion) return;
+  e.preventDefault();
+  e.stopPropagation();
+  document.querySelectorAll('.fb-question-card.fb-drag-over').forEach(el => el.classList.remove('fb-drag-over'));
+  const { sIdx: fromS, qIdx: fromQ } = _fbDragQuestion;
+  _fbDragQuestion = null;
+  if (fromS === sIdx && fromQ === qIdx) return;
+  syncFBState();
+  const [moved] = _fbSections[fromS].questions.splice(fromQ, 1);
+  let insertAt = qIdx;
+  if (fromS === sIdx && fromQ < insertAt) insertAt -= 1;
+  _fbSections[sIdx].questions.splice(insertAt, 0, moved);
+  renderFBSections();
+}
+function fbQuestionDragEnd() {
+  _fbDragQuestion = null;
+  document.querySelectorAll('.fb-question-card.fb-dragging,.fb-question-card.fb-drag-over').forEach(el => el.classList.remove('fb-dragging', 'fb-drag-over'));
+}
+// Lets a question be dropped into empty space in a section (including an
+// empty section with no questions yet) — appends it to the end of that section.
+function fbSectionQuestionsDragOver(e) {
+  if (!_fbDragQuestion) return;
+  e.preventDefault();
+  e.stopPropagation();
+}
+function fbSectionQuestionsDrop(e, sIdx) {
+  if (!_fbDragQuestion) return;
+  e.preventDefault();
+  e.stopPropagation();
+  document.querySelectorAll('.fb-question-card.fb-drag-over').forEach(el => el.classList.remove('fb-drag-over'));
+  const { sIdx: fromS, qIdx: fromQ } = _fbDragQuestion;
+  _fbDragQuestion = null;
+  syncFBState();
+  const [moved] = _fbSections[fromS].questions.splice(fromQ, 1);
+  _fbSections[sIdx].questions.push(moved);
+  renderFBSections();
+}
+const FB_DRAG_HANDLE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="5" r="1.6"/><circle cx="16" cy="5" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="19" r="1.6"/><circle cx="16" cy="19" r="1.6"/></svg>';
+
+// Renders/hides the "send confirmation to" picker based on how many email
+// questions currently exist in the form.
+function renderFBTargetEmailPicker() {
+  const row = document.getElementById('fb-target-email-row');
+  const sel = document.getElementById('fb-target-email-select');
+  if (!row || !sel) return;
+  const emailQs = fbCollectEmailQuestions();
+  if (emailQs.length < 2) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  row.style.flexDirection = 'column';
+  row.style.gap = '6px';
+  if (!emailQs.some(q => q.id === _fbTargetEmailQId)) _fbTargetEmailQId = null;
+  sel.innerHTML = '<option value="">Auto-detect (first email question)</option>' +
+    emailQs.map(q => `<option value="${q.id}" ${q.id === _fbTargetEmailQId ? 'selected' : ''}>${q.label}</option>`).join('');
 }
 
 // Flattens every question across every section, regardless of branch —
@@ -8103,11 +8252,18 @@ function clientComputeSectionPath(sections, answers) {
 }
 
 async function openFormBuilder(eventId, eventTitle) {
+  _fbMode = 'event';
   _fbEventId = eventId;
   _fbEventTitle = eventTitle;
+  _fbFormId = null;
+  _fbSlug = null;
+  _fbTargetEmailQId = null;
   _fbSections = [];
   document.getElementById('fb-event-label').textContent = eventTitle;
   document.getElementById('fb-title').textContent = 'Registration Form';
+  document.getElementById('fb-share-link-row').style.display = 'none';
+  const ticketRow = document.getElementById('fb-ticket-row');
+  if (ticketRow) ticketRow.style.display = 'flex';
   document.getElementById('fb-form-title').value = '';
   document.getElementById('fb-form-desc').value = '';
   document.getElementById('fb-is-open').checked = true;
@@ -8131,7 +8287,8 @@ async function openFormBuilder(eventId, eventTitle) {
       document.getElementById('fb-issues-ticket').checked = form.issues_ticket !== false;
       document.getElementById('fb-ticket-label').textContent = form.issues_ticket !== false ? 'Issues QR Ticket' : 'Responses Only (No Ticket)';
 
-      const { sections } = clientParseFormSchema(form.questions);
+      const { sections, targetEmailQuestionId } = clientParseFormSchema(form.questions);
+      _fbTargetEmailQId = targetEmailQuestionId || null;
       // amount_paise -> amount_rupees for editing; every section/question
       // gets the new fields so an older saved form upgrades cleanly the
       // first time it's opened in this builder.
@@ -8175,8 +8332,123 @@ async function openFormBuilder(eventId, eventTitle) {
   document.getElementById('form-builder-overlay').classList.add('open');
 }
 
+// Opens the same builder UI for a standalone (non-event) form. `form` is the
+// row from /api/admin/forms/:id — { id, slug, title, description, questions,
+// is_open, issues_ticket }.
+async function openStandaloneFormBuilder(form) {
+  _fbMode = 'standalone';
+  _fbEventId = null;
+  _fbFormId = form.id;
+  _fbSlug = form.slug;
+  _fbTargetEmailQId = null;
+  _fbEventTitle = form.title || 'Untitled Form';
+  document.getElementById('fb-event-label').textContent = 'Standalone Form';
+  document.getElementById('fb-title').textContent = form.title || 'Untitled Form';
+  const linkRow = document.getElementById('fb-share-link-row');
+  const linkEl = document.getElementById('fb-share-link');
+  const shareUrl = window.location.origin + '/forms/' + form.slug;
+  linkEl.href = shareUrl;
+  linkEl.textContent = shareUrl;
+  linkRow.style.display = 'flex';
+  const ticketRow = document.getElementById('fb-ticket-row');
+  if (ticketRow) ticketRow.style.display = 'none'; // no event to check into — tickets don't apply
+  document.getElementById('fb-form-title').value = form.title || '';
+  document.getElementById('fb-form-desc').value = form.description || '';
+  document.getElementById('fb-is-open').checked = form.is_open !== false;
+  document.getElementById('fb-open-label').textContent = form.is_open !== false ? 'Form is Open' : 'Form is Closed';
+  document.getElementById('fb-issues-ticket').checked = false;
+  document.getElementById('fb-response-count').textContent = '0 responses';
+  document.getElementById('fb-sections').innerHTML = '';
+
+  const { sections, targetEmailQuestionId } = clientParseFormSchema(form.questions);
+  _fbTargetEmailQId = targetEmailQuestionId || null;
+  _fbSections = sections.map(s => ({
+    id: s.id || ('sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+    title: s.title || '',
+    description: s.description || '',
+    questions: (s.questions || []).map(q => ({ ...q, branch: q.branch || { enabled: false, map: {} } })),
+    next_section: s.next_section === FB_SUBMIT_END ? FB_SUBMIT_END : (s.next_section || ''),
+    is_paid: !!s.is_paid,
+    amount_rupees: s.amount_paise ? Math.round(s.amount_paise / 100) : '',
+  }));
+  if (!_fbSections.length) {
+    _fbSections = [{ id: 'sec_' + Date.now(), title: '', description: '', questions: [], next_section: '', is_paid: false, amount_rupees: '' }];
+  }
+
+  try {
+    const rRes = await fetch('/api/admin/forms/' + form.id + '/responses', {
+      headers: { 'Authorization': 'Bearer ' + adminToken }
+    });
+    if (rRes.ok) {
+      const rs = await rRes.json();
+      _fbResponseCount = rs.length;
+      document.getElementById('fb-response-count').textContent = rs.length + (rs.length === 1 ? ' response' : ' responses');
+    }
+  } catch (e) {}
+
+  renderFBSections();
+  const isOpenEl = document.getElementById('fb-is-open');
+  isOpenEl.onchange = function() {
+    document.getElementById('fb-open-label').textContent = this.checked ? 'Form is Open' : 'Form is Closed';
+  };
+  document.getElementById('form-builder-overlay').classList.add('open');
+}
+
+function copyFBShareLink() {
+  const linkEl = document.getElementById('fb-share-link');
+  if (!linkEl || !linkEl.href) return;
+  navigator.clipboard.writeText(linkEl.href).then(() => {
+    const btn = event?.target;
+    if (btn) { const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => alert('Could not copy link. Long-press to copy manually: ' + linkEl.href));
+}
+
 function closeFormBuilder() {
   document.getElementById('form-builder-overlay').classList.remove('open');
+}
+
+// ── STANDALONE FORMS — admin list (Forms tab) ────────────────────────────────
+async function loadStandaloneFormsList() {
+  const forms = await apiFetch('/api/admin/forms');
+  const tbody = document.getElementById('admin-forms-tbody');
+  if (!tbody) return;
+  if (forms === null) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e74c3c">Failed to load — check the error bar above.<\/td><\/tr>`; return; }
+  if (!forms.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--grey)">No standalone forms yet. Create one to get a shareable link that works without an event.<\/td><\/tr>`; return; }
+  tbody.innerHTML = forms.map(f => {
+    const link = window.location.origin + '/forms/' + f.slug;
+    const fJson = JSON.stringify(f).replace(/"/g, '&quot;');
+    return `<tr data-id="${f.id}">
+      <td style="font-weight:500">${f.title || 'Untitled Form'}<\/td>
+      <td><span class="tag ${f.is_open ? 'upcoming' : ''}">${f.is_open ? 'Open' : 'Closed'}<\/span><\/td>
+      <td style="color:var(--grey);font-variant-numeric:tabular-nums">${f.response_count || 0}<\/td>
+      <td><a href="${link}" target="_blank" rel="noopener" style="color:#58a6ff;font-size:12px;text-decoration:none">${link}<\/a><\/td>
+      <td><div class="action-btns">
+        <button class="btn-sm" onclick='openStandaloneFormBuilder(${fJson})'>Edit<\/button>
+        <button class="btn-sm" onclick="copyStandaloneFormLink('${f.slug}', this)">Copy Link<\/button>
+        <button class="btn-sm danger" onclick="deleteStandaloneFormFromList('${f.id}', ${JSON.stringify(f.title || 'Untitled Form')})">Delete<\/button>
+      <\/div><\/td>
+    <\/tr>`;
+  }).join('');
+}
+
+function copyStandaloneFormLink(slug, btnEl) {
+  const link = window.location.origin + '/forms/' + slug;
+  navigator.clipboard.writeText(link).then(() => {
+    if (btnEl) { const orig = btnEl.textContent; btnEl.textContent = 'Copied!'; setTimeout(() => btnEl.textContent = orig, 1500); }
+  }).catch(() => alert('Could not copy automatically. Here\'s the link:\n' + link));
+}
+
+async function createStandaloneForm() {
+  const form = await apiFetch('/api/admin/forms', 'POST', { title: 'Untitled Form' });
+  if (!form) return;
+  loadStandaloneFormsList();
+  openStandaloneFormBuilder(form);
+}
+
+async function deleteStandaloneFormFromList(id, title) {
+  if (!confirm(`Delete "${title}"? This deletes the shareable link too — it will stop working, along with all its responses. This can't be undone.`)) return;
+  const res = await apiFetch('/api/admin/forms/' + id, 'DELETE');
+  if (res !== null) loadStandaloneFormsList();
 }
 
 function addFBSection() {
@@ -8363,8 +8635,10 @@ function renderFBSections() {
         </div>` : '';
 
       return `
-      <div class="fb-question-card" data-sidx="${sIdx}" data-qidx="${qIdx}">
+      <div class="fb-question-card" data-sidx="${sIdx}" data-qidx="${qIdx}" ondragover="fbQuestionDragOver(event,${sIdx},${qIdx})" ondrop="fbQuestionDrop(event,${sIdx},${qIdx})">
         <div class="fb-q-row">
+          <span class="fb-drag-handle" draggable="true" title="Drag to reorder" ondragstart="fbQuestionDragStart(event,${sIdx},${qIdx})" ondragend="fbQuestionDragEnd()">${FB_DRAG_HANDLE_SVG}</span>
+          <div class="fb-q-num">${qIdx + 1}</div>
           <input class="fb-q-label" placeholder="Question label..." value="${esc(q.label)}"
             oninput="syncFBQuestionLabel(${sIdx},${qIdx},this.value)">
           <select class="fb-q-type" onchange="fbQuestionTypeChange(${sIdx},${qIdx},this.value)">
@@ -8400,8 +8674,9 @@ function renderFBSections() {
     }).join('') || '<div style="font-size:12.5px;color:rgba(245,245,245,.3);padding:2px 0 6px">No questions yet — add one below.</div>';
 
     return `
-    <div class="fb-section-card" data-sidx="${sIdx}">
+    <div class="fb-section-card" data-sidx="${sIdx}" ondragover="fbSectionDragOver(event,${sIdx})" ondrop="fbSectionDrop(event,${sIdx})">
       <div class="fb-section-header">
+        <span class="fb-drag-handle" draggable="true" title="Drag to reorder section" ondragstart="fbSectionDragStart(event,${sIdx})" ondragend="fbSectionDragEnd()">${FB_DRAG_HANDLE_SVG}</span>
         <div class="fb-section-num">${sIdx + 1}</div>
         <div class="fb-section-meta">
           <input class="fb-section-title" placeholder="Section title (e.g. Participant Details)" value="${esc(section.title)}" oninput="syncFBSectionTitle(${sIdx},this.value)">
@@ -8417,7 +8692,7 @@ function renderFBSections() {
           <button class="fb-section-del" onclick="syncFBState();removeFBSection(${sIdx})" title="Delete section">✕</button>
         </div>
       </div>
-      <div class="fb-section-questions">${questionsHtml}</div>
+      <div class="fb-section-questions" ondragover="fbSectionQuestionsDragOver(event)" ondrop="fbSectionQuestionsDrop(event,${sIdx})">${questionsHtml}</div>
       <button class="fb-add-q-btn-sm" onclick="syncFBState();addFBQuestion(${sIdx})">+ Add Question</button>
       <div class="fb-section-footer">
         <label class="fb-pay-toggle-row">
@@ -8440,6 +8715,7 @@ function renderFBSections() {
       </div>
     </div>`;
   }).join('');
+  renderFBTargetEmailPicker();
 }
 
 async function saveFormBuilder() {
@@ -8478,17 +8754,27 @@ async function saveFormBuilder() {
     amount_paise: s.is_paid ? Math.round(Number(s.amount_rupees || 0) * 100) : null,
   }));
 
+  const payload = { title, description: desc, sections: cleanedSections, is_open, target_email_question_id: _fbTargetEmailQId || null };
+  const url = _fbMode === 'standalone'
+    ? '/api/admin/forms/' + _fbFormId
+    : '/api/admin/events/' + _fbEventId + '/form';
+  if (_fbMode === 'event') payload.issues_ticket = issues_ticket;
+
   btn.textContent = 'Saving…'; btn.disabled = true;
   try {
     const token = adminToken;
-    const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
+    const res = await fetch(url, {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' },
-      body: JSON.stringify({ title, description: desc, sections: cleanedSections, is_open, issues_ticket })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
       btn.textContent = '✓ Saved'; btn.disabled = false;
       setTimeout(() => btn.textContent = 'Save Form', 2000);
+      if (_fbMode === 'standalone') {
+        document.getElementById('fb-title').textContent = title;
+        if (typeof loadStandaloneFormsList === 'function') loadStandaloneFormsList();
+      }
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Error saving form: ' + (err.error || res.status));
@@ -8501,14 +8787,18 @@ async function saveFormBuilder() {
 }
 
 async function clearFormResponses() {
-  if (!_fbEventId) return;
+  if (_fbMode === 'event' && !_fbEventId) return;
+  if (_fbMode === 'standalone' && !_fbFormId) return;
   if (!confirm(`Clear ALL responses for "${_fbEventTitle}"?\n\nThis frees up Supabase storage but cannot be undone. The form schema will be kept.`)) return;
   const btn = document.getElementById('fb-clear-btn');
   const origHtml = btn.innerHTML;
   btn.textContent = 'Clearing…'; btn.disabled = true;
   try {
     const token = adminToken;
-    const res = await fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
+    const url = _fbMode === 'standalone'
+      ? '/api/admin/forms/' + _fbFormId + '/responses'
+      : '/api/admin/events/' + _fbEventId + '/form/responses';
+    const res = await fetch(url, {
       method: 'DELETE', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
@@ -8529,14 +8819,19 @@ async function clearFormResponses() {
 }
 
 async function deleteEntireForm() {
-  if (!_fbEventId) return;
-  if (!confirm(`Delete the ENTIRE form for "${_fbEventTitle}"?\n\nThis removes the form schema AND all responses permanently. This frees up Supabase space and cannot be undone.`)) return;
+  if (_fbMode === 'event' && !_fbEventId) return;
+  if (_fbMode === 'standalone' && !_fbFormId) return;
+  const warnWhat = _fbMode === 'standalone' ? 'This deletes the shareable link too — it will stop working.' : 'This removes the form schema AND all responses permanently.';
+  if (!confirm(`Delete the ENTIRE form for "${_fbEventTitle}"?\n\n${warnWhat} This frees up Supabase space and cannot be undone.`)) return;
   const btn = document.getElementById('fb-del-form-btn');
   const origHtml = btn.innerHTML;
   btn.textContent = 'Deleting…'; btn.disabled = true;
   try {
     const token = adminToken;
-    const res = await fetch('/api/admin/events/' + _fbEventId + '/form', {
+    const url = _fbMode === 'standalone'
+      ? '/api/admin/forms/' + _fbFormId
+      : '/api/admin/events/' + _fbEventId + '/form';
+    const res = await fetch(url, {
       method: 'DELETE', credentials: 'include',
       headers: { 'Authorization': 'Bearer ' + token, 'X-CSRF-Token': _csrfToken || '' }
     });
@@ -8548,6 +8843,7 @@ async function deleteEntireForm() {
         _fbSections = [];
         _fbQuestions = [];
         _fbResponseCount = 0;
+        if (_fbMode === 'standalone' && typeof loadStandaloneFormsList === 'function') loadStandaloneFormsList();
       }, 1200);
     } else {
       const err = await res.json().catch(() => ({}));
@@ -8575,11 +8871,13 @@ async function openResponseViewer() {
 
   try {
     const token = adminToken;
+    const formUrl = _fbMode === 'standalone' ? '/api/forms/' + _fbSlug : '/api/events/' + _fbEventId + '/form';
+    const respUrl = _fbMode === 'standalone'
+      ? '/api/admin/forms/' + _fbFormId + '/responses'
+      : '/api/admin/events/' + _fbEventId + '/form/responses';
     const [formRes, respRes] = await Promise.all([
-      fetch('/api/events/' + _fbEventId + '/form'),
-      fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      })
+      fetch(formUrl),
+      fetch(respUrl, { headers: { 'Authorization': 'Bearer ' + token } })
     ]);
 
     if (!respRes.ok) {
@@ -8613,7 +8911,7 @@ async function openResponseViewer() {
       const paidBadge = r.amount_paise > 0
         ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.25);color:#34c759;border-radius:20px;font-size:10.5px;font-weight:700" title="${r.razorpay_payment_id || ''}">₹${Math.round(r.amount_paise / 100).toLocaleString('en-IN')} paid</span>`
         : '';
-      const editBadge = r.edit_locked
+      const editBadge = (r.edit_locked && _fbMode === 'event')
         ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.3);color:#f0b429;border-radius:20px;font-size:10.5px;font-weight:700" title="${r.edited_at ? 'Edited ' + new Date(r.edited_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}">Edited — locked</span>
            <button class="btn-sm" style="padding:2px 8px;font-size:10.5px" onclick="adminResetEditLock('${r.id}', this)">Unlock</button>`
         : '';
@@ -8679,16 +8977,19 @@ async function downloadFormResponsesFromViewer() {
 }
 
 async function downloadFormResponses() {
-  if (!_fbEventId) return;
+  if (_fbMode === 'event' && !_fbEventId) return;
+  if (_fbMode === 'standalone' && !_fbFormId) return;
   const btn = document.getElementById('fb-dl-btn');
   btn.textContent = 'Loading…'; btn.disabled = true;
 
   try {
+    const formUrl = _fbMode === 'standalone' ? '/api/forms/' + _fbSlug : '/api/events/' + _fbEventId + '/form';
+    const respUrl = _fbMode === 'standalone'
+      ? '/api/admin/forms/' + _fbFormId + '/responses'
+      : '/api/admin/events/' + _fbEventId + '/form/responses';
     const [formRes, respRes] = await Promise.all([
-      fetch('/api/events/' + _fbEventId + '/form'),
-      fetch('/api/admin/events/' + _fbEventId + '/form/responses', {
-        headers: { 'Authorization': 'Bearer ' + adminToken }
-      })
+      fetch(formUrl),
+      fetch(respUrl, { headers: { 'Authorization': 'Bearer ' + adminToken } })
     ]);
 
     if (!respRes.ok) { alert('Failed to load responses'); return; }
@@ -8752,6 +9053,11 @@ async function downloadFormResponses() {
 // ════════════════════════════════════════════════════════════════════════════
 // REGISTRATION FORM (Public)
 // ════════════════════════════════════════════════════════════════════════════
+// Which public form-filling flow is currently active — 'event' (the modal
+// overlay, tied to an event) or 'standalone' (the full-page /forms/:slug
+// filler). Shared field renderers (buildRegField/previewRegImage) check this
+// to route image uploads and error-clearing to the right flow's own state.
+let _activeRegFormMode = 'event';
 let _rfEventId = null;
 let _rfEventTitle = '';
 let _rfEventDate = '';
@@ -8795,6 +9101,7 @@ function shareCurrentRegForm() {
 }
 
 async function openEventForm(eventId, eventTitle, eventDate='', eventTime='', eventLocation='', eventLocationLink='', eventWhatsappLink='') {
+  _activeRegFormMode = 'event';
   _rfEventId = eventId;
   _rfEventTitle = eventTitle;
   _rfEventDate = eventDate;
@@ -9192,7 +9499,7 @@ async function rfStartPayment(section) {
   }
 }
 
-function buildRegField(q) {
+function buildRegField(q, errId='rf-submit-error') {
   const req = q.required ? `<span class="req-dot">*</span>` : '';
   const label = `<div class="reg-field-label">${q.label || 'Question'}${req}</div>`;
 
@@ -9201,7 +9508,7 @@ function buildRegField(q) {
     const ph = q.type === 'email' ? 'you@example.com' : q.type === 'phone' ? '+91 XXXXX XXXXX' : 'Your answer';
     return `<div class="reg-field" data-qid="${q.id}">
       ${label}
-      <input class="reg-input" type="${t}" placeholder="${ph}" data-qid="${q.id}" ${q.required?'required':''} oninput="(function(){var e=document.getElementById('rf-submit-error');if(e)e.style.display='none';})()">
+      <input class="reg-input" type="${t}" placeholder="${ph}" data-qid="${q.id}" ${q.required?'required':''} oninput="(function(){var e=document.getElementById('${errId}');if(e)e.style.display='none';})()">
     </div>`;
   }
   if (q.type === 'textarea') {
@@ -9257,7 +9564,8 @@ function toggleCheckItem(label) {
 function previewRegImage(input, qid) {
   const file = input.files[0];
   if (!file) return;
-  _rfImageFiles[qid] = file;
+  const store = _activeRegFormMode === 'standalone' ? _sfImageFiles : _rfImageFiles;
+  store[qid] = file;
   const prev = document.getElementById('img-preview-' + qid);
   if (prev) {
     prev.src = URL.createObjectURL(file);
@@ -9390,6 +9698,473 @@ async function rfFinalSubmit(paymentPayload) {
     btn.disabled = false;
     rfShowTransientError('Network error — please try again');
     if (backBtn) backBtn.style.display = _rfHistory.length ? 'inline-flex' : 'none';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// STANDALONE FORM FILLER (Public) — the full page served at /forms/:slug.
+// Mirrors the event registration flow above (same clientParseFormSchema /
+// clientComputeSectionPath / buildRegField helpers) but renders in-page
+// instead of a modal overlay, and talks to /api/forms/:slug/* instead of
+// /api/events/:id/form/*. No QR ticket / calendar / WhatsApp-group concept
+// applies here since there's no event to check into.
+// ════════════════════════════════════════════════════════════════════════════
+let _sfSlug = null;
+let _sfForm = null;
+let _sfImageFiles = {};
+let _sfSections = [];
+let _sfCurrentSectionId = null;
+let _sfAnswers = {};
+let _sfHistory = [];
+let _sfPaymentInfo = null;
+let _sfPaidSectionId = null;
+
+async function loadStandaloneFormPage(slug) {
+  _activeRegFormMode = 'standalone';
+  _sfSlug = slug;
+  _sfForm = null;
+  _sfImageFiles = {};
+  _sfSections = [];
+  _sfCurrentSectionId = null;
+  _sfAnswers = {};
+  _sfHistory = [];
+  _sfPaymentInfo = null;
+  _sfPaidSectionId = null;
+
+  document.getElementById('sf-title').textContent = 'Loading…';
+  document.getElementById('sf-desc').textContent = '';
+  document.getElementById('sf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey);font-size:14px">Loading form…</div>';
+  document.getElementById('sf-submit-row').style.display = 'flex';
+  document.getElementById('sf-progress').style.display = 'none';
+  document.getElementById('sf-fee-note').style.display = 'none';
+  document.getElementById('sf-back-btn').style.display = 'none';
+  const tcCb = document.getElementById('sf-tc-checkbox');
+  if (tcCb) { tcCb.checked = false; tcCb.classList.remove('shake'); }
+  const tcErr = document.getElementById('sf-tc-error');
+  if (tcErr) tcErr.classList.remove('visible');
+  const tcRow = document.getElementById('sf-tc-row');
+  if (tcRow) tcRow.classList.remove('visible');
+  const banner0 = document.getElementById('sf-test-mode-banner');
+  if (banner0) banner0.remove();
+  const oldErr = document.getElementById('sf-submit-error');
+  if (oldErr) oldErr.remove();
+  const oldPayErr = document.getElementById('sf-payment-error');
+  if (oldPayErr) oldPayErr.remove();
+
+  let res;
+  try {
+    res = await fetch('/api/forms/' + encodeURIComponent(slug));
+  } catch (e) {
+    document.getElementById('sf-title').textContent = 'Something went wrong';
+    document.getElementById('sf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">Couldn\'t reach the server. Please check your connection and reload.</div>';
+    document.getElementById('sf-submit-row').style.display = 'none';
+    return;
+  }
+  if (!res.ok) {
+    document.getElementById('sf-title').textContent = 'Form not found';
+    document.getElementById('sf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">This form link is invalid or has been removed.</div>';
+    document.getElementById('sf-submit-row').style.display = 'none';
+    return;
+  }
+  const form = await res.json();
+  if (!form.is_open) {
+    document.getElementById('sf-title').textContent = form.title || 'Form Closed';
+    document.getElementById('sf-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--grey)">This form is currently closed for responses.</div>';
+    document.getElementById('sf-submit-row').style.display = 'none';
+    return;
+  }
+
+  _sfForm = form;
+  const { sections } = clientParseFormSchema(form.questions);
+  _sfSections = sections;
+  _sfCurrentSectionId = sections[0] ? sections[0].id : null;
+
+  document.getElementById('sf-title').textContent = form.title || 'Form';
+  document.getElementById('sf-desc').textContent = form.description || '';
+  if (typeof updateMetaTags === 'function') {
+    updateMetaTags({
+      title: (form.title || 'Form') + ' — KFS',
+      description: form.description || 'Fill this form for KIIT Film Society.',
+      image: '/images/og-banner.png',
+      url: '/forms/' + slug,
+    });
+  }
+
+  renderSFCurrentSection();
+}
+
+function sfGetCurrentSection() {
+  return _sfSections.find(s => s.id === _sfCurrentSectionId) || null;
+}
+
+function sfPeekIsTerminal(section) {
+  const hasBranch = (section.questions || []).some(q => q.type === 'radio' && q.branch && q.branch.enabled);
+  if (hasBranch) return false;
+  if (section.next_section === '__submit__') return true;
+  if (section.next_section) return false;
+  const idx = _sfSections.findIndex(s => s.id === section.id);
+  return !(idx >= 0 && idx + 1 < _sfSections.length);
+}
+
+function updateSFPrimaryButton() {
+  const section = sfGetCurrentSection();
+  const btn = document.getElementById('sf-submit-btn');
+  const feeNote = document.getElementById('sf-fee-note');
+  const tcRow = document.getElementById('sf-tc-row');
+  if (!section || !btn) return;
+  btn.disabled = false;
+  const isPaidSection = section.is_paid && Number(section.amount_paise) > 0;
+  if (tcRow) tcRow.classList.toggle('visible', !!isPaidSection);
+  if (isPaidSection) {
+    const rupees = Math.round(Number(section.amount_paise) / 100);
+    btn.innerHTML = `Pay ₹${rupees.toLocaleString('en-IN')} &amp; Continue <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
+    feeNote.style.display = 'block';
+    feeNote.innerHTML = `A payment of <strong>₹${rupees.toLocaleString('en-IN')}</strong> is required to complete this step.`;
+  } else {
+    feeNote.style.display = 'none';
+    const isTerminal = sfPeekIsTerminal(section);
+    btn.innerHTML = isTerminal
+      ? 'Submit <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+      : 'Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+}
+
+function renderSFCurrentSection() {
+  const section = sfGetCurrentSection();
+  if (!section) return;
+  document.getElementById('sf-body').innerHTML = (section.questions || []).map(q => buildRegField(q, 'sf-submit-error')).join('');
+  restoreSFAnswersIntoDom(section.questions || []);
+
+  const descEl = document.getElementById('sf-desc');
+  if (descEl) descEl.textContent = section.description || (_sfHistory.length ? '' : (_sfForm?.description || ''));
+
+  const progressEl = document.getElementById('sf-progress');
+  const stepsSoFar = [..._sfHistory, _sfCurrentSectionId];
+  if (_sfSections.length > 1) {
+    progressEl.style.display = 'flex';
+    progressEl.innerHTML = stepsSoFar.map((id, i) =>
+      `<div class="reg-progress-dot ${i < stepsSoFar.length - 1 ? 'done' : 'current'}"></div>`
+    ).join('');
+  } else {
+    progressEl.style.display = 'none';
+  }
+
+  document.getElementById('sf-back-btn').style.display = _sfHistory.length ? 'inline-flex' : 'none';
+  updateSFPrimaryButton();
+
+  const errEl = document.getElementById('sf-submit-error');
+  if (errEl) errEl.style.display = 'none';
+  const tcErrEl = document.getElementById('sf-tc-error');
+  if (tcErrEl) tcErrEl.classList.remove('visible');
+  const tcCbEl = document.getElementById('sf-tc-checkbox');
+  if (tcCbEl) tcCbEl.classList.remove('shake');
+
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function restoreSFAnswersIntoDom(questions) {
+  for (const q of questions) {
+    const saved = _sfAnswers[q.id];
+    if (saved === undefined) continue;
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
+      if (el) el.value = saved;
+    } else if (q.type === 'radio') {
+      document.querySelectorAll(`input[name="q_${q.id}"]`).forEach(inp => {
+        if (inp.value === saved) { inp.checked = true; inp.closest('.reg-radio-item')?.classList.add('selected'); }
+      });
+    } else if (q.type === 'checkbox') {
+      const vals = Array.isArray(saved) ? saved : [];
+      document.querySelectorAll(`input[data-qid="${q.id}"]`).forEach(inp => {
+        if (vals.includes(inp.value)) { inp.checked = true; inp.closest('.reg-check-item')?.classList.add('selected'); }
+      });
+    } else if (q.type === 'image') {
+      const file = _sfImageFiles[q.id];
+      if (file) {
+        const prev = document.getElementById('img-preview-' + q.id);
+        if (prev) { prev.src = URL.createObjectURL(file); prev.style.display = 'block'; }
+        const hint = document.querySelector(`#img-upload-${q.id} .reg-image-upload-text`);
+        if (hint) hint.textContent = file.name;
+      }
+    }
+  }
+}
+
+function sfShowTransientError(msg) {
+  const btn = document.getElementById('sf-submit-btn');
+  const orig = btn.innerHTML;
+  btn.innerHTML = msg;
+  btn.style.background = '#ff453a';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; updateSFPrimaryButton(); }, 2500);
+}
+
+function collectSFCurrentAnswers(section) {
+  let valid = true;
+  let firstInvalid = null;
+  const collected = {};
+  for (const q of section.questions || []) {
+    if (q.type === 'text' || q.type === 'email' || q.type === 'phone' || q.type === 'textarea') {
+      const el = document.querySelector(`input[data-qid="${q.id}"], textarea[data-qid="${q.id}"]`);
+      const val = el ? el.value.trim() : '';
+      if (q.required && !val) { firstInvalid = firstInvalid || el; valid = false; }
+      collected[q.id] = val;
+    } else if (q.type === 'radio') {
+      const checked = document.querySelector(`input[name="q_${q.id}"]:checked`);
+      if (q.required && !checked) valid = false;
+      collected[q.id] = checked ? checked.value : '';
+    } else if (q.type === 'checkbox') {
+      const checked = [...document.querySelectorAll(`input[data-qid="${q.id}"]:checked`)].map(i => i.value);
+      if (q.required && !checked.length) valid = false;
+      collected[q.id] = checked;
+    } else if (q.type === 'image') {
+      if (q.required && !_sfImageFiles[q.id]) valid = false;
+    }
+  }
+  return { valid, firstInvalid, collected };
+}
+
+async function sfPrimaryAction() {
+  const section = sfGetCurrentSection();
+  if (!section) return;
+  const { valid, firstInvalid, collected } = collectSFCurrentAnswers(section);
+  if (!valid) {
+    if (firstInvalid) firstInvalid.focus();
+    sfShowTransientError('Please fill all required fields');
+    return;
+  }
+
+  const isPaidSection = section.is_paid && Number(section.amount_paise) > 0;
+
+  if (isPaidSection) {
+    const tcCheckbox = document.getElementById('sf-tc-checkbox');
+    if (!tcCheckbox || !tcCheckbox.checked) {
+      const tcErr = document.getElementById('sf-tc-error');
+      if (tcErr) tcErr.classList.add('visible');
+      if (tcCheckbox) {
+        tcCheckbox.classList.remove('shake');
+        void tcCheckbox.offsetWidth;
+        tcCheckbox.classList.add('shake');
+        tcCheckbox.focus();
+      }
+      return;
+    }
+  }
+
+  Object.assign(_sfAnswers, collected);
+
+  if (isPaidSection) {
+    await sfStartPayment(section);
+    return;
+  }
+  sfAdvance();
+}
+
+function sfAdvance() {
+  const result = clientComputeSectionPath(_sfSections, _sfAnswers);
+  const idx = result.visitedSectionIds.indexOf(_sfCurrentSectionId);
+  const nextId = idx >= 0 ? result.visitedSectionIds[idx + 1] : undefined;
+  if (!nextId) {
+    sfFinalSubmit(_sfPaymentInfo);
+    return;
+  }
+  _sfHistory.push(_sfCurrentSectionId);
+  _sfCurrentSectionId = nextId;
+  renderSFCurrentSection();
+}
+
+function sfGoBack() {
+  if (!_sfHistory.length) return;
+  _sfCurrentSectionId = _sfHistory.pop();
+  if (_sfCurrentSectionId === _sfPaidSectionId) {
+    _sfPaymentInfo = null;
+    _sfPaidSectionId = null;
+  }
+  renderSFCurrentSection();
+}
+
+function sfShowPaymentError(msg) {
+  let errEl = document.getElementById('sf-payment-error');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.id = 'sf-payment-error';
+    errEl.style.cssText = 'color:#ff453a;font-size:13px;text-align:center;margin:0 0 12px;padding:10px 14px;background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.25);border-radius:8px;font-weight:600';
+    const feeNote = document.getElementById('sf-fee-note');
+    if (feeNote && feeNote.parentNode) feeNote.parentNode.insertBefore(errEl, feeNote.nextSibling);
+  }
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+}
+
+async function sfStartPayment(section) {
+  const btn = document.getElementById('sf-submit-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Opening payment…';
+  const prevPayErr = document.getElementById('sf-payment-error');
+  if (prevPayErr) prevPayErr.style.display = 'none';
+
+  if (typeof Razorpay === 'undefined') {
+    try {
+      await new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+        if (existing) {
+          if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
+            reject(new Error('Razorpay SDK failed to load — check network / CSP'));
+            return;
+          }
+          existing.addEventListener('load', () => {
+            typeof Razorpay !== 'undefined' ? resolve() : reject(new Error('Razorpay SDK loaded but Razorpay constructor not found'));
+          });
+          existing.addEventListener('error', () => reject(new Error('Razorpay SDK network error')));
+        } else {
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.onload = () => {
+            typeof Razorpay !== 'undefined' ? resolve() : reject(new Error('Razorpay SDK loaded but Razorpay constructor not found'));
+          };
+          s.onerror = () => reject(new Error('Razorpay SDK failed to load'));
+          document.head.appendChild(s);
+        }
+      });
+    } catch (e) {
+      sfShowPaymentError(e.message || 'Could not load payment gateway');
+      btn.disabled = false; btn.innerHTML = origHtml;
+      return;
+    }
+  }
+
+  try {
+    const orderRes = await fetch('/api/forms/' + encodeURIComponent(_sfSlug) + '/create-order', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken || '' },
+      body: JSON.stringify({ answers: _sfAnswers }),
+    });
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) {
+      const errMsg = orderData.error || 'Could not start payment';
+      sfShowPaymentError(errMsg);
+      sfShowTransientError(errMsg);
+      btn.disabled = false; btn.innerHTML = origHtml;
+      return;
+    }
+    const { order_id, key_id, amount_paise } = orderData;
+
+    const existingBanner = document.getElementById('sf-test-mode-banner');
+    if (existingBanner) existingBanner.remove();
+    if (key_id && key_id.startsWith('rzp_test_')) {
+      const banner = document.createElement('div');
+      banner.id = 'sf-test-mode-banner';
+      banner.style.cssText = 'background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;margin:0 0 12px;text-align:center;letter-spacing:.04em';
+      banner.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> TEST MODE — No real money will be charged. Use Razorpay test card: 4111 1111 1111 1111';
+      const feeNote = document.getElementById('sf-fee-note');
+      if (feeNote && feeNote.parentNode) feeNote.parentNode.insertBefore(banner, feeNote);
+    }
+
+    let prefillEmail = '';
+    for (const val of Object.values(_sfAnswers)) {
+      if (typeof val === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) { prefillEmail = val.trim(); break; }
+    }
+
+    const rzp = new Razorpay({
+      key: key_id,
+      amount: amount_paise,
+      currency: 'INR',
+      name: 'KFS — KIIT Film Society',
+      description: (_sfForm?.title || 'Form') + ' Submission',
+      order_id: order_id,
+      prefill: { email: prefillEmail },
+      theme: { color: '#f5f5f5' },
+      modal: {
+        ondismiss: () => { btn.disabled = false; btn.innerHTML = origHtml; },
+      },
+      handler: async (response) => {
+        _sfPaymentInfo = {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        };
+        _sfPaidSectionId = section.id;
+        btn.innerHTML = 'Payment received…';
+        sfAdvance();
+      },
+    });
+    rzp.open();
+  } catch (e) {
+    console.error('Payment init error:', e);
+    sfShowTransientError('Network error — please try again');
+    btn.disabled = false; btn.innerHTML = origHtml;
+  }
+}
+
+// Called once the section path is fully walked. `paymentPayload` is whatever
+// sfStartPayment's Razorpay handler stashed in _sfPaymentInfo if a paid
+// section was crossed along the way — null for an entirely free form.
+async function sfFinalSubmit(paymentPayload) {
+  const btn = document.getElementById('sf-submit-btn');
+  const backBtn = document.getElementById('sf-back-btn');
+  btn.disabled = true;
+  btn.innerHTML = 'Submitting…';
+
+  const fd = new FormData();
+  fd.append('answers', JSON.stringify(_sfAnswers));
+  if (paymentPayload) {
+    fd.append('razorpay_order_id', paymentPayload.razorpay_order_id);
+    fd.append('razorpay_payment_id', paymentPayload.razorpay_payment_id);
+    fd.append('razorpay_signature', paymentPayload.razorpay_signature);
+  }
+  Object.entries(_sfImageFiles).forEach(([qid, file]) => fd.append(qid, file));
+
+  try {
+    const res = await fetch('/api/forms/' + encodeURIComponent(_sfSlug) + '/submit', {
+      method: 'POST', credentials: 'include',
+      headers: { 'X-CSRF-Token': _csrfToken || '' },
+      body: fd,
+    });
+    if (res.ok) {
+      document.getElementById('sf-progress').style.display = 'none';
+      document.getElementById('sf-fee-note').style.display = 'none';
+      document.getElementById('sf-tc-row').classList.remove('visible');
+      document.getElementById('sf-tc-error').classList.remove('visible');
+      document.getElementById('sf-submit-row').style.display = 'none';
+      document.getElementById('sf-body').innerHTML = `
+        <div class="reg-success">
+          <div class="reg-success-icon">
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="26" cy="26" r="25" stroke="rgba(245,245,245,0.15)" stroke-width="1.5"/>
+              <rect x="12" y="17" width="28" height="20" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/>
+              <path d="M12 21h28M12 29h28M20 17v20M32 17v20" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="38" cy="14" r="6" fill="#34c759"/>
+              <path d="M35.5 14l1.8 1.8 3-3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="reg-success-title">Thank you!</div>
+          <div class="reg-success-sub">Your response to <strong>${_sfForm?.title || 'this form'}</strong> has been recorded${paymentPayload ? ', and a payment receipt has been emailed to you' : ''}${' — check your inbox for a confirmation, if you gave an email address.'}</div>
+          <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
+            <a href="/" style="display:inline-flex;align-items:center;gap:8px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none">Back to Home</a>
+          </div>
+        </div>`;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.error('Form submit failed:', res.status, err);
+      const errMsg = err.error || `Submission failed (${res.status}). Please try again.`;
+      let errEl = document.getElementById('sf-submit-error');
+      if (!errEl) {
+        errEl = document.createElement('div');
+        errEl.id = 'sf-submit-error';
+        errEl.style.cssText = 'color:#ff453a;font-size:13px;text-align:center;margin-top:10px;padding:10px 16px;background:rgba(255,69,58,.1);border-radius:10px;border:1px solid rgba(255,69,58,.25)';
+        document.getElementById('sf-submit-row').after(errEl);
+      }
+      errEl.textContent = errMsg;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      updateSFPrimaryButton();
+      if (backBtn) backBtn.style.display = _sfHistory.length ? 'inline-flex' : 'none';
+    }
+  } catch (err) {
+    console.error('Form submit error:', err);
+    btn.disabled = false;
+    sfShowTransientError('Network error — please try again');
+    if (backBtn) backBtn.style.display = _sfHistory.length ? 'inline-flex' : 'none';
   }
 }
 
