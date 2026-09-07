@@ -252,6 +252,10 @@ body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .b
 .fb-question-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;position:relative;transition:border-color .2s,box-shadow .2s;cursor:default}
 .fb-question-card:hover{border-color:rgba(255,255,255,.14)}
 .fb-question-card.fb-dragging{opacity:.4;border-color:rgba(255,255,255,.3);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.fb-question-card.fb-drag-over{border-color:rgba(88,166,255,.55);box-shadow:0 0 0 1px rgba(88,166,255,.25) inset}
+.fb-section-card.fb-dragging{opacity:.45;border-color:rgba(255,255,255,.3);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.fb-section-card.fb-drag-over{border-color:rgba(88,166,255,.55);box-shadow:0 0 0 1px rgba(88,166,255,.25) inset}
+.fb-section-header .fb-drag-handle{margin-top:4px}
 
 /* Drag handle */
 .fb-drag-handle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;cursor:grab;color:rgba(245,245,245,.22);flex-shrink:0;margin-top:2px;transition:color .15s}
@@ -3087,6 +3091,7 @@ body.light-mode .psw-comment-gate a{color:#111}
       <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden">
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="blogs" checked> Blog Posts</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="events" checked> Events</label>
+        <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="forms" checked> Forms</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="members" checked> Members</label>
         <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="movies" checked> Films</label>
         <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="new-admin-perm" value="chitra-vichitra" checked> Chitra Vichitra</label>
@@ -3134,6 +3139,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <div class="perm-check-grid" style="border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="blogs"> Blog Posts</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="events"> Events</label>
+      <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="forms"> Forms</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="members"> Members</label>
       <label class="perm-check-item" style="border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="movies"> Films</label>
       <label class="perm-check-item" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border)"><input type="checkbox" class="edit-perm-cb" value="chitra-vichitra"> Chitra Vichitra</label>
@@ -4005,6 +4011,39 @@ body.light-mode .psw-comment-gate a{color:#111}
     </div>
   </section>
 </div>
+<!-- ── STANDALONE FORM (public, shareable /forms/:slug page) ── -->
+<div class="page" id="page-form-fill">
+  <section class="section" style="min-height:100vh;padding:48px 16px 100px;display:flex;align-items:flex-start;justify-content:center">
+    <div class="reg-form-panel" style="margin-top:24px">
+      <div class="reg-form-header">
+        <div class="reg-form-title" id="sf-title">Loading…</div>
+        <div class="reg-form-desc" id="sf-desc"></div>
+      </div>
+      <div class="reg-progress" id="sf-progress" style="display:none"></div>
+      <div class="reg-form-body" id="sf-body"></div>
+      <div class="reg-fee-note" id="sf-fee-note" style="display:none"></div>
+      <div class="reg-tc-row" id="sf-tc-row">
+        <div class="reg-tc-checkbox-wrap">
+          <input type="checkbox" class="reg-tc-checkbox" id="sf-tc-checkbox">
+        </div>
+        <label class="reg-tc-label" for="sf-tc-checkbox">
+          I have read and agree to the <a href="#" data-action="openTCModal">Terms &amp; Conditions</a>, including the <strong style="color:var(--white)">strict no-refund policy</strong>.
+        </label>
+      </div>
+      <div class="reg-tc-error" id="sf-tc-error">Please accept the Terms &amp; Conditions before proceeding to payment.</div>
+      <div class="reg-nav-row" id="sf-submit-row">
+        <button onclick="sfGoBack()" class="reg-back-btn" id="sf-back-btn" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
+        <button onclick="sfPrimaryAction()" class="reg-submit-btn" id="sf-submit-btn">
+          Submit
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="page" id="page-404">
   <div class="not-found-reel">404</div>
   <div class="not-found-icon">
@@ -4375,6 +4414,7 @@ body.light-mode .psw-comment-gate a{color:#111}
     <div class="admin-sidebar-group">Content</div>
     <div data-action="showAdminSection" data-args='["blogs"]' class="admin-sidebar-item" data-section="blogs"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Blog Posts</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["events"]' data-section="events"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Events</div>
+    <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["forms"]' data-section="forms"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span> Forms</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["scanner"]' data-section="scanner"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="16" y1="11" x2="21" y2="11"/><line x1="11" y1="3" x2="11" y2="8"/><line x1="11" y1="11" x2="11" y2="16"/><line x1="3" y1="11" x2="8" y2="11"/></svg></span> Scanner</div>
     <div class="admin-sidebar-item" data-action="showAdminSection" data-args='["attendance"]' data-section="attendance"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> Attendance</div>
     <div data-action="showAdminSection" data-args='["members"]' class="admin-sidebar-item" data-section="members"><span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Members</div>
@@ -4530,6 +4570,20 @@ body.light-mode .psw-comment-gate a{color:#111}
         <table class="admin-table">
           <thead><tr><th>Title</th><th>Date</th><th>Status</th><th>Location</th><th>Regs</th><th>Actions</th></tr></thead>
           <tbody id="admin-events-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FORMS (standalone — not tied to any event, each with its own shareable link) -->
+    <div class="admin-section" id="section-forms">
+      <div class="admin-header">
+        <div><h2>Forms</h2><p>Standalone forms with their own shareable link — no event required</p></div>
+        <button onclick="createStandaloneForm()" class="btn btn-primary">+ New Form</button>
+      </div>
+      <div class="admin-card">
+        <table class="admin-table">
+          <thead><tr><th>Title</th><th>Status</th><th>Responses</th><th>Shareable Link</th><th>Actions</th></tr></thead>
+          <tbody id="admin-forms-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -6651,6 +6705,11 @@ KFS — KIIT Film Society"></textarea>
       <div>
         <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:4px" id="fb-event-label">Event Form</div>
         <h3 id="fb-title">Registration Form</h3>
+        <div id="fb-share-link-row" style="display:none;align-items:center;gap:8px;margin-top:6px">
+          <span style="font-size:11.5px;color:rgba(245,245,245,.4)">Shareable link:</span>
+          <a id="fb-share-link" href="#" target="_blank" style="font-size:12px;color:#58a6ff;text-decoration:none;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></a>
+          <button data-action="copyFBShareLink" class="btn-sm" style="padding:3px 8px;font-size:11px">Copy</button>
+        </div>
       </div>
       <div class="fb-header-actions">
         <button data-action="openResponseViewer" class="fb-dl-btn" id="fb-dl-btn">
@@ -6674,6 +6733,12 @@ KFS — KIIT Film Society"></textarea>
         <input type="text" id="fb-form-title" placeholder="Form title (e.g. KFS Screening Registration)">
         <textarea id="fb-form-desc" placeholder="Short description or instructions (optional)"></textarea>
       </div>
+      <div class="fb-meta" id="fb-target-email-row" style="display:none">
+        <div class="fb-meta-label">Send confirmation/ticket mail to</div>
+        <select id="fb-target-email-select" onchange="syncFBTargetEmail(this.value)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;color:rgba(245,245,245,.85);font:inherit;font-size:13px;outline:none;cursor:pointer">
+        </select>
+        <div style="font-size:11px;color:rgba(245,245,245,.35);margin-top:2px">This form asks for more than one email — pick which one gets the confirmation.</div>
+      </div>
       <div class="fb-sections" id="fb-sections"></div>
       <button data-action="addFBSection" class="fb-add-section-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -6689,7 +6754,7 @@ KFS — KIIT Film Society"></textarea>
         </span>
         <span id="fb-open-label">Form is Open</span>
       </label>
-      <label class="fb-toggle-row" title="When on, every submission also creates a QR entry ticket and gets emailed one. Turn off for plain feedback/survey forms that don't need entry tickets.">
+      <label class="fb-toggle-row" id="fb-ticket-row" title="When on, every submission also creates a QR entry ticket and gets emailed one. Turn off for plain feedback/survey forms that don't need entry tickets.">
         <span class="fb-toggle" id="fb-ticket-toggle">
           <input type="checkbox" id="fb-issues-ticket" checked>
           <div class="fb-toggle-track"></div>
