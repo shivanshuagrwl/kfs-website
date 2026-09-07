@@ -5541,7 +5541,15 @@ function parseFormSchema(rawQuestions) {
     parsed = [];
   }
   if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sections)) {
-    return { version: 2, sections: parsed.sections };
+    return {
+      version: 2,
+      sections: parsed.sections,
+      // Admin-chosen question whose answer should receive the confirmation/
+      // ticket email, when a form has more than one email-type question
+      // (e.g. a KIIT mail + a personal mail). Falls back to the tiered
+      // auto-detection in pickTargetEmail() when not set.
+      targetEmailQuestionId: parsed.target_email_question_id || null,
+    };
   }
   // Legacy flat array — wrap as a single implicit section so the branching
   // engine below works unchanged for old forms that haven't been rebuilt yet.
@@ -5559,7 +5567,56 @@ function parseFormSchema(rawQuestions) {
         amount_paise: null,
       },
     ],
+    targetEmailQuestionId: null,
   };
+}
+
+// Decide which answer becomes the "toEmail" for confirmation/ticket mail.
+// Tier 0: the admin explicitly picked a question (used when a form has
+//         multiple email fields, e.g. "KIIT mail" + "Personal mail").
+// Tier 1: the first question explicitly typed "email".
+// Tier 2: a text/textarea question whose label mentions "email".
+// Tier 3: scan every answer for something that looks like an email address.
+function pickTargetEmail(questions, finalAnswers, targetEmailQuestionId) {
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (targetEmailQuestionId) {
+    const q = (questions || []).find((q) => q.id === targetEmailQuestionId);
+    const val = q ? (finalAnswers[q.id] || "").toString().trim() : "";
+    if (val) return val;
+  }
+
+  let emailQ = (questions || []).find((q) => q.type === "email");
+  if (!emailQ)
+    emailQ = (questions || []).find(
+      (q) =>
+        ["text", "textarea"].includes(q.type) &&
+        /e[\s-]?mail/i.test(q.label || ""),
+    );
+
+  let toEmail = emailQ ? (finalAnswers[emailQ.id] || "").trim() : null;
+  if (!toEmail) {
+    for (const val of Object.values(finalAnswers)) {
+      if (typeof val === "string" && EMAIL_RE.test(val.trim())) {
+        toEmail = val.trim();
+        break;
+      }
+    }
+  }
+  return toEmail || null;
+}
+
+// Every email-type question across a form's sections, tagged with its
+// section title — used to populate the "send confirmation to" picker in the
+// admin form builder whenever a form has 2+ email questions.
+function collectEmailQuestions(sections) {
+  const out = [];
+  for (const s of sections || []) {
+    for (const q of s.questions || []) {
+      if (q.type === "email") out.push({ id: q.id, label: q.label || "Email", sectionTitle: s.title || "" });
+    }
+  }
+  return out;
 }
 
 // Walk the section graph starting at sections[0], using `answers` to resolve
@@ -5780,7 +5837,7 @@ app.post(
   "/api/admin/events/:id/form",
   requireSection("events"),
   async (req, res) => {
-    const { title, description, sections, questions, is_open, issues_ticket } = req.body;
+    const { title, description, sections, questions, is_open, issues_ticket, target_email_question_id } = req.body;
 
     // Preferred path: sections-based schema (branching + per-section payment).
     // `questions` (flat array) is still accepted for any older client code,
@@ -5790,7 +5847,23 @@ app.post(
     if (Array.isArray(sections)) {
       const err = validateSectionsPayload(sections);
       if (err) return res.status(400).json({ error: err });
-      storedQuestionsJson = JSON.stringify({ version: 2, sections });
+
+      // Optional: which email question receives the confirmation/ticket
+      // mail, when the form has more than one. Must reference a real
+      // question of type "email" that's actually in this form.
+      let targetEmailQId = null;
+      if (target_email_question_id) {
+        const allQuestions = sections.flatMap((s) => s.questions || []);
+        const match = allQuestions.find(
+          (q) => q.id === target_email_question_id && q.type === "email",
+        );
+        if (!match)
+          return res.status(400).json({
+            error: "Selected confirmation-email question was not found in this form.",
+          });
+        targetEmailQId = target_email_question_id;
+      }
+      storedQuestionsJson = JSON.stringify({ version: 2, sections, target_email_question_id: targetEmailQId });
     } else if (Array.isArray(questions)) {
       for (const q of questions) {
         if (!q.id || !q.type)
@@ -5997,7 +6070,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
   //    below is the flattened set of questions belonging only to the
   //    sections actually visited — branches not taken are correctly ignored
   //    for both required-field validation and the fee that's owed.
-  const { sections } = parseFormSchema(form.questions);
+  const { sections, targetEmailQuestionId } = parseFormSchema(form.questions);
   const { questions, requiredAmountPaise } = computeSectionPath(sections, answers);
 
   for (const q of questions) {
@@ -6180,29 +6253,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   // 7. Send confirmation email (non-blocking — never fail the response)
   try {
-    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    // Tier 1: question explicitly typed as 'email'
-    let emailQ = questions.find((q) => q.type === "email");
-
-    // Tier 2: any text/textarea question whose label mentions email
-    if (!emailQ)
-      emailQ = questions.find(
-        (q) =>
-          ["text", "textarea"].includes(q.type) &&
-          /e[\s-]?mail/i.test(q.label || ""),
-      );
-
-    // Tier 3: scan every answer value for something that looks like an email
-    let toEmail = emailQ ? (finalAnswers[emailQ.id] || "").trim() : null;
-    if (!toEmail) {
-      for (const val of Object.values(finalAnswers)) {
-        if (typeof val === "string" && EMAIL_RE.test(val.trim())) {
-          toEmail = val.trim();
-          break;
-        }
-      }
-    }
+    let toEmail = pickTargetEmail(questions, finalAnswers, targetEmailQuestionId);
 
     // Name: prefer a question labelled 'name', fall back to first short-text answer
     const nameQ = questions.find(
@@ -6675,7 +6726,374 @@ app.get(
   },
 );
 
-// ── ADMIN: Send test confirmation email ───────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION SF — Standalone Forms (not tied to any event)
+//
+// Same schema/branching/payment engine as event forms (parseFormSchema,
+// computeSectionPath, validateSectionsPayload, pickTargetEmail — all reused
+// as-is), but reachable at its own shareable link instead of living under an
+// event. No QR ticket / check-in concept applies here since there's no event
+// to check into — a submission just gets a confirmation email (and a payment
+// receipt if a section required payment).
+//
+// SQL migration (run once in Supabase):
+//
+//   CREATE TABLE IF NOT EXISTS standalone_forms (
+//     id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     slug                      TEXT UNIQUE NOT NULL,
+//     title                     TEXT,
+//     description               TEXT,
+//     questions                 TEXT NOT NULL,   -- JSON: {version:2, sections, target_email_question_id}
+//     is_open                   BOOLEAN NOT NULL DEFAULT TRUE,
+//     created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_standalone_forms_slug ON standalone_forms(slug);
+//   ALTER TABLE standalone_forms DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+//
+//   CREATE TABLE IF NOT EXISTS standalone_form_responses (
+//     id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+//     form_id                   UUID NOT NULL REFERENCES standalone_forms(id) ON DELETE CASCADE,
+//     answers                   TEXT NOT NULL,
+//     amount_paise              INT,
+//     razorpay_order_id         TEXT,
+//     razorpay_payment_id       TEXT,
+//     razorpay_signature        TEXT,
+//     payment_verified_at       TIMESTAMPTZ,
+//     submitted_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+//   );
+//   CREATE INDEX IF NOT EXISTS idx_standalone_form_responses_form ON standalone_form_responses(form_id);
+//   ALTER TABLE standalone_form_responses DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Public — CSRF-protected. Mirrors eventFormPaymentLimit for standalone forms.
+const standaloneFormPaymentLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many payment attempts. Please wait 15 minutes." },
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
+});
+
+// Turns a title into a short, unique, URL-friendly slug — e.g.
+// "Alumni Meet Feedback" -> "alumni-meet-feedback-4f2a". Retries with a new
+// random suffix on the rare collision.
+async function generateFormSlug(title) {
+  const base = slugify(title || "form") || "form";
+  for (let i = 0; i < 6; i++) {
+    const suffix = crypto.randomBytes(3).toString("hex"); // 6 hex chars
+    const slug = `${base}-${suffix}`;
+    const { data } = await supabase
+      .from("standalone_forms")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!data) return slug;
+  }
+  // Extremely unlikely fallback — fully random slug.
+  return `${base}-${crypto.randomBytes(5).toString("hex")}`;
+}
+
+// ADMIN: List all standalone forms (with response counts)
+app.get("/api/admin/forms", requireSection("forms"), async (req, res) => {
+  const { data: forms, error } = await supabase
+    .from("standalone_forms")
+    .select("id,slug,title,description,is_open,created_at,updated_at")
+    .order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+
+  const { data: counts } = await supabase
+    .from("standalone_form_responses")
+    .select("form_id");
+  const countMap = {};
+  (counts || []).forEach((r) => { countMap[r.form_id] = (countMap[r.form_id] || 0) + 1; });
+
+  res.json((forms || []).map((f) => ({ ...f, response_count: countMap[f.id] || 0 })));
+});
+
+// ADMIN: Create a new standalone form (starts empty — admin fills it in via the builder)
+app.post("/api/admin/forms", requireSection("forms"), async (req, res) => {
+  const title = (req.body?.title || "Untitled Form").trim().slice(0, 200);
+  const slug = await generateFormSlug(title);
+  const emptySchema = JSON.stringify({
+    version: 2,
+    sections: [{ id: "sec_" + Date.now(), title: "", description: "", questions: [], next_section: "", is_paid: false, amount_paise: null }],
+    target_email_question_id: null,
+  });
+  const { data, error } = await supabase
+    .from("standalone_forms")
+    .insert([{ slug, title, description: null, questions: emptySchema, is_open: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }])
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "create", "standalone_form", title).catch((e) => console.error("[activity]", e.message));
+  res.json(data);
+});
+
+// ADMIN: Fetch one standalone form (full schema) for editing
+app.get("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("standalone_forms")
+    .select("*")
+    .eq("id", req.params.id)
+    .maybeSingle();
+  if (error || !data) return res.status(404).json({ error: "Form not found" });
+  res.json(data);
+});
+
+// ADMIN: Update a standalone form's schema/settings
+app.post("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
+  const { title, description, sections, is_open, target_email_question_id } = req.body;
+  if (!Array.isArray(sections)) return res.status(400).json({ error: "sections array is required" });
+  const err = validateSectionsPayload(sections);
+  if (err) return res.status(400).json({ error: err });
+
+  let targetEmailQId = null;
+  if (target_email_question_id) {
+    const allQuestions = sections.flatMap((s) => s.questions || []);
+    const match = allQuestions.find((q) => q.id === target_email_question_id && q.type === "email");
+    if (!match) return res.status(400).json({ error: "Selected confirmation-email question was not found in this form." });
+    targetEmailQId = target_email_question_id;
+  }
+
+  const storedQuestionsJson = JSON.stringify({ version: 2, sections, target_email_question_id: targetEmailQId });
+  const { data, error } = await supabase
+    .from("standalone_forms")
+    .update({
+      title: (title || "Untitled Form").trim().slice(0, 200),
+      description: description || null,
+      questions: storedQuestionsJson,
+      is_open: is_open !== false && is_open !== "false",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", req.params.id)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "update", "standalone_form", data.title || req.params.id).catch((e) => console.error("[activity]", e.message));
+  res.json(data);
+});
+
+// ADMIN: Delete a standalone form (and all its responses — the shareable link stops working)
+app.delete("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
+  const { data: form } = await supabase.from("standalone_forms").select("title").eq("id", req.params.id).maybeSingle();
+  await supabase.from("standalone_form_responses").delete().eq("form_id", req.params.id);
+  const { error } = await supabase.from("standalone_forms").delete().eq("id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  logActivity(req.admin.id, req.admin.name, "delete", "standalone_form", form?.title || req.params.id).catch((e) => console.error("[activity]", e.message));
+  res.json({ success: true });
+});
+
+// ADMIN: Get all responses for a standalone form
+app.get("/api/admin/forms/:id/responses", requireSection("forms"), async (req, res) => {
+  const { data, error } = await supabase
+    .from("standalone_form_responses")
+    .select("*")
+    .eq("form_id", req.params.id)
+    .order("submitted_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+// ADMIN: Delete only the responses (keeps the form schema + shareable link intact)
+app.delete("/api/admin/forms/:id/responses", requireSection("forms"), async (req, res) => {
+  const { error } = await supabase.from("standalone_form_responses").delete().eq("form_id", req.params.id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  const { data: form } = await supabase.from("standalone_forms").select("title").eq("id", req.params.id).maybeSingle();
+  logActivity(req.admin.id, req.admin.name, "delete", "standalone_form_responses", `Responses for ${form?.title || req.params.id}`).catch((e) => console.error("[activity]", e.message));
+  res.json({ success: true });
+});
+
+// PUBLIC: Fetch a standalone form's schema by its shareable slug
+app.get("/api/forms/:slug", async (req, res) => {
+  cacheFor(res, 60);
+  try {
+    const data = await memCache(`standalone-form:${req.params.slug}`, 60, async () => {
+      const { data, error } = await supabasePublic
+        .from("standalone_forms")
+        .select("id,slug,title,description,questions,is_open,created_at,updated_at")
+        .eq("slug", req.params.slug)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    });
+    if (!data) return res.status(404).json({ error: "Form not found" });
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUBLIC: Create a Razorpay order for a paid section in a standalone form.
+app.post("/api/forms/:slug/create-order", standaloneFormPaymentLimit, csrfProtect, async (req, res) => {
+  if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    console.error("[standalone-form/create-order] Razorpay env vars not configured.");
+    return res.status(503).json({ error: "Payment gateway not configured. Contact support." });
+  }
+  const { data: form, error: formErr } = await supabasePublic
+    .from("standalone_forms")
+    .select("id,is_open,questions")
+    .eq("slug", req.params.slug)
+    .maybeSingle();
+  if (formErr || !form) return res.status(404).json({ error: "Form not found" });
+  if (!form.is_open) return res.status(403).json({ error: "This form is currently closed" });
+
+  const { sections } = parseFormSchema(form.questions);
+  let answers = {};
+  try {
+    const raw = req.body.answers;
+    answers = (typeof raw === "object" && raw !== null) ? raw : JSON.parse(raw || "{}");
+  } catch {
+    return res.status(400).json({ error: "Invalid answers payload" });
+  }
+  const { requiredAmountPaise } = computeSectionPath(sections, answers);
+  if (!requiredAmountPaise || requiredAmountPaise <= 0) {
+    return res.status(400).json({ error: "No payment is required at this step." });
+  }
+  try {
+    const receiptId = `kfs_sf_${Date.now()}`;
+    const order = await createRazorpayOrder(requiredAmountPaise, receiptId);
+    return res.json({ order_id: order.id, key_id: RAZORPAY_KEY_ID, amount_paise: requiredAmountPaise });
+  } catch (e) {
+    console.error("[standalone-form/create-order]", e.message);
+    return res.status(502).json({ error: "Could not initiate payment. Please try again." });
+  }
+});
+
+// PUBLIC: Submit a response to a standalone form
+app.post("/api/forms/:slug/submit", strictWriteLimit, upload.any(), async (req, res) => {
+  const { data: form, error: formErr } = await supabasePublic
+    .from("standalone_forms")
+    .select("id,title,is_open,questions")
+    .eq("slug", req.params.slug)
+    .maybeSingle();
+  if (formErr || !form) return res.status(404).json({ error: "Form not found" });
+  if (!form.is_open) return res.status(403).json({ error: "This form is currently closed" });
+
+  let answers = {};
+  try {
+    answers = JSON.parse(req.body.answers || "{}");
+  } catch (e) {
+    return res.status(400).json({ error: "Invalid answers payload" });
+  }
+
+  const { sections, targetEmailQuestionId } = parseFormSchema(form.questions);
+  const { questions, requiredAmountPaise } = computeSectionPath(sections, answers);
+
+  for (const q of questions) {
+    if (!q.required) continue;
+    if (q.type === "image") {
+      const hasFile = (req.files || []).some((f) => f.fieldname === q.id);
+      if (!hasFile) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+    } else {
+      const val = answers[q.id];
+      const isEmpty = val === undefined || val === null || val === "" || (Array.isArray(val) && val.length === 0);
+      if (isEmpty) return res.status(400).json({ error: `"${q.label || q.id}" is required` });
+    }
+  }
+
+  let paymentRecord = null;
+  if (requiredAmountPaise > 0) {
+    let payment = null;
+    try { payment = JSON.parse(req.body.payment || "null"); } catch {}
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = payment || {};
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature)
+      return res.status(402).json({ error: "Payment is required to complete this submission." });
+    if (!RAZORPAY_KEY_SECRET) return res.status(503).json({ error: "Payment gateway not configured." });
+
+    const { data: existingPay } = await supabase
+      .from("standalone_form_responses")
+      .select("id")
+      .eq("razorpay_order_id", razorpay_order_id)
+      .maybeSingle();
+    if (existingPay) return res.json({ success: true, duplicate: true, id: existingPay.id });
+
+    const sigBody = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSig = crypto.createHmac("sha256", RAZORPAY_KEY_SECRET).update(sigBody).digest("hex");
+    let sigValid = false;
+    try {
+      sigValid = crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(razorpay_signature));
+    } catch { sigValid = false; }
+    if (!sigValid) {
+      console.warn("[standalone-form/submit] Signature mismatch for order:", razorpay_order_id);
+      return res.status(400).json({ error: "Payment verification failed. Signature mismatch." });
+    }
+
+    let paidAmountPaise = null;
+    try {
+      const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString("base64");
+      const payRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, { headers: { Authorization: `Basic ${auth}` } });
+      const payData = await payRes.json();
+      if (payRes.ok && payData.amount) paidAmountPaise = payData.amount;
+    } catch (e) {
+      console.warn("[standalone-form/submit] Could not fetch payment amount from Razorpay:", e.message);
+    }
+    if (paidAmountPaise !== null && paidAmountPaise !== requiredAmountPaise) {
+      return res.status(400).json({ error: "Payment amount does not match the required fee." });
+    }
+
+    paymentRecord = {
+      amount_paise: paidAmountPaise || requiredAmountPaise,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      payment_verified_at: new Date().toISOString(),
+    };
+  }
+
+  const imageUrls = {};
+  for (const file of req.files || []) {
+    try {
+      const url = await uploadImage(file, `standalone-form-responses/${form.id}`);
+      imageUrls[file.fieldname] = url;
+    } catch (e) {
+      console.error("Image upload error for question", file.fieldname, e.message);
+      return res.status(500).json({ error: "Image upload failed: " + e.message });
+    }
+  }
+  const finalAnswers = { ...answers, ...imageUrls };
+
+  const { data: response, error: insertErr } = await supabase
+    .from("standalone_form_responses")
+    .insert([{ form_id: form.id, answers: JSON.stringify(finalAnswers), submitted_at: new Date().toISOString(), ...(paymentRecord || {}) }])
+    .select()
+    .single();
+  if (insertErr) return res.status(500).json({ error: "Internal server error" });
+
+  // Confirmation email — non-blocking, never fails the response.
+  try {
+    const toEmail = pickTargetEmail(questions, finalAnswers, targetEmailQuestionId);
+    const nameQ = questions.find((q) => ["text", "textarea"].includes(q.type) && /\bname\b/i.test(q.label || ""));
+    const toName = nameQ ? (finalAnswers[nameQ.id] || "").trim() : null;
+
+    if (toEmail) {
+      sendConfirmationEmail({ toEmail, toName, eventTitle: form.title || "", eventDate: null, eventVenue: null, eventId: null })
+        .catch((e) => console.error("[email] standalone form confirmation failed:", e.message));
+
+      if (paymentRecord) {
+        sendPaymentBill({
+          type: "REGISTRATION",
+          donorId: null,
+          recipientEmail: toEmail,
+          recipientName: toName,
+          isAnonymous: false,
+          cause: form.title || "Form Submission",
+          amountPaise: paymentRecord.amount_paise,
+          paymentId: paymentRecord.razorpay_payment_id,
+          orderId: paymentRecord.razorpay_order_id,
+          paymentDateTime: paymentRecord.payment_verified_at,
+        }).catch((e) => console.error("[standalone-form/submit] payment bill email failed:", e.message));
+      }
+    }
+  } catch (e) {
+    console.error("[email] standalone form pre-send error:", e.message);
+  }
+
+  res.json({ success: true, id: response.id, amount_paise: paymentRecord?.amount_paise || 0 });
+});
+
+
 app.post("/api/admin/email/test", authMiddleware, async (req, res) => {
   const { to } = req.body;
   if (!to || !to.includes("@"))
@@ -19029,6 +19447,38 @@ app.listen(PORT, async () => {
   }
   await refreshEngagementAnalytics();
   setInterval(refreshEngagementAnalytics, 10 * 60 * 1000); // every 10 min — dashboard reads are cached 60s on top of this
+});
+
+// ── /forms/:slug  (e.g. /forms/alumni-meet-feedback-4f2a) ───────────────────
+// Standalone forms are not tied to any event — this is their canonical,
+// shareable, crawlable URL. Serves the SPA with real OG tags for link
+// previews; the client router (checkRoute) renders the actual fillable
+// form full-page once index.html loads.
+app.get("/forms/:slug", async (req, res) => {
+  try {
+    const { data: f } = await supabasePublic
+      .from("standalone_forms")
+      .select("slug,title,description,is_open")
+      .eq("slug", req.params.slug)
+      .maybeSingle();
+
+    if (!f) {
+      // Unknown slug — serve SPA without special OG; client shows its own "not found" state.
+      return res.sendFile(path.join(__dirname, "public", "index.html"));
+    }
+
+    const pageUrl = `https://kiitfilmsociety.in/forms/${f.slug}`;
+    return serveWithOg(res, {
+      title: f.title ? `${f.title} — KFS` : "Form — KFS",
+      description: f.description || `Fill out "${f.title || "this form"}" for KIIT Film Society.`,
+      imageUrl: null,
+      url: pageUrl,
+      type: "website",
+    });
+  } catch (err) {
+    console.error("[share/forms]", err.message);
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+  }
 });
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
