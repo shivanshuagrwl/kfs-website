@@ -52,8 +52,44 @@ Promise.race([fetchCsrf(), new Promise(r => setTimeout(r, 5000))]).then(() => {
 // Auto-refresh every 3.5 hours
 setInterval(fetchCsrf, 3.5 * 60 * 60 * 1000);
 
+// ── Token refresh ─────────────────────────────────────────────────────────────
+// Shared by the interval timer, the visibility-change handler, and the
+// reactive 401 retry in api() below. Returns true iff _token was updated.
+let _refreshInFlight = null;
+async function refreshToken() {
+  // Coalesce concurrent callers (e.g. interval + a 401 from a scan landing
+  // at the same moment) into a single network call.
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    try {
+      const r = await fetch('/api/admin/refresh', {
+        method: 'POST', credentials: 'include',
+        headers: { 'x-csrf-token': _csrfToken || '' },
+      });
+      if (!r.ok) { log('auth', `refresh failed: ${r.status}`); return false; }
+      const d = await r.json();
+      if (!d.token) { log('auth', 'refresh: no token in response'); return false; }
+      _token = d.token;
+      log('auth', 'token refreshed');
+      return true;
+    } catch (e) {
+      warn('auth', 'refresh failed:', e.message);
+      return false;
+    }
+  })();
+  try {
+    return await _refreshInFlight;
+  } finally {
+    _refreshInFlight = null;
+  }
+}
+
 // ── API helper ────────────────────────────────────────────────────────────────
-async function api(method, url, body) {
+// On a 401 (token expired/invalid — very common mid-event, since phone screen
+// locks/backgrounding pause the refresh interval below), silently refresh
+// and retry the request once before giving up. Only falls back to a hard
+// logout if the refresh token itself is no longer valid.
+async function api(method, url, body, _isRetry) {
   const opts = {
     method,
     headers: {
@@ -67,6 +103,16 @@ async function api(method, url, body) {
   try {
     const r    = await fetch(url, opts);
     const data = await r.json().catch(() => ({}));
+
+    if (r.status === 401 && _token && !_isRetry && url !== '/api/admin/refresh') {
+      log('api', `${method} ${url} → 401, attempting silent refresh + retry`);
+      const refreshed = await refreshToken();
+      if (refreshed) return api(method, url, body, true);
+      warn('api', 'silent refresh failed — session truly expired, logging out');
+      await doLogout();
+      showLoginError('Your session expired — please sign in again.');
+    }
+
     if (!r.ok) {
       warn('api', `${method} ${url} → ${r.status}`, data);
     }
@@ -77,22 +123,21 @@ async function api(method, url, body) {
   }
 }
 
-// Auto-refresh token every 12 min
-setInterval(async () => {
-  if (!_token) return;
-  try {
-    const r = await fetch('/api/admin/refresh', {
-      method: 'POST', credentials: 'include',
-      headers: { 'x-csrf-token': _csrfToken || '' },
-    });
-    if (r.ok) {
-      const d = await r.json();
-      if (d.token) { _token = d.token; log('auth', 'token refreshed'); }
-    }
-  } catch (e) {
-    warn('auth', 'refresh failed:', e.message);
+// Auto-refresh token every 12 min (proactive — keeps the 15-min access token
+// alive while the tab is in the foreground).
+setInterval(() => { if (_token) refreshToken(); }, 12 * 60 * 1000);
+
+// Refresh immediately whenever the tab regains focus/visibility. This is the
+// important one for events: a phone locking between scans pauses the interval
+// above, so without this the token can go stale while the screen is off and
+// the first scan after unlocking would otherwise fail. Refreshing right on
+// unlock means that never happens.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _token) {
+    log('auth', 'tab visible again — refreshing token');
+    refreshToken();
   }
-}, 12 * 60 * 1000);
+});
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -173,8 +218,22 @@ function showLoginError(msg) {
 }
 
 async function doLogout() {
-  try { await api('POST', '/api/admin/logout', {}); } catch {}
+  // Clear the token BEFORE calling the endpoint, and hit it with a bare
+  // fetch (not the 401-retrying api() helper) — otherwise an already-dead
+  // token here would trigger another failed refresh -> doLogout() -> loop.
+  const staleToken = _token;
   _token = null;
+  try {
+    await fetch('/api/admin/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...staleToken  ? { 'Authorization': `Bearer ${staleToken}` } : {},
+        ..._csrfToken  ? { 'x-csrf-token': _csrfToken } : {},
+      },
+    });
+  } catch {}
   if (_scanner) { try { await _scanner.stop(); } catch {} _scanner = null; }
   _scanning = false;
   document.getElementById('app').style.display = 'none';
@@ -253,191 +312,9 @@ function onEventChange() {
   const ev  = _events.find(e => String(e.id) === String(sel.value));
   document.getElementById('topbar-event').textContent = ev ? ev.title : 'Select event';
   hideResult();
-  closeManualSearch();
   _scanCooldown = false;
   _lastScanned  = null;
   log('event-select', `selected event_id=${sel.value} "${ev?.title || 'none'}"`);
-}
-
-// ── MANUAL SEARCH FALLBACK (search name/roll, mark present without QR) ────────
-function toggleManualSearch() {
-  const wrap = document.getElementById('manual-search-wrap');
-  if (wrap.style.display === 'none') openManualSearch();
-  else closeManualSearch();
-}
-
-async function openManualSearch() {
-  const eventId = document.getElementById('event-select').value;
-  if (!eventId) { toast('Select an event first'); return; }
-
-  // If camera is running, stop it — manual search takes over the panel.
-  if (_scanner && _scanning) {
-    try { await _scanner.stop(); } catch {}
-    _scanner = null;
-    _scanning = false;
-    document.getElementById('start-scan-btn').style.display = 'flex';
-    document.getElementById('qr-reader-wrap').style.display = 'none';
-  }
-  hideResult();
-
-  const wrap = document.getElementById('manual-search-wrap');
-  const input = document.getElementById('manual-search-input');
-  wrap.style.display = 'block';
-  input.value = '';
-  input.focus();
-
-  const results = document.getElementById('manual-search-results');
-  results.innerHTML = `<div class="state-box" style="padding:28px 12px"><div class="spinner spinner-dark" style="width:24px;height:24px;border-width:3px"></div></div>`;
-
-  log('manual-search', `opened for event_id=${eventId}`);
-  await ensureRegsLoaded(eventId);
-  renderManualResults('');
-}
-
-function closeManualSearch() {
-  const wrap = document.getElementById('manual-search-wrap');
-  if (wrap) wrap.style.display = 'none';
-}
-
-async function ensureRegsLoaded(eventId, force = false) {
-  if (!force && _regsCache[eventId]) return;
-  const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations`);
-  _regsCache[eventId] = ok ? (data || []) : (_regsCache[eventId] || []);
-  if (!ok) warn('manual-search', 'failed to load registrations for event', eventId);
-}
-
-function onManualSearchInput(q) {
-  renderManualResults(q);
-}
-
-function renderManualResults(q) {
-  const eventId = document.getElementById('event-select').value;
-  const regs    = _regsCache[eventId] || [];
-  const ql      = q.trim().toLowerCase();
-
-  const filtered = !ql ? regs : regs.filter(r =>
-    (r.name    || '').toLowerCase().includes(ql) ||
-    (r.roll_no || '').toLowerCase().includes(ql) ||
-    (r.email   || '').toLowerCase().includes(ql)
-  );
-
-  const list = document.getElementById('manual-search-results');
-
-  if (!filtered.length) {
-    list.innerHTML = `
-      <div class="state-box" style="padding:32px 12px">
-        <div class="state-icon">${ql ? '🔍' : '👤'}</div>
-        <div class="state-title">${ql ? 'No matches' : 'Search for a name or roll no'}</div>
-        <div class="state-sub">${ql ? 'Try a different search' : 'Results will appear here as you type'}</div>
-      </div>`;
-    return;
-  }
-
-  const LIMIT = 30;
-  const shown = filtered.slice(0, LIMIT);
-
-  list.innerHTML = shown.map((r, i) => {
-    const isFirst = i === 0, isLast = i === shown.length - 1;
-    const br = isFirst && isLast ? 'var(--r-md)'
-      : isFirst ? 'var(--r-md) var(--r-md) 0 0'
-      : isLast  ? '0 0 var(--r-md) var(--r-md)'
-      : '0';
-    return `
-    <div class="reg-item" style="border-radius:${br};cursor:pointer"
-      onclick="${r.checked_in ? `manualUndoPresent(${r.id})` : `manualMarkPresent(${r.id})`}">
-      <div class="reg-status-dot ${r.checked_in ? 'present' : ''}"></div>
-      <div class="reg-info">
-        <div class="reg-name">${esc(r.name)}</div>
-        <div class="reg-email">${esc(r.email)}${r.roll_no ? ' · ' + esc(r.roll_no) : ''}</div>
-      </div>
-      <div class="reg-time ${r.checked_in ? 'present' : ''}">
-        ${r.checked_in ? '✓ Present · tap to undo' : 'Mark present'}
-      </div>
-    </div>`;
-  }).join('');
-
-  if (filtered.length > shown.length) {
-    list.innerHTML += `<div class="state-sub" style="text-align:center;padding:12px">+${filtered.length - shown.length} more — refine your search</div>`;
-  }
-}
-
-async function manualMarkPresent(regId) {
-  const eventId = document.getElementById('event-select').value;
-  const regs    = _regsCache[eventId] || [];
-  const r       = regs.find(x => x.id === regId);
-  if (!r || r.checked_in) return;
-
-  log('manual-search', `marking present reg_id=${regId} name="${r.name}" event_id=${eventId}`);
-
-  const { ok, data } = await api('POST', '/api/admin/scan-qr/confirm', {
-    registration_id: regId,
-    event_id: eventId,
-  });
-
-  if (!ok) {
-    flashBody('red');
-    vibrateDevice([100, 50, 100]);
-    playError();
-    if (data?.status === 'already_used') {
-      r.checked_in = true;
-      renderManualResults(document.getElementById('manual-search-input').value);
-    }
-    toast(data?.error || 'Could not mark present — try again');
-    err('manual-search', 'confirm failed:', data?.error);
-    return;
-  }
-
-  flashBody('green');
-  vibrateDevice([60, 40, 60, 40, 100]);
-  playSuccess();
-  toast(`${r.name} marked present`);
-  log('manual-search', `✓ ${r.name} checked in (manual)`);
-
-  r.checked_in    = true;
-  r.checked_in_at = new Date().toISOString();
-  r.checked_in_by = _adminName;
-
-  // Keep Data tab in sync if it's showing the same event
-  if (String(document.getElementById('data-event-select').value) === String(eventId)) {
-    _allRegs = regs;
-  }
-
-  renderManualResults(document.getElementById('manual-search-input').value);
-}
-
-async function manualUndoPresent(regId) {
-  const eventId = document.getElementById('event-select').value;
-  const regs    = _regsCache[eventId] || [];
-  const r       = regs.find(x => x.id === regId);
-  if (!r || !r.checked_in) return;
-
-  if (!confirm(`Undo check-in for ${r.name}? They will show as pending again.`)) return;
-
-  log('manual-search', `undoing reg_id=${regId} name="${r.name}" event_id=${eventId}`);
-
-  const { ok, data } = await api('POST', '/api/admin/scan-qr/undo', {
-    registration_id: regId,
-    event_id: eventId,
-  });
-
-  if (!ok) {
-    toast(data?.error || 'Undo failed — try again');
-    err('manual-search', 'undo failed:', data?.error);
-    return;
-  }
-
-  toast(`${r.name} reverted to pending`);
-  log('manual-search', `✓ ${r.name} check-in undone (manual)`);
-
-  r.checked_in    = false;
-  r.checked_in_at = null;
-  r.checked_in_by = null;
-
-  if (String(document.getElementById('data-event-select').value) === String(eventId)) {
-    _allRegs = regs;
-  }
-
-  renderManualResults(document.getElementById('manual-search-input').value);
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
@@ -449,7 +326,6 @@ async function startCamera() {
   // browsers block AudioContext until one occurs.
   ensureAudioCtx();
 
-  closeManualSearch();
   document.getElementById('start-scan-btn').style.display = 'none';
   document.getElementById('qr-reader-wrap').style.display = 'block';
 
@@ -906,35 +782,11 @@ function openRegDetail(id) {
     <div class="sheet-email">${esc(r.email)}</div>
     <div class="sheet-fields">${fields}</div>
     <div class="sheet-actions">
-      ${r.checked_in ? `<button class="btn btn-ghost" style="width:auto" onclick="undoCheckin(${r.id}, '${evId}')">Undo check-in</button>` : ''}
       <button class="btn btn-danger" style="width:auto" onclick="deleteReg(${r.id}, '${evId}')">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal()">Close</button>
     </div>
   `;
   document.getElementById('modal-overlay').classList.add('visible');
-}
-
-async function undoCheckin(id, eventId) {
-  if (!confirm('Undo this check-in? They will show as pending again.')) return;
-  const { ok, data } = await api('POST', '/api/admin/scan-qr/undo', {
-    registration_id: id,
-    event_id: eventId,
-  });
-  if (!ok) { toast(data?.error || 'Undo failed'); return; }
-  closeModal();
-  toast(`${data?.name || 'Registration'} reverted to pending`);
-  log('undo', `reg_id=${id} event_id=${eventId} reverted`);
-
-  // Update local caches so lists reflect the change immediately
-  const r1 = _allRegs.find(x => x.id === id);
-  if (r1) { r1.checked_in = false; r1.checked_in_at = null; r1.checked_in_by = null; }
-  const cached = _regsCache[eventId];
-  if (cached) {
-    const r2 = cached.find(x => x.id === id);
-    if (r2) { r2.checked_in = false; r2.checked_in_at = null; r2.checked_in_by = null; }
-  }
-
-  renderDataTab(eventId);
 }
 
 async function deleteReg(id, eventId) {
