@@ -76,55 +76,117 @@ let allEvents = [];
 // ── AUTO-REFRESH TOKEN — every 12 min (token is 15-min short-lived) ──────────
 // On every page load this fires immediately to re-hydrate adminToken from the
 // httpOnly refresh cookie — no localStorage read needed.
-(function autoRefreshToken() {
-  // Immediate refresh on page load — always attempt, cookie presence determines success
-  fetch('/api/admin/refresh', {
-    method: 'POST',
-    credentials: 'include' // send httpOnly refresh cookie
-  }).then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if (!data || !data.token) return;
-      adminToken = data.token; // memory only — never localStorage
-      currentAdminRole = data.role || 'admin';
-      currentAdminName = data.name || '';
-      currentAdminPermissions = data.permissions || [];
-      localStorage.setItem('kfs_role', data.role);
-      localStorage.setItem('kfs_admin_name', data.name || '');
-      localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
-      var panel = document.getElementById('admin-panel');
-      if (panel && panel.classList.contains('active')) { showAdminPanel(); }
-      // If moderation section was already open when token hydrated, reload reports now
-      var modSection = document.getElementById('section-moderation');
-      if (modSection && modSection.classList.contains('active')) { loadModReports(); loadModerationBadge(); }
-      document.dispatchEvent(new Event('adminTokenReady'));
-    }).catch(function() {});
-  // Then every 12 minutes proactively
-  setInterval(async function() {
-    if (!adminToken) return;
+//
+// refreshAdminToken() is also called reactively by the fetch interceptor
+// below (on any 401) and on visibilitychange. That reactive path is what
+// actually matters in practice: a laptop going to sleep or a backgrounded/
+// throttled tab pauses the 12-min interval, so without a reactive refresh
+// the token can go stale while the admin is away and the next click would
+// otherwise just fail with "session expired" for no obvious reason.
+let _refreshInFlight = null;
+async function refreshAdminToken() {
+  if (_refreshInFlight) return _refreshInFlight; // coalesce concurrent callers
+  _refreshInFlight = (async () => {
     try {
       const r = await fetch('/api/admin/refresh', { method: 'POST', credentials: 'include' });
-      if (r.ok) {
-        const d = await r.json();
-        adminToken = d.token; // memory only — never localStorage
-        currentAdminRole = d.role || 'admin';
-        currentAdminName = d.name || '';
-        currentAdminPermissions = d.permissions || [];
-        localStorage.setItem('kfs_role', d.role);
-        localStorage.setItem('kfs_admin_name', d.name || '');
-        localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
-        // FIX: refresh CSRF token alongside JWT so it never expires mid-session
-        try {
-          const cr = await fetch('/api/csrf-token');
-          if (cr.ok) { const cd = await cr.json(); _csrfToken = cd.csrf_token; }
-        } catch(ce) {}
-      } else {
-        // Refresh failed — force re-login
-        adminToken = null;
-        ['kfs_role','kfs_admin_name','kfs_permissions'].forEach(k => localStorage.removeItem(k));
-        navigate('admin');
-      }
-    } catch(e) {}
+      if (!r.ok) return false;
+      const d = await r.json();
+      if (!d.token) return false;
+      adminToken = d.token; // memory only — never localStorage
+      currentAdminRole = d.role || 'admin';
+      currentAdminName = d.name || '';
+      currentAdminPermissions = d.permissions || [];
+      localStorage.setItem('kfs_role', d.role);
+      localStorage.setItem('kfs_admin_name', d.name || '');
+      localStorage.setItem('kfs_permissions', JSON.stringify(currentAdminPermissions));
+      // Refresh CSRF token alongside JWT so it never expires mid-session
+      try {
+        const cr = await fetch('/api/csrf-token');
+        if (cr.ok) { const cd = await cr.json(); _csrfToken = cd.csrf_token; }
+      } catch (ce) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  })();
+  try {
+    return await _refreshInFlight;
+  } finally {
+    _refreshInFlight = null;
+  }
+}
+
+// ── Global fetch interceptor: silent 401 refresh + retry for admin requests ─
+// The admin panel has dozens of call sites across this file that build raw
+// fetch() calls with an explicit 'Authorization: Bearer <adminToken>' header
+// rather than going through a single shared helper. Rather than hunting down
+// every one of them individually (and risking missing some, or missing new
+// ones added later), we wrap fetch itself: if a request carried the CURRENT
+// admin bearer token and the server responds 401 (token went stale), we
+// silently refresh and retry that exact request once with the fresh token
+// before handing the response back — completely invisible to the caller.
+// Requests that aren't admin-authenticated (no matching Authorization header)
+// pass straight through untouched, so this can't interfere with public or
+// member-facing requests.
+(function installAdminFetchInterceptor() {
+  const nativeFetch = window.fetch.bind(window);
+
+  function getAuthHeader(init) {
+    const h = init && init.headers;
+    if (!h) return null;
+    if (typeof Headers !== 'undefined' && h instanceof Headers) {
+      return h.get('Authorization') || h.get('authorization');
+    }
+    return h['Authorization'] || h['authorization'] || null;
+  }
+
+  window.fetch = async function(input, init) {
+    const res = await nativeFetch(input, init);
+    if (res.status !== 401 || !adminToken) return res;
+    if (getAuthHeader(init) !== 'Bearer ' + adminToken) return res; // not this admin token — leave alone
+
+    const refreshed = await refreshAdminToken();
+    if (!refreshed) {
+      // Refresh token itself is dead (expired / revoked / logged out
+      // elsewhere) — this is the only case that should actually end the
+      // session and ask the admin to sign in again.
+      adminToken = null;
+      ['kfs_role', 'kfs_admin_name', 'kfs_permissions'].forEach(k => localStorage.removeItem(k));
+      showAdminError('Session expired — please log out and log back in.');
+      return res;
+    }
+
+    // Retry the original request once with the freshly-issued token.
+    const retryInit = { ...(init || {}) };
+    const retryHeaders = (typeof Headers !== 'undefined' && init && init.headers instanceof Headers)
+      ? Object.fromEntries(init.headers.entries())
+      : { ...(init && init.headers) };
+    retryHeaders['Authorization'] = 'Bearer ' + adminToken;
+    retryInit.headers = retryHeaders;
+    return nativeFetch(input, retryInit);
+  };
+})();
+
+(function autoRefreshToken() {
+  // Immediate refresh on page load — always attempt, cookie presence determines success
+  refreshAdminToken().then(function(ok) {
+    if (!ok) return;
+    var panel = document.getElementById('admin-panel');
+    if (panel && panel.classList.contains('active')) { showAdminPanel(); }
+    // If moderation section was already open when token hydrated, reload reports now
+    var modSection = document.getElementById('section-moderation');
+    if (modSection && modSection.classList.contains('active')) { loadModReports(); loadModerationBadge(); }
+    document.dispatchEvent(new Event('adminTokenReady'));
+  });
+  // Then every 12 minutes proactively
+  setInterval(function() {
+    if (adminToken) refreshAdminToken();
   }, 12 * 60 * 1000);
+  // And immediately whenever the tab regains focus — covers the laptop-sleep /
+  // backgrounded-tab case where the interval above was paused.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && adminToken) refreshAdminToken();
+  });
 })();
 
 
@@ -5118,8 +5180,10 @@ async function apiFetch(url, method='GET', body=null) {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       console.warn('apiFetch error:', method, url, res.status, data?.error || data);
-      if (res.status === 401) showAdminError('Session expired — please log out and log back in.');
-      else if (res.status === 403) showAdminError('Access denied: ' + (data?.error || 'insufficient permissions'));
+      // A 401 here means the interceptor already tried a silent refresh and
+      // it genuinely failed (and already showed its own message) — no need
+      // to duplicate that. 403/5xx are shown here as before.
+      if (res.status === 403) showAdminError('Access denied: ' + (data?.error || 'insufficient permissions'));
       else if (res.status >= 500) showAdminError('Server error on ' + url + ': ' + (data?.error || res.status));
     }
     return data;
