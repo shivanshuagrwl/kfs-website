@@ -369,6 +369,7 @@ async function loadAboutUsPage() {
   const founderGrid = document.getElementById('aboutus-founder-grid');
   const founderSection = document.getElementById('aboutus-founder-section');
   const founderDivider = document.getElementById('aboutus-founder-divider');
+  const deansSection = document.getElementById('aboutus-deans-section');
   const deansGrid = document.getElementById('aboutus-deans-grid');
   const deputyGrid = document.getElementById('aboutus-deputy-grid');
   const deputyWrap = document.getElementById('aboutus-deputy-wrap');
@@ -392,13 +393,14 @@ async function loadAboutUsPage() {
     founderGrid.innerHTML = founder.map(m => _aboutUsTeamCardHTML(withLabel(m), true)).join('');
   }
   if (founderSection) founderSection.style.display = founder.length ? '' : 'none';
-  if (founderDivider) founderDivider.style.display = founder.length ? '' : 'none';
 
+
+  // KSAC Deans — section + divider hidden entirely if none are set.
   if (deansGrid) {
-    deansGrid.innerHTML = deans.length
-      ? deans.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
-      : '<div style="color:var(--grey)">No deans listed yet.</div>';
+    deansGrid.innerHTML = deans.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('');
   }
+  if (deansSection) deansSection.style.display = deans.length ? '' : 'none';
+  if (founderDivider) founderDivider.style.display = (founder.length && deans.length) ? '' : 'none';
 
   // Deputy Director — section + divider hidden entirely if none are set.
   if (deputyGrid) {
