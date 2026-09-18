@@ -914,6 +914,7 @@ function imageFileFilter(req, file, cb) {
     cb(
       Object.assign(new Error("Only image files are allowed (JPEG, PNG, WebP)."), {
         code: "INVALID_FILE_TYPE",
+        status: 400,
       }),
       false,
     );
@@ -19561,6 +19562,12 @@ setInterval(
 app.use((err, req, res, next) => {
   console.error(`[unhandled] ${req.method} ${req.path}`, err);
   if (res.headersSent) return next(err);
+  // Multer errors (bad file type, file too large, unexpected field, etc.)
+  // don't carry an err.status — without this they'd fall through to the
+  // generic 500 branch below and hide the real reason from the client.
+  if (err instanceof multer.MulterError || err.code === 'INVALID_FILE_TYPE') {
+    return res.status(400).json({ error: err.message || 'Invalid upload' });
+  }
   const status = typeof err.status === 'number' ? err.status : 500;
   res.status(status).json({ error: status < 500 ? (err.message || 'Bad request') : 'Internal server error' });
 });
