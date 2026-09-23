@@ -6753,11 +6753,16 @@ app.get(
 //     description               TEXT,
 //     questions                 TEXT NOT NULL,   -- JSON: {version:2, sections, target_email_question_id}
 //     is_open                   BOOLEAN NOT NULL DEFAULT TRUE,
+//     whatsapp_group_link       TEXT,            -- optional; shown as a "Join our WhatsApp Group"
+//                                                 -- button on the Thank You screen after submit
 //     created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 //     updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 //   );
 //   CREATE INDEX IF NOT EXISTS idx_standalone_forms_slug ON standalone_forms(slug);
 //   ALTER TABLE standalone_forms DISABLE ROW LEVEL SECURITY; -- server uses service_role key
+//
+//   -- If the table already exists (e.g. before this feature), just add the column:
+//   ALTER TABLE standalone_forms ADD COLUMN IF NOT EXISTS whatsapp_group_link TEXT;
 //
 //   CREATE TABLE IF NOT EXISTS standalone_form_responses (
 //     id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -6857,7 +6862,7 @@ app.get("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
 
 // ADMIN: Update a standalone form's schema/settings
 app.post("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
-  const { title, description, sections, is_open, target_email_question_id } = req.body;
+  const { title, description, sections, is_open, target_email_question_id, whatsapp_group_link } = req.body;
   if (!Array.isArray(sections)) return res.status(400).json({ error: "sections array is required" });
   const err = validateSectionsPayload(sections);
   if (err) return res.status(400).json({ error: err });
@@ -6878,6 +6883,7 @@ app.post("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
       description: description || null,
       questions: storedQuestionsJson,
       is_open: is_open !== false && is_open !== "false",
+      whatsapp_group_link: whatsapp_group_link ? String(whatsapp_group_link).trim().slice(0, 500) : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", req.params.id)
@@ -6930,7 +6936,7 @@ app.get("/api/forms/:slug", async (req, res) => {
     const data = await memCache(`standalone-form:${req.params.slug}`, 60, async () => {
       const { data, error } = await supabasePublic
         .from("standalone_forms")
-        .select("id,slug,title,description,questions,is_open,created_at,updated_at")
+        .select("id,slug,title,description,questions,is_open,whatsapp_group_link,created_at,updated_at")
         .eq("slug", req.params.slug)
         .maybeSingle();
       if (error) throw new Error(error.message);
