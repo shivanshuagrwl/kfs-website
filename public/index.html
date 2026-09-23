@@ -219,12 +219,12 @@ body.light-mode .movie-card,body.light-mode .achievement-card,body.light-mode .b
 .form-builder-overlay.open{opacity:1;pointer-events:auto}
 .form-builder-panel{background:rgba(18,18,20,.96);border:1px solid rgba(255,255,255,.1);border-radius:22px;width:100%;max-width:820px;min-height:400px;display:flex;flex-direction:column;overflow:hidden;transform:translateY(28px) scale(.98);transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .3s;box-shadow:0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06) inset;margin:auto}
 .form-builder-overlay.open .form-builder-panel{transform:translateY(0) scale(1)}
-.fb-header{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 20px;border-bottom:1px solid rgba(255,255,255,.07);gap:12px;background:rgba(255,255,255,.02)}
+.fb-header{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 20px;border-bottom:1px solid rgba(255,255,255,.07);gap:12px;background:rgba(255,255,255,.02);flex-wrap:wrap}
 .fb-header-left{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
 .fb-event-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(245,245,245,.45);font-weight:600;margin-bottom:2px}
 .fb-event-chip svg{opacity:.6}
 .fb-header h3{font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fb-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.fb-header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex-shrink:1;min-width:0}
 .fb-close-btn{background:rgba(255,255,255,.08);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(245,245,245,.6);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .fb-close-btn:hover{background:rgba(255,255,255,.15);color:var(--white)}
 .fb-save-btn{padding:8px 18px;background:var(--white);color:#0a0a0a;border:none;border-radius:20px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
