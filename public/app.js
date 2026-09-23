@@ -8330,6 +8330,8 @@ async function openFormBuilder(eventId, eventTitle) {
   document.getElementById('fb-share-link-row').style.display = 'none';
   const ticketRow = document.getElementById('fb-ticket-row');
   if (ticketRow) ticketRow.style.display = 'flex';
+  const waRow = document.getElementById('fb-whatsapp-row');
+  if (waRow) waRow.style.display = 'none'; // event forms already have their own WhatsApp link on the event itself
   document.getElementById('fb-form-title').value = '';
   document.getElementById('fb-form-desc').value = '';
   document.getElementById('fb-is-open').checked = true;
@@ -8418,6 +8420,9 @@ async function openStandaloneFormBuilder(form) {
   linkRow.style.display = 'flex';
   const ticketRow = document.getElementById('fb-ticket-row');
   if (ticketRow) ticketRow.style.display = 'none'; // no event to check into — tickets don't apply
+  const waRow = document.getElementById('fb-whatsapp-row');
+  if (waRow) waRow.style.display = 'flex';
+  document.getElementById('fb-whatsapp-link').value = form.whatsapp_group_link || '';
   document.getElementById('fb-form-title').value = form.title || '';
   document.getElementById('fb-form-desc').value = form.description || '';
   document.getElementById('fb-is-open').checked = form.is_open !== false;
@@ -8825,6 +8830,10 @@ async function saveFormBuilder() {
     ? '/api/admin/forms/' + _fbFormId
     : '/api/admin/events/' + _fbEventId + '/form';
   if (_fbMode === 'event') payload.issues_ticket = issues_ticket;
+  if (_fbMode === 'standalone') {
+    const waEl = document.getElementById('fb-whatsapp-link');
+    payload.whatsapp_group_link = waEl && waEl.value.trim() ? waEl.value.trim() : null;
+  }
 
   btn.textContent = 'Saving…'; btn.disabled = true;
   try {
@@ -10205,7 +10214,12 @@ async function sfFinalSubmit(paymentPayload) {
           </div>
           <div class="reg-success-title">Thank you!</div>
           <div class="reg-success-sub">Your response to <strong>${_sfForm?.title || 'this form'}</strong> has been recorded${paymentPayload ? ', and a payment receipt has been emailed to you' : ''}${' — check your inbox for a confirmation, if you gave an email address.'}</div>
-          <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;justify-content:center">
+          ${_sfForm?.whatsapp_group_link ? `
+          <a href="${_sfForm.whatsapp_group_link.replace(/"/g, '&quot;')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;margin-top:18px;padding:11px 24px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.3);border-radius:50px;font:inherit;font-size:13px;font-weight:600;color:#25d366;text-decoration:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.001 2C6.478 2 2 6.478 2 12c0 1.75.454 3.481 1.317 5.005L2 22l5.117-1.291A9.958 9.958 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12.001 2zm0 18.062a8.03 8.03 0 0 1-4.11-1.125l-.294-.174-3.037.766.81-2.96-.192-.304A8.03 8.03 0 0 1 3.938 12c0-4.454 3.61-8.062 8.063-8.062 4.454 0 8.062 3.608 8.062 8.062 0 4.454-3.608 8.062-8.062 8.062z"/></svg>
+            Join our WhatsApp Group
+          </a>` : ''}
+          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center">
             <a href="/" style="display:inline-flex;align-items:center;gap:8px;padding:11px 28px;background:var(--white);color:var(--black);border:none;border-radius:50px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none">Back to Home</a>
           </div>
         </div>`;
