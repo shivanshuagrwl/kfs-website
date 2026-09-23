@@ -6807,7 +6807,12 @@ async function generateFormSlug(title) {
 app.get("/api/admin/forms", requireSection("forms"), async (req, res) => {
   const { data: forms, error } = await supabase
     .from("standalone_forms")
-    .select("id,slug,title,description,is_open,created_at,updated_at")
+    // NOTE: `questions` must be included here — the admin Forms table's EDIT
+    // button passes this row straight into openStandaloneFormBuilder(), which
+    // reads form.questions to rebuild the sections. Without it, reopening a
+    // form via EDIT showed title/description fine but every section came back
+    // empty ("No questions yet"), even though the DB copy was untouched.
+    .select("id,slug,title,description,questions,is_open,created_at,updated_at")
     .order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: "Internal server error" });
 
