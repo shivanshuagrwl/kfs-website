@@ -5944,6 +5944,12 @@ app.post(
 
     if (error) return res.status(500).json({ error: "Internal server error" });
 
+    // The public GET /api/events/:id/form route (used by both the live
+    // registration page and this same admin builder when it reopens) caches
+    // its result for 2 minutes. Without invalidating here, a saved form
+    // (new/edited questions) stays invisible for up to 2 minutes after save.
+    memInvalidate(`event:form:${req.params.id}`);
+
     const { data: ev } = await supabase
       .from("events")
       .select("title")
@@ -6011,6 +6017,7 @@ app.delete(
       .delete()
       .eq("event_id", req.params.id);
     await supabase.from("event_forms").delete().eq("event_id", req.params.id);
+    memInvalidate(`event:form:${req.params.id}`);
     const { data: ev } = await supabase
       .from("events")
       .select("title")
@@ -6872,16 +6879,21 @@ app.post("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
     .select()
     .single();
   if (error) return res.status(500).json({ error: "Internal server error" });
+  // Same 2-minute stale-cache issue as the event form route above — the
+  // public GET /api/forms/:slug endpoint caches by slug, so invalidate it
+  // here or a saved edit won't show up on the live shareable link for a while.
+  memInvalidate(`standalone-form:${data.slug}`);
   logActivity(req.admin.id, req.admin.name, "update", "standalone_form", data.title || req.params.id).catch((e) => console.error("[activity]", e.message));
   res.json(data);
 });
 
 // ADMIN: Delete a standalone form (and all its responses — the shareable link stops working)
 app.delete("/api/admin/forms/:id", requireSection("forms"), async (req, res) => {
-  const { data: form } = await supabase.from("standalone_forms").select("title").eq("id", req.params.id).maybeSingle();
+  const { data: form } = await supabase.from("standalone_forms").select("title,slug").eq("id", req.params.id).maybeSingle();
   await supabase.from("standalone_form_responses").delete().eq("form_id", req.params.id);
   const { error } = await supabase.from("standalone_forms").delete().eq("id", req.params.id);
   if (error) return res.status(500).json({ error: "Internal server error" });
+  if (form?.slug) memInvalidate(`standalone-form:${form.slug}`);
   logActivity(req.admin.id, req.admin.name, "delete", "standalone_form", form?.title || req.params.id).catch((e) => console.error("[activity]", e.message));
   res.json({ success: true });
 });
