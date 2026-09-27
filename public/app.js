@@ -247,6 +247,9 @@ function _doNavigate(page, pushState=true) {
     pageEl.style.display = '';
     pageEl.classList.add('active');
     currentPage = page;
+    // Fire once per real page render — covers first load, every in-app nav
+    // click, and browser back/forward, since all of them funnel through here.
+    trackPageView(page);
     // When landing on wrapped always restore the hero so refresh/nav starts cleanly
     if (page === 'wrapped') {
       const hero = document.getElementById('wrapped-hero');
@@ -270,7 +273,7 @@ function _doNavigate(page, pushState=true) {
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
   // Reset meta tags to site defaults on section navigation
-  if (page === 'home' || page === 'films' || page === 'events' || page === 'blog' || page === 'about' || page === 'aboutus' || page === 'team' || page === 'strand') {
+  if (page === 'home' || page === 'movies' || page === 'events' || page === 'blog' || page === 'about' || page === 'aboutus' || page === 'team' || page === 'strand') {
     updateMetaTags({
       title: 'KIIT Film Society',
       description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
@@ -347,6 +350,23 @@ async function loadAboutUsPage() {
     apiFetch('/api/aboutus-gallery').catch(() => []),
   ]);
 
+  const videoBlock = document.getElementById('aboutus-video-block');
+  const videoEl = document.getElementById('aboutus-video-el');
+  if (videoBlock && videoEl) {
+    const videoUrl = settings && settings.aboutus_video_url;
+    if (videoUrl) {
+      videoEl.src = videoUrl;
+      // Cloudinary can hand back a frame of the video at the same path with a
+      // .jpg extension — no separate poster upload needed.
+      videoEl.poster = videoUrl.replace(/\.[a-zA-Z0-9]+$/, '.jpg');
+      videoBlock.classList.remove('playing');
+      videoBlock.style.display = 'block';
+    } else {
+      videoBlock.style.display = 'none';
+      videoEl.removeAttribute('src');
+    }
+  }
+
   const scroller = document.getElementById('aboutus-scroller');
   const track = document.getElementById('aboutus-scroller-track');
   if (scroller && track) {
@@ -421,6 +441,24 @@ async function loadAboutUsPage() {
       ? fic.map(m => _aboutUsTeamCardHTML(withLabel(m))).join('')
       : '<div style="color:var(--grey)">No faculty in charge listed yet.</div>';
   }
+}
+
+// Click-to-play with sound — no autoplay/mute trick, this is meant to be watched.
+function playAboutUsVideo() {
+  const wrap = document.getElementById('aboutus-video-block');
+  const video = document.getElementById('aboutus-video-el');
+  if (!wrap || !video || !video.src) return;
+  if (wrap.classList.contains('playing')) return; // already playing, ignore further clicks on the wrapper
+  wrap.classList.add('playing');
+  video.controls = true;
+  video.muted = false;
+  video.play().catch(() => {
+    // Autoplay-with-sound can still be blocked in rare cases even on a
+    // user gesture (e.g. iOS quirks) — fall back to a muted play so the
+    // click isn't a dead end, the visitor can unmute via native controls.
+    video.muted = true;
+    video.play().catch(() => {});
+  });
 }
 
 function toggleMenu() {
@@ -3423,6 +3461,7 @@ async function loadAdminData(name) {
       document.getElementById('set-tagline').value = settings.site_tagline||'';
       document.getElementById('set-about').value = settings.about_text||'';
       document.getElementById('set-aboutus-text').value = settings.aboutus_text||'';
+      renderAboutUsVideoAdmin(settings.aboutus_video_url||null);
       loadAboutTeamAdmin();
       loadAboutGalleryAdmin();
       loadHomeAboutGalleryAdmin();
@@ -4503,6 +4542,59 @@ async function deleteAboutGalleryImage(id) {
   await apiFetch('/api/admin/aboutus-gallery/'+id, 'DELETE');
   loadAboutGalleryAdmin();
 }
+
+// ── ABOUT US VIDEO — single admin-managed clip, About Us page ───────────────
+function renderAboutUsVideoAdmin(videoUrl) {
+  const filenameEl = document.getElementById('aboutus-video-filename');
+  const removeBtn = document.getElementById('aboutus-video-remove-btn');
+  const preview = document.getElementById('aboutus-video-admin-preview');
+  if (!filenameEl || !removeBtn || !preview) return;
+  if (videoUrl) {
+    filenameEl.textContent = 'Current video uploaded';
+    removeBtn.style.display = 'inline-flex';
+    preview.src = videoUrl;
+    preview.style.display = 'block';
+  } else {
+    filenameEl.textContent = 'No video uploaded';
+    removeBtn.style.display = 'none';
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
+  }
+}
+
+async function uploadAboutUsVideo(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const filenameEl = document.getElementById('aboutus-video-filename');
+  const uploadBtn = document.getElementById('aboutus-video-upload-btn');
+  if (filenameEl) filenameEl.textContent = 'Uploading — this can take a moment…';
+  if (uploadBtn) uploadBtn.disabled = true;
+  const fd = new FormData();
+  fd.append('video', file);
+  try {
+    const res = await fetch('/api/admin/aboutus-video', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) { alert((data && data.error) || 'Error uploading video'); renderAboutUsVideoAdmin(null); return; }
+    inputEl.value = '';
+    renderAboutUsVideoAdmin(data && data.url);
+  } catch (e) {
+    alert('Error uploading video');
+  } finally {
+    if (uploadBtn) uploadBtn.disabled = false;
+  }
+}
+
+async function removeAboutUsVideo() {
+  if (!confirm('Remove the About Us video?')) return;
+  await apiFetch('/api/admin/aboutus-video', 'DELETE');
+  renderAboutUsVideoAdmin(null);
+}
+
+function triggerClick_aboutus_video_file(){ document.getElementById('aboutus-video-file')?.click(); }
 
 // ── HOMEPAGE ABOUT FADE SLIDESHOW — admin-managed, homepage About visual box ──
 async function loadHomeAboutGalleryAdmin() {
@@ -7244,16 +7336,15 @@ if (!navigator.maxTouchPoints) document.getElementById('search-kbd').style.displ
 
 
 // ══════════════════════════════════════════════════════════
-// TRAFFIC TRACKING — fire on every page view
+// TRAFFIC TRACKING — called from _doNavigate on every real page render
 // ══════════════════════════════════════════════════════════
-(function trackPageView() {
-  const page = window.location.pathname.replace('/','') || 'home';
+function trackPageView(page) {
   fetch('/api/track', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ page, hour: new Date().getHours() })
   }).catch(()=>{});
-})();
+}
 
 
 // ══════════════════════════════════════════════════════════
