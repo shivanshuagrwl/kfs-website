@@ -978,6 +978,34 @@ body.light-mode .aboutus-partner-card:hover{border-color:#111}
 .aboutus-partner-card img{width:44px;height:44px;object-fit:contain;flex-shrink:0}
 .aboutus-partner-name{font-size:16px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--white)}
 .aboutus-partner-sub{font-size:13px;color:var(--grey);margin-top:2px}
+
+/* ── ABOUT US VIDEO — click-to-play clip, sits above the KSAC/KIIT cards ── */
+.aboutus-video{position:relative;width:100%;max-width:760px;aspect-ratio:16/9;border-radius:14px;
+  overflow:hidden;background:#000;border:1px solid var(--border);margin-top:32px;cursor:pointer;
+  isolation:isolate;transition:border-color .3s var(--ease)}
+.aboutus-video:hover{border-color:var(--white)}
+body.light-mode .aboutus-video:hover{border-color:#111}
+.aboutus-video video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.aboutus-video::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(0,0,0,.6) 100%);
+  pointer-events:none;transition:opacity .35s var(--ease);z-index:1}
+.aboutus-video.playing::before{opacity:0}
+.aboutus-video-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;
+  border-radius:50%;border:1.5px solid rgba(255,255,255,.55);background:rgba(20,20,20,.35);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;
+  color:#fff;cursor:pointer;transition:transform .3s var(--ease),background .3s var(--ease),border-color .3s var(--ease),opacity .3s var(--ease);z-index:2}
+.aboutus-video-play svg{width:22px;height:22px;margin-left:3px}
+.aboutus-video-play::after{content:'';position:absolute;inset:-1px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.35);animation:aboutusVideoPulse 2.6s ease-out infinite}
+.aboutus-video:hover .aboutus-video-play{transform:translate(-50%,-50%) scale(1.08);background:rgba(20,20,20,.55);border-color:#fff}
+.aboutus-video.playing .aboutus-video-play{opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(.82)}
+@keyframes aboutusVideoPulse{0%{transform:scale(1);opacity:.65}100%{transform:scale(1.5);opacity:0}}
+.aboutus-video-caption{position:absolute;left:20px;bottom:18px;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:#fff;opacity:.9;z-index:2;transition:opacity .3s var(--ease);
+  text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.aboutus-video.playing .aboutus-video-caption{opacity:0}
+body.light-mode .aboutus-video-play{border-color:rgba(255,255,255,.7);background:rgba(0,0,0,.35)}
+@media(max-width:640px){.aboutus-video-play{width:56px;height:56px}.aboutus-video-play svg{width:18px;height:18px}}
 .aboutus-team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:24px;margin-top:32px}
 .aboutus-team-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;text-align:center;padding-bottom:18px}
 .aboutus-team-photo{width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--card);display:block}
@@ -3438,6 +3466,14 @@ body.light-mode .psw-comment-gate a{color:#111}
       <h2 class="section-title">Under the wings of<br><em style="color:var(--grey);font-style:normal">KSAC</em> &amp; <em style="color:var(--grey);font-style:normal">KIIT</em>.</h2>
       <p class="about-text" style="margin-top:24px;max-width:720px" id="aboutus-text">Loading...</p>
 
+      <div class="aboutus-video" id="aboutus-video-block" style="display:none" data-action="playAboutUsVideo">
+        <video id="aboutus-video-el" playsinline preload="metadata"></video>
+        <button type="button" class="aboutus-video-play" id="aboutus-video-play-btn" aria-label="Play video" data-action="playAboutUsVideo">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="aboutus-video-caption">Watch — Inside KSAC</div>
+      </div>
+
       <div class="aboutus-partners">
         <a href="https://ksac.kiit.ac.in/" target="_blank" rel="noopener" class="aboutus-partner-card">
           <img src="/images/ksac-logo.png" alt="KSAC" onerror="this.style.display='none'">
@@ -4877,6 +4913,18 @@ body.light-mode .psw-comment-gate a{color:#111}
             <button data-action="triggerClick_aboutus_gallery_file" type="button" class="btn btn-secondary">+ Add Image</button>
           </div>
           <div id="admin-aboutus-gallery-grid" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+        </div>
+
+        <div class="form-group">
+          <label>About Us Video <span style="font-weight:400;color:var(--grey)">(one clip, click-to-play with sound — shown right above the KSAC &amp; KIIT cards)</span></label>
+          <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input type="file" id="aboutus-video-file" accept="video/mp4,video/webm,video/quicktime" style="display:none" data-onchange="uploadAboutUsVideo(this)">
+            <button data-action="triggerClick_aboutus_video_file" type="button" class="btn btn-secondary" id="aboutus-video-upload-btn">+ Upload Video</button>
+            <span id="aboutus-video-filename" style="font-size:13px;color:var(--grey);opacity:.7">No video uploaded</span>
+            <button data-action="removeAboutUsVideo" type="button" class="btn btn-secondary" id="aboutus-video-remove-btn" style="display:none">Remove</button>
+          </div>
+          <video id="aboutus-video-admin-preview" controls style="display:none;margin-top:6px;max-width:320px;width:100%;border-radius:8px;background:#000"></video>
+          <p style="font-size:12px;color:var(--grey);opacity:.7;margin-top:6px">MP4, WebM, or MOV — under 80MB. Uploads with sound; visitors click play to hear it.</p>
         </div>
 
         <div class="form-group">
