@@ -1050,7 +1050,7 @@ function videoFileFilter(req, file, cb) {
 }
 const uploadVideo = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 80 * 1024 * 1024 }, // 80MB — plenty for a short 1080p clip
+  limits: { fileSize: 180 * 1024 * 1024 }, // 180MB
   fileFilter: videoFileFilter,
 });
 
@@ -4264,7 +4264,7 @@ app.post(
     uploadVideo.single("video")(req, res, (err) => {
       if (err) {
         if (err.code === "LIMIT_FILE_SIZE")
-          return res.status(400).json({ error: "Video too large — please use a file under 80MB" });
+          return res.status(400).json({ error: "Video too large — please use a file under 180MB" });
         if (err.code === "INVALID_FILE_TYPE")
           return res.status(400).json({ error: err.message });
         return res.status(400).json({ error: "Upload failed. Please check the file and try again." });
