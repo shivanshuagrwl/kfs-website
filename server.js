@@ -1030,6 +1030,45 @@ async function uploadImage(file, folder = "general") {
   return result.secure_url;
 }
 
+// ── Video upload (About Us hero video) ───────────────────────────────────────
+// Every other media path in this app deliberately avoids raw video storage
+// (see SECTION MA-27 note above — Cloudinary/Supabase egress adds up fast for
+// per-user content). This is the one exception: a single admin-managed clip
+// for the About Us page, uploaded rarely and served to everyone who visits
+// /aboutus, so the tradeoff that matters everywhere else doesn't apply here.
+function videoFileFilter(req, file, cb) {
+  const allowed = ["video/mp4", "video/webm", "video/quicktime"];
+  if (!allowed.includes(file.mimetype)) {
+    return cb(
+      Object.assign(new Error("Only MP4, WebM, or MOV videos are allowed"), {
+        code: "INVALID_FILE_TYPE",
+      }),
+      false,
+    );
+  }
+  cb(null, true);
+}
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 80 * 1024 * 1024 }, // 80MB — plenty for a short 1080p clip
+  fileFilter: videoFileFilter,
+});
+
+async function uploadVideoToCloudinary(file, folder = "general") {
+  if (!file) return null;
+  const result = await new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: `kfs-media/${folder}`, resource_type: "video" },
+      (error, result) => {
+        if (error) reject(new Error("Cloudinary video upload: " + error.message));
+        else resolve(result);
+      },
+    );
+    uploadStream.end(file.buffer);
+  });
+  return result.secure_url;
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 // Fix 1: Lock CORS to production domain only (was open to all origins)
 app.use(cors({
@@ -1082,6 +1121,7 @@ app.use(helmet({
       ],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
+      mediaSrc: ["'self'", "https://res.cloudinary.com"], // About Us video (Cloudinary-hosted <video>)
     },
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -4214,6 +4254,65 @@ app.delete(
   },
 );
 
+// ── ABOUT US VIDEO — single admin-managed clip shown on the About Us page ───
+// Stored as a plain settings key (aboutus_video_url), same pattern already
+// used for aboutus_text — a single value doesn't need its own table.
+app.post(
+  "/api/admin/aboutus-video",
+  requireSection("settings"),
+  (req, res, next) => {
+    uploadVideo.single("video")(req, res, (err) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE")
+          return res.status(400).json({ error: "Video too large — please use a file under 80MB" });
+        if (err.code === "INVALID_FILE_TYPE")
+          return res.status(400).json({ error: err.message });
+        return res.status(400).json({ error: "Upload failed. Please check the file and try again." });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Video is required" });
+    try {
+      const videoUrl = await uploadVideoToCloudinary(req.file, "aboutus-video");
+      if (!videoUrl) return res.status(500).json({ error: "Video upload failed" });
+      await supabase
+        .from("settings")
+        .upsert({ key: "aboutus_video_url", value: videoUrl }, { onConflict: "key" });
+      memInvalidate("settings");
+      logActivity(
+        req.admin.id,
+        req.admin.name,
+        "update",
+        "settings",
+        "About Us video",
+      ).catch(e => console.error("[activity]", e.message));
+      res.json({ url: videoUrl });
+    } catch (e) {
+      console.error("[aboutus-video] upload error:", e);
+      res.status(500).json({ error: "Video upload failed" });
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/aboutus-video",
+  requireSection("settings"),
+  async (req, res) => {
+    await supabase.from("settings").delete().eq("key", "aboutus_video_url");
+    memInvalidate("settings");
+    logActivity(
+      req.admin.id,
+      req.admin.name,
+      "delete",
+      "settings",
+      "About Us video",
+    ).catch(e => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
+
 // ── HOMEPAGE ABOUT FADE GALLERY — admin-managed slideshow, homepage About Us visual ──
 // Supabase migration — run once:
 // CREATE TABLE IF NOT EXISTS home_about_gallery (
@@ -5277,7 +5376,7 @@ app.post("/api/track", trackLimit, async (req, res) => {
   const ua = req.headers["user-agent"] || "";
   if (BOT_UA_RE.test(ua)) return res.json({ ok: true }); // silently drop bot hits
 
-  const allowed = ["home", "films", "events", "blog", "members", "collaborate"];
+  const allowed = ["home", "movies", "events", "blog", "members", "collaborate", "aboutus", "credits", "donations", "wrapped", "strand", "form-fill"];
   const page = allowed.includes(req.body.page) ? req.body.page : "home";
   const hour = parseInt(req.body.hour) || 0;
   const today = new Date().toISOString().slice(0, 10);
