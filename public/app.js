@@ -4565,24 +4565,55 @@ function renderAboutUsVideoAdmin(videoUrl) {
 async function uploadAboutUsVideo(inputEl) {
   const file = inputEl.files[0];
   if (!file) return;
+  if (file.size > 180 * 1024 * 1024) { alert('Video too large — please use a file under 180MB'); inputEl.value=''; return; }
   const filenameEl = document.getElementById('aboutus-video-filename');
   const uploadBtn = document.getElementById('aboutus-video-upload-btn');
-  if (filenameEl) filenameEl.textContent = 'Uploading — this can take a moment…';
   if (uploadBtn) uploadBtn.disabled = true;
-  const fd = new FormData();
-  fd.append('video', file);
+  const authHeaders = { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' };
   try {
-    const res = await fetch('/api/admin/aboutus-video', {
+    // 1. Get a signature from our server
+    const sres = await fetch('/api/admin/aboutus-video/sign', { credentials: 'include', headers: authHeaders });
+    const sig = await sres.json().catch(() => null);
+    if (!sres.ok || !sig) throw new Error((sig && sig.error) || 'Could not start upload');
+
+    // 2. Upload in 20MB chunks straight to Cloudinary
+    const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/video/upload`;
+    const uploadId = Date.now() + '-' + Math.random().toString(36).slice(2);
+    const CHUNK = 20 * 1024 * 1024;
+    let result = null;
+    for (let start = 0; start < file.size; start += CHUNK) {
+      const end = Math.min(start + CHUNK, file.size);
+      const fd = new FormData();
+      fd.append('file', file.slice(start, end), file.name);
+      fd.append('api_key', sig.api_key);
+      fd.append('timestamp', sig.timestamp);
+      fd.append('folder', sig.folder);
+      fd.append('signature', sig.signature);
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'X-Unique-Upload-Id': uploadId, 'Content-Range': `bytes ${start}-${end-1}/${file.size}` },
+        body: fd,
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((j && j.error && j.error.message) || 'Cloudinary upload failed');
+      if (filenameEl) filenameEl.textContent = `Uploading… ${Math.round(end / file.size * 100)}%`;
+      result = j;
+    }
+    if (!result || !result.secure_url) throw new Error('Upload did not finish');
+
+    // 3. Tell our server to save the URL
+    const res = await fetch('/api/admin/aboutus-video/save', {
       method: 'POST', credentials: 'include',
-      headers: { 'Authorization': 'Bearer '+adminToken, 'X-CSRF-Token': _csrfToken||'' },
-      body: fd,
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: result.secure_url }),
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) { alert((data && data.error) || 'Error uploading video'); renderAboutUsVideoAdmin(null); return; }
+    if (!res.ok) throw new Error((data && data.error) || 'Could not save video');
     inputEl.value = '';
-    renderAboutUsVideoAdmin(data && data.url);
+    renderAboutUsVideoAdmin(data.url);
   } catch (e) {
-    alert('Error uploading video');
+    alert(e.message || 'Error uploading video');
+    renderAboutUsVideoAdmin(null);
   } finally {
     if (uploadBtn) uploadBtn.disabled = false;
   }
