@@ -1109,6 +1109,7 @@ app.use(helmet({
         "https://lumberjack.razorpay.com", // Razorpay analytics/logging
         "https://accounts.google.com/gsi/", // Google Identity Services background calls
         "https://cdnjs.cloudflare.com",  // DOMPurify + other CDN libs (source maps)
+        "https://api.cloudinary.com",    // Direct browser -> Cloudinary video upload
       ],
       frameSrc: [
         "https://www.youtube.com",       // YouTube embeds
@@ -4292,6 +4293,49 @@ app.post(
     } catch (e) {
       console.error("[aboutus-video] upload error:", e);
       res.status(500).json({ error: "Video upload failed" });
+    }
+  },
+);
+
+// Direct-to-Cloudinary upload: the browser sends the file straight to Cloudinary,
+// so the 180MB never passes through this server's RAM or the host's proxy timeout.
+app.get(
+  "/api/admin/aboutus-video/sign",
+  requireSection("settings"),
+  (req, res) => {
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = "kfs-media/aboutus-video";
+    const signature = cloudinary.utils.api_sign_request(
+      { timestamp, folder },
+      process.env.CLOUDINARY_API_SECRET,
+    );
+    res.json({
+      timestamp, folder, signature,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    });
+  },
+);
+
+app.post(
+  "/api/admin/aboutus-video/save",
+  requireSection("settings"),
+  async (req, res) => {
+    const url = String((req.body && req.body.url) || "");
+    const prefix = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/video/upload/`;
+    if (!url.startsWith(prefix) || url.length > 500)
+      return res.status(400).json({ error: "Invalid video URL" });
+    try {
+      await supabase
+        .from("settings")
+        .upsert({ key: "aboutus_video_url", value: url }, { onConflict: "key" });
+      memInvalidate("settings");
+      logActivity(req.admin.id, req.admin.name, "update", "settings", "About Us video")
+        .catch(e => console.error("[activity]", e.message));
+      res.json({ url });
+    } catch (e) {
+      console.error("[aboutus-video] save error:", e);
+      res.status(500).json({ error: "Could not save video" });
     }
   },
 );
