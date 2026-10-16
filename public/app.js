@@ -222,6 +222,16 @@ async function refreshAdminToken() {
 })();
 
 // ── NAVIGATION ──
+// Per-section title/description. Keep in sync with SEO_PAGES in server.js.
+const KFS_PAGE_META = {
+  home:     { title: 'KIIT Film Society (KFS) — Official Website', description: 'KIIT Film Society (KFS) is the official student-run film society of KIIT University, Bhubaneswar. Short films, screenings, events, blogs and creative collaboration.' },
+  movies:   { title: 'Films — KIIT Film Society (KFS)', description: 'Watch films and student productions made by KIIT Film Society (KFS), KIIT University, Bhubaneswar — with cast and crew credits.' },
+  events:   { title: 'Events & Screenings — KIIT Film Society (KFS)', description: 'Upcoming and past events and screenings by KIIT Film Society (KFS) at KIIT University, Bhubaneswar — with registration and event summaries.' },
+  blog:     { title: 'Blog — KIIT Film Society (KFS)', description: 'Film reviews, event summaries and stories from KIIT Film Society (KFS), KIIT University, Bhubaneswar.' },
+  members:  { title: 'Members & Team — KIIT Film Society (KFS)', description: 'Meet the current members and alumni of KIIT Film Society (KFS), the student film society of KIIT University, Bhubaneswar.' },
+  aboutus:  { title: 'About KIIT Film Society (KFS)', description: 'About KIIT Film Society (KFS): the student-run cinema collective of KIIT University, Bhubaneswar.' },
+};
+
 function _doNavigate(page, pushState=true) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('blog-detail').classList.remove('active');
@@ -272,11 +282,19 @@ function _doNavigate(page, pushState=true) {
   });
   window.scrollTo({top:0,behavior:'instant'});
   if (pushState) history.pushState({page}, '', '/'+page);
-  // Reset meta tags to site defaults on section navigation
-  if (page === 'home' || page === 'movies' || page === 'events' || page === 'blog' || page === 'about' || page === 'aboutus' || page === 'team' || page === 'strand') {
+  // Reset meta tags to site defaults on section navigation.
+  // SEO FIX: when the server already rendered this URL (<html data-kfs-ssr>), the FIRST
+  // render must keep the server's title / canonical / description. Without this, a deep
+  // link such as /events/my-event-12 loads the events list and this block rewrote the
+  // canonical to /events — so Google saw every event page as a duplicate of the list.
+  const _keepSsrMeta = document.documentElement.hasAttribute('data-kfs-ssr') && !window._kfsSsrDone;
+  window._kfsSsrDone = true;
+  if (!_keepSsrMeta && (page === 'home' || page === 'movies' || page === 'events' || page === 'blog' || page === 'about' || page === 'aboutus' || page === 'team' || page === 'members' || page === 'strand')) {
+    const _m = KFS_PAGE_META[page];
     updateMetaTags({
-      title: 'KIIT Film Society',
-      description: 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
+      title: _m ? _m.title : 'KIIT Film Society',
+      fullTitle: !!_m,
+      description: _m ? _m.description : 'Official KIIT Film Society — a student-run collective passionate about cinema, filmmaking, storytelling, screenings, and creative collaboration.',
       image: '/images/og-banner.png',
       url: page === 'home' ? '/' : '/' + page,
     });
@@ -5726,13 +5744,14 @@ function removePageSchema() {
   if (el) el.remove();
 }
 
-function updateMetaTags({ title, description, image, url }) {
+function updateMetaTags({ title, description, image, url, fullTitle }) {
+  window._kfsSsrDone = true; // client now owns the meta tags (detail pages call this directly)
   const BASE = 'https://kiitfilmsociety.in';
   const fullUrl = url.startsWith('http') ? url : BASE + url;
   const fullImg = image ? (image.startsWith('http') ? image : BASE + image) : BASE + '/images/og-banner.png';
 
   // <title>
-  document.title = title + ' — KFS | KIIT Film Society';
+  document.title = fullTitle ? title : title + ' — KFS | KIIT Film Society';
 
   // canonical
   let canon = document.querySelector('link[rel="canonical"]');
