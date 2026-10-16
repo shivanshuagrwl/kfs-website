@@ -1236,7 +1236,7 @@ const strictWriteLimit = rateLimit({
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { index: false })); // index:false -> "/" goes through the SEO route below
 
 // Every /api/* response is dynamic, per-request, often per-user data — it
 // must never be cached by the browser or by any proxy/CDN sitting in front
@@ -1247,6 +1247,9 @@ app.use(express.static(path.join(__dirname, "public")));
 // one directive every HTTP cache in the chain is required to respect.
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
+  // robots.txt lets Googlebot FETCH the public read APIs (needed to render the SPA),
+  // but these JSON URLs must never show up as search results themselves.
+  res.set('X-Robots-Tag', 'noindex');
   next();
 });
 
@@ -1748,6 +1751,19 @@ app.get("/robots.txt", (req, res) => {
   res.send(
     "User-agent: *\n" +
       "Allow: /\n" +
+      // Googlebot renders the SPA with JS, so it must be able to fetch the PUBLIC read
+      // endpoints. The longer Allow rules beat the shorter "Disallow: /api/" (RFC 9309).
+      // These responses carry X-Robots-Tag: noindex so they never appear in results.
+      "Allow: /api/blogs\n" +
+      "Allow: /api/events\n" +
+      "Allow: /api/movies\n" +
+      "Allow: /api/members\n" +
+      "Allow: /api/settings\n" +
+      "Allow: /api/theme\n" +
+      "Allow: /api/aboutus-team\n" +
+      "Allow: /api/aboutus-gallery\n" +
+      "Allow: /api/home-about-gallery\n" +
+      "Allow: /api/notifications/active\n" +
       "Disallow: /api/\n" +
       "Disallow: /admin\n" +
       "Disallow: /admin/\n" +
@@ -1781,6 +1797,7 @@ app.get("/sitemap.xml", async (req, res) => {
     const { data: movies } = await supabasePublic
       .from("movies")
       .select("id, title, updated_at")
+      .is("deleted_at", null)
       .order("release_year", { ascending: false })
       .limit(200);
     if (movies && movies.length > 0) {
@@ -1803,6 +1820,7 @@ app.get("/sitemap.xml", async (req, res) => {
       .from("blogs")
       .select("id, title, updated_at, created_at")
       .eq("published", true)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(200);
     if (blogs && blogs.length > 0) {
@@ -1828,6 +1846,7 @@ app.get("/sitemap.xml", async (req, res) => {
     const { data: evs } = await supabasePublic
       .from("events")
       .select("id, title, updated_at, event_date")
+      .is("deleted_at", null)
       .order("event_date", { ascending: false })
       .limit(200);
     if (evs && evs.length > 0) {
@@ -1853,7 +1872,7 @@ app.get("/sitemap.xml", async (req, res) => {
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://kiitfilmsociety.in/films</loc>
+    <loc>https://kiitfilmsociety.in/movies</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -1868,12 +1887,12 @@ app.get("/sitemap.xml", async (req, res) => {
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://kiitfilmsociety.in/about</loc>
+    <loc>https://kiitfilmsociety.in/aboutus</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://kiitfilmsociety.in/team</loc>
+    <loc>https://kiitfilmsociety.in/members</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -7635,19 +7654,19 @@ function injectOgTags(
   if (url) {
     html = html.replace(
       /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
-      `<link rel="canonical" href="${url}" />`,
+      () => `<link rel="canonical" href="${url}" />`,
     );
   }
 
   const KFS_LOGO = "https://kiitfilmsociety.in/images/kfs-logo.png";
   const siteName = "KFS — KIIT Film Society";
   const ogType = type || "website";
-  const safeTitle = (title || siteName).replace(/"/g, "&quot;");
-  const safeDesc = (
-    description || "KIIT Film Society — student-run cinema collective."
-  )
-    .slice(0, 200)
-    .replace(/"/g, "&quot;");
+  const _escAttr = (v) =>
+    String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const safeTitle = _escAttr(title || siteName);
+  const safeDesc = _escAttr(
+    (description || "KIIT Film Society — student-run cinema collective.").slice(0, 200),
+  );
   const safeUrl = url || "https://kiitfilmsociety.in";
 
   const hasPoster = !!imageUrl;
@@ -7687,12 +7706,12 @@ function injectOgTags(
   <meta name="twitter:image:alt"   content="${safeTitle}" />`;
 
   if (html.includes("</head>")) {
-    let result = html.replace("</head>", tags + "\n</head>");
+    let result = html.replace("</head>", () => tags + "\n</head>");
     // Also update the <title> so Google picks up the right title for this page
     if (title) {
       result = result.replace(
         /<title>[^<]*<\/title>/i,
-        `<title>${safeTitle}</title>`,
+        () => `<title>${safeTitle}</title>`,
       );
     }
     return result;
@@ -7731,120 +7750,646 @@ async function serveWithOg(res, ogData) {
   }
 }
 
-// ── /blog/:slug  (e.g. /blog/my-post-title-42) ───────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SEO — SERVER-RENDERED CONTENT FOR GOOGLE + AI CRAWLERS
+//
+// The site is a single-page app: blog text, event summaries, film credits etc.
+// are fetched by JavaScript AFTER the page loads. Googlebot can run JS (but
+// only if robots.txt lets it fetch /api/...), and most AI crawlers / AI answer
+// engines do NOT run JS at all — so they used to see an empty shell.
+//
+// Everything below puts the real text + links + JSON-LD into the raw HTML:
+//   • /, /movies, /events, /blog, /members, /aboutus  -> per-page title,
+//     description, canonical, crawlable text and links
+//   • /blog/:slug, /events/:slug, /films/:slug        -> full article / event
+//     summary / film credits + schema.org data
+// The text lives in a visually-hidden #seo-content block (CSS: .seo-only in
+// index.html). The SPA renders exactly as before for real visitors.
+// ═══════════════════════════════════════════════════════════════════════════
+const SEO_SITE = "https://kiitfilmsociety.in";
+const SEO_BRAND = "KIIT Film Society";
+
+function seoEsc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// JSON for <script type="application/ld+json">. "<" is escaped so a title such
+// as "</script>" can never break out of the tag.
+function seoJson(o) {
+  return JSON.stringify(o).replace(/</g, "\\u003c");
+}
+
+function seoHtmlToText(html, max = 8000) {
+  return String(html || "")
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (m, n) => {
+      const c = Number(n);
+      return c > 0 && c < 0x110000 ? String.fromCodePoint(c) : "";
+    })
+    .replace(/&amp;/g, "&")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim()
+    .slice(0, max);
+}
+
+function seoParas(text) {
+  return String(text || "")
+    .split("\n")
+    .filter(Boolean)
+    .map((p) => `<p>${seoEsc(p)}</p>`)
+    .join("\n");
+}
+
+// One-line, word-safe truncation (used for meta descriptions + list snippets)
+function seoClip(text, n) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (t.length <= n) return t;
+  return t.slice(0, n - 1).replace(/\s+\S*$/, "") + "…";
+}
+
+// Names are stored as "Name||memberId" and several are joined with ";;"
+// (legacy data: plain comma-separated). Mirrors splitCrew() in app.js, but
+// returns only the clean display names — never the internal member ids.
+function seoNames(val) {
+  if (!val) return [];
+  const s = String(val);
+  return (s.includes(";;") ? s.split(";;") : s.split(","))
+    .map((p) => p.split("||")[0].trim())
+    .filter(Boolean);
+}
+
+function seoDate(v) {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+}
+
+// index.html is ~550 KB — read it from disk only when it actually changes.
+let _seoIndexCache = { mtime: 0, html: "" };
+function readIndexHtml() {
+  const p = path.join(__dirname, "public", "index.html");
+  const mtime = fs.statSync(p).mtimeMs;
+  if (_seoIndexCache.mtime !== mtime) {
+    _seoIndexCache = { mtime, html: fs.readFileSync(p, "utf8") };
+  }
+  return _seoIndexCache.html;
+}
+
+// Small per-record cache (kept out of _memStore so it is never written to the
+// on-disk cache file). Returns null for "genuinely not found"; throws on a real
+// DB failure so callers can fall back to the plain SPA instead of sending 404.
+const _seoRowCache = new Map();
+async function seoRow(key, ttlSec, query) {
+  const hit = _seoRowCache.get(key);
+  if (hit && Date.now() < hit.expires) return hit.data;
+  const { data, error } = await query();
+  // 22P02 = malformed id in the URL -> not found (not an outage)
+  if (error && error.code !== "22P02") throw new Error(error.message);
+  if (data) {
+    if (_seoRowCache.size > 300) _seoRowCache.clear();
+    _seoRowCache.set(key, { data, expires: Date.now() + ttlSec * 1000 });
+  }
+  return data || null;
+}
+
+// Crawlable site-wide navigation (the real nav in index.html has no hrefs for
+// the first paint, so spell the links out here).
+const SEO_NAV = [
+  ["Home", "/"],
+  ["Films", "/movies"],
+  ["Events", "/events"],
+  ["Blog", "/blog"],
+  ["Members", "/members"],
+  ["About Us", "/aboutus"],
+  ["Collaborate", "/collaborate"],
+  ["Social Strand", "/social-strand"],
+];
+function seoNavHtml() {
+  return (
+    `<nav aria-label="Main"><ul>` +
+    SEO_NAV.map(([n, p]) => `<li><a href="${SEO_SITE}${p}">${seoEsc(n)}</a></li>`).join("") +
+    `</ul></nav>`
+  );
+}
+
+function seoBreadcrumb(items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map(([name, url], i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name,
+      item: url,
+    })),
+  };
+}
+
+// Runs AFTER injectOgTags(): fixes meta description, drops duplicate
+// site-level JSON-LD on inner pages, adds page JSON-LD, and puts real
+// crawlable content into the raw HTML.
+function injectSeoBody(html, { description, bodyHtml, jsonLdList, primarySchemaId, isHome } = {}) {
+  // Tell app.js the server already set page-specific <title>/canonical/meta,
+  // so the first client-side navigation of a deep link must not overwrite them.
+  html = html.replace(/<html([^>]*)>/i, (m, a) =>
+    /data-kfs-ssr/.test(a) ? m : `<html${a} data-kfs-ssr="1">`,
+  );
+
+  if (description) {
+    const d = seoEsc(seoClip(description, 300));
+    html = html.replace(
+      /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+      () => `<meta name="description" content="${d}">`,
+    );
+  }
+
+  // index.html hard-codes WebSite + BreadcrumbList(Home) JSON-LD for the
+  // homepage. On inner pages they'd be wrong/duplicated, so drop them there.
+  if (!isHome) {
+    html = html.replace(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>\s*/gi,
+      (m, json) => (/"@type"\s*:\s*"(WebSite|BreadcrumbList)"/.test(json) ? "" : m),
+    );
+  }
+
+  if (jsonLdList && jsonLdList.length) {
+    const tags = jsonLdList
+      .map(
+        (o, i) =>
+          `<script type="application/ld+json"${i === 0 && primarySchemaId ? ` id="${primarySchemaId}"` : ""}>${seoJson(o)}</script>`,
+      )
+      .join("\n");
+    html = html.replace("</head>", () => tags + "\n</head>");
+  }
+
+  if (bodyHtml) {
+    // class (not inline style) keeps the CSP happy; `inert` keeps the hidden
+    // links out of the keyboard tab order and away from screen readers.
+    const block = `<div id="seo-content" class="seo-only" inert aria-hidden="true">${bodyHtml}</div>`;
+    html = html.replace(/<body([^>]*)>/i, (m) => m + "\n" + block);
+  }
+  return html;
+}
+
+function serveSeoPage(res, ogData, extra, status = 200) {
+  try {
+    let html = readIndexHtml();
+    html = injectOgTags(html, ogData);
+    html = injectSeoBody(html, extra || {});
+    res.status(status);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", status === 200 ? "public, max-age=300" : "no-cache");
+    res.send(html);
+  } catch (e) {
+    console.error("[seo/serve]", e.message);
+    res.status(status).sendFile(path.join(__dirname, "public", "index.html"));
+  }
+}
+
+// Plain SPA shell (used for 404s + fallbacks when the DB is unreachable)
+function seoShell(res, status = 200) {
+  res.status(status).sendFile(path.join(__dirname, "public", "index.html"));
+}
+
+// Wrong/old slug -> 301 to the one true URL (keeps ?register=1 etc.)
+function seoCanonicalRedirect(req, res, base, canonicalSlug) {
+  if (req.params.slug === canonicalSlug) return false;
+  const qi = req.originalUrl.indexOf("?");
+  res.redirect(301, `/${base}/${canonicalSlug}${qi >= 0 ? req.originalUrl.slice(qi) : ""}`);
+  return true;
+}
+
+// ── 1. LIST / SECTION PAGES ──────────────────────────────────────────────────
+// Keep title/description in sync with KFS_PAGE_META in app.js.
+const SEO_PAGES = {
+  "/": {
+    title: "KIIT Film Society (KFS) — Official Website",
+    h1: "KIIT Film Society (KFS)",
+    description:
+      "KIIT Film Society (KFS) is the official student-run film society of KIIT University, Bhubaneswar. Short films, screenings, events, blogs and creative collaboration.",
+    intro:
+      "KIIT Film Society (KFS), also known as KFS, is the official student-run film society of KIIT University in Bhubaneswar, Odisha. KFS makes films, hosts screenings and events, publishes film reviews and event summaries on its blog, and welcomes creative collaboration.",
+  },
+  "/movies": {
+    title: "Films — KIIT Film Society (KFS)",
+    h1: "Films by KIIT Film Society",
+    description:
+      "Watch films and student productions made by KIIT Film Society (KFS), KIIT University, Bhubaneswar — with cast and crew credits.",
+    intro: "All films produced by KIIT Film Society (KFS) members, with cast and crew credits.",
+  },
+  "/events": {
+    title: "Events & Screenings — KIIT Film Society (KFS)",
+    h1: "KIIT Film Society Events",
+    description:
+      "Upcoming and past events and screenings by KIIT Film Society (KFS) at KIIT University, Bhubaneswar — with registration and event summaries.",
+    intro: "Upcoming and past events and screenings organised by KIIT Film Society (KFS).",
+  },
+  "/blog": {
+    title: "Blog — KIIT Film Society (KFS)",
+    h1: "KFS Blog",
+    description:
+      "Film reviews, event summaries and stories from KIIT Film Society (KFS), KIIT University, Bhubaneswar.",
+    intro: "Film reviews, event summaries and stories from KIIT Film Society (KFS).",
+  },
+  "/members": {
+    title: "Members & Team — KIIT Film Society (KFS)",
+    h1: "The KIIT Film Society Team",
+    description:
+      "Meet the current members and alumni of KIIT Film Society (KFS), the student film society of KIIT University, Bhubaneswar.",
+    intro: "The current members and alumni of KIIT Film Society (KFS).",
+  },
+  "/aboutus": {
+    title: "About KIIT Film Society (KFS)",
+    h1: "About KIIT Film Society",
+    description:
+      "About KIIT Film Society (KFS): the student-run cinema collective of KIIT University, Bhubaneswar.",
+    intro: "KIIT Film Society (KFS) is the student-run cinema collective of KIIT University, Bhubaneswar.",
+  },
+};
+
+function seoLink(base, o) {
+  return `${SEO_SITE}/${base}/${slugify(o.title)}-${o.id}`;
+}
+
+// Cached 5 min and deliberately trimmed (snippets, not full bodies) so the
+// cache — which is also written to disk — stays small.
+async function seoListData() {
+  return memCache("seo:lists", 300, async () => {
+    const kfsId = await getKfsSentinelId().catch(() => null);
+
+    const membersQuery = (client) =>
+      client
+        .from("members")
+        .select("id,name,role,is_past,sort_order")
+        .is("deleted_at", null)
+        .order("sort_order", { ascending: true })
+        .limit(300);
+
+    const [ev, bl, mv, mb, st] = await Promise.all([
+      supabasePublic
+        .from("events")
+        .select("id,title,event_date,location,recap,description")
+        .is("deleted_at", null)
+        .order("event_date", { ascending: false })
+        .limit(40),
+      supabasePublic
+        .from("blogs")
+        .select("id,title,excerpt,author,created_at")
+        .eq("published", true)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(40),
+      supabasePublic
+        .from("movies")
+        .select("id,title,release_year,director")
+        .is("deleted_at", null)
+        .order("release_year", { ascending: false })
+        .limit(60),
+      membersQuery(supabasePublic),
+      supabasePublic
+        .from("settings")
+        .select("key,value")
+        .in("key", ["about_text", "aboutus_text"]),
+    ]);
+
+    let members = mb.data || [];
+    if (!members.length) {
+      // anon read blocked by RLS -> same fallback /api/members uses
+      const fb = await membersQuery(supabase);
+      members = fb.data || [];
+    }
+    if (kfsId) members = members.filter((m) => m.id !== kfsId);
+
+    const settings = {};
+    (st.data || []).forEach((r) => (settings[r.key] = r.value));
+
+    return {
+      events: (ev.data || []).map((e) => ({
+        id: e.id,
+        title: e.title,
+        event_date: e.event_date,
+        location: e.location,
+        snippet: seoClip(seoHtmlToText(e.recap || e.description || "", 3000), 300),
+      })),
+      blogs: (bl.data || []).map((b) => ({
+        id: b.id,
+        title: b.title,
+        excerpt: seoClip(b.excerpt || "", 300),
+        authors: seoNames(b.author),
+      })),
+      movies: mv.data || [],
+      members: members.map((m) => ({ name: m.name, role: m.role, is_past: !!m.is_past })),
+      about: settings.about_text || "",
+      aboutus: settings.aboutus_text || "",
+    };
+  });
+}
+
+app.get(["/", "/movies", "/events", "/blog", "/members", "/aboutus"], async (req, res) => {
+  const key = req.path.length > 1 ? req.path.replace(/\/+$/, "") : "/";
+  const cfg = SEO_PAGES[key];
+  if (!cfg) return seoShell(res);
+  try {
+    const d = await seoListData();
+    const isHome = key === "/";
+    const lim = (arr, n) => (isHome ? arr.slice(0, n) : arr);
+
+    const evList = lim(d.events, 10)
+      .map((e) => {
+        const meta = [seoDate(e.event_date), e.location].filter(Boolean).join(", ");
+        return `<li><a href="${seoLink("events", e)}">${seoEsc(e.title)}</a>${meta ? " — " + seoEsc(meta) : ""}${e.snippet ? ". " + seoEsc(e.snippet) : ""}</li>`;
+      })
+      .join("");
+    const blogList = lim(d.blogs, 10)
+      .map(
+        (b) =>
+          `<li><a href="${seoLink("blog", b)}">${seoEsc(b.title)}</a>${b.authors.length ? " by " + seoEsc(b.authors.join(", ")) : ""}${b.excerpt ? " — " + seoEsc(b.excerpt) : ""}</li>`,
+      )
+      .join("");
+    const filmList = lim(d.movies, 20)
+      .map((m) => {
+        const dir = seoNames(m.director);
+        return `<li><a href="${seoLink("films", m)}">${seoEsc(m.title)}</a>${m.release_year ? " (" + seoEsc(m.release_year) + ")" : ""}${dir.length ? " — directed by " + seoEsc(dir.join(", ")) : ""}</li>`;
+      })
+      .join("");
+
+    let body = `<h1>${seoEsc(cfg.h1)}</h1><p>${seoEsc(cfg.intro)}</p>${seoNavHtml()}`;
+    if (isHome && d.about) body += seoParas(d.about);
+    if (key === "/aboutus") body += seoParas(d.aboutus || d.about);
+    if ((isHome || key === "/events") && evList) body += `<h2>Events</h2><ul>${evList}</ul>`;
+    if ((isHome || key === "/blog") && blogList) body += `<h2>Blog</h2><ul>${blogList}</ul>`;
+    if ((isHome || key === "/movies") && filmList) body += `<h2>Films</h2><ul>${filmList}</ul>`;
+    if (key === "/members") {
+      const cur = d.members.filter((m) => !m.is_past);
+      const past = d.members.filter((m) => m.is_past);
+      const li = (m) => `<li>${seoEsc(m.name)}${m.role ? " — " + seoEsc(m.role) : ""}</li>`;
+      if (cur.length) body += `<h2>Current members</h2><ul>${cur.map(li).join("")}</ul>`;
+      if (past.length) body += `<h2>Alumni</h2><ul>${past.map(li).join("")}</ul>`;
+    }
+
+    const url = SEO_SITE + (isHome ? "/" : key);
+    return serveSeoPage(
+      res,
+      {
+        title: cfg.title,
+        description: cfg.description,
+        url,
+        type: "website",
+        imageUrl: `${SEO_SITE}/images/og-image.png`,
+      },
+      {
+        description: cfg.description,
+        isHome,
+        bodyHtml: body,
+        jsonLdList: isHome
+          ? []
+          : [seoBreadcrumb([["Home", SEO_SITE + "/"], [cfg.h1, url]])],
+      },
+    );
+  } catch (err) {
+    console.error("[seo/list]", err.message);
+    seoShell(res);
+  }
+});
+
+// Old / guessed URLs -> the real SPA routes (they used to render the 404 page)
+app.get(["/films", "/about", "/team", "/home"], (req, res) => {
+  const map = { "/films": "/movies", "/about": "/aboutus", "/team": "/members", "/home": "/" };
+  const key = req.path.replace(/\/+$/, "");
+  const qi = req.originalUrl.indexOf("?");
+  res.redirect(301, (map[key] || "/") + (qi >= 0 ? req.originalUrl.slice(qi) : ""));
+});
+
+// ── 2. llms.txt — plain-text site summary for AI crawlers ────────────────────
+app.get("/llms.txt", (req, res) => {
+  res.type("text/plain").send(
+`# KIIT Film Society (KFS)
+> Official student-run film society of KIIT University, Bhubaneswar, Odisha, India. Also called KFS.
+
+Official site: ${SEO_SITE}
+Instagram: https://www.instagram.com/kiitfilmsociety
+YouTube: https://www.youtube.com/@kiitfilmsociety
+
+## Key pages
+- [Events](${SEO_SITE}/events): upcoming and past events, with summaries
+- [Blog](${SEO_SITE}/blog): reviews and event write-ups
+- [Films](${SEO_SITE}/movies): films made by KFS, with cast and crew credits
+- [Members](${SEO_SITE}/members): current members and alumni
+- [About](${SEO_SITE}/aboutus)
+- [Sitemap](${SEO_SITE}/sitemap.xml)
+`,
+  );
+});
+
+// ── 3. /blog/:slug  (e.g. /blog/my-post-title-42) ────────────────────────────
 app.get("/blog/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const blogResult = id
-      ? await supabasePublic
-          .from("blogs")
-          .select("id,title,excerpt,cover_image,author,created_at")
-          .eq("id", id)
-          .maybeSingle()
-      : { data: null };
-    const b = blogResult?.data ?? null;
-
-    if (!b) {
-      // Unknown blog — serve SPA without special OG so the app can show its own 404
-      return res.sendFile(path.join(__dirname, "public", "index.html"));
-    }
+    const b = id
+      ? await seoRow(`seo:blog:${id}`, 120, () =>
+          supabasePublic
+            .from("blogs")
+            .select("*")
+            .eq("id", id)
+            .eq("published", true)
+            .is("deleted_at", null)
+            .maybeSingle(),
+        )
+      : null;
+    if (!b) return seoShell(res, 404);
 
     const canonicalSlug = slugify(b.title) + "-" + b.id;
-    const pageUrl = `https://kiitfilmsociety.in/blog/${canonicalSlug}`;
-    const imageUrl = b.cover_image
-      ? `https://kiitfilmsociety.in/og/blog/${b.id}`
-      : null;
+    if (seoCanonicalRedirect(req, res, "blog", canonicalSlug)) return;
 
-    return serveWithOg(res, {
-      title: b.title ? `${b.title} — KFS Blog` : "KFS Blog",
-      description:
-        b.excerpt || `Read "${b.title}" on the KIIT Film Society blog.`,
-      imageUrl,
-      url: pageUrl,
-      type: "article",
-      author: b.author || "KFS — KIIT Film Society",
-      publishedTime: b.created_at || null,
-      jsonLd: {
-        "@context": "https://schema.org",
-        "@type": "Article",
-        headline: b.title,
-        description: b.excerpt || "",
+    const pageUrl = `${SEO_SITE}/blog/${canonicalSlug}`;
+    const title = b.title || "KFS Blog";
+    const text = seoHtmlToText(b.content, 30000);
+    const desc = seoClip(b.excerpt || text || `Read "${title}" on the KIIT Film Society blog.`, 155);
+    const authors = seoNames(b.author);
+    const dateStr = seoDate(b.created_at);
+    const ogImage = b.cover_image ? `${SEO_SITE}/og/blog/${b.id}` : null;
+
+    return serveSeoPage(
+      res,
+      {
+        title: `${title} — KFS Blog`,
+        description: desc,
+        imageUrl: ogImage,
         url: pageUrl,
-        image: imageUrl || "https://kiitfilmsociety.in/images/og-banner.png",
-        author: { "@type": "Person", name: b.author || "KFS" },
-        publisher: {
-          "@type": "Organization",
-          name: "KFS — KIIT Film Society",
-          logo: {
-            "@type": "ImageObject",
-            url: "https://kiitfilmsociety.in/images/kfs-logo.png",
-          },
-        },
-        datePublished: b.created_at || null,
-        mainEntityOfPage: pageUrl,
+        type: "article",
+        author: authors.join(", ") || "KFS — KIIT Film Society",
+        publishedTime: b.created_at || null,
       },
-    });
+      {
+        description: desc,
+        primarySchemaId: "kfs-page-schema", // app.js re-uses this id, so no duplicate block after JS runs
+        bodyHtml:
+          seoNavHtml() +
+          `<article><h1>${seoEsc(title)}</h1>` +
+          `<p>By ${seoEsc(authors.join(", ") || SEO_BRAND)}${dateStr ? " · " + seoEsc(dateStr) : ""} · <a href="${SEO_SITE}/blog">KFS Blog</a></p>` +
+          seoParas(text) +
+          `</article>`,
+        jsonLdList: [
+          {
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            headline: title,
+            description: desc,
+            url: pageUrl,
+            mainEntityOfPage: { "@type": "WebPage", "@id": pageUrl },
+            image: b.cover_image || `${SEO_SITE}/images/og-image.png`,
+            author: authors.length
+              ? authors.map((n) => ({ "@type": "Person", name: n }))
+              : { "@type": "Organization", name: "KFS — KIIT Film Society", url: SEO_SITE },
+            publisher: {
+              "@type": "Organization",
+              name: SEO_BRAND,
+              logo: { "@type": "ImageObject", url: `${SEO_SITE}/images/kfs-logo.png` },
+            },
+            datePublished: b.created_at || undefined,
+            dateModified: b.updated_at || b.created_at || undefined,
+            inLanguage: "en",
+            isPartOf: { "@type": "Blog", name: "KFS Blog", url: `${SEO_SITE}/blog` },
+          },
+          seoBreadcrumb([
+            ["Home", SEO_SITE + "/"],
+            ["Blog", `${SEO_SITE}/blog`],
+            [title, pageUrl],
+          ]),
+        ],
+      },
+    );
   } catch (err) {
-    console.error("[share/blog]", err.message);
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+    console.error("[seo/blog]", err.message);
+    seoShell(res);
   }
 });
 
 // ── /films/:slug  (e.g. /films/do-paise-ki-dhoop-7) ─────────────────────────
+// Full credits are rendered into the HTML (see SEO block above) so search and
+// AI crawlers can read who made the film, not just its title.
+const SEO_FILM_CREDITS = [
+  ["Director", "director"],
+  ["Producer", "producer"],
+  ["Screenwriter", "screenwriter"],
+  ["Director of Photography", "dop"],
+  ["Video Editor", "video_editor"],
+  ["Sound Design", "sound_design"],
+  ["Management", "management"],
+  ["Graphic Design", "graphic_design"],
+  ["Cast", "actors"],
+  ["Support Crew", "support_crew"],
+];
+
 app.get("/films/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const queryResult = id
-      ? await supabasePublic
-          .from("movies")
-          .select("id,title,description,poster_image,director,release_year,genre")
-          .eq("id", id)
-          .maybeSingle()
-      : { data: null };
-    const m = queryResult?.data ?? null;
-
-    if (!m) {
-      return res.sendFile(path.join(__dirname, "public", "index.html"));
-    }
+    const m = id
+      ? await seoRow(`seo:film:${id}`, 120, () =>
+          supabasePublic.from("movies").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
+        )
+      : null;
+    if (!m) return seoShell(res, 404);
 
     const canonicalSlug = slugify(m.title) + "-" + m.id;
-    const pageUrl = `https://kiitfilmsociety.in/films/${canonicalSlug}`;
-    const desc = m.description
-      ? m.description.slice(0, 160)
-      : m.director
-        ? `Directed by ${m.director}${m.release_year ? ` · ${m.release_year}` : ""}`
-        : "A film by KIIT Film Society.";
-    const imageUrl = m.poster_image
-      ? `https://kiitfilmsociety.in/og/film/${m.id}`
-      : null;
+    if (seoCanonicalRedirect(req, res, "films", canonicalSlug)) return;
 
-    return serveWithOg(res, {
-      title: m.title ? `${m.title} — KFS Films` : "KFS Films",
-      description: desc,
-      imageUrl,
-      url: pageUrl,
-      type: "video.movie",
-      jsonLd: {
-        "@context": "https://schema.org",
-        "@type": "Movie",
-        name: m.title,
+    const pageUrl = `${SEO_SITE}/films/${canonicalSlug}`;
+    const title = m.title || "KFS Film";
+    const genres = parseGenre(m.genre);
+    const directors = seoNames(m.director);
+    const descText = seoHtmlToText(m.description, 4000);
+    const desc = seoClip(
+      descText ||
+        (directors.length
+          ? `${title}${m.release_year ? ` (${m.release_year})` : ""} — directed by ${directors.join(", ")}. A film by KIIT Film Society.`
+          : `${title} — a film by KIIT Film Society.`),
+      155,
+    );
+    const ogImage = m.poster_image ? `${SEO_SITE}/og/film/${m.id}` : null;
+
+    const credits = SEO_FILM_CREDITS.map(([label, field]) => {
+      const names = seoNames(m[field]);
+      return names.length ? `<li>${seoEsc(label)}: ${seoEsc(names.join(", "))}</li>` : "";
+    }).join("");
+
+    const links =
+      (m.watch_url && /^https:\/\//i.test(m.watch_url)
+        ? `<p><a href="${seoEsc(m.watch_url)}">Watch ${seoEsc(title)}</a></p>`
+        : "") +
+      (m.trailer_url && /^https:\/\//i.test(m.trailer_url)
+        ? `<p><a href="${seoEsc(m.trailer_url)}">${seoEsc(title)} — trailer</a></p>`
+        : "");
+
+    const intro =
+      `${title} is a ${genres.length ? genres.join(", ").toLowerCase() + " " : ""}film by ${SEO_BRAND} (KFS)` +
+      `${directors.length ? ", directed by " + directors.join(", ") : ""}` +
+      `${m.release_year ? ", released in " + m.release_year : ""}.`;
+
+    const runtimeMin = parseInt(m.runtime, 10);
+    const cast = seoNames(m.actors);
+
+    return serveSeoPage(
+      res,
+      {
+        title: `${title} — KFS Films`,
         description: desc,
+        imageUrl: ogImage,
         url: pageUrl,
-        image: imageUrl || "https://kiitfilmsociety.in/images/og-banner.png",
-        director: m.director
-          ? { "@type": "Person", name: m.director }
-          : undefined,
-        dateCreated: m.release_year ? String(m.release_year) : undefined,
-        productionCompany: {
-          "@type": "Organization",
-          name: "KFS — KIIT Film Society",
-          url: "https://kiitfilmsociety.in",
-        },
+        type: "video.movie",
       },
-    });
+      {
+        description: desc,
+        primarySchemaId: "kfs-page-schema", // app.js re-uses this id, so no duplicate block after JS runs
+        bodyHtml:
+          seoNavHtml() +
+          `<article><h1>${seoEsc(title)}${m.release_year ? " (" + seoEsc(m.release_year) + ")" : ""}</h1>` +
+          `<p>${seoEsc(intro)}</p>` +
+          seoParas(descText) +
+          (credits ? `<h2>Credits</h2><ul>${credits}</ul>` : "") +
+          links +
+          `<p><a href="${SEO_SITE}/movies">All films by KIIT Film Society</a></p></article>`,
+        jsonLdList: [
+          {
+            "@context": "https://schema.org",
+            "@type": "Movie",
+            name: title,
+            description: desc,
+            url: pageUrl,
+            image: m.poster_image || `${SEO_SITE}/images/og-image.png`,
+            director: directors.length ? directors.map((n) => ({ "@type": "Person", name: n })) : undefined,
+            actor: cast.length ? cast.map((n) => ({ "@type": "Person", name: n })) : undefined,
+            dateCreated: m.release_year ? String(m.release_year) : undefined,
+            genre: genres.length ? genres : undefined,
+            duration: runtimeMin > 0 ? `PT${runtimeMin}M` : undefined,
+            inLanguage: m.language || undefined,
+            productionCompany: { "@type": "Organization", name: SEO_BRAND, url: SEO_SITE },
+          },
+          seoBreadcrumb([
+            ["Home", SEO_SITE + "/"],
+            ["Films", `${SEO_SITE}/movies`],
+            [title, pageUrl],
+          ]),
+        ],
+      },
+    );
   } catch (err) {
-    console.error("[share/film]", err.message);
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+    console.error("[seo/film]", err.message);
+    seoShell(res);
   }
 });
 
@@ -7960,67 +8505,91 @@ app.get("/studio/:slug", async (req, res) => {
 });
 
 // ── /events/:slug ─────────────────────────────────────────────────────────────
+// The event description AND the post-event summary (recap) are rendered into
+// the HTML so Google and AI crawlers can read them without running JavaScript.
 app.get("/events/:slug", async (req, res) => {
   try {
     const id = idFromSlug(req.params.slug);
-    const eventResult = id
-      ? await supabasePublic
-          .from("events")
-          .select("id,title,description,cover_image,event_date,location")
-          .eq("id", id)
-          .maybeSingle()
-      : { data: null };
-    const e = eventResult?.data ?? null;
-
-    if (!e) {
-      return res.sendFile(path.join(__dirname, "public", "index.html"));
-    }
+    const e = id
+      ? await seoRow(`seo:event:${id}`, 120, () =>
+          supabasePublic.from("events").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
+        )
+      : null;
+    if (!e) return seoShell(res, 404);
 
     const canonicalSlug = slugify(e.title) + "-" + e.id;
-    const pageUrl = `https://kiitfilmsociety.in/events/${canonicalSlug}`;
-    const dateStr = e.event_date
-      ? new Date(e.event_date).toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
-      : null;
-    const desc = e.description
-      ? e.description.slice(0, 160)
-      : `KFS Event${dateStr ? " on " + dateStr : ""}${e.location ? " at " + e.location : ""}.`;
+    if (seoCanonicalRedirect(req, res, "events", canonicalSlug)) return;
 
-    const imageUrl = e.cover_image
-      ? `https://kiitfilmsociety.in/og/event/${e.id}`
-      : null;
+    const pageUrl = `${SEO_SITE}/events/${canonicalSlug}`;
+    const title = e.title || "KFS Event";
+    const dateStr = seoDate(e.event_date);
+    const descText = seoHtmlToText(e.description, 6000);
+    const recapText = seoHtmlToText(e.recap, 12000);
+    const desc = seoClip(
+      descText ||
+        recapText ||
+        `KFS event${dateStr ? " on " + dateStr : ""}${e.location ? " at " + e.location : ""}.`,
+      155,
+    );
+    const ogImage = e.cover_image ? `${SEO_SITE}/og/event/${e.id}` : null;
 
-    return serveWithOg(res, {
-      title: e.title ? `${e.title} — KFS Events` : "KFS Events",
-      description: desc,
-      imageUrl,
-      url: pageUrl,
-      type: "article",
-      publishedTime: e.event_date || null,
-      jsonLd: {
-        "@context": "https://schema.org",
-        "@type": "Event",
-        name: e.title,
+    const where = [e.event_time, e.location].filter(Boolean).join(", ");
+    return serveSeoPage(
+      res,
+      {
+        title: `${title} — KFS Events`,
         description: desc,
+        imageUrl: ogImage,
         url: pageUrl,
-        image: imageUrl || "https://kiitfilmsociety.in/images/og-banner.png",
-        startDate: e.event_date || undefined,
-        location: e.location
-          ? { "@type": "Place", name: e.location }
-          : { "@type": "Place", name: "KIIT University, Bhubaneswar" },
-        organizer: {
-          "@type": "Organization",
-          name: "KFS — KIIT Film Society",
-          url: "https://kiitfilmsociety.in",
-        },
+        type: "article",
+        publishedTime: e.event_date || null,
       },
-    });
+      {
+        description: desc,
+        // No primarySchemaId on purpose: app.js clears its own page-schema block
+        // when it shows the events list, which must not remove this Event data.
+        bodyHtml:
+          seoNavHtml() +
+          `<article><h1>${seoEsc(title)}</h1>` +
+          `<p>Organised by ${SEO_BRAND} (KFS)${dateStr ? " on " + seoEsc(dateStr) : ""}${where ? ", " + seoEsc(where) : ""}.</p>` +
+          (descText ? `<h2>About this event</h2>${seoParas(descText)}` : "") +
+          (recapText ? `<h2>Event summary</h2>${seoParas(recapText)}` : "") +
+          `<p><a href="${SEO_SITE}/events">All events by KIIT Film Society</a></p></article>`,
+        jsonLdList: [
+          {
+            "@context": "https://schema.org",
+            "@type": "Event",
+            name: title,
+            description: desc,
+            url: pageUrl,
+            image: e.cover_image || `${SEO_SITE}/images/og-image.png`,
+            startDate: e.event_date || undefined,
+            eventStatus: "https://schema.org/EventScheduled",
+            eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+            location: {
+              "@type": "Place",
+              name: e.location || "KIIT University",
+              hasMap: e.location_link && /^https:\/\//i.test(e.location_link) ? e.location_link : undefined,
+              address: {
+                "@type": "PostalAddress",
+                addressLocality: "Bhubaneswar",
+                addressRegion: "Odisha",
+                addressCountry: "IN",
+              },
+            },
+            organizer: { "@type": "Organization", name: SEO_BRAND, alternateName: "KFS", url: SEO_SITE },
+          },
+          seoBreadcrumb([
+            ["Home", SEO_SITE + "/"],
+            ["Events", `${SEO_SITE}/events`],
+            [title, pageUrl],
+          ]),
+        ],
+      },
+    );
   } catch (err) {
-    console.error("[share/event]", err.message);
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+    console.error("[seo/event]", err.message);
+    seoShell(res);
   }
 });
 
