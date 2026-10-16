@@ -1825,8 +1825,8 @@ app.get("/sitemap.xml", async (req, res) => {
       movieUrls = movies
         .map((mv) => {
           const slug = slugify(mv.title) + "-" + mv.id;
-          const lastmod = mv.updated_at ? mv.updated_at.split("T")[0] : today;
-          return `  <url>\n    <loc>https://kiitfilmsociety.in/films/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`;
+          const lastmod = mv.updated_at ? mv.updated_at.split("T")[0] : "";
+          return `  <url>\n    <loc>https://kiitfilmsociety.in/films/${slug}</loc>\n${lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : ""}    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`;
         })
         .join("\n");
     }
@@ -1867,9 +1867,13 @@ app.get("/sitemap.xml", async (req, res) => {
       eventUrls = evs
         .map((ev) => {
           const slug = slugify(ev.title) + "-" + ev.id;
-          const lastmod = ev.updated_at ? ev.updated_at.split("T")[0] : today;
+          const lastmod = ev.updated_at
+            ? ev.updated_at.split("T")[0]
+            : ev.event_date
+              ? String(ev.event_date).split("T")[0]
+              : "";
           const isPast = ev.event_date && new Date(ev.event_date) < new Date();
-          return `  <url>\n    <loc>https://kiitfilmsociety.in/events/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${isPast ? "monthly" : "weekly"}</changefreq>\n    <priority>${isPast ? "0.6" : "0.85"}</priority>\n  </url>`;
+          return `  <url>\n    <loc>https://kiitfilmsociety.in/events/${slug}</loc>\n${lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : ""}    <changefreq>${isPast ? "monthly" : "weekly"}</changefreq>\n    <priority>${isPast ? "0.6" : "0.85"}</priority>\n  </url>`;
         })
         .join("\n");
     }
