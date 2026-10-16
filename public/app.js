@@ -5339,6 +5339,9 @@ async function apiFetch(url, method='GET', body=null) {
 
 function showAdminError(msg) {
   const isAdmin = document.getElementById('admin-panel')?.classList.contains('active');
+  // Public visitors and crawlers (Googlebot's screenshot showed this red bar) must never
+  // see raw API errors — log them for debugging, only show the bar to logged-in admins.
+  if (!isAdmin && !adminToken) { console.warn('[api]', msg); return; }
   let bar = document.getElementById('admin-error-bar');
   if (!bar) {
     bar = document.createElement('div');
