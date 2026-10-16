@@ -1782,6 +1782,30 @@ function slugify(str) {
 }
 
 // ── SITEMAP.XML ───────────────────────────────────────────────────────────────
+// Reads rows for the sitemap. Supabase RETURNS errors instead of throwing, so the old
+// code silently produced an empty list whenever a column (e.g. updated_at) didn't exist
+// or RLS blocked the anon client. This tries (with updated_at -> without) x (anon -> admin
+// client) and logs every failure so it is visible in the server logs.
+async function sitemapRows(table, colsFull, colsBase, applyFilters) {
+  for (const cols of [colsFull, colsBase]) {
+    for (const [label, client] of [["public", supabasePublic], ["admin", supabase]]) {
+      try {
+        const { data, error } = await applyFilters(
+          client.from(table).select(cols).is("deleted_at", null),
+        );
+        if (error) {
+          console.warn(`[sitemap] ${table} (${cols}) via ${label}: ${error.message}`);
+          continue;
+        }
+        if (data && data.length) return data;
+      } catch (e) {
+        console.warn(`[sitemap] ${table} via ${label} threw: ${e.message}`);
+      }
+    }
+  }
+  return [];
+}
+
 app.get("/sitemap.xml", async (req, res) => {
   const today = new Date().toISOString().split("T")[0];
   const cachedXml = _memStore.get("sitemap:xml");
@@ -1794,12 +1818,9 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Movies ────────────────────────────────────────────────────────────────
   let movieUrls = "";
   try {
-    const { data: movies } = await supabasePublic
-      .from("movies")
-      .select("id, title, updated_at")
-      .is("deleted_at", null)
-      .order("release_year", { ascending: false })
-      .limit(200);
+    const movies = await sitemapRows("movies", "id, title, updated_at", "id, title", (q) =>
+      q.order("release_year", { ascending: false }).limit(200),
+    );
     if (movies && movies.length > 0) {
       movieUrls = movies
         .map((mv) => {
@@ -1816,13 +1837,9 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Blogs ─────────────────────────────────────────────────────────────────
   let blogUrls = "";
   try {
-    const { data: blogs } = await supabasePublic
-      .from("blogs")
-      .select("id, title, updated_at, created_at")
-      .eq("published", true)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(200);
+    const blogs = await sitemapRows("blogs", "id, title, updated_at, created_at", "id, title, created_at", (q) =>
+      q.eq("published", true).order("created_at", { ascending: false }).limit(200),
+    );
     if (blogs && blogs.length > 0) {
       blogUrls = blogs
         .map((b) => {
@@ -1843,12 +1860,9 @@ app.get("/sitemap.xml", async (req, res) => {
   // ── Events ────────────────────────────────────────────────────────────────
   let eventUrls = "";
   try {
-    const { data: evs } = await supabasePublic
-      .from("events")
-      .select("id, title, updated_at, event_date")
-      .is("deleted_at", null)
-      .order("event_date", { ascending: false })
-      .limit(200);
+    const evs = await sitemapRows("events", "id, title, updated_at, event_date", "id, title, event_date", (q) =>
+      q.order("event_date", { ascending: false }).limit(200),
+    );
     if (evs && evs.length > 0) {
       eventUrls = evs
         .map((ev) => {
@@ -1901,7 +1915,8 @@ ${blogUrls}
 ${eventUrls}
 </urlset>`;
   // Cache for 1 hour
-  _memStore.set("sitemap:xml", { data: xmlString, expires: Date.now() + 3600 * 1000 });
+  const hasDynamic = !!(movieUrls || blogUrls || eventUrls);
+  _memStore.set("sitemap:xml", { data: xmlString, expires: Date.now() + (hasDynamic ? 3600 : 60) * 1000 });
   res.header("Content-Type", "application/xml");
   res.header("Cache-Control", "public, max-age=3600");
   res.send(xmlString);
