@@ -5,8 +5,8 @@
 <!-- ── Basic Meta ──────────────────────────────────────────────────────── -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KIIT Film Society | Cinema, Filmmaking & Screenings</title>
-<meta name="description" content="KIIT Film Society (KFS) — Bhubaneswar's student-run cinema collective at KIIT University. Short films, screenings, reviews, blogs, and creative collaboration.">
+<title>KIIT Film Society (KFS) — Official Website</title>
+<meta name="description" content="KIIT Film Society (KFS) is the official student-run film society of KIIT University, Bhubaneswar. Short films, screenings, events, blogs and creative collaboration.">
 <meta name="keywords" content="KFS, KIIT Film Society, KIIT cinema club, film society Bhubaneswar, filmmaking, movies, short films, Chitra Vichitra, student films, KIIT University, film screenings Odisha">
 <meta name="author" content="KFS — KIIT Film Society">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -54,8 +54,8 @@
 {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "name": "KFS — KIIT Film Society",
-  "alternateName": "KFS",
+  "name": "KIIT Film Society",
+  "alternateName": ["KFS", "KIIT Film Society (KFS)", "KFS KIIT", "KIIT KFS"],
   "url": "https://kiitfilmsociety.in/",
   "logo": {
     "@type": "ImageObject",
@@ -87,37 +87,19 @@
 }
 </script>
 
-<!-- ── Structured Data: WebSite with SearchAction ───────────────────────── -->
+<!-- ── Structured Data: WebSite (Google "site name") ───────────────────── -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "name": "KFS — KIIT Film Society",
+  "name": "KIIT Film Society",
+  "alternateName": ["KFS", "KFS KIIT", "KIIT Film Society KFS"],
   "url": "https://kiitfilmsociety.in/",
-  "potentialAction": {
-    "@type": "SearchAction",
-    "target": {
-      "@type": "EntryPoint",
-      "urlTemplate": "https://kiitfilmsociety.in/?q={search_term_string}"
-    },
-    "query-input": "required name=search_term_string"
-  }
+  "inLanguage": "en-IN",
+  "publisher": { "@type": "Organization", "name": "KIIT Film Society", "url": "https://kiitfilmsociety.in/" }
 }
 </script>
 
-<!-- ── Structured Data: BreadcrumbList (Homepage) ───────────────────────── -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    { "@type": "ListItem", "position": 1, "name": "Home",   "item": "https://kiitfilmsociety.in/" },
-    { "@type": "ListItem", "position": 2, "name": "Films",  "item": "https://kiitfilmsociety.in/films" },
-    { "@type": "ListItem", "position": 3, "name": "Events", "item": "https://kiitfilmsociety.in/events" },
-    { "@type": "ListItem", "position": 4, "name": "Blog",   "item": "https://kiitfilmsociety.in/blog" }
-  ]
-}
-</script>
 
 <!-- ── Favicon ───────────────────────────────────────────────────────────── -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -162,6 +144,8 @@
 })();
 </script>
 <style>
+/* SEO: server-rendered text for Google + AI crawlers; hidden for visitors, SPA looks unchanged */
+.seo-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 /* ── RESET & BASE ─────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
