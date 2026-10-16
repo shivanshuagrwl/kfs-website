@@ -1764,6 +1764,15 @@ app.get("/robots.txt", (req, res) => {
       "Allow: /api/aboutus-gallery\n" +
       "Allow: /api/home-about-gallery\n" +
       "Allow: /api/notifications/active\n" +
+      "Allow: /api/achievements\n" +
+      "Allow: /api/chitra-vichitra\n" +
+      "Allow: /api/testimonials\n" +
+      "Allow: /api/gallery\n" +
+      "Allow: /api/credits\n" +
+      "Allow: /api/wrapped\n" +
+      "Allow: /api/studio/projects\n" +
+      "Allow: /api/recommendations\n" +
+      "Allow: /api/reviews\n" +
       "Disallow: /api/\n" +
       "Disallow: /admin\n" +
       "Disallow: /admin/\n" +
