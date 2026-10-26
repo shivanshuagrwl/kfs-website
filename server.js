@@ -1253,6 +1253,20 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// ── PRIVATE PAGES: never indexed, never cached ───────────────────────────────
+// /admin and other non-public pages get noindex/nofollow in the HTTP header, which
+// works even if Google never renders the page. They are NOT listed in robots.txt
+// (that would advertise them) — Google must be allowed to fetch the page to see
+// the noindex, and since nothing links to /admin it will rarely even try.
+const PRIVATE_PAGE_RE = /^\/(admin|membersaccess|collaborate\/edit|forms)(\/|$)/i;
+app.use((req, res, next) => {
+  if (PRIVATE_PAGE_RE.test(req.path)) {
+    res.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+    if (/^\/admin(\/|$)/i.test(req.path)) res.set("Cache-Control", "no-store");
+  }
+  next();
+});
+
 // ── Response cache helper ──────────────────────────────────────────────────────
 // maxAge in seconds. Sends Cache-Control: public, max-age=N, stale-while-revalidate=60
 function cacheFor(res, seconds = 60) {
@@ -1774,8 +1788,10 @@ app.get("/robots.txt", (req, res) => {
       "Allow: /api/recommendations\n" +
       "Allow: /api/reviews\n" +
       "Disallow: /api/\n" +
-      "Disallow: /admin\n" +
-      "Disallow: /admin/\n" +
+      // NOTE: /admin is deliberately NOT listed here. robots.txt is public, so a
+      // "Disallow: /admin" line tells everyone where the admin login lives. Private
+      // pages are kept out of Google with an X-Robots-Tag: noindex header instead
+      // (see the PRIVATE PAGES middleware).
       "\n" +
       "Sitemap: https://kiitfilmsociety.in/sitemap.xml\n",
   );
@@ -1922,6 +1938,16 @@ app.get("/sitemap.xml", async (req, res) => {
     <loc>https://kiitfilmsociety.in/members</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://kiitfilmsociety.in/collaborate</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://kiitfilmsociety.in/social-strand</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
   </url>
 ${movieUrls}
 ${blogUrls}
@@ -8193,6 +8219,58 @@ app.get(["/", "/movies", "/events", "/blog", "/members", "/aboutus"], async (req
     seoShell(res);
   }
 });
+
+
+// ── SPA SHELL WITH CORRECT PER-URL SEO ───────────────────────────────────────
+// Used for client-side routes that have no server-rendered content (/admin,
+// /collaborate, /credits, /wrapped, unknown URLs ...). Before this, all of them
+// were served the homepage HTML with  canonical=/  and  robots=index  at HTTP 200,
+// which is exactly what Search Console reports as "Alternate page with proper
+// canonical tag" and "Soft 404".
+const SPA_PUBLIC_ROUTES = new Set([
+  "/collaborate", "/credits", "/donations", "/leaderboard", "/wrapped",
+]);
+function serveSpaShell(req, res, { status = 200, noindex = false, title } = {}) {
+  try {
+    let html = readIndexHtml();
+    const cleanPath = req.path.replace(/\/+$/, "") || "/";
+    if (noindex) {
+      html = html.replace(
+        /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
+        () => '<meta name="robots" content="noindex, nofollow, noarchive">',
+      );
+      // a noindex page must not claim to be a copy of the homepage
+      html = html.replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>\s*/i, "");
+      html = html.replace(/<link\s+rel="alternate"[^>]*>\s*/gi, "");
+      html = html.replace(/<meta\s+property="og:url"[^>]*>\s*/i, "");
+    } else {
+      html = html.replace(
+        /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+        () => `<link rel="canonical" href="${SEO_SITE}${cleanPath}">`,
+      );
+      html = html.replace(
+        /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
+        () => `<meta property="og:url" content="${SEO_SITE}${cleanPath}">`,
+      );
+    }
+    if (title) {
+      html = html.replace(/<title>[^<]*<\/title>/i, () => `<title>${seoEsc(title)}</title>`);
+    }
+    res.status(status);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", noindex ? "no-store" : "public, max-age=300");
+    if (noindex) res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    res.send(html);
+  } catch (e) {
+    console.error("[seo/spaShell]", e.message);
+    res.status(status).sendFile(path.join(__dirname, "public", "index.html"));
+  }
+}
+
+// /admin — the login/panel shell. Never indexed, never in the sitemap, not in robots.txt.
+app.get(/^\/admin(\/.*)?$/i, (req, res) =>
+  serveSpaShell(req, res, { noindex: true, title: "Sign in" }),
+);
 
 // Old / guessed URLs -> the real SPA routes (they used to render the 404 page)
 app.get(["/films", "/about", "/team", "/home"], (req, res) => {
@@ -20247,7 +20325,12 @@ app.get("/forms/:slug", async (req, res) => {
 
 // ── CATCH-ALL ─────────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  const p = req.path.replace(/\/+$/, "") || "/";
+  // Known client-side pages: serve the shell with their OWN canonical.
+  if (SPA_PUBLIC_ROUTES.has(p.toLowerCase())) return serveSpaShell(req, res);
+  // Anything else is a URL that does not exist. Return a real 404 status (the SPA
+  // still shows its friendly 404 screen) and keep it out of the index.
+  return serveSpaShell(req, res, { status: 404, noindex: true, title: "Page not found — KIIT Film Society" });
 });
 
 // ── SUPABASE KEEPALIVE ────────────────────────────────────────────────────────
