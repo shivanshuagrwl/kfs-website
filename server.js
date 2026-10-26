@@ -1225,6 +1225,19 @@ app.use(
   }),
 );
 
+// ── Paging helper: Supabase silently caps a single select at 1000 rows. ──────
+// Use _pageAll(() => supabase.from(..).select(..).eq(..).order(..)) to get EVERY row.
+async function _pageAll(build, pageSize = 1000) {
+  const out = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await build().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    out.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: out, error: null };
+}
+
 // ── Strict rate limiters for public write endpoints ───────────────────────────
 // Prevents bots from flooding comments/reviews within the global 100-req window.
 const strictWriteLimit = rateLimit({
@@ -2478,6 +2491,721 @@ function csrfProtectAdmin(req, res, next) {
 }
 app.use("/api/admin", csrfProtectAdmin);
 app.use("/api/master", csrfProtect);
+
+// ── Responses Pro: unified dataset, live shareable sheet, ticket reconcile ───
+
+// ── Sheet engine (served at /sheet-view.js; used by admin Live Sheet + public /sheet/<token>) ──
+const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
+ *  1) window.KFSSheetGrid  : reusable virtual-scrolling grid (used by the admin Responses Pro "Sheet" tab)
+ *  2) public viewer        : boots automatically on /sheet/<token> (read-only, live, PIN/expiry aware)
+ * Self-contained, no dependencies, CSP-safe (no inline handlers, no eval).
+ */
+(function () {
+  'use strict';
+
+  var RH = 30, HH = 32, LH = 22, GUT = 52;   // row height, header height, letter-row height, gutter width
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  function letters(i) { var s = ''; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+  function fmtTs(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d)) return '';
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  function isUrl(v) { return /^https?:\\/\\/\\S+$/i.test(v); }
+  function guessWidth(label, sample) {
+    var m = Math.max(String(label || '').length + 3, 8);
+    for (var i = 0; i < sample.length; i++) { var l = String(sample[i] || '').length; if (l > m) m = l; }
+    return Math.max(90, Math.min(300, m * 7.4 + 22));
+  }
+
+  var CSS = '' +
+    '.ks{--bg:#0e0e10;--bg2:#151518;--bg3:#1b1b1f;--line:#2a2a30;--txt:#ececef;--mut:#8b8b95;--acc:#4c9bff;--sel:rgba(76,155,255,.18);--new:rgba(52,199,89,.22);' +
+    'display:flex;flex-direction:column;height:100%;min-height:0;background:var(--bg);color:var(--txt);font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;border:1px solid var(--line);border-radius:12px;overflow:hidden}' +
+    '.ks.light{--bg:#fff;--bg2:#f6f7f9;--bg3:#eceef2;--line:#d9dce3;--txt:#1a1c21;--mut:#6b7280;--acc:#1a73e8;--sel:rgba(26,115,232,.14);--new:rgba(52,199,89,.28)}' +
+    '.ks-fx{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-bottom:1px solid var(--line);flex-shrink:0}' +
+    '.ks-fx b{min-width:46px;text-align:center;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-weight:600;color:var(--mut);font-size:12px}' +
+    '.ks-fx span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt)}' +
+    '.ks-sc{flex:1;min-height:0;overflow:auto;position:relative;background:var(--bg);outline:none}' +
+    '.ks-in{position:relative}' +
+    '.ks-hd,.ks-ltr{position:sticky;z-index:3;display:flex;width:100%}' +
+    '.ks-ltr{top:0;height:' + LH + 'px;background:var(--bg3);color:var(--mut);font-size:11px}' +
+    '.ks-hd{top:' + LH + 'px;height:' + HH + 'px;background:var(--bg2);font-weight:600;border-bottom:1px solid var(--line)}' +
+    '.ks-c{flex:none;box-sizing:border-box;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);display:flex;align-items:center;position:relative}' +
+    '.ks-ltr .ks-c{justify-content:center;border-right:1px solid var(--line)}' +
+    '.ks-g{position:sticky;left:0;z-index:2;width:' + GUT + 'px;justify-content:center;color:var(--mut);background:var(--bg3);font-size:11px;padding:0}' +
+    '.ks-hd .ks-g,.ks-ltr .ks-g{z-index:4}' +
+    '.ks-hd .ks-c:not(.ks-g){cursor:pointer;user-select:none}.ks-hd .ks-c:not(.ks-g):hover{background:var(--bg3)}' +
+    '.ks-ar{margin-left:6px;color:var(--acc);font-size:10px}' +
+    '.ks-rs{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:5}' +
+    '.ks-row{position:absolute;left:0;height:' + RH + 'px;display:flex;width:100%;border-bottom:1px solid var(--line)}' +
+    '.ks-row:hover .ks-c:not(.ks-g){background:var(--bg2)}' +
+    '.ks-row.nw .ks-c:not(.ks-g){background:var(--new)}' +
+    '.ks-c.sel{outline:2px solid var(--acc);outline-offset:-2px;background:var(--sel)!important}' +
+    '.ks-c a{color:var(--acc);text-decoration:none}.ks-c a:hover{text-decoration:underline}' +
+    '.ks-ft{display:flex;gap:14px;align-items:center;padding:6px 12px;background:var(--bg2);border-top:1px solid var(--line);color:var(--mut);font-size:12px;flex-shrink:0}' +
+    '.ks-empty{padding:60px 20px;text-align:center;color:var(--mut)}';
+
+  function injectCss() {
+    if (document.getElementById('ks-css')) return;
+    var st = document.createElement('style'); st.id = 'ks-css'; st.textContent = CSS; document.head.appendChild(st);
+  }
+
+  /* ── prepare: dataset → grid-ready columns/rows (adds Submitted [+ Paid]) ───────────── */
+  function prepare(ds, opts) {
+    opts = opts || {};
+    var cols = [{ id: '__ts', label: 'Submitted', type: 'time' }];
+    var hasPaid = opts.admin && (ds.rows || []).some(function (r) { return r.paid > 0; });
+    if (hasPaid) cols.push({ id: '__paid', label: 'Paid (₹)', type: 'number' });
+    cols = cols.concat(ds.columns || []);
+    var rows = (ds.rows || []).map(function (r) {
+      var v = {}; for (var k in r.values) v[k] = r.values[k];
+      v.__ts = fmtTs(r.submitted_at);
+      if (hasPaid) v.__paid = r.paid ? String(r.paid) : '';
+      return { n: r.n, id: r.id, ts: r.submitted_at, values: v };
+    });
+    return { columns: cols, rows: rows };
+  }
+
+  /* ── grid ──────────────────────────────────────────────────────────────────────────── */
+  function mount(host, o) {
+    o = o || {}; injectCss();
+    host.innerHTML = '';
+    var root = document.createElement('div'); root.className = 'ks' + (o.light ? ' light' : '');
+    root.innerHTML =
+      '<div class="ks-fx"><b data-r="ref">—</b><span data-r="fx">Click a cell to inspect it</span></div>' +
+      '<div class="ks-sc" tabindex="0"><div class="ks-in"><div class="ks-ltr"></div><div class="ks-hd"></div><div class="ks-body"></div></div></div>' +
+      '<div class="ks-ft"><span data-r="cnt"></span><span data-r="sel"></span></div>';
+    host.appendChild(root);
+    var sc = root.querySelector('.ks-sc'), inn = root.querySelector('.ks-in'), ltr = root.querySelector('.ks-ltr'),
+        hd = root.querySelector('.ks-hd'), body = root.querySelector('.ks-body');
+    var ref = root.querySelector('[data-r=ref]'), fx = root.querySelector('[data-r=fx]'),
+        cnt = root.querySelector('[data-r=cnt]'), selEl = root.querySelector('[data-r=sel]');
+
+    var S = { cols: [], all: [], view: [], widths: [], q: '', sort: { id: null, dir: 1 }, sel: null, newFrom: Infinity, newUntil: 0, raf: 0 };
+
+    function totalW() { var w = GUT; for (var i = 0; i < S.widths.length; i++) w += S.widths[i]; return w; }
+
+    function rebuildHeader() {
+      var w = totalW();
+      inn.style.width = w + 'px';
+      var l = '<div class="ks-c ks-g"></div>', h = '<div class="ks-c ks-g">#</div>';
+      S.cols.forEach(function (c, i) {
+        var arrow = S.sort.id === c.id ? '<span class="ks-ar">' + (S.sort.dir > 0 ? '▲' : '▼') + '</span>' : '';
+        l += '<div class="ks-c" style="width:' + S.widths[i] + 'px">' + letters(i) + '</div>';
+        h += '<div class="ks-c" data-i="' + i + '" style="width:' + S.widths[i] + 'px" title="' + esc(c.label) + '">' + esc(c.label) + arrow + '<i class="ks-rs" data-rs="' + i + '"></i></div>';
+      });
+      ltr.innerHTML = l; hd.innerHTML = h;
+    }
+
+    function applyView() {
+      var q = S.q.trim().toLowerCase(), rows = S.all;
+      if (q) rows = rows.filter(function (r) {
+        for (var i = 0; i < S.cols.length; i++) { var v = r.values[S.cols[i].id]; if (v && String(v).toLowerCase().indexOf(q) !== -1) return true; }
+        return false;
+      });
+      rows = rows.slice();
+      if (S.sort.id) {
+        var id = S.sort.id, d = S.sort.dir;
+        rows.sort(function (a, b) {
+          var x = id === '__ts' ? (a.ts || '') : (a.values[id] || ''), y = id === '__ts' ? (b.ts || '') : (b.values[id] || '');
+          return d * String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' });
+        });
+      }
+      S.view = rows;
+      inn.querySelector('.ks-body').style.height = (S.view.length * RH) + 'px';
+      cnt.textContent = S.view.length + (S.view.length !== S.all.length ? ' of ' + S.all.length : '') + ' rows';
+      if (!S.view.length) body.innerHTML = '<div class="ks-empty">' + (S.all.length ? 'No rows match your search.' : 'No responses yet.') + '</div>';
+      else paint();
+    }
+
+    function paint() {
+      S.raf = 0;
+      if (!S.view.length) return;
+      var top = sc.scrollTop, vh = sc.clientHeight;
+      var from = Math.max(0, Math.floor((top - LH - HH) / RH) - 6), to = Math.min(S.view.length, Math.ceil((top + vh) / RH) + 6);
+      var now = Date.now(), out = '';
+      for (var r = from; r < to; r++) {
+        var row = S.view[r], isNew = row.n >= S.newFrom && now < S.newUntil;
+        out += '<div class="ks-row' + (isNew ? ' nw' : '') + '" style="top:' + (r * RH) + 'px"><div class="ks-c ks-g">' + row.n + '</div>';
+        for (var c = 0; c < S.cols.length; c++) {
+          var v = row.values[S.cols[c].id] || '', s = S.sel && S.sel.r === r && S.sel.c === c;
+          out += '<div class="ks-c' + (s ? ' sel' : '') + '" data-r="' + r + '" data-c="' + c + '" style="width:' + S.widths[c] + 'px">' +
+            (isUrl(v) ? '<a href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">' + esc(v) + '</a>' : esc(v)) + '</div>';
+        }
+        out += '</div>';
+      }
+      body.innerHTML = out;
+    }
+    function schedule() { if (!S.raf) S.raf = requestAnimationFrame(paint); }
+
+    function select(r, c, scroll) {
+      if (!S.view.length) return;
+      r = Math.max(0, Math.min(S.view.length - 1, r)); c = Math.max(0, Math.min(S.cols.length - 1, c));
+      S.sel = { r: r, c: c };
+      var v = S.view[r].values[S.cols[c].id] || '';
+      ref.textContent = letters(c) + (r + 1); fx.textContent = v || '(empty)';
+      selEl.textContent = S.cols[c].label;
+      if (scroll) {
+        var y = LH + HH + r * RH;
+        if (y - LH - HH < sc.scrollTop) sc.scrollTop = y - LH - HH;
+        else if (y + RH > sc.scrollTop + sc.clientHeight) sc.scrollTop = y + RH - sc.clientHeight;
+      }
+      paint();
+    }
+
+    sc.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    body.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      var el = e.target.closest('.ks-c[data-r]'); if (el) select(+el.dataset.r, +el.dataset.c, false);
+    });
+    hd.addEventListener('click', function (e) {
+      if (e.target.dataset.rs !== undefined) return;
+      var el = e.target.closest('[data-i]'); if (!el) return;
+      var id = S.cols[+el.dataset.i].id;
+      if (S.sort.id === id) { if (S.sort.dir === 1) S.sort.dir = -1; else S.sort.id = null; } else { S.sort.id = id; S.sort.dir = 1; }
+      rebuildHeader(); applyView();
+    });
+    // column resize
+    var drag = null;
+    hd.addEventListener('mousedown', function (e) {
+      if (e.target.dataset.rs === undefined) return;
+      drag = { i: +e.target.dataset.rs, x: e.clientX, w: S.widths[+e.target.dataset.rs] }; e.preventDefault();
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      S.widths[drag.i] = Math.max(60, Math.min(700, drag.w + e.clientX - drag.x)); rebuildHeader(); paint();
+    });
+    window.addEventListener('mouseup', function () { drag = null; });
+    sc.addEventListener('keydown', function (e) {
+      if (!S.sel) return;
+      var k = e.key, r = S.sel.r, c = S.sel.c;
+      if (k === 'ArrowDown') select(r + 1, c, true); else if (k === 'ArrowUp') select(r - 1, c, true);
+      else if (k === 'ArrowLeft') select(r, c - 1, true); else if (k === 'ArrowRight') select(r, c + 1, true);
+      else if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'C')) {
+        var v = S.view[r].values[S.cols[c].id] || '';
+        if (navigator.clipboard) navigator.clipboard.writeText(v).then(function () { selEl.textContent = 'Copied ✓'; }, function () {});
+        return;
+      } else return;
+      e.preventDefault();
+    });
+
+    var api = {
+      el: root,
+      setData: function (p) {
+        var firstLoad = !S.cols.length;
+        var oldMax = S.all.length ? S.all[S.all.length - 1].n : 0;
+        var sameCols = S.cols.length === p.columns.length && S.cols.every(function (c, i) { return c.id === p.columns[i].id; });
+        S.cols = p.columns; S.all = p.rows;
+        if (!sameCols) {
+          S.widths = S.cols.map(function (c) {
+            return c.id === '__ts' ? 150 : guessWidth(c.label, S.all.slice(0, 80).map(function (r) { return r.values[c.id]; }));
+          });
+          rebuildHeader();
+        }
+        var newMax = S.all.length ? S.all[S.all.length - 1].n : 0;
+        if (!firstLoad && newMax > oldMax) { S.newFrom = oldMax + 1; S.newUntil = Date.now() + 4000; setTimeout(schedule, 4100); }
+        applyView();
+      },
+      setQuery: function (q) { S.q = q || ''; sc.scrollTop = 0; applyView(); },
+      setLight: function (b) { root.classList.toggle('light', !!b); },
+      getView: function () { return { columns: S.cols, rows: S.view }; },
+      resize: schedule
+    };
+    return api;
+  }
+
+  function toCSV(columns, rows) {
+    var q = function (v) { v = String(v == null ? '' : v); if (/^[=+\\-@\\t\\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+    var out = [['#'].concat(columns.map(function (c) { return c.label; })).map(q).join(',')];
+    rows.forEach(function (r) { out.push([r.n].concat(columns.map(function (c) { return r.values[c.id]; })).map(q).join(',')); });
+    return '\\ufeff' + out.join('\\r\\n');
+  }
+  function download(name, text, mime) {
+    var a = document.createElement('a'), u = URL.createObjectURL(new Blob([text], { type: mime || 'text/csv;charset=utf-8' }));
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 2000);
+  }
+
+  window.KFSSheetGrid = { mount: mount, prepare: prepare, toCSV: toCSV, download: download, esc: esc, fmtTs: fmtTs };
+
+  /* ═════════════ Public live viewer (only on /sheet/<token>) ═════════════ */
+  var m = location.pathname.match(/^\\/sheet\\/([A-Za-z0-9_\\-]{30,100})\\/?$/);
+  if (!m) return;
+  var TOKEN = m[1], root = document.getElementById('root');
+  if (!root) return;
+  document.documentElement.style.height = '100%'; document.body.style.cssText = 'margin:0;height:100%;background:#0b0b0d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  root.style.cssText = 'height:100%;display:flex;flex-direction:column;padding:12px;box-sizing:border-box;gap:10px;color:#ececef';
+
+  var pin = ''; try { pin = sessionStorage.getItem('ks_pin_' + TOKEN.slice(0, 10)) || ''; } catch (e) {}
+  var grid = null, version = '', timer = null, lastOk = 0, light = false, expires = null, allowDl = true, titleTxt = 'Live sheet', lastData = null;
+  try { light = localStorage.getItem('ks_light') === '1'; } catch (e) {}
+
+  function msg(html) { root.innerHTML = '<div style="margin:auto;max-width:380px;text-align:center;color:#9a9aa4;line-height:1.6">' + html + '</div>'; }
+  function api(path) {
+    var h = {}; if (pin) h['x-sheet-pin'] = pin;
+    return fetch('/api/sheet/' + TOKEN + path, { headers: h, cache: 'no-store' }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { s: r.status, d: d }; }); });
+  }
+  function askPin(wrong) {
+    msg('<div style="font-size:34px">🔒</div><h2 style="color:#fff;margin:8px 0">Enter PIN</h2><p>This sheet is protected.</p>' +
+      '<input id="pin" inputmode="numeric" maxlength="8" autocomplete="off" style="width:140px;padding:10px;text-align:center;font-size:20px;letter-spacing:6px;background:#17171a;border:1px solid #333;border-radius:10px;color:#fff;outline:none">' +
+      '<div><button id="go" style="margin-top:12px;padding:9px 22px;border:0;border-radius:10px;background:#4c9bff;color:#fff;font-weight:600;cursor:pointer">Open</button></div>' +
+      (wrong ? '<p style="color:#ff6b60">Wrong PIN — try again.</p>' : ''));
+    var i = document.getElementById('pin'); i.focus();
+    function go() { pin = i.value.trim(); try { sessionStorage.setItem('ks_pin_' + TOKEN.slice(0, 10), pin); } catch (e) {} start(); }
+    document.getElementById('go').onclick = go; i.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+  }
+  function ago() { var s = Math.round((Date.now() - lastOk) / 1000); return s < 5 ? 'just now' : s < 60 ? s + 's ago' : Math.round(s / 60) + 'm ago'; }
+
+  function shell() {
+    root.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+        '<div style="font-weight:700;font-size:17px;color:#fff" id="t"></div>' +
+        '<span id="live" style="font-size:12px;color:#34c759">● Live</span><span id="upd" style="font-size:12px;color:#8b8b95"></span>' +
+        '<span id="mk" style="display:none;font-size:11px;color:#f0b429;border:1px solid #f0b42955;padding:2px 8px;border-radius:20px">Personal data masked</span>' +
+        '<div style="flex:1"></div>' +
+        '<input id="q" placeholder="Search…" style="padding:7px 12px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;outline:none;min-width:150px">' +
+        '<button id="th" style="padding:7px 11px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;cursor:pointer">◐</button>' +
+        '<button id="dl" style="padding:7px 12px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;cursor:pointer">⬇ CSV</button>' +
+      '</div><div id="gh" style="flex:1;min-height:0"></div>' +
+      '<div style="font-size:11px;color:#6b6b75;text-align:center" id="ex"></div>';
+    grid = mount(document.getElementById('gh'), { light: light });
+    document.getElementById('q').oninput = function () { grid.setQuery(this.value); };
+    document.getElementById('th').onclick = function () { light = !light; grid.setLight(light); try { localStorage.setItem('ks_light', light ? '1' : '0'); } catch (e) {} };
+    document.getElementById('dl').onclick = function () {
+      var v = grid.getView(); download((titleTxt || 'sheet').replace(/[^a-z0-9]+/gi, '_') + '.csv', toCSV(v.columns, v.rows));
+    };
+    setInterval(function () { var u = document.getElementById('upd'); if (u && lastOk) u.textContent = 'updated ' + ago(); }, 1000);
+  }
+
+  function apply(d) {
+    titleTxt = d.title || titleTxt; version = d.version; allowDl = d.allow_download !== false; expires = d.expires_at;
+    document.getElementById('t').textContent = titleTxt; document.title = titleTxt + ' — KFS Live Sheet';
+    document.getElementById('dl').style.display = allowDl ? '' : 'none';
+    document.getElementById('mk').style.display = d.masked ? '' : 'none';
+    document.getElementById('ex').textContent = expires ? 'Read-only • link expires ' + new Date(expires).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    grid.setData(prepare(d));
+  }
+
+  function poll() {
+    clearTimeout(timer);
+    if (document.hidden) { timer = setTimeout(poll, 5000); return; }
+    api('/data' + (version ? '?since=' + encodeURIComponent(version) : '')).then(function (r) {
+      var live = document.getElementById('live');
+      if (r.s === 200) { lastOk = Date.now(); if (!r.d.unchanged) apply(r.d); if (live) { live.textContent = '● Live'; live.style.color = '#34c759'; } }
+      else if (r.s === 401) { askPin(!!pin); return; }
+      else if (r.s === 404) { msg('<div style="font-size:34px">⛔</div><h2 style="color:#fff">Link unavailable</h2><p>' + esc(r.d.error || 'This link is invalid, expired or revoked.') + '</p>'); return; }
+      else if (live) { live.textContent = '● Reconnecting…'; live.style.color = '#f0b429'; }
+      timer = setTimeout(poll, 5000);
+    }, function () {
+      var live = document.getElementById('live'); if (live) { live.textContent = '● Offline'; live.style.color = '#ff6b60'; }
+      timer = setTimeout(poll, 8000);
+    });
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && grid) poll(); });
+
+  function start() {
+    msg('Loading…');
+    api('/meta').then(function (r) {
+      if (r.s !== 200) { msg('<div style="font-size:34px">⛔</div><h2 style="color:#fff">Link unavailable</h2><p>' + esc(r.d.error || 'This link is invalid, expired or revoked.') + '</p>'); return; }
+      if (r.d.needs_pin && !pin) { askPin(false); return; }
+      shell(); version = ''; poll();
+    });
+  }
+  start();
+})();
+`;
+app.get("/sheet-view.js", (req, res) => {
+  res.type("application/javascript");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(_SHEET_VIEW_JS);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KFS Responses Pro — server module
+//   • unified dataset API for event forms + standalone forms (paged past 1000)
+//   • secure read-only live-sheet share links (hashed token, expiry, revoke,
+//     optional PIN, hidden columns, PII masking)
+//   • form-responses <-> event_registrations reconcile + one-click sync
+//
+// Mounted from server.js AFTER csrfProtectAdmin so every admin POST/DELETE here
+// is CSRF-protected automatically. Nothing existing is modified.
+//
+// SQL (run once in Supabase): see responses-pro.sql
+// ─────────────────────────────────────────────────────────────────────────────
+(function mountResponsesPro(app, deps) {
+  const {
+    supabase, requireSection, logActivity, sendTicketEmail,
+    parseFormSchema, pickTargetEmail, rateLimit, ipKeyGenerator, crypto,
+  } = deps;
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const UUID_RE  = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const PAGE = 1000;
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+  // Supabase caps a single select at 1000 rows -> page through everything.
+  async function fetchAll(build) {
+    const out = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await build().range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      out.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  }
+  const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+  const normEmail = (s) => String(s || "").trim().toLowerCase();
+  const kindSection = (kind) => (kind === "form" ? "forms" : "events");
+  const guard = (req, res, next) => {
+    const kind = req.params.kind;
+    if (kind !== "event" && kind !== "form") return res.status(400).json({ error: "Invalid kind" });
+    return requireSection(kindSection(kind))(req, res, next);
+  };
+
+  function flattenQuestions(raw) {
+    const { sections, targetEmailQuestionId } = parseFormSchema(raw);
+    const qs = [];
+    for (const s of sections) for (const q of s.questions || []) qs.push(q);
+    return { qs, targetEmailQuestionId };
+  }
+  function safeJson(s) {
+    try { return typeof s === "object" && s ? s : JSON.parse(s || "{}"); } catch { return {}; }
+  }
+
+  // ── dataset (shared by admin + public share) ───────────────────────────────
+  const dsCache = new Map(); // key -> {t, v}
+  const DS_TTL = 4000;       // many live viewers -> at most 1 DB read / 4s / sheet
+
+  async function buildDataset(kind, id) {
+    let title = "", questions = [], rows = [], targetEmailQuestionId = null, issuesTicket = null;
+    if (kind === "event") {
+      const [{ data: ev }, { data: form }] = await Promise.all([
+        supabase.from("events").select("title").eq("id", id).maybeSingle(),
+        supabase.from("event_forms").select("*").eq("event_id", id).maybeSingle(),
+      ]);
+      title = ev?.title || "Event";
+      if (form) {
+        const f = flattenQuestions(form.questions);
+        questions = f.qs; targetEmailQuestionId = f.targetEmailQuestionId;
+        issuesTicket = form.issues_ticket !== false;
+      }
+      rows = await fetchAll(() => supabase.from("form_responses").select("*").eq("event_id", id).order("submitted_at", { ascending: true }));
+    } else {
+      const { data: form } = await supabase.from("standalone_forms").select("*").eq("id", id).maybeSingle();
+      title = form?.title || "Form";
+      if (form) { const f = flattenQuestions(form.questions); questions = f.qs; targetEmailQuestionId = f.targetEmailQuestionId; }
+      rows = await fetchAll(() => supabase.from("standalone_form_responses").select("*").eq("form_id", id).order("submitted_at", { ascending: true }));
+    }
+    const columns = questions.map((q) => ({ id: q.id, label: q.label || q.id, type: q.type || "text", options: (q.options || []).filter(Boolean) }));
+    const out = rows.map((r, i) => {
+      const a = safeJson(r.answers);
+      const values = {};
+      for (const c of columns) {
+        const v = a[c.id] ?? a[c.label] ?? "";
+        values[c.id] = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+      }
+      return {
+        n: i + 1, id: r.id, submitted_at: r.submitted_at || r.created_at || null, values,
+        paid: r.amount_paise > 0 ? Math.round(r.amount_paise / 100) : 0,
+        payment_id: r.razorpay_payment_id || null,
+        edited: !!r.edit_locked, edited_at: r.edited_at || null,
+      };
+    });
+    const last = out.reduce((m, r) => (r.submitted_at && r.submitted_at > m ? r.submitted_at : m), "");
+    const lastEdit = out.reduce((m, r) => (r.edited_at && r.edited_at > m ? r.edited_at : m), "");
+    return {
+      kind, id, title, columns, rows: out, issues_ticket: issuesTicket, targetEmailQuestionId,
+      version: `${out.length}:${last}:${lastEdit}`,
+    };
+  }
+  async function getDataset(kind, id) {
+    const key = kind + ":" + id, hit = dsCache.get(key);
+    if (hit && Date.now() - hit.t < DS_TTL) return hit.v;
+    const v = await buildDataset(kind, id);
+    dsCache.set(key, { t: Date.now(), v });
+    if (dsCache.size > 200) for (const [k, e] of dsCache) if (Date.now() - e.t > 60000) dsCache.delete(k);
+    return v;
+  }
+
+  // ── admin: dataset ─────────────────────────────────────────────────────────
+  app.get("/api/admin/rp/:kind/:id/dataset", guard, async (req, res) => {
+    try {
+      dsCache.delete(req.params.kind + ":" + req.params.id); // admin always fresh
+      const ds = await getDataset(req.params.kind, req.params.id);
+      if (req.query.since && req.query.since === ds.version) return res.json({ unchanged: true, version: ds.version });
+      res.json(ds);
+    } catch (e) {
+      console.error("[rp/dataset]", e.message);
+      res.status(500).json({ error: "Could not load responses" });
+    }
+  });
+
+  // ── share links ────────────────────────────────────────────────────────────
+  const SHARE_SQL_HINT = "Run responses-pro.sql in Supabase to enable share links.";
+  function pinHash(pin, salt) { return crypto.scryptSync(String(pin), salt, 32).toString("hex"); }
+
+  app.post("/api/admin/rp/:kind/:id/shares", guard, async (req, res) => {
+    try {
+      const { kind, id } = req.params;
+      const b = req.body || {};
+      const hours = Math.min(Math.max(parseInt(b.expires_in_hours, 10) || 72, 1), 24 * 90);
+      const token = crypto.randomBytes(32).toString("base64url");
+      const row = {
+        token_hash: sha256(token), kind, target_id: String(id),
+        title: String(b.label || "").slice(0, 80) || null,
+        hidden_columns: Array.isArray(b.hidden_columns) ? b.hidden_columns.slice(0, 200).map(String) : [],
+        mask_pii: !!b.mask_pii, allow_download: b.allow_download !== false,
+        expires_at: new Date(Date.now() + hours * 3600_000).toISOString(),
+        created_by: req.admin.id, created_by_name: req.admin.name || req.admin.username,
+      };
+      if (b.pin) {
+        if (!/^\d{4,8}$/.test(String(b.pin))) return res.status(400).json({ error: "PIN must be 4-8 digits" });
+        row.pin_salt = crypto.randomBytes(16).toString("hex");
+        row.pin_hash = pinHash(b.pin, row.pin_salt);
+      }
+      const { data, error } = await supabase.from("response_share_links").insert([row]).select("id, expires_at").single();
+      if (error) {
+        console.error("[rp/share]", error.message);
+        return res.status(500).json({ error: SHARE_SQL_HINT, detail: error.message });
+      }
+      const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+      logActivity(req.admin.id, req.admin.name, "share_create", "response_share", `${kind}:${id}`).catch(() => {});
+      res.json({ id: data.id, url: `${base}/sheet/${token}`, expires_at: data.expires_at, has_pin: !!row.pin_hash });
+    } catch (e) {
+      console.error("[rp/share]", e.message);
+      res.status(500).json({ error: "Could not create link" });
+    }
+  });
+
+  app.get("/api/admin/rp/:kind/:id/shares", guard, async (req, res) => {
+    const { data, error } = await supabase.from("response_share_links")
+      .select("id, title, hidden_columns, mask_pii, allow_download, expires_at, revoked_at, created_by_name, created_at, last_viewed_at, view_count, pin_hash")
+      .eq("kind", req.params.kind).eq("target_id", String(req.params.id)).order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: SHARE_SQL_HINT, detail: error.message });
+    res.json((data || []).map(({ pin_hash, ...r }) => ({ ...r, has_pin: !!pin_hash })));
+  });
+
+  app.delete("/api/admin/rp/:kind/shares/:shareId", guard, async (req, res) => {
+    const { error } = await supabase.from("response_share_links").update({ revoked_at: new Date().toISOString() })
+      .eq("id", req.params.shareId).eq("kind", req.params.kind);
+    if (error) return res.status(500).json({ error: "Could not revoke" });
+    logActivity(req.admin.id, req.admin.name, "share_revoke", "response_share", req.params.shareId).catch(() => {});
+    res.json({ success: true });
+  });
+
+  // ── public: read-only live sheet ───────────────────────────────────────────
+  const dataLimit = rateLimit({
+    windowMs: 60_000, max: 600, standardHeaders: true, legacyHeaders: false,
+    message: { error: "Too many requests" },
+  });
+  const pinLimit = rateLimit({
+    windowMs: 15 * 60_000, max: 12, standardHeaders: true, legacyHeaders: false,
+    keyGenerator: (req, res) => `${ipKeyGenerator(req, res)}:${String(req.params.token || "").slice(0, 12)}`,
+    skipSuccessfulRequests: true, message: { error: "Too many wrong PIN attempts. Try later." },
+  });
+  const noStore = (res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.setHeader("Referrer-Policy", "no-referrer");
+  };
+
+  async function loadShare(token) {
+    if (!token || token.length < 30 || token.length > 100) return null;
+    const { data } = await supabase.from("response_share_links").select("*").eq("token_hash", sha256(token)).maybeSingle();
+    if (!data || data.revoked_at || new Date(data.expires_at) < new Date()) return null;
+    return data;
+  }
+  function pinOk(share, pin) {
+    if (!share.pin_hash) return true;
+    if (!pin) return false;
+    const a = Buffer.from(pinHash(pin, share.pin_salt)), b = Buffer.from(share.pin_hash);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+  const maskEmail = (v) => v.replace(/^([^@]{1,2})[^@]*(@.*)$/, "$1***$2");
+  const maskPhone = (v) => { const d = v.replace(/\s/g, ""); return d.length > 4 ? d.slice(0, 2) + "****" + d.slice(-2) : "****"; };
+
+  app.get("/sheet/:token", (req, res) => {
+    noStore(res);
+    res.type("html").send('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KFS - Live Sheet</title><link rel="icon" href="data:,"></head><body style="margin:0;background:#0b0b0d"><div id="root"></div><script src="/sheet-view.js"></script></body></html>');
+  });
+
+  app.get("/api/sheet/:token/meta", dataLimit, async (req, res) => {
+    noStore(res);
+    const s = await loadShare(req.params.token);
+    if (!s) return res.status(404).json({ error: "This link is invalid, expired or has been revoked." });
+    res.json({ needs_pin: !!s.pin_hash, label: s.title || null, expires_at: s.expires_at });
+  });
+
+  app.get("/api/sheet/:token/data", dataLimit, pinLimit, async (req, res) => {
+    noStore(res);
+    try {
+      const s = await loadShare(req.params.token);
+      if (!s) return res.status(404).json({ error: "This link is invalid, expired or has been revoked." });
+      if (!pinOk(s, req.headers["x-sheet-pin"])) return res.status(401).json({ error: "PIN required or incorrect", needs_pin: true });
+      const ds = await getDataset(s.kind, s.target_id);
+      if (req.query.since && req.query.since === ds.version) return res.json({ unchanged: true, version: ds.version });
+      const hidden = new Set(s.hidden_columns || []);
+      const columns = ds.columns.filter((c) => !hidden.has(c.id));
+      const rows = ds.rows.map((r) => {
+        const values = {};
+        for (const c of columns) {
+          let v = r.values[c.id];
+          if (s.mask_pii && v) {
+            if (c.type === "email" || /e[\s-]?mail/i.test(c.label)) v = EMAIL_RE.test(v.trim()) ? maskEmail(v.trim()) : v;
+            else if (c.type === "phone" || /phone|mobile|whatsapp/i.test(c.label)) v = maskPhone(v);
+          }
+          values[c.id] = v;
+        }
+        return { n: r.n, submitted_at: r.submitted_at, values };
+      });
+      supabase.from("response_share_links")
+        .update({ last_viewed_at: new Date().toISOString(), view_count: (s.view_count || 0) + 1 })
+        .eq("id", s.id).then(() => {}, () => {});
+      res.json({
+        title: s.title || ds.title, columns, rows, version: ds.version, allow_download: s.allow_download,
+        masked: !!s.mask_pii, expires_at: s.expires_at, served_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("[sheet/data]", e.message);
+      res.status(500).json({ error: "Could not load sheet" });
+    }
+  });
+
+  // ── reconcile: form_responses <-> event_registrations ──────────────────────
+  function extractPerson(questions, targetEmailQuestionId, answers) {
+    const get = (q) => (q ? String(answers[q.id] ?? "").trim() : "");
+    const txt = (q) => ["text", "textarea"].includes(q.type);
+    const nameQ  = questions.find((q) => txt(q) && /\bname\b/i.test(q.label || ""));
+    const phoneQ = questions.find((q) => q.type === "phone" || (txt(q) && /phone|mobile/i.test(q.label || "")));
+    const rollQ  = questions.find((q) => txt(q) && /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""));
+    const primary = normEmail(pickTargetEmail(questions, answers, targetEmailQuestionId) || "");
+    const all = new Set();
+    for (const v of Object.values(answers)) if (typeof v === "string" && EMAIL_RE.test(v.trim())) all.add(normEmail(v));
+    if (primary) all.add(primary);
+    return {
+      name: get(nameQ) || null, phone: get(phoneQ) || null, roll_no: get(rollQ).toUpperCase() || null,
+      email: EMAIL_RE.test(primary) ? primary : ([...all][0] || ""), allEmails: [...all],
+    };
+  }
+
+  async function reconcile(eventId) {
+    const { data: ev } = await supabase.from("events")
+      .select("id,title,event_date,location,location_link,whatsapp_group_link,is_upcoming").eq("id", eventId).maybeSingle();
+    if (!ev) throw Object.assign(new Error("Event not found"), { status: 404 });
+    const { data: form } = await supabase.from("event_forms").select("*").eq("event_id", eventId).maybeSingle();
+    const { qs, targetEmailQuestionId } = form ? flattenQuestions(form.questions) : { qs: [], targetEmailQuestionId: null };
+    const responses = await fetchAll(() => supabase.from("form_responses").select("id,answers,submitted_at").eq("event_id", eventId).order("submitted_at", { ascending: true }));
+    const regs = await fetchAll(() => supabase.from("event_registrations").select("id,name,email,phone,roll_no,checked_in,created_at").eq("event_id", eventId).order("created_at", { ascending: true }));
+
+    const regByEmail = new Map(regs.map((r) => [normEmail(r.email), r]));
+    const seen = new Map();   // primary email -> first response id
+    const usedRegs = new Set();
+    const missing = [], noEmail = [], dups = [], badNames = [];
+    let matched = 0;
+
+    for (const r of responses) {
+      const a = safeJson(r.answers);
+      const p = extractPerson(qs, targetEmailQuestionId, a);
+      const brief = { response_id: r.id, name: p.name || "-", email: p.email || "", phone: p.phone, roll_no: p.roll_no, submitted_at: r.submitted_at };
+      if (!p.allEmails.length) { noEmail.push(brief); continue; }
+      const key = p.email || p.allEmails[0];
+      if (seen.has(key)) { dups.push({ ...brief, duplicate_of: seen.get(key) }); continue; }
+      seen.set(key, r.id);
+      const reg = p.allEmails.map((e) => regByEmail.get(e)).find(Boolean);
+      if (reg) {
+        matched++; usedRegs.add(reg.id);
+        if (p.name && normEmail(reg.name) === normEmail(reg.email) && p.name.toLowerCase() !== normEmail(reg.email)) {
+          badNames.push({ registration_id: reg.id, email: reg.email, current: reg.name, correct: p.name });
+        }
+      } else missing.push({ ...brief, _p: p });
+    }
+    const orphans = regs.filter((r) => !usedRegs.has(r.id)).map((r) => ({
+      registration_id: r.id, name: r.name, email: r.email, checked_in: r.checked_in, created_at: r.created_at,
+    }));
+    const total = responses.length, regTotal = regs.length;
+    const explain = [];
+    explain.push(`Form responses: ${total} | Scanner tickets: ${regTotal} | Gap: ${total - regTotal}`);
+    if (dups.length)    explain.push(`${dups.length} response(s) are repeat submissions by the same email. One person = one ticket, so they are not missing.`);
+    if (noEmail.length) explain.push(`${noEmail.length} response(s) have no usable email, so no ticket could be generated.`);
+    if (missing.length) explain.push(`${missing.length} real people submitted the form but their ticket was never created (server restart or ticket step failed after the response was saved).`);
+    if (orphans.length) explain.push(`${orphans.length} ticket(s) exist with no matching form response (manual or imported entries).`);
+    if (form && form.issues_ticket === false) explain.push("This form is set to 'Responses Only (No Ticket)', so tickets are not auto-created.");
+    return {
+      event: ev, issues_ticket: form ? form.issues_ticket !== false : null,
+      counts: {
+        responses: total, registrations: regTotal, matched, duplicates: dups.length, no_email: noEmail.length,
+        missing_ticket: missing.length, orphans: orphans.length, bad_names: badNames.length,
+      },
+      explain, missing: missing.map(({ _p, ...m }) => m), no_email: noEmail, duplicates: dups, orphans, bad_names: badNames,
+      _missingFull: missing,
+    };
+  }
+
+  app.get("/api/admin/rp/event/:id/reconcile", requireSection("events"), async (req, res) => {
+    if (!UUID_RE.test(req.params.id) && isNaN(parseInt(req.params.id, 10))) return res.status(400).json({ error: "Invalid event ID" });
+    try {
+      const { _missingFull, ...out } = await reconcile(req.params.id);
+      res.json(out);
+    } catch (e) {
+      console.error("[rp/reconcile]", e.message);
+      res.status(e.status || 500).json({ error: e.status ? e.message : "Reconcile failed" });
+    }
+  });
+
+  app.post("/api/admin/rp/event/:id/reconcile/sync", requireSection("events"), async (req, res) => {
+    try {
+      const send = !!(req.body || {}).send_tickets;
+      const rep = await reconcile(req.params.id);
+      let created = 0, existed = 0, emailed = 0;
+      const failed = [];
+      for (const m of rep._missingFull) {
+        const p = m._p;
+        const row = {
+          event_id: rep.event.id, name: p.name || p.email, email: p.email, phone: p.phone, roll_no: p.roll_no,
+          qr_token: crypto.randomUUID(), created_at: m.submitted_at || new Date().toISOString(),
+        };
+        let { data: reg, error } = await supabase.from("event_registrations").insert([row]).select().single();
+        if (error && /phone|roll_no/.test(error.message || "")) {
+          delete row.phone; delete row.roll_no;
+          ({ data: reg, error } = await supabase.from("event_registrations").insert([row]).select().single());
+        }
+        if (error) {
+          if (error.code === "23505") existed++; else failed.push({ email: p.email, error: error.message });
+          continue;
+        }
+        created++;
+        if (send) {
+          try {
+            const QRCode = require("qrcode");
+            const qrDataUrl = await QRCode.toDataURL(reg.qr_token, { width: 400, margin: 3, color: { dark: "#000000", light: "#ffffff" }, errorCorrectionLevel: "M" });
+            await sendTicketEmail({ event: rep.event, reg, qrDataUrl });
+            emailed++;
+            await new Promise((r) => setTimeout(r, 150));
+          } catch (e) { failed.push({ email: p.email, error: "ticket email: " + e.message }); }
+        }
+      }
+      let namesFixed = 0;
+      for (const b of rep.bad_names) {
+        const { error } = await supabase.from("event_registrations").update({ name: b.correct }).eq("id", b.registration_id);
+        if (!error) namesFixed++;
+      }
+      dsCache.clear();
+      logActivity(req.admin.id, req.admin.name, "reconcile_sync", "event_registrations", `${rep.event.title}: +${created} tickets, ${namesFixed} names`).catch(() => {});
+      res.json({ success: true, created, already_existed: existed, emailed, names_fixed: namesFixed, failed });
+    } catch (e) {
+      console.error("[rp/sync]", e.message);
+      res.status(e.status || 500).json({ error: e.status ? e.message : "Sync failed" });
+    }
+  });
+})(app, {
+  supabase, requireSection, logActivity, sendTicketEmail,
+  parseFormSchema, pickTargetEmail, rateLimit, ipKeyGenerator, crypto,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION E — Updated /api/admin/refresh (single-use httpOnly cookie)
@@ -6187,11 +6915,12 @@ app.get(
   "/api/admin/events/:id/form/responses",
   requireSection("events"),
   async (req, res) => {
-    const { data, error } = await supabase
+    const { data, error } = await _pageAll(() => supabase
       .from("form_responses")
       .select("*")
       .eq("event_id", req.params.id)
-      .order("submitted_at", { ascending: false });
+      .order("submitted_at", { ascending: false })
+      .order("id", { ascending: true }));
     if (error) return res.status(500).json({ error: "Internal server error" });
     res.json(data || []);
   },
@@ -6412,10 +7141,11 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
 
   if (dedupeKeys.length > 0) {
     // Fetch existing responses for this event
-    const { data: existing } = await supabasePublic
+    const { data: existing } = await _pageAll(() => supabase
       .from("form_responses")
       .select("answers")
-      .eq("event_id", req.params.id);
+      .eq("event_id", req.params.id)
+      .order("id", { ascending: true }));
 
     for (const key of dedupeKeys) {
       const submitted = (answers[key.id] || "").trim().toLowerCase();
@@ -6500,7 +7230,8 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
       // survey forms (issues_ticket=false) just get a plain confirmation —
       // no scanner entry, no QR.
       if (ev && toEmail && issuesTicket) {
-        (async () => {
+        // v-RP: AWAIT the ticket row (fast DB work only). Emails stay async.
+        await (async () => {
           try {
             const EMAIL_NORM = toEmail.toLowerCase().trim();
             // Check if already in event_registrations (avoid duplicate on re-submit)
@@ -6523,25 +7254,44 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
                 color: { dark: "#000000", light: "#ffffff" },
                 errorCorrectionLevel: "M",
               });
-              const { data: inserted, error: insErr } = await supabase
-                .from("event_registrations")
-                .insert([{
-                  event_id: ev.id,
-                  name:     (toName || toEmail).trim(),
-                  email:    EMAIL_NORM,
-                  qr_token: qrToken,
-                  created_at: new Date().toISOString(),
-                }])
-                .select()
-                .single();
-              if (insErr) {
-                console.error("[form-submit] event_registrations insert failed:", insErr.message);
+              const _phoneQ = questions.find(q => q.type === "phone" || (["text","textarea"].includes(q.type) && /phone|mobile/i.test(q.label || "")));
+              const _rollQ  = questions.find(q => ["text","textarea"].includes(q.type) && /roll|reg(istration)?\s*(no|number|#)/i.test(q.label || ""));
+              const _regRow = {
+                event_id: ev.id,
+                name:     (toName || toEmail).trim(),
+                email:    EMAIL_NORM,
+                phone:    _phoneQ ? ((finalAnswers[_phoneQ.id] || "").toString().trim() || null) : null,
+                roll_no:  _rollQ  ? ((finalAnswers[_rollQ.id]  || "").toString().trim().toUpperCase() || null) : null,
+                qr_token: qrToken,
+                created_at: new Date().toISOString(),
+              };
+              let inserted = null, insErr = null;
+              for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+                ({ data: inserted, error: insErr } = await supabase
+                  .from("event_registrations").insert([_regRow]).select().single());
+                if (!insErr) break;
+                if (/phone|roll_no/.test(insErr.message || "")) { delete _regRow.phone; delete _regRow.roll_no; continue; }
+                if (insErr.code === "23505") {
+                  const { data: ex } = await supabase.from("event_registrations").select("*")
+                    .eq("event_id", ev.id).eq("email", EMAIL_NORM).maybeSingle();
+                  if (ex) { inserted = ex; insErr = null; }
+                  break;
+                }
+                await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+              }
+              if (insErr || !inserted) {
+                console.error("[form-submit] event_registrations insert failed:", insErr ? insErr.message : "unknown");
                 // Fall back to plain confirmation email
                 sendConfirmationEmail({ toEmail, toName, eventTitle: ev.title || "", eventDate: ev.event_date || null, eventVenue: ev.location || null, eventId: ev.id })
                   .catch(e => console.error("[email] confirmation fallback failed:", e.message));
                 return;
               }
               reg = inserted;
+              if (reg.qr_token !== qrToken) {
+                qrDataUrl = await QRCode.toDataURL(reg.qr_token, {
+                  width: 400, margin: 3, color: { dark: "#000000", light: "#ffffff" }, errorCorrectionLevel: "M",
+                });
+              }
               console.log(`[form-submit] Created event_registrations row reg_id=${reg.id} for form response`);
             } else {
               // Already registered — regenerate QR from existing token
@@ -7127,11 +7877,12 @@ app.delete("/api/admin/forms/:id", requireSection("forms"), async (req, res) => 
 
 // ADMIN: Get all responses for a standalone form
 app.get("/api/admin/forms/:id/responses", requireSection("forms"), async (req, res) => {
-  const { data, error } = await supabase
+  const { data, error } = await _pageAll(() => supabase
     .from("standalone_form_responses")
     .select("*")
     .eq("form_id", req.params.id)
-    .order("submitted_at", { ascending: false });
+    .order("submitted_at", { ascending: false })
+    .order("id", { ascending: true }));
   if (error) return res.status(500).json({ error: "Internal server error" });
   res.json(data || []);
 });
@@ -11924,11 +12675,12 @@ app.get("/api/admin/events/:id/registrations", authMiddleware, async (req, res) 
 
   console.log(`[registrations-api] Fetching registrations for event_id=${eventId} (admin=${req.admin?.username})`);
 
-  const { data, error } = await supabase
+  const { data, error } = await _pageAll(() => supabase
     .from("event_registrations")
     .select("id, name, email, phone, roll_no, checked_in, checked_in_at, checked_in_by, created_at")
     .eq("event_id", eventId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true }));
 
   if (error) {
     console.error(`[registrations-api] DB error for event_id=${eventId}:`, error.message, error.code);
@@ -12120,6 +12872,21 @@ app.get("/api/admin/events/:id/registrations/stats", authMiddleware, async (req,
   }
 
   res.json({ total, checked_in: checkedIn, pending: total - checkedIn });
+});
+
+// ── SCANNER: form-responses vs tickets health (counts only, no personal data) ──
+app.get("/api/admin/events/:id/registrations/health", authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  const ok = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) || /^\d+$/.test(id);
+  if (!ok) return res.status(400).json({ error: "Invalid event ID" });
+  const [r, g, f] = await Promise.all([
+    supabase.from("form_responses").select("id", { count: "exact", head: true }).eq("event_id", id),
+    supabase.from("event_registrations").select("id", { count: "exact", head: true }).eq("event_id", id),
+    supabase.from("event_forms").select("issues_ticket").eq("event_id", id).maybeSingle(),
+  ]);
+  if (r.error || g.error) return res.status(500).json({ error: "Internal server error" });
+  const responses = r.count || 0, tickets = g.count || 0;
+  res.json({ responses, tickets, gap: responses - tickets, issues_ticket: f.data ? f.data.issues_ticket !== false : null });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -12362,10 +13129,11 @@ app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"
   try { questions = JSON.parse(form.questions || "[]"); } catch (_) {}
 
   // 2. Fetch all responses
-  const { data: responses, error } = await supabase
+  const { data: responses, error } = await _pageAll(() => supabase
     .from("form_responses")
     .select("id,answers,submitted_at")
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .order("id", { ascending: true }));
 
   if (error) return res.status(500).json({ error: "DB error fetching responses" });
 
@@ -12388,7 +13156,7 @@ app.post("/api/admin/events/:id/backfill-registrations", requireSection("events"
     if (!email) { skipped++; continue; }
 
     // Extract name
-    const nameQ = questions.find(q => ["text","textarea"].includes(q.type) && /name/i.test(q.label || ""));
+    const nameQ = questions.find(q => ["text","textarea"].includes(q.type) && /\bname\b/i.test(q.label || ""));
     const name = (nameQ ? (answers[nameQ.id] || "").trim() : null) || email;
 
     // Extract phone
