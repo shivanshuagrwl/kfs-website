@@ -9097,6 +9097,10 @@ async function openResponseViewer() {
   const body = document.getElementById('fb-rv-body');
   const countEl = document.getElementById('fb-rv-count');
   viewer.classList.add('open');
+  // Responses Pro: always start on the Cards tab; Tickets tab is event-only
+  _rpDs = null; rvTab('cards');
+  const _tt = document.querySelector('#fb-rv-tabs [data-tab="tickets"]');
+  if (_tt) _tt.style.display = _fbMode === 'standalone' ? 'none' : '';
   body.innerHTML = '<div class="fb-rv-loading">Loading responses…</div>';
   countEl.textContent = '';
 
@@ -9193,8 +9197,269 @@ async function adminResetEditLock(responseId, btnEl) {
 }
 
 function closeResponseViewer() {
+  _rpStop(); _rpSeq++;
   document.getElementById('fb-resp-viewer').classList.remove('open');
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// RESPONSES PRO (admin) — tabs for the response viewer: Cards | Sheet | Summary
+// | Tickets | Share.  Works for BOTH event forms and standalone forms.
+// Server API: /api/admin/rp/:kind/:id/...   (kind = 'event' | 'form')
+// ════════════════════════════════════════════════════════════════════════════
+let _rpTab = 'cards', _rpDs = null, _rpGrid = null, _rpTimer = null, _rpLive = true, _rpBusy = false, _rpSeq = 0;
+
+function _rpKind() { return _fbMode === 'standalone' ? 'form' : 'event'; }
+function _rpId()   { return _fbMode === 'standalone' ? _fbFormId : _fbEventId; }
+function _rpEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function _rpLight() { return document.body.classList.contains('light-mode'); }
+async function _rpFetch(path, opt) {
+  opt = opt || {};
+  const h = { 'Authorization': 'Bearer ' + adminToken };
+  if (opt.body) h['Content-Type'] = 'application/json';
+  if (opt.method && opt.method !== 'GET') h['X-CSRF-Token'] = _csrfToken || '';
+  const r = await fetch('/api/admin/rp/' + path, { method: opt.method || 'GET', credentials: 'include', headers: h, body: opt.body ? JSON.stringify(opt.body) : undefined, cache: 'no-store' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(d.error || ('HTTP ' + r.status)), { detail: d.detail });
+  return d;
+}
+function _rpStop() { if (_rpTimer) { clearInterval(_rpTimer); _rpTimer = null; } }
+function _rpPane(name) { return document.getElementById('rp-pane-' + name); }
+
+function rvTab(name) {
+  _rpTab = name; _rpStop();
+  document.querySelectorAll('#fb-rv-tabs .rp-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  const cards = name === 'cards';
+  document.getElementById('fb-rv-body').style.display = cards ? '' : 'none';
+  document.getElementById('fb-rv-pro').style.display = cards ? 'none' : 'flex';
+  ['sheet', 'summary', 'tickets', 'share'].forEach(n => { const p = _rpPane(n); if (p) p.style.display = (n === name) ? 'flex' : 'none'; });
+  if (name === 'sheet') _rpOpenSheet();
+  else if (name === 'summary') _rpOpenSummary();
+  else if (name === 'tickets') _rpOpenTickets();
+  else if (name === 'share') _rpOpenShare();
+}
+function rvTabClick(name) { rvTab(name); }
+
+async function _rpLoadDs(force) {
+  const k = _rpKind(), id = _rpId();
+  const since = (!force && _rpDs && _rpDs.kind === k && String(_rpDs.id) === String(id)) ? _rpDs.version : '';
+  const d = await _rpFetch(k + '/' + encodeURIComponent(id) + '/dataset' + (since ? '?since=' + encodeURIComponent(since) : ''));
+  if (d.unchanged) return { ds: _rpDs, changed: false };
+  _rpDs = d;
+  const c = document.getElementById('fb-rv-count');
+  if (c) c.textContent = d.rows.length + ' response' + (d.rows.length !== 1 ? 's' : '');
+  return { ds: d, changed: true };
+}
+
+// ── SHEET ───────────────────────────────────────────────────────────────────
+async function _rpOpenSheet() {
+  const pane = _rpPane('sheet');
+  if (!window.KFSSheetGrid) { pane.innerHTML = '<div class="fb-rv-empty"><span>Sheet engine not loaded (sheet-view.js). Hard-refresh the page.</span></div>'; return; }
+  pane.innerHTML =
+    '<div class="rp-bar">' +
+      '<input class="rp-in" id="rp-q" placeholder="Search all columns…" autocomplete="off">' +
+      '<label class="rp-chk"><input type="checkbox" id="rp-live" ' + (_rpLive ? 'checked' : '') + '> <span class="rp-dot"></span> Live</label>' +
+      '<span class="rp-mut" id="rp-stamp"></span><span style="flex:1"></span>' +
+      '<button class="rp-btn" id="rp-refresh">Refresh</button>' +
+      '<button class="rp-btn" id="rp-csv">CSV</button>' +
+      '<button class="rp-btn" id="rp-xlsx">Excel</button>' +
+    '</div><div id="rp-grid" class="rp-grid"></div>';
+  _rpGrid = KFSSheetGrid.mount(document.getElementById('rp-grid'), { light: _rpLight() });
+  const stamp = document.getElementById('rp-stamp');
+  const seq = ++_rpSeq;
+  const load = async (force) => {
+    if (_rpBusy || seq !== _rpSeq) return; _rpBusy = true;
+    try {
+      const r = await _rpLoadDs(force);
+      if (seq !== _rpSeq) return;
+      if (r.changed) _rpGrid.setData(KFSSheetGrid.prepare(r.ds, { admin: true }));
+      stamp.textContent = r.ds.rows.length + ' rows · updated ' + new Date().toLocaleTimeString('en-GB');
+    } catch (e) { stamp.textContent = 'Error: ' + e.message; }
+    finally { _rpBusy = false; }
+  };
+  await load(true);
+  const setTimer = () => { _rpStop(); if (_rpLive) _rpTimer = setInterval(() => { if (!document.hidden && _rpTab === 'sheet') load(false); }, 5000); };
+  setTimer();
+  document.getElementById('rp-live').addEventListener('change', e => { _rpLive = e.target.checked; setTimer(); });
+  document.getElementById('rp-q').addEventListener('input', e => _rpGrid.setQuery(e.target.value));
+  document.getElementById('rp-refresh').addEventListener('click', () => load(true));
+  const exp = (kind) => {
+    const v = _rpGrid.getView(); if (!v.rows.length) return;
+    const name = (_rpDs.title || 'responses').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10);
+    if (kind === 'csv') { KFSSheetGrid.download(name + '.csv', KFSSheetGrid.toCSV(v.columns, v.rows)); return; }
+    if (typeof XLSX === 'undefined') { KFSSheetGrid.download(name + '.csv', KFSSheetGrid.toCSV(v.columns, v.rows)); return; }
+    const head = ['#'].concat(v.columns.map(c => c.label));
+    const aoa = [head].concat(v.rows.map(r => [r.n].concat(v.columns.map(c => { const x = r.values[c.id]; return x == null ? '' : x; }))));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = head.map((h, i) => ({ wch: Math.min(40, Math.max(8, String(h).length + 2, ...v.rows.slice(0, 100).map(r => String(i ? (r.values[v.columns[i - 1].id] || '') : r.n).length + 1))) }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Responses'); XLSX.writeFile(wb, name + '.xlsx');
+  };
+  document.getElementById('rp-csv').addEventListener('click', () => exp('csv'));
+  document.getElementById('rp-xlsx').addEventListener('click', () => exp('xlsx'));
+}
+
+// ── SUMMARY (Google-Forms style) ────────────────────────────────────────────
+async function _rpOpenSummary() {
+  const pane = _rpPane('summary');
+  pane.innerHTML = '<div class="fb-rv-loading">Building summary…</div>';
+  let ds;
+  try { ds = (await _rpLoadDs(true)).ds; } catch (e) { pane.innerHTML = '<div class="fb-rv-empty"><span>' + _rpEsc(e.message) + '</span></div>'; return; }
+  const rows = ds.rows, n = rows.length;
+  if (!n) { pane.innerHTML = '<div class="fb-rv-empty"><span>No responses yet</span></div>'; return; }
+  const now = Date.now(), day = 86400000;
+  const last24 = rows.filter(r => r.submitted_at && now - new Date(r.submitted_at) < day).length;
+  const paid = rows.reduce((a, r) => a + (r.paid || 0), 0);
+  const emailCols = ds.columns.filter(c => c.type === 'email' || /e[\s-]?mail/i.test(c.label));
+  const seen = new Map(); let dupes = 0;
+  if (emailCols.length) rows.forEach(r => {
+    const e = String(r.values[emailCols[0].id] || '').trim().toLowerCase(); if (!e) return;
+    if (seen.has(e)) dupes++; else seen.set(e, 1);
+  });
+  // per-day timeline
+  const byDay = {};
+  rows.forEach(r => { if (!r.submitted_at) return; const k = new Date(r.submitted_at).toLocaleDateString('en-CA'); byDay[k] = (byDay[k] || 0) + 1; });
+  const days = Object.keys(byDay).sort(), maxD = Math.max(1, ...days.map(k => byDay[k]));
+  const tl = days.slice(-30).map(k => '<div class="rp-tl" title="' + _rpEsc(k) + ': ' + byDay[k] + '"><i style="height:' + Math.max(4, Math.round(byDay[k] / maxD * 56)) + 'px"></i><span>' + k.slice(5) + '</span></div>').join('');
+  let html =
+    '<div class="rp-stats">' +
+      '<div class="rp-stat"><b>' + n + '</b><span>Total</span></div>' +
+      '<div class="rp-stat"><b>' + last24 + '</b><span>Last 24h</span></div>' +
+      (emailCols.length ? '<div class="rp-stat"><b>' + seen.size + '</b><span>Unique emails</span></div><div class="rp-stat ' + (dupes ? 'warn' : '') + '"><b>' + dupes + '</b><span>Repeat submissions</span></div>' : '') +
+      (paid ? '<div class="rp-stat"><b>₹' + paid.toLocaleString('en-IN') + '</b><span>Collected</span></div>' : '') +
+    '</div>' +
+    '<div class="rp-card"><div class="rp-q">Responses over time</div><div class="rp-tls">' + tl + '</div></div>';
+  ds.columns.forEach(c => {
+    const vals = rows.map(r => r.values[c.id]).filter(v => v !== undefined && v !== null && String(v).trim() !== '');
+    const opts = (c.options || []);
+    if (opts.length && opts.length <= 30) {
+      const counts = {}; opts.forEach(o => counts[o] = 0); let other = 0;
+      vals.forEach(v => {
+        const s = String(v); let hit = false;
+        if (counts[s] !== undefined) { counts[s]++; hit = true; }
+        else s.split(/\s*,\s*/).forEach(t => { if (counts[t] !== undefined) { counts[t]++; hit = true; } });
+        if (!hit) other++;
+      });
+      const entries = Object.entries(counts); if (other) entries.push(['Other', other]);
+      const mx = Math.max(1, ...entries.map(e => e[1]));
+      html += '<div class="rp-card"><div class="rp-q">' + _rpEsc(c.label) + '</div><div class="rp-mut">' + vals.length + ' response' + (vals.length !== 1 ? 's' : '') + '</div>' +
+        entries.map(([k, v]) => '<div class="rp-bar-row"><div class="rp-bl" title="' + _rpEsc(k) + '">' + _rpEsc(k) + '</div><div class="rp-bt"><i style="width:' + (v / mx * 100) + '%"></i></div><div class="rp-bv">' + v + ' <small>' + Math.round(v / (vals.length || 1) * 100) + '%</small></div></div>').join('') + '</div>';
+    } else {
+      const freq = {}; vals.forEach(v => { const k = String(v).trim().toLowerCase(); freq[k] = (freq[k] || 0) + 1; });
+      const uniq = Object.keys(freq).length;
+      const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const recent = vals.slice(-4).reverse();
+      html += '<div class="rp-card"><div class="rp-q">' + _rpEsc(c.label) + '</div><div class="rp-mut">' + vals.length + ' response' + (vals.length !== 1 ? 's' : '') + ' · ' + uniq + ' unique</div>' +
+        (uniq < vals.length && top[0][1] > 1 ? '<div class="rp-mut" style="margin-top:6px">Most common</div>' + top.filter(t => t[1] > 1).map(([k, v]) => '<div class="rp-txt">' + _rpEsc(k.length > 90 ? k.slice(0, 90) + '…' : k) + ' <small>×' + v + '</small></div>').join('') : recent.map(v => '<div class="rp-txt">' + _rpEsc(String(v).length > 120 ? String(v).slice(0, 120) + '…' : v) + '</div>').join('')) + '</div>';
+    }
+  });
+  pane.innerHTML = '<div class="rp-scroll">' + html + '</div>';
+}
+
+// ── TICKETS (form responses vs scanner) ─────────────────────────────────────
+async function _rpOpenTickets() {
+  const pane = _rpPane('tickets');
+  if (_fbMode === 'standalone') { pane.innerHTML = '<div class="fb-rv-empty"><span>Tickets/scanner apply to event forms only.</span></div>'; return; }
+  pane.innerHTML = '<div class="fb-rv-loading">Comparing responses with scanner tickets…</div>';
+  try {
+    const d = await _rpFetch('event/' + encodeURIComponent(_fbEventId) + '/reconcile');
+    const c = d.counts;
+    const list = (title, arr, cols, tone) => !arr.length ? '' :
+      '<details class="rp-card"><summary class="rp-q ' + (tone || '') + '">' + title + ' <small>(' + arr.length + ')</small></summary><div class="rp-tbl-w"><table class="rp-tbl"><thead><tr>' +
+      cols.map(x => '<th>' + x[1] + '</th>').join('') + '</tr></thead><tbody>' +
+      arr.slice(0, 300).map(r => '<tr>' + cols.map(x => '<td>' + _rpEsc(r[x[0]] == null ? '' : r[x[0]]) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table>' + (arr.length > 300 ? '<div class="rp-mut">Showing first 300</div>' : '') + '</div></details>';
+    const fixable = c.missing_ticket + c.bad_names;
+    pane.innerHTML = '<div class="rp-scroll">' +
+      '<div class="rp-stats">' +
+        '<div class="rp-stat"><b>' + c.responses + '</b><span>Form responses</span></div>' +
+        '<div class="rp-stat"><b>' + c.registrations + '</b><span>Scanner tickets</span></div>' +
+        '<div class="rp-stat ' + (c.missing_ticket ? 'bad' : '') + '"><b>' + c.missing_ticket + '</b><span>Missing tickets</span></div>' +
+        '<div class="rp-stat ' + (c.duplicates ? 'warn' : '') + '"><b>' + c.duplicates + '</b><span>Repeat submits</span></div>' +
+        '<div class="rp-stat ' + (c.no_email ? 'warn' : '') + '"><b>' + c.no_email + '</b><span>No email</span></div>' +
+        '<div class="rp-stat"><b>' + c.orphans + '</b><span>Tickets w/o response</span></div>' +
+      '</div>' +
+      '<div class="rp-card"><div class="rp-q">Why the numbers differ</div>' + d.explain.map(x => '<div class="rp-txt">• ' + _rpEsc(x) + '</div>').join('') + '</div>' +
+      '<div class="rp-card"><div class="rp-q">Fix it</div><div class="rp-mut" style="margin-bottom:10px">Creates a scanner ticket for every real person who submitted but has none yet' + (c.bad_names ? ', and repairs ' + c.bad_names + ' ticket name(s) that show an email instead of a name' : '') + '. Existing tickets are never touched or duplicated.</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="rp-btn pri" id="rp-sync" ' + (fixable ? '' : 'disabled') + '>Create missing tickets</button>' +
+        '<button class="rp-btn" id="rp-sync-mail" ' + (c.missing_ticket ? '' : 'disabled') + '>Create + email QR tickets</button>' +
+        '<button class="rp-btn" id="rp-recheck">Re-check</button></div><div class="rp-mut" id="rp-sync-out" style="margin-top:8px"></div></div>' +
+      list('Submitted but NO ticket', d.missing, [['name','Name'],['email','Email'],['phone','Phone'],['roll_no','Roll'],['submitted_at','Submitted']], 'bad') +
+      list('Repeat submissions (same email)', d.duplicates, [['name','Name'],['email','Email'],['submitted_at','Submitted']], 'warn') +
+      list('Responses without a usable email', d.no_email, [['name','Name'],['phone','Phone'],['submitted_at','Submitted']], 'warn') +
+      list('Tickets with no form response', d.orphans, [['name','Name'],['email','Email'],['checked_in','Checked in'],['created_at','Created']]) +
+      '</div>';
+    const out = document.getElementById('rp-sync-out');
+    const run = async (send) => {
+      if (!confirm(send ? 'Create missing tickets AND email each person their QR ticket?' : 'Create missing scanner tickets (no emails sent)?')) return;
+      out.textContent = 'Working…';
+      try {
+        const r = await _rpFetch('event/' + encodeURIComponent(_fbEventId) + '/reconcile/sync', { method: 'POST', body: { send_tickets: !!send } });
+        out.textContent = 'Done — created ' + r.created + ', already existed ' + r.already_existed + ', emailed ' + r.emailed + ', names fixed ' + r.names_fixed + (r.failed.length ? ', FAILED ' + r.failed.length : '') + '.';
+        setTimeout(_rpOpenTickets, 1800);
+      } catch (e) { out.textContent = 'Error: ' + e.message; }
+    };
+    const a = document.getElementById('rp-sync'), b = document.getElementById('rp-sync-mail');
+    if (a) a.addEventListener('click', () => run(false));
+    if (b) b.addEventListener('click', () => run(true));
+    document.getElementById('rp-recheck').addEventListener('click', _rpOpenTickets);
+  } catch (e) { pane.innerHTML = '<div class="fb-rv-empty"><span>' + _rpEsc(e.message) + '</span></div>'; }
+}
+
+// ── SHARE (secure read-only live links) ─────────────────────────────────────
+async function _rpOpenShare() {
+  const pane = _rpPane('share');
+  pane.innerHTML = '<div class="fb-rv-loading">Loading…</div>';
+  let ds;
+  try { ds = (await _rpLoadDs(false)).ds; } catch (e) { pane.innerHTML = '<div class="fb-rv-empty"><span>' + _rpEsc(e.message) + '</span></div>'; return; }
+  pane.innerHTML = '<div class="rp-scroll">' +
+    '<div class="rp-card"><div class="rp-q">Create a live, read-only sheet link</div>' +
+    '<div class="rp-mut" style="margin-bottom:10px">Anyone with the link sees an Excel-style sheet that updates live — no login, no edit access. Link is random, stored hashed, expires automatically, and can be revoked any time.</div>' +
+    '<div class="rp-form">' +
+      '<label>Label<input class="rp-in" id="rp-sh-label" maxlength="80" placeholder="e.g. Volunteers view"></label>' +
+      '<label>Expires in<select class="rp-in" id="rp-sh-exp"><option value="24">24 hours</option><option value="72" selected>3 days</option><option value="168">7 days</option><option value="720">30 days</option><option value="2160">90 days</option></select></label>' +
+      '<label>PIN (optional, 4–8 digits)<input class="rp-in" id="rp-sh-pin" inputmode="numeric" maxlength="8" placeholder="none"></label>' +
+    '</div>' +
+    '<label class="rp-chk"><input type="checkbox" id="rp-sh-mask" checked> Mask emails &amp; phone numbers</label>' +
+    '<label class="rp-chk"><input type="checkbox" id="rp-sh-dl" checked> Allow CSV download</label>' +
+    '<div class="rp-mut" style="margin:8px 0 4px">Columns visible to viewers (untick to hide):</div>' +
+    '<div class="rp-cols">' + ds.columns.map(c => '<label class="rp-chk"><input type="checkbox" class="rp-sh-col" value="' + _rpEsc(c.id) + '" checked> ' + _rpEsc(c.label) + '</label>').join('') + '</div>' +
+    '<div style="margin-top:12px"><button class="rp-btn pri" id="rp-sh-make">Create link</button> <span class="rp-mut" id="rp-sh-out"></span></div>' +
+    '<div id="rp-sh-new"></div></div>' +
+    '<div class="rp-card"><div class="rp-q">Existing links</div><div id="rp-sh-list" class="rp-mut">Loading…</div></div></div>';
+  const listEl = document.getElementById('rp-sh-list');
+  const refresh = async () => {
+    try {
+      const rows = await _rpFetch(_rpKind() + '/' + encodeURIComponent(_rpId()) + '/shares');
+      if (!rows.length) { listEl.textContent = 'No links yet.'; return; }
+      listEl.innerHTML = '<div class="rp-tbl-w"><table class="rp-tbl"><thead><tr><th>Label</th><th>By</th><th>Expires</th><th>Views</th><th>Status</th><th></th></tr></thead><tbody>' +
+        rows.map(r => {
+          const dead = r.revoked_at ? 'Revoked' : (new Date(r.expires_at) < new Date() ? 'Expired' : 'Active');
+          return '<tr><td>' + _rpEsc(r.title || '—') + (r.has_pin ? ' 🔒' : '') + (r.mask_pii ? ' · masked' : '') + '</td><td>' + _rpEsc(r.created_by_name || '') + '</td><td>' + _rpEsc(new Date(r.expires_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + (r.view_count || 0) + '</td><td>' + dead + '</td><td>' +
+            (dead === 'Active' ? '<button class="rp-btn" data-rev="' + _rpEsc(r.id) + '">Revoke</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div><div class="rp-mut" style="margin-top:6px">The full URL is shown only once, at creation. Lost it? Revoke and create a new one.</div>';
+      listEl.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('Revoke this link? Viewers lose access immediately.')) return;
+        try { await _rpFetch(_rpKind() + '/shares/' + b.dataset.rev, { method: 'DELETE' }); refresh(); } catch (e) { alert(e.message); }
+      }));
+    } catch (e) { listEl.textContent = e.message + (e.detail ? ' — ' + e.detail : ''); }
+  };
+  refresh();
+  document.getElementById('rp-sh-make').addEventListener('click', async () => {
+    const out = document.getElementById('rp-sh-out'), nw = document.getElementById('rp-sh-new');
+    out.textContent = 'Creating…'; nw.innerHTML = '';
+    try {
+      const hidden = [...pane.querySelectorAll('.rp-sh-col')].filter(x => !x.checked).map(x => x.value);
+      const r = await _rpFetch(_rpKind() + '/' + encodeURIComponent(_rpId()) + '/shares', { method: 'POST', body: {
+        label: document.getElementById('rp-sh-label').value.trim(), expires_in_hours: +document.getElementById('rp-sh-exp').value,
+        pin: document.getElementById('rp-sh-pin').value.trim() || undefined, mask_pii: document.getElementById('rp-sh-mask').checked,
+        allow_download: document.getElementById('rp-sh-dl').checked, hidden_columns: hidden } });
+      out.textContent = '';
+      nw.innerHTML = '<div class="rp-linkbox"><input class="rp-in" readonly value="' + _rpEsc(r.url) + '" id="rp-sh-url"><button class="rp-btn pri" id="rp-sh-copy">Copy</button><a class="rp-btn" href="' + _rpEsc(r.url) + '" target="_blank" rel="noopener">Open</a></div><div class="rp-mut">Copy it now — it will not be shown again.' + (r.has_pin ? ' Share the PIN separately.' : '') + '</div>';
+      document.getElementById('rp-sh-copy').addEventListener('click', () => { const i = document.getElementById('rp-sh-url'); i.select(); (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).catch(() => document.execCommand('copy')); document.getElementById('rp-sh-copy').textContent = 'Copied'; });
+      refresh();
+    } catch (e) { out.textContent = e.message + (e.detail ? ' — ' + e.detail : ''); }
+  });
+}
+
 
 async function downloadFormResponsesFromViewer() {
   const btn = document.getElementById('fb-rv-dl-btn');
