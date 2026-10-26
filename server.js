@@ -2594,7 +2594,7 @@ const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
       inn.style.width = w + 'px';
       var l = '<div class="ks-c ks-g"></div>', h = '<div class="ks-c ks-g">#</div>';
       S.cols.forEach(function (c, i) {
-        var arrow = S.sort.id === c.id ? '<span class="ks-ar">' + (S.sort.dir > 0 ? '▲' : '▼') + '</span>' : '';
+        var arrow = S.sort.id === c.id ? '<span class="ks-ar">' + '<svg viewBox="0 0 10 10" width="8" height="8" fill="currentColor"><path d="' + (S.sort.dir > 0 ? 'M5 2 9 8H1z' : 'M5 8 1 2h8z') + '"/></svg>' + '</span>' : '';
         l += '<div class="ks-c" style="width:' + S.widths[i] + 'px">' + letters(i) + '</div>';
         h += '<div class="ks-c" data-i="' + i + '" style="width:' + S.widths[i] + 'px" title="' + esc(c.label) + '">' + esc(c.label) + arrow + '<i class="ks-rs" data-rs="' + i + '"></i></div>';
       });
@@ -2688,7 +2688,7 @@ const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
       else if (k === 'ArrowLeft') select(r, c - 1, true); else if (k === 'ArrowRight') select(r, c + 1, true);
       else if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'C')) {
         var v = S.view[r].values[S.cols[c].id] || '';
-        if (navigator.clipboard) navigator.clipboard.writeText(v).then(function () { selEl.textContent = 'Copied ✓'; }, function () {});
+        if (navigator.clipboard) navigator.clipboard.writeText(v).then(function () { selEl.textContent = 'Copied'; }, function () {});
         return;
       } else return;
       e.preventDefault();
@@ -2737,56 +2737,107 @@ const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
   if (!m) return;
   var TOKEN = m[1], root = document.getElementById('root');
   if (!root) return;
-  document.documentElement.style.height = '100%'; document.body.style.cssText = 'margin:0;height:100%;background:#0b0b0d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-  root.style.cssText = 'height:100%;display:flex;flex-direction:column;padding:12px;box-sizing:border-box;gap:10px;color:#ececef';
+
+  var ICON = function (p, s) { return '<svg viewBox="0 0 24 24" width="' + (s || 18) + '" height="' + (s || 18) + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var I_LOCK = '<rect x="4.5" y="10.5" width="15" height="10" rx="2.8"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><path d="M12 14.6v2.1"/>';
+  var I_OFF = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5M12 16.2h.01"/>';
+  var I_MOON = '<path d="M20 14.2A8 8 0 0 1 9.8 4 8 8 0 1 0 20 14.2z"/>';
+  var I_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M5.5 18.5l1.4-1.4M17.1 6.9l1.4-1.4"/>';
+  var I_DL = '<path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 19.5h14"/>';
+  var I_SEARCH = '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/>';
 
   var pin = ''; try { pin = sessionStorage.getItem('ks_pin_' + TOKEN.slice(0, 10)) || ''; } catch (e) {}
-  var grid = null, version = '', timer = null, lastOk = 0, light = false, expires = null, allowDl = true, titleTxt = 'Live sheet', lastData = null;
-  try { light = localStorage.getItem('ks_light') === '1'; } catch (e) {}
+  var grid = null, version = '', timer = null, lastOk = 0, light = false, expires = null, allowDl = true, titleTxt = 'Live sheet';
+  try { var sv = localStorage.getItem('ks_light'); light = sv === null ? !!(window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) : sv === '1'; } catch (e) {}
 
-  function msg(html) { root.innerHTML = '<div style="margin:auto;max-width:380px;text-align:center;color:#9a9aa4;line-height:1.6">' + html + '</div>'; }
+  var st = document.createElement('style');
+  st.textContent =
+    'html,body{height:100%;margin:0}' +
+    'body{--bg:#000;--tx:#f5f5f7;--mu:#86868b;--ln:rgba(255,255,255,.12);--fill:rgba(255,255,255,.08);--card:rgba(28,28,30,.72);--ac:#0a84ff;--ok:#30d158;--wn:#ff9f0a;--er:#ff453a;' +
+    'background:var(--bg);color:var(--tx);font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}' +
+    'body.kv-light{--bg:#f5f5f7;--tx:#1d1d1f;--mu:#6e6e73;--ln:rgba(0,0,0,.1);--fill:rgba(0,0,0,.05);--card:rgba(255,255,255,.78);--ac:#0071e3;--ok:#248a3d;--wn:#b25000;--er:#d70015}' +
+    '#root{height:100%;display:flex;flex-direction:column;box-sizing:border-box;padding:14px;gap:12px}' +
+    '.kv-gate{margin:auto;width:min(360px,100%);text-align:center;padding:40px 28px 32px;border-radius:28px;background:var(--card);border:1px solid var(--ln);-webkit-backdrop-filter:saturate(180%) blur(30px);backdrop-filter:saturate(180%) blur(30px);box-shadow:0 30px 80px rgba(0,0,0,.35);animation:kvIn .5s cubic-bezier(.2,.8,.2,1)}' +
+    'body.kv-light .kv-gate{box-shadow:0 20px 60px rgba(0,0,0,.1)}' +
+    '@keyframes kvIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}' +
+    '@keyframes kvShake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}' +
+    '.kv-tile{width:64px;height:64px;margin:0 auto 20px;border-radius:18px;display:flex;align-items:center;justify-content:center;color:var(--tx);background:var(--fill);border:1px solid var(--ln)}' +
+    '.kv-gate h1{margin:0 0 6px;font-size:22px;font-weight:700;letter-spacing:-.02em}' +
+    '.kv-gate p{margin:0 0 22px;color:var(--mu);font-size:14px}' +
+    '.kv-pin{width:100%;box-sizing:border-box;padding:14px;text-align:center;font:600 22px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.5em;text-indent:.5em;background:var(--fill);border:1px solid transparent;border-radius:14px;color:var(--tx);outline:none;transition:border-color .2s,box-shadow .2s}' +
+    '.kv-pin:focus{border-color:var(--ac);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 25%,transparent)}' +
+    '.kv-pin.bad{animation:kvShake .4s;border-color:var(--er)}' +
+    '.kv-go{width:100%;margin-top:12px;padding:13px;border:0;border-radius:14px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer;transition:filter .2s,transform .1s}' +
+    '.kv-go:hover{filter:brightness(1.1)}.kv-go:active{transform:scale(.98)}' +
+    '.kv-err{margin-top:14px;color:var(--er);font-size:13px;min-height:18px}' +
+    '.kv-foot{margin-top:22px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}' +
+    '.kv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:18px;background:var(--card);border:1px solid var(--ln);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}' +
+    '.kv-t{font-weight:700;font-size:17px;letter-spacing:-.02em;margin-right:4px}' +
+    '.kv-live{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ok)}' +
+    '.kv-live i{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 0 currentColor;animation:kvPulse 2s infinite}' +
+    '.kv-live.wn{color:var(--wn)}.kv-live.er{color:var(--er)}.kv-live.wn i,.kv-live.er i{animation:none}' +
+    '@keyframes kvPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,currentColor 55%,transparent)}70%,100%{box-shadow:0 0 0 7px transparent}}' +
+    '.kv-mu{font-size:12px;color:var(--mu)}' +
+    '.kv-chip{font-size:11px;font-weight:600;color:var(--wn);background:color-mix(in srgb,var(--wn) 14%,transparent);padding:3px 10px;border-radius:99px}' +
+    '.kv-sp{flex:1}' +
+    '.kv-sw{position:relative;display:flex;align-items:center}.kv-sw svg{position:absolute;left:11px;color:var(--mu);pointer-events:none}' +
+    '.kv-q{padding:8px 12px 8px 34px;min-width:170px;background:var(--fill);border:1px solid transparent;border-radius:99px;color:var(--tx);font:inherit;font-size:13px;outline:none;transition:border-color .2s}' +
+    '.kv-q:focus{border-color:var(--ac)}' +
+    '.kv-b{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--fill);border:0;border-radius:99px;color:var(--tx);font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s}' +
+    '.kv-b:hover{background:var(--ln)}.kv-b.ic{padding:8px 10px}' +
+    '.kv-ex{font-size:11px;color:var(--mu);text-align:center}' +
+    '.kv-spin{width:22px;height:22px;margin:auto;border-radius:50%;border:2px solid var(--ln);border-top-color:var(--ac);animation:kvSp .8s linear infinite}@keyframes kvSp{to{transform:rotate(360deg)}}';
+  document.head.appendChild(st);
+  document.body.classList.toggle('kv-light', light);
+
+  function gate(icon, title, sub, extra) {
+    root.innerHTML = '<div class="kv-gate"><div class="kv-tile">' + ICON(icon, 28) + '</div><h1>' + title + '</h1><p>' + sub + '</p>' + (extra || '') + '<div class="kv-foot">KIIT Film Society</div></div>';
+  }
+  function loading() { root.innerHTML = '<div class="kv-spin"></div>'; }
+  function unavailable(m) { gate(I_OFF, 'Link unavailable', esc(m || 'This link is invalid, expired or has been revoked.')); }
   function api(path) {
     var h = {}; if (pin) h['x-sheet-pin'] = pin;
     return fetch('/api/sheet/' + TOKEN + path, { headers: h, cache: 'no-store' }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { s: r.status, d: d }; }); });
   }
   function askPin(wrong) {
-    msg('<div style="font-size:34px">🔒</div><h2 style="color:#fff;margin:8px 0">Enter PIN</h2><p>This sheet is protected.</p>' +
-      '<input id="pin" inputmode="numeric" maxlength="8" autocomplete="off" style="width:140px;padding:10px;text-align:center;font-size:20px;letter-spacing:6px;background:#17171a;border:1px solid #333;border-radius:10px;color:#fff;outline:none">' +
-      '<div><button id="go" style="margin-top:12px;padding:9px 22px;border:0;border-radius:10px;background:#4c9bff;color:#fff;font-weight:600;cursor:pointer">Open</button></div>' +
-      (wrong ? '<p style="color:#ff6b60">Wrong PIN — try again.</p>' : ''));
+    gate(I_LOCK, 'Enter PIN', 'This sheet is protected. Ask the person who shared it for the PIN.',
+      '<input id="pin" class="kv-pin' + (wrong ? ' bad' : '') + '" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" aria-label="PIN">' +
+      '<button id="go" class="kv-go">Continue</button><div class="kv-err">' + (wrong ? 'Incorrect PIN. Try again.' : '') + '</div>');
     var i = document.getElementById('pin'); i.focus();
-    function go() { pin = i.value.trim(); try { sessionStorage.setItem('ks_pin_' + TOKEN.slice(0, 10), pin); } catch (e) {} start(); }
+    function go() { if (!i.value.trim()) return; pin = i.value.trim(); try { sessionStorage.setItem('ks_pin_' + TOKEN.slice(0, 10), pin); } catch (e) {} start(); }
     document.getElementById('go').onclick = go; i.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+    i.oninput = function () { i.value = i.value.replace(/\\D/g, ''); };
   }
   function ago() { var s = Math.round((Date.now() - lastOk) / 1000); return s < 5 ? 'just now' : s < 60 ? s + 's ago' : Math.round(s / 60) + 'm ago'; }
+  function setLive(txt, cls) { var l = document.getElementById('live'); if (l) { l.className = 'kv-live' + (cls ? ' ' + cls : ''); l.innerHTML = '<i></i>' + txt; } }
 
   function shell() {
     root.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-        '<div style="font-weight:700;font-size:17px;color:#fff" id="t"></div>' +
-        '<span id="live" style="font-size:12px;color:#34c759">● Live</span><span id="upd" style="font-size:12px;color:#8b8b95"></span>' +
-        '<span id="mk" style="display:none;font-size:11px;color:#f0b429;border:1px solid #f0b42955;padding:2px 8px;border-radius:20px">Personal data masked</span>' +
-        '<div style="flex:1"></div>' +
-        '<input id="q" placeholder="Search…" style="padding:7px 12px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;outline:none;min-width:150px">' +
-        '<button id="th" style="padding:7px 11px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;cursor:pointer">◐</button>' +
-        '<button id="dl" style="padding:7px 12px;background:#17171a;border:1px solid #2a2a30;border-radius:9px;color:#ececef;cursor:pointer">⬇ CSV</button>' +
-      '</div><div id="gh" style="flex:1;min-height:0"></div>' +
-      '<div style="font-size:11px;color:#6b6b75;text-align:center" id="ex"></div>';
+      '<div class="kv-top">' +
+        '<div class="kv-t" id="t"></div><span class="kv-live" id="live"><i></i>Live</span><span class="kv-mu" id="upd"></span>' +
+        '<span class="kv-chip" id="mk" style="display:none">Personal data masked</span><div class="kv-sp"></div>' +
+        '<div class="kv-sw">' + ICON(I_SEARCH, 15) + '<input id="q" class="kv-q" placeholder="Search" autocomplete="off"></div>' +
+        '<button id="th" class="kv-b ic" aria-label="Toggle theme"></button>' +
+        '<button id="dl" class="kv-b">' + ICON(I_DL, 15) + 'CSV</button>' +
+      '</div><div id="gh" style="flex:1;min-height:0"></div><div class="kv-ex" id="ex"></div>';
+    var th = document.getElementById('th');
+    function paintTheme() { th.innerHTML = ICON(light ? I_MOON : I_SUN, 16); document.body.classList.toggle('kv-light', light); }
+    paintTheme();
     grid = mount(document.getElementById('gh'), { light: light });
     document.getElementById('q').oninput = function () { grid.setQuery(this.value); };
-    document.getElementById('th').onclick = function () { light = !light; grid.setLight(light); try { localStorage.setItem('ks_light', light ? '1' : '0'); } catch (e) {} };
+    th.onclick = function () { light = !light; grid.setLight(light); paintTheme(); try { localStorage.setItem('ks_light', light ? '1' : '0'); } catch (e) {} };
     document.getElementById('dl').onclick = function () {
       var v = grid.getView(); download((titleTxt || 'sheet').replace(/[^a-z0-9]+/gi, '_') + '.csv', toCSV(v.columns, v.rows));
     };
-    setInterval(function () { var u = document.getElementById('upd'); if (u && lastOk) u.textContent = 'updated ' + ago(); }, 1000);
+    setInterval(function () { var u = document.getElementById('upd'); if (u && lastOk) u.textContent = 'Updated ' + ago(); }, 1000);
   }
 
   function apply(d) {
     titleTxt = d.title || titleTxt; version = d.version; allowDl = d.allow_download !== false; expires = d.expires_at;
-    document.getElementById('t').textContent = titleTxt; document.title = titleTxt + ' — KFS Live Sheet';
+    document.getElementById('t').textContent = titleTxt; document.title = titleTxt + ' | KFS Live Sheet';
     document.getElementById('dl').style.display = allowDl ? '' : 'none';
     document.getElementById('mk').style.display = d.masked ? '' : 'none';
-    document.getElementById('ex').textContent = expires ? 'Read-only • link expires ' + new Date(expires).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    document.getElementById('ex').textContent = expires ? 'Read-only. Link expires ' + new Date(expires).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     grid.setData(prepare(d));
   }
 
@@ -2794,23 +2845,19 @@ const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
     clearTimeout(timer);
     if (document.hidden) { timer = setTimeout(poll, 5000); return; }
     api('/data' + (version ? '?since=' + encodeURIComponent(version) : '')).then(function (r) {
-      var live = document.getElementById('live');
-      if (r.s === 200) { lastOk = Date.now(); if (!r.d.unchanged) apply(r.d); if (live) { live.textContent = '● Live'; live.style.color = '#34c759'; } }
+      if (r.s === 200) { lastOk = Date.now(); if (!r.d.unchanged) apply(r.d); setLive('Live', ''); }
       else if (r.s === 401) { askPin(!!pin); return; }
-      else if (r.s === 404) { msg('<div style="font-size:34px">⛔</div><h2 style="color:#fff">Link unavailable</h2><p>' + esc(r.d.error || 'This link is invalid, expired or revoked.') + '</p>'); return; }
-      else if (live) { live.textContent = '● Reconnecting…'; live.style.color = '#f0b429'; }
+      else if (r.s === 404) { unavailable(r.d.error); return; }
+      else setLive('Reconnecting', 'wn');
       timer = setTimeout(poll, 5000);
-    }, function () {
-      var live = document.getElementById('live'); if (live) { live.textContent = '● Offline'; live.style.color = '#ff6b60'; }
-      timer = setTimeout(poll, 8000);
-    });
+    }, function () { setLive('Offline', 'er'); timer = setTimeout(poll, 8000); });
   }
   document.addEventListener('visibilitychange', function () { if (!document.hidden && grid) poll(); });
 
   function start() {
-    msg('Loading…');
+    loading();
     api('/meta').then(function (r) {
-      if (r.s !== 200) { msg('<div style="font-size:34px">⛔</div><h2 style="color:#fff">Link unavailable</h2><p>' + esc(r.d.error || 'This link is invalid, expired or revoked.') + '</p>'); return; }
+      if (r.s !== 200) { unavailable(r.d.error); return; }
       if (r.d.needs_pin && !pin) { askPin(false); return; }
       shell(); version = ''; poll();
     });
@@ -3029,6 +3076,41 @@ app.get("/sheet-view.js", (req, res) => {
   const maskEmail = (v) => v.replace(/^([^@]{1,2})[^@]*(@.*)$/, "$1***$2");
   const maskPhone = (v) => { const d = v.replace(/\s/g, ""); return d.length > 4 ? d.slice(0, 2) + "****" + d.slice(-2) : "****"; };
 
+  // ── viewer audit log: IP + browser/device of every visitor (de-duplicated) ──
+  const _viewSeen = new Map();
+  function parseUA(ua) {
+    ua = String(ua || "");
+    const browser = /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+      : /CriOS|Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Unknown";
+    const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad|iOS/.test(ua) ? "iOS"
+      : /Mac OS X/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "Unknown";
+    const device = /iPad|Tablet/.test(ua) ? "Tablet" : /Mobi|Android|iPhone/.test(ua) ? "Mobile" : "Desktop";
+    return { browser, os, device };
+  }
+  function logShareView(shareId, req) {
+    const ip = String(req.ip || "").replace(/^::ffff:/, "");
+    const ua = String(req.headers["user-agent"] || "").slice(0, 400);
+    const key = shareId + "|" + ip + "|" + ua;
+    const last = _viewSeen.get(key);
+    if (last && Date.now() - last < 10 * 60_000) return; // same visitor within 10 min = same visit
+    _viewSeen.set(key, Date.now());
+    if (_viewSeen.size > 5000) for (const [k, t] of _viewSeen) if (Date.now() - t > 600_000) _viewSeen.delete(k);
+    const p = parseUA(ua);
+    supabase.from("response_share_views")
+      .insert([{ share_id: shareId, ip, user_agent: ua, browser: p.browser, os: p.os, device: p.device }])
+      .then(() => {}, () => {});
+  }
+
+  app.get("/api/admin/rp/:kind/shares/:shareId/views", guard, async (req, res) => {
+    const { data: sh } = await supabase.from("response_share_links").select("id").eq("id", req.params.shareId).eq("kind", req.params.kind).maybeSingle();
+    if (!sh) return res.status(404).json({ error: "Link not found" });
+    const { data, error } = await supabase.from("response_share_views")
+      .select("ip, browser, os, device, user_agent, viewed_at").eq("share_id", sh.id)
+      .order("viewed_at", { ascending: false }).limit(200);
+    if (error) return res.status(500).json({ error: "Run the latest SQL (response_share_views table).", detail: error.message });
+    res.json(data || []);
+  });
+
   app.get("/sheet/:token", (req, res) => {
     noStore(res);
     res.type("html").send('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KFS - Live Sheet</title><link rel="icon" href="data:,"></head><body style="margin:0;background:#0b0b0d"><div id="root"></div><script src="/sheet-view.js"></script></body></html>');
@@ -3063,9 +3145,13 @@ app.get("/sheet-view.js", (req, res) => {
         }
         return { n: r.n, submitted_at: r.submitted_at, values };
       });
-      supabase.from("response_share_links")
-        .update({ last_viewed_at: new Date().toISOString(), view_count: (s.view_count || 0) + 1 })
-        .eq("id", s.id).then(() => {}, () => {});
+      // Count + log a "visit" only on the first load of a page (live polls send ?since=)
+      if (!req.query.since) {
+        supabase.from("response_share_links")
+          .update({ last_viewed_at: new Date().toISOString(), view_count: (s.view_count || 0) + 1 })
+          .eq("id", s.id).then(() => {}, () => {});
+        logShareView(s.id, req);
+      }
       res.json({
         title: s.title || ds.title, columns, rows, version: ds.version, allow_download: s.allow_download,
         masked: !!s.mask_pii, expires_at: s.expires_at, served_at: new Date().toISOString(),
