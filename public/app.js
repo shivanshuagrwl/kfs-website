@@ -9418,13 +9418,14 @@ async function _rpOpenShare() {
       '<label>Expires in<select class="rp-in" id="rp-sh-exp"><option value="24">24 hours</option><option value="72" selected>3 days</option><option value="168">7 days</option><option value="720">30 days</option><option value="2160">90 days</option></select></label>' +
       '<label>PIN (optional, 4–8 digits)<input class="rp-in" id="rp-sh-pin" inputmode="numeric" maxlength="8" placeholder="none"></label>' +
     '</div>' +
-    '<label class="rp-chk"><input type="checkbox" id="rp-sh-mask" checked> Mask emails &amp; phone numbers</label>' +
+    '<label class="rp-chk"><input type="checkbox" id="rp-sh-mask" checked> Mask emails &amp; phones (ab***@gmail.com, 98****21)</label>' +
     '<label class="rp-chk"><input type="checkbox" id="rp-sh-dl" checked> Allow CSV download</label>' +
     '<div class="rp-mut" style="margin:8px 0 4px">Columns visible to viewers (untick to hide):</div>' +
     '<div class="rp-cols">' + ds.columns.map(c => '<label class="rp-chk"><input type="checkbox" class="rp-sh-col" value="' + _rpEsc(c.id) + '" checked> ' + _rpEsc(c.label) + '</label>').join('') + '</div>' +
     '<div style="margin-top:12px"><button class="rp-btn pri" id="rp-sh-make">Create link</button> <span class="rp-mut" id="rp-sh-out"></span></div>' +
     '<div id="rp-sh-new"></div></div>' +
-    '<div class="rp-card"><div class="rp-q">Existing links</div><div id="rp-sh-list" class="rp-mut">Loading…</div></div></div>';
+    '<div class="rp-card"><div class="rp-q">Existing links</div><div id="rp-sh-list" class="rp-mut">Loading…</div></div>' +
+    '<div class="rp-card" id="rp-sh-views" style="display:none"></div></div>';
   const listEl = document.getElementById('rp-sh-list');
   const refresh = async () => {
     try {
@@ -9434,8 +9435,20 @@ async function _rpOpenShare() {
         rows.map(r => {
           const dead = r.revoked_at ? 'Revoked' : (new Date(r.expires_at) < new Date() ? 'Expired' : 'Active');
           return '<tr><td>' + _rpEsc(r.title || '—') + (r.has_pin ? ' 🔒' : '') + (r.mask_pii ? ' · masked' : '') + '</td><td>' + _rpEsc(r.created_by_name || '') + '</td><td>' + _rpEsc(new Date(r.expires_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + (r.view_count || 0) + '</td><td>' + dead + '</td><td>' +
+            '<button class="rp-btn" data-vw="' + _rpEsc(r.id) + '" data-vt="' + _rpEsc(r.title || 'link') + '">Viewers</button> ' +
             (dead === 'Active' ? '<button class="rp-btn" data-rev="' + _rpEsc(r.id) + '">Revoke</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div><div class="rp-mut" style="margin-top:6px">The full URL is shown only once, at creation. Lost it? Revoke and create a new one.</div>';
+      listEl.querySelectorAll('[data-vw]').forEach(b => b.addEventListener('click', async () => {
+        const box = document.getElementById('rp-sh-views');
+        box.style.display = 'block'; box.innerHTML = '<div class="rp-mut">Loading viewers…</div>';
+        try {
+          const v = await _rpFetch(_rpKind() + '/shares/' + b.dataset.vw + '/views');
+          box.innerHTML = '<div class="rp-q">Who opened “' + _rpEsc(b.dataset.vt) + '”</div>' + (!v.length ? '<div class="rp-mut">Nobody has opened this link yet.</div>' :
+            '<div class="rp-tbl-w"><table class="rp-tbl"><thead><tr><th>When</th><th>IP address</th><th>Browser</th><th>Device</th><th>OS</th></tr></thead><tbody>' +
+            v.map(x => '<tr title="' + _rpEsc(x.user_agent || '') + '"><td>' + _rpEsc(new Date(x.viewed_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + _rpEsc(x.ip) + '</td><td>' + _rpEsc(x.browser) + '</td><td>' + _rpEsc(x.device) + '</td><td>' + _rpEsc(x.os) + '</td></tr>').join('') +
+            '</tbody></table></div><div class="rp-mut" style="margin-top:6px">Same person re-opening within 10 minutes counts once. Latest 200 shown.</div>');
+        } catch (e) { box.innerHTML = '<div class="rp-mut">' + _rpEsc(e.message) + (e.detail ? ' — ' + _rpEsc(e.detail) : '') + '</div>'; }
+      }));
       listEl.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', async () => {
         if (!confirm('Revoke this link? Viewers lose access immediately.')) return;
         try { await _rpFetch(_rpKind() + '/shares/' + b.dataset.rev, { method: 'DELETE' }); refresh(); } catch (e) { alert(e.message); }
