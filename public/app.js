@@ -1185,7 +1185,7 @@ function renderBlogCard(b) {
       <p class="blog-card-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : ''}<\/p>
       ${spoilerPill}
       ${tagPills}
-      <h3 class="blog-card-title">${b.title}<\/h3>
+      <h3 class="blog-card-title">${kfsCrawlLink('/blog/'+kfsSlug(b.title, b.id), b.title)}<\/h3>
       ${b.author ? `<p class="blog-card-author" style="font-size:11px;color:var(--grey);margin:4px 0 6px;letter-spacing:.04em">${b.author.split(';;').map(a=>{const p=a.indexOf('||');return p!==-1?a.slice(0,p).trim():a.trim();}).join(', ')}<\/p>` : ''}
       <p class="blog-card-excerpt">${b.excerpt||''}<\/p>
     <\/div>
@@ -1697,6 +1697,18 @@ function renderMoviesGrid(movies) {
   }
 }
 
+
+// SEO: real, crawlable links. Cards are click-handler <div>s, which Googlebot does not
+// follow, so each card title also carries a genuine <a href>. Plain clicks still open
+// the in-app view (the click bubbles to the card's onclick); ctrl/cmd/middle-click open
+// the real URL in a new tab.
+function kfsSlug(title, id) {
+  return (title ? String(title).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
+}
+function kfsCrawlLink(href, innerHtml) {
+  return `<a href="${href}" style="color:inherit;text-decoration:none" onclick="if(event.metaKey||event.ctrlKey||event.shiftKey||event.button){event.stopPropagation()}else{event.preventDefault()}">${innerHtml}</a>`;
+}
+
 function renderMovieCard(m, clickable=false) {
   const watched = isMovieWatched(m.id);
   const rating = window._movieRatings && window._movieRatings[m.id];
@@ -1714,7 +1726,7 @@ function renderMovieCard(m, clickable=false) {
       <\/div>` : ''}
     <\/div>
     <div class="movie-info">
-      <div class="movie-title">${m.title}<\/div>
+      <div class="movie-title">${clickable ? kfsCrawlLink('/films/'+kfsSlug(m.title, m.id), m.title) : m.title}<\/div>
       <div class="movie-year">${m.release_year||''}<\/div>
       ${(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${(Array.isArray(m.genre)?m.genre:[m.genre]).map(g=>`<span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--grey)">${g}<\/span>`).join('')}<\/div>` : ''}
       <div class="movie-director">${m.director ? 'Dir. '+splitCrew(m.director).map(p=>p.split('||')[0].trim()).join(', ') : ''}<\/div>
