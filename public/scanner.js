@@ -631,6 +631,8 @@ async function silentRefresh(eventId) {
   if (cEl) cEl.textContent = checked;
   if (pEl) pEl.textContent = total - checked;
 
+  loadSyncHealth(eventId);
+
   const lastEl = document.getElementById('last-updated');
   if (lastEl) lastEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -685,6 +687,8 @@ function renderDataTab(eventId) {
       </div>
     </div>
 
+    <div id="sync-health"></div>
+
     <div class="search-wrap">
       <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -696,6 +700,29 @@ function renderDataTab(eventId) {
   `;
 
   renderRegsList(_allRegs);
+  loadSyncHealth(eventId);
+}
+
+// Compares form responses with scanner tickets (counts only) and explains any gap.
+async function loadSyncHealth(eventId) {
+  const box = document.getElementById('sync-health');
+  if (!box) return;
+  const { ok, data } = await api('GET', `/api/admin/events/${eventId}/registrations/health`);
+  if (!ok || !data || !document.getElementById('sync-health')) return;
+  const { responses, tickets, gap, issues_ticket } = data;
+  let html = '';
+  if (issues_ticket === false) {
+    html = `<div class="sync-note">This form is <b>Responses Only</b> (no tickets), so the scanner list is empty by design.</div>`;
+  } else if (gap > 0) {
+    html = `<div class="sync-note warn"><b>${responses}</b> form responses vs <b>${tickets}</b> scanner tickets — <b>${gap}</b> difference.<br>
+      Usually repeat submissions by the same email (one person = one ticket) or tickets that failed to generate.
+      A site admin can fix it in <b>Admin → Form → Responses → Tickets &amp; Scanner</b>.</div>`;
+  } else if (gap < 0) {
+    html = `<div class="sync-note">${tickets} tickets, ${responses} form responses — extra tickets were added manually/imported.</div>`;
+  } else {
+    html = `<div class="sync-note ok">✓ In sync — ${responses} responses, ${tickets} tickets.</div>`;
+  }
+  box.innerHTML = html;
 }
 
 function onSearch(q) {
