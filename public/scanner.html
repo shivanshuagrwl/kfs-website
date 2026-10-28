@@ -1060,6 +1060,33 @@ body.flash-red   { animation: flashR 0.5s ease forwards; }
 @media (min-width: 540px) {
   .tab-content { max-width: 540px; margin: 0 auto; }
 }
+
+/* ── Manual check-in (search when QR can't be scanned) ───────────────────── */
+.manual-section { margin-top: 22px; padding-bottom: 40px; }
+.manual-title {
+  font-size: 13px; font-weight: 600; color: var(--label-tertiary);
+  text-transform: uppercase; letter-spacing: 0.4px; margin: 0 4px 8px;
+}
+#manual-results {
+  display: flex; flex-direction: column; border-radius: var(--r-md);
+  overflow: hidden; box-shadow: var(--shadow-sm);
+}
+#manual-results:empty { display: none; }
+.manual-item {
+  background: var(--surface); display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+}
+.manual-item:not(:last-child) { border-bottom: 0.5px solid var(--separator); }
+.manual-btn {
+  flex-shrink: 0; height: 36px; padding: 0 14px; border: none; border-radius: 10px;
+  background: var(--green); color: #fff; font-size: 14px; font-weight: 600;
+  font-family: var(--font); cursor: pointer; min-width: 92px;
+}
+.manual-btn:disabled { opacity: 0.6; }
+.manual-done { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--green-dark); text-align: right; }
+.manual-hint { font-size: 12px; color: var(--label-tertiary); text-align: center; padding: 10px 4px 0; }
+.manual-empty { background: var(--surface); padding: 20px; text-align: center; color: var(--label-tertiary); font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -1221,6 +1248,21 @@ body.flash-red   { animation: flashR 0.5s ease forwards; }
       </div>
     </div>
     <div id="scan-next-hint">Ready to scan the next ticket</div>
+
+    <!-- Manual check-in: search + mark present when a QR can't be scanned -->
+    <div class="manual-section">
+      <div class="manual-title">Can't scan? Search &amp; mark present</div>
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="manual-search" placeholder="Name, email, roll no or phone…"
+               autocomplete="off" autocapitalize="off" spellcheck="false"
+               oninput="onManualSearch(this.value)" onfocus="onManualFocus()">
+      </div>
+      <div id="manual-results"></div>
+      <div class="manual-hint" id="manual-hint"></div>
+    </div>
 
   </div>
 
