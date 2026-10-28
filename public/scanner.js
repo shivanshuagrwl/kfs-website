@@ -52,91 +52,189 @@ Promise.race([fetchCsrf(), new Promise(r => setTimeout(r, 5000))]).then(() => {
 // Auto-refresh every 3.5 hours
 setInterval(fetchCsrf, 3.5 * 60 * 60 * 1000);
 
-// ── Token refresh ─────────────────────────────────────────────────────────────
-// Shared by the interval timer, the visibility-change handler, and the
-// reactive 401 retry in api() below. Returns true iff _token was updated.
-let _refreshInFlight = null;
-async function refreshToken() {
-  // Coalesce concurrent callers (e.g. interval + a 401 from a scan landing
-  // at the same moment) into a single network call.
-  if (_refreshInFlight) return _refreshInFlight;
-  _refreshInFlight = (async () => {
-    try {
-      const r = await fetch('/api/admin/refresh', {
-        method: 'POST', credentials: 'include',
-        headers: { 'x-csrf-token': _csrfToken || '' },
-      });
-      if (!r.ok) { log('auth', `refresh failed: ${r.status}`); return false; }
-      const d = await r.json();
-      if (!d.token) { log('auth', 'refresh: no token in response'); return false; }
-      _token = d.token;
-      log('auth', 'token refreshed');
-      return true;
-    } catch (e) {
-      warn('auth', 'refresh failed:', e.message);
-      return false;
-    }
-  })();
+// ── CSRF cookie helper ────────────────────────────────────────────────────────
+// Always read the CURRENT cookie value at request time. The in-memory
+// _csrfToken can drift from the cookie (cookie rewritten, tab restored after
+// the phone slept) → "CSRF token mismatch" 403s on valid scans.
+function getCookie(name) {
+  const m = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='));
+  return m ? decodeURIComponent(m.slice(name.length + 1)) : null;
+}
+function currentCsrf() { return getCookie('kfs_csrf') || _csrfToken || ''; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ── Token handling ────────────────────────────────────────────────────────────
+let _tokenExp = 0;          // ms epoch when access token expires
+let _lastRefreshData = null;
+
+function decodeExp(t) {
   try {
-    return await _refreshInFlight;
-  } finally {
-    _refreshInFlight = null;
+    const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (p.exp || 0) * 1000;
+  } catch { return 0; }
+}
+function setToken(t) { _token = t; _tokenExp = t ? decodeExp(t) : 0; }
+
+// One refresh attempt → 'ok' | 'expired' (server said 401/403: session really
+// dead) | 'network' (offline / 5xx / 429 — NOT a reason to log out).
+async function refreshOnce() {
+  try {
+    const r = await fetch('/api/admin/refresh', {
+      method: 'POST', credentials: 'include',
+      headers: { 'x-csrf-token': currentCsrf() },
+    });
+    if (r.ok) {
+      const d = await r.json().catch(() => ({}));
+      if (!d.token) return 'network';
+      setToken(d.token);
+      _lastRefreshData = d;
+      if (d.name) _adminName = d.name;
+      if (d.role) _adminRole = d.role;
+      return 'ok';
+    }
+    if (r.status === 401 || r.status === 403) { log('auth', `refresh rejected: ${r.status}`); return 'expired'; }
+    log('auth', `refresh transient error: ${r.status}`);
+    return 'network';
+  } catch (e) {
+    warn('auth', 'refresh network error:', e.message);
+    return 'network';
   }
 }
 
+// Coalesced + retried refresh. Phone just woke up → network is often not ready
+// for a second or two, so we retry with backoff instead of giving up (the old
+// code logged you out on the first failed attempt).
+let _refreshInFlight = null;
+async function refreshToken() {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const delays = [0, 1000, 2000, 4000, 8000];
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) await sleep(delays[i]);
+      const res = await refreshOnce();
+      if (res === 'ok') { log('auth', 'token refreshed'); return 'ok'; }
+      if (res === 'expired') return 'expired';
+    }
+    return 'network';
+  })();
+  try { return await _refreshInFlight; }
+  finally { _refreshInFlight = null; }
+}
+
 // ── API helper ────────────────────────────────────────────────────────────────
-// On a 401 (token expired/invalid — very common mid-event, since phone screen
-// locks/backgrounding pause the refresh interval below), silently refresh
-// and retry the request once before giving up. Only falls back to a hard
-// logout if the refresh token itself is no longer valid.
-async function api(method, url, body, _isRetry) {
+// - refreshes the token BEFORE it expires (no failed first request)
+// - 401  → refresh + retry once; logout ONLY if the server says the session is dead
+// - 403 CSRF → re-fetch CSRF + retry once
+// - 429 / network error → short wait + retry (GET and scan lookup only)
+async function api(method, url, body, _try = 0) {
+  if (_token && url !== '/api/admin/refresh' && _tokenExp && _tokenExp - Date.now() < 45000) {
+    await refreshToken();
+  }
   const opts = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ..._token        ? { 'Authorization': `Bearer ${_token}` } : {},
-      ..._csrfToken && method !== 'GET' ? { 'x-csrf-token': _csrfToken } : {},
+      ..._token ? { 'Authorization': `Bearer ${_token}` } : {},
+      ...method !== 'GET' ? { 'x-csrf-token': currentCsrf() } : {},
     },
     credentials: 'include',
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
+  const idempotent = method === 'GET' || url.endsWith('/scan-qr/lookup');
+
   try {
     const r    = await fetch(url, opts);
     const data = await r.json().catch(() => ({}));
 
-    if (r.status === 401 && _token && !_isRetry && url !== '/api/admin/refresh') {
-      log('api', `${method} ${url} → 401, attempting silent refresh + retry`);
-      const refreshed = await refreshToken();
-      if (refreshed) return api(method, url, body, true);
-      warn('api', 'silent refresh failed — session truly expired, logging out');
-      await doLogout();
-      showLoginError('Your session expired — please sign in again.');
+    if (r.status === 401 && _token && !(_try & 1) && url !== '/api/admin/refresh') {
+      log('api', `${method} ${url} → 401, refreshing + retrying`);
+      const st = await refreshToken();
+      if (st === 'ok') return api(method, url, body, _try | 1);
+      if (st === 'expired') {
+        warn('api', 'session truly expired → logout');
+        await doLogout();
+        showLoginError('Your session expired — please sign in again.');
+        return { ok: false, status: 401, data };
+      }
+      return { ok: false, status: 0, data: { error: 'Connection problem — check network and try again.' } };
     }
-
-    if (!r.ok) {
-      warn('api', `${method} ${url} → ${r.status}`, data);
+    if (r.status === 403 && /csrf/i.test(data?.error || '') && !(_try & 2)) {
+      log('api', 'CSRF problem → re-fetching token and retrying');
+      await fetchCsrf();
+      return api(method, url, body, _try | 2);
     }
+    if (r.status === 429 && idempotent && !(_try & 4)) {
+      warn('api', `${method} ${url} → 429, retrying shortly`);
+      await sleep(1500);
+      return api(method, url, body, _try | 4);
+    }
+    if (!r.ok) warn('api', `${method} ${url} → ${r.status}`, data);
     return { ok: r.ok, status: r.status, data };
   } catch (e) {
     err('api', `${method} ${url} FAILED:`, e.message);
+    if (idempotent && !(_try & 8)) {
+      await sleep(800);
+      return api(method, url, body, _try | 8);
+    }
     return { ok: false, status: 0, data: { error: e.message } };
   }
 }
 
-// Auto-refresh token every 12 min (proactive — keeps the 15-min access token
-// alive while the tab is in the foreground).
-setInterval(() => { if (_token) refreshToken(); }, 12 * 60 * 1000);
+// Proactive refresh: check every 30 s, refresh when <3 min of life left.
+// (A fixed 12-min interval is useless on phones — timers freeze when the
+// screen is off, so the token was often already dead on wake-up.)
+setInterval(() => {
+  if (_token && _tokenExp && _tokenExp - Date.now() < 3 * 60 * 1000) refreshToken();
+}, 30 * 1000);
 
-// Refresh immediately whenever the tab regains focus/visibility. This is the
-// important one for events: a phone locking between scans pauses the interval
-// above, so without this the token can go stale while the screen is off and
-// the first scan after unlocking would otherwise fail. Refreshing right on
-// unlock means that never happens.
+// ── Wake lock: keep the screen on while scanning ──────────────────────────────
+let _wakeLock = null;
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !_wakeLock && document.visibilityState === 'visible') {
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+      log('wake', 'screen wake lock acquired');
+    }
+  } catch (e) { warn('wake', 'wake lock failed:', e.message); }
+}
+async function releaseWakeLock() {
+  try { if (_wakeLock) await _wakeLock.release(); } catch {}
+  _wakeLock = null;
+}
+
+// ── Camera recovery after the phone slept ─────────────────────────────────────
+let _cameraRestarting = false;
+async function ensureCamera() {
+  if (!_scanning || !_scanner || _cameraRestarting) return;
+  let alive = false;
+  try {
+    const v = document.querySelector('#qr-reader video');
+    alive = !!(v && v.srcObject && v.srcObject.getTracks().some(t => t.readyState === 'live'));
+  } catch {}
+  if (alive) return;
+  warn('camera', 'stream dead after resume — restarting');
+  _cameraRestarting = true;
+  try { await _scanner.stop(); } catch {}
+  try { _scanner.clear(); } catch {}
+  _scanner = null; _scanning = false;
+  try { await startCamera(); } finally { _cameraRestarting = false; }
+}
+
+// Phone unlocked / tab visible again: refresh token, re-grab wake lock,
+// restart camera if the OS killed it, make sure CSRF cookie still exists.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && _token) {
-    log('auth', 'tab visible again — refreshing token');
-    refreshToken();
-  }
+  if (document.visibilityState !== 'visible') return;
+  log('lifecycle', 'tab visible again');
+  if (_token) refreshToken();
+  if (!getCookie('kfs_csrf')) fetchCsrf();
+  if (_audioCtx) _audioCtx.resume().catch(() => {});
+  if (_scanning) { acquireWakeLock(); setTimeout(ensureCamera, 400); }
+});
+window.addEventListener('online', () => {
+  log('lifecycle', 'back online');
+  if (_token) refreshToken();
+  if (!getCookie('kfs_csrf')) fetchCsrf();
 });
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
@@ -195,7 +293,7 @@ async function doLogin() {
       return;
     }
 
-    _token     = data.token;
+    setToken(data.token);
     _adminName = data.name;
     _adminRole = data.role;
     log('login', `✓ logged in as ${_adminName} (${_adminRole})`);
@@ -222,7 +320,8 @@ async function doLogout() {
   // fetch (not the 401-retrying api() helper) — otherwise an already-dead
   // token here would trigger another failed refresh -> doLogout() -> loop.
   const staleToken = _token;
-  _token = null;
+  setToken(null);
+  releaseWakeLock();
   try {
     await fetch('/api/admin/logout', {
       method: 'POST',
@@ -230,7 +329,7 @@ async function doLogout() {
       headers: {
         'Content-Type': 'application/json',
         ...staleToken  ? { 'Authorization': `Bearer ${staleToken}` } : {},
-        ..._csrfToken  ? { 'x-csrf-token': _csrfToken } : {},
+        'x-csrf-token': currentCsrf(),
       },
     });
   } catch {}
@@ -342,6 +441,7 @@ async function startCamera() {
     );
     _scanning = true;
     log('camera', 'started ✓');
+    acquireWakeLock();
   } catch (e) {
     err('camera', 'start failed:', e.message);
     toast('Camera not accessible — check permissions');
@@ -391,7 +491,12 @@ async function onQrScanned(rawText) {
     if (status === 404 || data?.status === 'invalid') {
       showResult({ status: 'invalid', error: data?.error || 'Invalid QR code — not a KFS ticket.' });
     } else {
-      showResult({ status: 'invalid', error: `Server error (HTTP ${status}) — try again.` });
+      // Network / server hiccup — NOT the ticket's fault. Allow the same QR to be
+      // scanned again straight away instead of getting stuck on it.
+      _lastScanned = null;
+      showResult({ status: 'invalid', error: status === 0
+        ? 'No connection — hold the QR again in a moment.'
+        : `Server error (HTTP ${status}) — hold the QR again.` });
     }
     return;
   }
@@ -601,15 +706,19 @@ async function loadRegistrations() {
   }
 
   renderDataTab(eventId);
-  startAutoRefresh(eventId);
+  // Only poll while the Data tab is actually open — polling the full list from
+  // every phone while scanning was hammering the server.
+  if (document.getElementById('tab-data').classList.contains('visible')) startAutoRefresh(eventId);
 }
 
 function startAutoRefresh(eventId) {
   if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
-  _autoRefreshTimer = setInterval(() => silentRefresh(eventId), 15000);
+  _autoRefreshTimer = setInterval(() => silentRefresh(eventId), 30000);
 }
 
 async function silentRefresh(eventId) {
+  if (document.hidden || !_token) return;
+  if (!document.getElementById('tab-data').classList.contains('visible')) return;
   const sel = document.getElementById('data-event-select');
   if (!sel || String(sel.value) !== String(eventId)) {
     clearInterval(_autoRefreshTimer);
@@ -836,7 +945,7 @@ async function exportData(eventId) {
     const r = await fetch(`/api/admin/events/${eventId}/registrations/export`, {
       headers: {
         'Authorization': `Bearer ${_token}`,
-        'x-csrf-token': _csrfToken || '',
+        'x-csrf-token': currentCsrf(),
       },
     });
     if (!r.ok) { toast('Export failed'); return; }
@@ -923,22 +1032,17 @@ function playError() {
   if (!document.cookie.split(';').some(c => c.trim().startsWith('kfs_session='))) return;
   log('autologin', 'session cookie found, refreshing token...');
   try {
-    const r = await fetch('/api/admin/refresh', {
-      method: 'POST', credentials: 'include',
-      headers: { 'x-csrf-token': _csrfToken || '' },
-    });
-    if (!r.ok) { log('autologin', `refresh failed: ${r.status}`); return; }
-    const d = await r.json();
-    if (!d.token) { log('autologin', 'no token in response'); return; }
+    const st = await refreshToken();          // retries on flaky network
+    if (st !== 'ok') { log('autologin', `refresh result: ${st}`); return; }
+    const d = _lastRefreshData || {};
     const perms = d.permissions || [];
     if (d.role !== 'master' && !perms.includes('events')) {
       log('autologin', 'insufficient permissions');
       return;
     }
-    _token     = d.token;
-    _adminName = d.name;
-    _adminRole = d.role;
+    _adminName = d.name; _adminRole = d.role;
     log('autologin', `✓ auto-logged in as ${_adminName}`);
+    await fetchCsrf();
     await bootApp();
   } catch (e) {
     warn('autologin', 'exception:', e.message);
