@@ -1185,6 +1185,10 @@ const GLOBAL_LIMIT_EXEMPT_PATHS = new Set([
   "/api/member/google-login",
   "/api/admin/login",
   "/api/admin/refresh",
+  // Door scanners: several phones share one admin login, and a rate-limit
+  // rejection at the gate means a valid guest gets turned away.
+  "/api/admin/scan-qr/lookup",
+  "/api/admin/scan-qr/confirm",
 ]);
 
 // Key the global budget by logged-in identity when we can, not just IP.
@@ -1208,7 +1212,8 @@ function apiRateLimitKeyGenerator(req, res) {
     } catch {}
     try {
       const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
-      if (decoded?.id) return `admin:${decoded.id}`;
+      // per token (jti), so 4 phones on ONE admin login don't share a single bucket
+      if (decoded?.id) return `admin:${decoded.id}:${decoded.jti || ""}`;
     } catch {}
   }
   return ipKeyGenerator(req, res);
@@ -1220,7 +1225,9 @@ app.use(
     windowMs: 15 * 60 * 1000,
     max: 1000, // raised from 500 — extra headroom on top of the per-identity keying above
     message: { error: "Too many requests. Slow down." },
-    skip: (req) => GLOBAL_LIMIT_EXEMPT_PATHS.has(req.path),
+    // req.path is RELATIVE to the "/api/" mount (e.g. "/admin/refresh"), so the old
+    // check against "/api/..." never matched. Use the full URL instead.
+    skip: (req) => GLOBAL_LIMIT_EXEMPT_PATHS.has((req.originalUrl || "").split("?")[0]),
     keyGenerator: apiRateLimitKeyGenerator,
   }),
 );
@@ -1420,7 +1427,8 @@ const _revokedJtis = new Set();
 // later) still falls through to the theft-protection revoke below.
 // ─────────────────────────────────────────────────────────────────────────────
 const _refreshGraceCache = new Map(); // token_hash -> { response, expiresAt }
-const REFRESH_GRACE_MS = 10 * 1000;
+// 2 min: a phone that locks mid-refresh often retries with the OLD cookie later.
+const REFRESH_GRACE_MS = 2 * 60 * 1000;
 
 function setRefreshGrace(tokenHash, response) {
   _refreshGraceCache.set(tokenHash, { response, expiresAt: Date.now() + REFRESH_GRACE_MS });
@@ -3323,10 +3331,13 @@ app.post("/api/admin/refresh", async (req, res) => {
       console.log(`[refresh] grace-window reuse for admin ${stored.admin_id} — same token served`);
       return res.json(graced.body);
     }
-    // Outside the grace window — treat as genuine reuse/theft, revoke ALL tokens
-    await revokeAllForAdmin(stored.admin_id);
+    // Outside the grace window. Previously this revoked EVERY refresh token of the
+    // admin — with 3-4 scanner phones on one login, one phone retrying with a stale
+    // cookie (lost response / screen lock) logged out ALL of them. Reject only this
+    // device; the others keep working.
+    console.warn(`[refresh] stale/reused token for admin ${stored.admin_id} — rejecting this device only`);
     clearRefreshCookie(res);
-    return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
+    return res.status(401).json({ error: "Refresh token already used — please sign in again" });
   }
 
   if (new Date(stored.expires_at) < new Date()) {
@@ -3347,20 +3358,24 @@ app.post("/api/admin/refresh", async (req, res) => {
     .select("id");
 
   if (claimErr) {
-    return res.status(500).json({ error: "Refresh failed" });
+    console.error("[refresh] claim failed:", claimErr.message);
+    return res.status(503).json({ error: "Refresh failed — retry" });
   }
 
   if (!claimRows || claimRows.length === 0) {
     // Lost the race — another concurrent request is rotating this token
     // right now. Briefly wait for it to populate the grace cache, then
     // serve that result instead of treating this as theft.
-    await new Promise(r => setTimeout(r, 250));
-    const graced = getRefreshGrace(hash);
-    if (graced) {
-      setRefreshCookie(res, graced.newRefreshRaw);
-      return res.json(graced.body);
+    for (let i = 0; i < 25; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      const graced = getRefreshGrace(hash);
+      if (graced) {
+        setRefreshCookie(res, graced.newRefreshRaw);
+        return res.json(graced.body);
+      }
     }
-    return res.status(401).json({ error: "Refresh token already used — all sessions revoked" });
+    // Still nothing: tell the client to retry (503), NOT "session dead" (401).
+    return res.status(503).json({ error: "Refresh busy — retry" });
   }
 
   // Fetch fresh admin data (picks up permission changes)
