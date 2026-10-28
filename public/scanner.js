@@ -414,6 +414,11 @@ function onEventChange() {
   _scanCooldown = false;
   _lastScanned  = null;
   log('event-select', `selected event_id=${sel.value} "${ev?.title || 'none'}"`);
+  // reset + preload the list used by the manual search box
+  _scanRegs = []; _scanRegsEvent = null;
+  const ms = document.getElementById('manual-search'); if (ms) ms.value = '';
+  if (document.getElementById('manual-results')) renderManual('');
+  if (sel.value && _token) loadScanRegs(true);
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
@@ -652,6 +657,8 @@ async function confirmEntry() {
 
   // Invalidate data cache for this event
   if (eventId) delete _regsCache[eventId];
+  const _sr = _scanRegs.find(x => String(x.id) === String(_pendingReg.registration_id));
+  if (_sr) { _sr.checked_in = true; _sr.checked_in_at = new Date().toISOString(); _sr.checked_in_by = _adminName; }
 
   // Auto-resume after 3s
   setTimeout(() => {
@@ -1048,3 +1055,110 @@ function playError() {
     warn('autologin', 'exception:', e.message);
   }
 })();
+
+// ── MANUAL CHECK-IN (search when a QR can't be scanned) ───────────────────────
+let _scanRegs      = [];
+let _scanRegsEvent = null;
+let _scanRegsAt    = 0;
+let _scanRegsBusy  = false;
+let _manualTimer   = null;
+
+async function loadScanRegs(force) {
+  const eventId = document.getElementById('event-select').value;
+  if (!eventId || !_token) return false;
+  if (!force && _scanRegsEvent === eventId && Date.now() - _scanRegsAt < 20000) return true;
+  if (_scanRegsBusy) return false;
+  _scanRegsBusy = true;
+  const { ok, data, status } = await api('GET', `/api/admin/events/${eventId}/registrations`);
+  _scanRegsBusy = false;
+  // user switched event while we were loading → drop this result
+  if (document.getElementById('event-select').value !== eventId) return false;
+  if (!ok) { warn('manual', `load failed status=${status}`); return false; }
+  _scanRegs = data || [];
+  _scanRegsEvent = eventId;
+  _scanRegsAt = Date.now();
+  log('manual', `loaded ${_scanRegs.length} registrations for search`);
+  return true;
+}
+
+async function onManualFocus() {
+  // refresh in the background so results are current, then re-render
+  const had = _scanRegsEvent === document.getElementById('event-select').value;
+  const fresh = await loadScanRegs(false);
+  if (fresh || had) renderManual(document.getElementById('manual-search').value);
+}
+
+function onManualSearch(q) {
+  clearTimeout(_manualTimer);
+  _manualTimer = setTimeout(async () => {
+    if (_scanRegsEvent !== document.getElementById('event-select').value) await loadScanRegs(true);
+    renderManual(q);
+  }, 150);
+}
+
+function renderManual(q) {
+  const box  = document.getElementById('manual-results');
+  const hint = document.getElementById('manual-hint');
+  if (!box) return;
+  const query = String(q || '').trim().toLowerCase();
+  if (query.length < 2) { box.innerHTML = ''; hint.textContent = query ? 'Type at least 2 characters' : ''; return; }
+
+  if (_scanRegsEvent !== document.getElementById('event-select').value) {
+    box.innerHTML = '<div class="manual-empty">Loading list…</div>'; hint.textContent = ''; return;
+  }
+
+  const words = query.split(/\s+/);
+  const matches = _scanRegs.filter(r => {
+    const hay = `${r.name || ''} ${r.email || ''} ${r.roll_no || ''} ${r.phone || ''}`.toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+  // not-yet-present first
+  matches.sort((a, b) => (a.checked_in ? 1 : 0) - (b.checked_in ? 1 : 0));
+
+  if (!matches.length) {
+    box.innerHTML = '<div class="manual-empty">No match. Check spelling or try email / roll no.</div>';
+    hint.textContent = '';
+    return;
+  }
+
+  const shown = matches.slice(0, 20);
+  box.innerHTML = shown.map(r => {
+    const sub = [r.email, r.roll_no].filter(Boolean).map(esc).join(' · ');
+    const right = r.checked_in
+      ? `<div class="manual-done">✓ Present${r.checked_in_at ? '<br>' + new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : ''}</div>`
+      : `<button class="manual-btn" onclick="manualCheckIn('${esc(String(r.id))}', this)">Mark present</button>`;
+    return `<div class="manual-item">
+      <div class="reg-info">
+        <div class="reg-name">${esc(r.name)}</div>
+        <div class="reg-email">${sub}</div>
+      </div>${right}</div>`;
+  }).join('');
+  hint.textContent = matches.length > shown.length ? `Showing ${shown.length} of ${matches.length} — type more to narrow down` : '';
+}
+
+async function manualCheckIn(id, btn) {
+  const r = _scanRegs.find(x => String(x.id) === String(id));
+  if (!r) return;
+  const eventId = document.getElementById('event-select').value;
+  if (!confirm(`Mark ${r.name} as present?`)) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
+  log('manual', `confirm reg_id=${r.id} event_id=${eventId}`);
+  const { ok, status, data } = await api('POST', '/api/admin/scan-qr/confirm', {
+    registration_id: r.id,
+    event_id: eventId,
+  });
+
+  if (ok || status === 409) {
+    r.checked_in = true;
+    r.checked_in_at = r.checked_in_at || new Date().toISOString();
+    if (ok) { r.checked_in_by = _adminName; vibrateDevice([60, 40, 100]); playSuccess(); flashBody('green'); }
+    toast(ok ? `${r.name} marked present` : `${r.name} was already checked in`);
+    delete _regsCache[eventId];
+    renderManual(document.getElementById('manual-search').value);
+    return;
+  }
+  err('manual', 'confirm failed:', status, data?.error);
+  toast(data?.error || 'Could not mark present — try again');
+  if (btn) { btn.disabled = false; btn.textContent = 'Mark present'; }
+}
