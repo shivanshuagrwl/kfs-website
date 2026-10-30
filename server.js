@@ -3589,7 +3589,32 @@ app.delete("/api/master/admins/:id", masterMiddleware, async (req, res) => {
   if (!target) return res.status(404).json({ error: "Not found" });
   if (target.role === "master")
     return res.status(403).json({ error: "Cannot delete master admin" });
-  await supabase.from("admins").delete().eq("id", req.params.id);
+  if (String(req.params.id) === String(req.admin?.id))
+    return res.status(403).json({ error: "You cannot delete your own account" });
+
+  // Rows in other tables that reference this admin can block the delete
+  // (foreign key without ON DELETE CASCADE). Clear them first.
+  const { error: rtErr } = await supabase
+    .from("refresh_tokens")
+    .delete()
+    .eq("admin_id", req.params.id);
+  if (rtErr) console.error("[delete admin] refresh_tokens cleanup failed:", rtErr.message);
+
+  // Keep the activity history (admin_name is stored on each row); just detach it.
+  const { error: actErr } = await supabase
+    .from("admin_activity")
+    .update({ admin_id: null })
+    .eq("admin_id", req.params.id);
+  if (actErr) console.error("[delete admin] admin_activity detach failed:", actErr.message);
+
+  const { error: delErr } = await supabase
+    .from("admins")
+    .delete()
+    .eq("id", req.params.id);
+  if (delErr) {
+    console.error("[delete admin] failed:", delErr);
+    return res.status(500).json({ error: "Could not delete admin: " + delErr.message });
+  }
   res.json({ success: true });
 });
 
