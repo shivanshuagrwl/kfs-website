@@ -15265,20 +15265,22 @@ async function sendTestCredentialsEmail() {
   };
 }
 
-async function exportMemberData() {
+async function exportMemberData(type) {
+  type = ['current', 'alumni'].includes(type) ? type : 'all';
   try {
-    const r = await fetch('/api/admin/members/export', {
+    const r = await fetch('/api/admin/members/export?type=' + type, {
       headers: { 'Authorization': `Bearer ${adminToken}`, 'x-csrf-token': _csrfToken || '' },
     });
     if (!r.ok) { showAdminError('Export failed'); return; }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const el = document.createElement('a');
+    el.href = url;
     const date = new Date().toISOString().slice(0, 10);
-    a.download = `kfs-members-${date}.xlsx`;
-    a.click();
+    el.download = `kfs-members${type === 'all' ? '' : '-' + type}-${date}.xlsx`;
+    el.click();
     URL.revokeObjectURL(url);
+    if (typeof showToast === 'function') showToast('Excel exported', 'success');
   } catch {
     showAdminError('Export failed');
   }
@@ -17628,16 +17630,16 @@ function _cvToast(msg, type) {
 function openCurrentVerify() {
   _cv = { step: 'upload', data: null, tab: 'matched', fileName: '', rejectFuzzy: new Set(), overwrite: new Set(), act: {}, sheetAct: {}, deleteArmed: false, busy: false };
   _cvRender();
-  document.getElementById('cv-modal').style.display = 'flex';
+  document.getElementById('cvf-modal').style.display = 'flex';
   _cvBindDrop();
 }
 function closeCurrentVerify() {
   if (_cv?.busy) return;
-  document.getElementById('cv-modal').style.display = 'none';
+  document.getElementById('cvf-modal').style.display = 'none';
   _cv = null;
 }
 function cvPickFile() { document.getElementById('cv-file-input')?.click(); }
-function cvBack() { if (!_cv || _cv.busy) return; _cv.step = 'upload'; _cv.data = null; _cv.deleteArmed = false; _cvRender(); _cvBindDrop(); }
+function cvBack() { if (!_cv || _cv.busy) return; _cv.wiz = null; _cv.step = 'upload'; _cv.data = null; _cv.deleteArmed = false; _cvRender(); _cvBindDrop(); }
 
 function cvDownloadTemplate() {
   if (typeof XLSX === 'undefined') { _cvToast('Excel library not loaded yet', 'error'); return; }
@@ -17728,7 +17730,7 @@ function _cvParseRows(aoa) {
 }
 
 // ── review-state mutations ───────────────────────────────────────────────────
-function cvTab(t) { if (_cv) { _cv.tab = t; _cvRender(); } }
+function cvTab(t) { if (_cv) { _cv.tab = t; if (t !== 'missing') _cv.wiz = null; _cvRender(); } }
 function cvSetAct(id, a) { if (!_cv) return; _cv.act[_cvId(id)] = a; _cv.deleteArmed = false; _cvRender(); }
 function cvSetAllAct(a) {
   if (!_cv?.data) return;
@@ -17748,6 +17750,66 @@ function cvFuzzy(id, same) {
   same ? _cv.rejectFuzzy.delete(k) : _cv.rejectFuzzy.add(k);
   _cv.deleteArmed = false; _cvRender();
 }
+// ── one-by-one review (Not in sheet) ─────────────────────────────────────────
+function cvWizStart() {
+  if (!_cv?.data) return;
+  _cv.wiz = { list: _cvMissingAll().map(m => m.id), idx: 0 };
+  _cvRenderBody();
+}
+function cvWizExit() { if (_cv) { _cv.wiz = null; _cvRender(); } }
+function cvWizAct(a) {
+  if (!_cv?.wiz) return;
+  const w = _cv.wiz, id = w.list[w.idx];
+  if (id === undefined) return;
+  _cv.act[_cvId(id)] = a; _cv.deleteArmed = false;
+  w.idx++;
+  _cvRenderBody(); _cvRenderFooter();
+}
+function cvWizPrev() { if (_cv?.wiz && _cv.wiz.idx > 0) { _cv.wiz.idx--; _cvRenderBody(); } }
+function cvWizSkip() { if (_cv?.wiz && _cv.wiz.idx < _cv.wiz.list.length) { _cv.wiz.idx++; _cvRenderBody(); } }
+document.addEventListener('keydown', e => {
+  if (!_cv?.wiz || _cv.step !== 'review' || _cv.tab !== 'missing') return;
+  if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'k') cvWizAct('keep');
+  else if (k === 'a') cvWizAct('alumni');
+  else if (k === 'd') cvWizAct('delete');
+  else if (k === 'arrowleft') cvWizPrev();
+  else if (k === 'arrowright') cvWizSkip();
+});
+function _cvWizHTML() {
+  const w = _cv.wiz, all = _cvMissingAll();
+  const byId = Object.fromEntries(all.map(m => [String(m.id), m]));
+  if (w.idx >= w.list.length) {
+    const c = _cvCounts();
+    return `<div class="cv-wiz"><div class="cv-check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <h4>All reviewed</h4><div class="cv-wiz-sub">${c.keep} kept · ${c.alumni} to Alumni · ${c.delete} to delete</div>
+      <div class="cv-wiz-nav" style="justify-content:center;gap:14px"><button class="cv-link" data-action="cvWizPrev">← Go back</button><button class="cv-link" data-action="cvWizExit">View as list</button></div>
+      <div class="cv-wiz-q">Press <b>Apply changes</b> below to save.</div></div>`;
+  }
+  const m = byId[String(w.list[w.idx])] || { id: w.list[w.idx], name: 'Unknown' };
+  const cur = _cv.act[_cvId(m.id)];
+  const pct = Math.round((w.idx / w.list.length) * 100);
+  return `<div class="cv-wiz">
+    <div class="cv-wiz-bar"><i style="width:${pct}%"></i></div>
+    <div class="cv-wiz-n">${w.idx + 1} of ${w.list.length}</div>
+    ${_cvAvatar(m)}
+    <h4>${_cvEsc(m.name)}</h4>
+    <div class="cv-wiz-sub">${_cvEsc([m.role, m.batch].filter(Boolean).join(' · ') || 'Member')}</div>
+    <div class="cv-wiz-q"><b>Not in your sheet.</b> What should happen to them?</div>
+    <div class="cv-wiz-acts">
+      <button class="k ${cur === 'keep' ? 'on' : ''}" data-action="cvWizAct" data-args='["keep"]'>Keep<small>stay current</small><kbd>K</kbd></button>
+      <button class="a ${cur === 'alumni' ? 'on' : ''}" data-action="cvWizAct" data-args='["alumni"]'>Alumni<small>move to past</small><kbd>A</kbd></button>
+      <button class="d ${cur === 'delete' ? 'on' : ''}" data-action="cvWizAct" data-args='["delete"]'>Delete<small>remove member</small><kbd>D</kbd></button>
+    </div>
+    <div class="cv-wiz-nav">
+      <button class="cv-link" data-action="cvWizPrev" ${w.idx === 0 ? 'disabled style="opacity:.3"' : ''}>← Back</button>
+      <button class="cv-link" data-action="cvWizExit">Switch to list</button>
+      <button class="cv-link" data-action="cvWizSkip">Skip →</button>
+    </div></div>`;
+}
+
 function cvSearch(v) { if (_cv) { _cv.q = String(v || '').toLowerCase(); _cvRenderBody(); } }
 
 // A rejected fuzzy match turns into (a) a member who's "not in sheet" and (b) a sheet-only row.
@@ -17875,8 +17937,10 @@ function _cvRenderBody() {
   if (_cv.tab === 'missing') {
     const list = _cvVisibleMissing();
     if (!_cvMissingAll().length) { body.innerHTML = `<div class="cv-empty">🎉 Everyone marked Current is on your sheet.</div>`; return; }
+    if (_cv.wiz) { body.innerHTML = _cvWizHTML(); return; }
     body.innerHTML = `
       <div class="cv-bulk"><span>These current members were <b>not found</b> in your sheet. Choose what happens to each one:</span>
+        <button class="cv-go" data-action="cvWizStart">Review one by one →</button>
         <div class="cv-seg">
           <button data-action="cvSetAllAct" data-args='["keep"]'>All: Keep</button>
           <button class="al" data-action="cvSetAllAct" data-args='["alumni"]'>All: Alumni</button>
