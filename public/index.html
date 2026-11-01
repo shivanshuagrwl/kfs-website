@@ -4764,6 +4764,17 @@ body.light-mode .psw-comment-gate a{color:#111}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import Excel
           </button>
+          <div class="cv-exp" id="cv-exp-wrap">
+            <button data-action="exportMemberData" data-args='["all"]' class="cv-exp-btn" title="Download members as Excel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export Excel
+            </button>
+            <div class="cv-exp-menu">
+              <button data-action="exportMemberData" data-args='["all"]'>Everyone</button>
+              <button data-action="exportMemberData" data-args='["current"]'>Current only</button>
+              <button data-action="exportMemberData" data-args='["alumni"]'>Alumni only</button>
+            </div>
+          </div>
           <input type="file" id="member-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none" data-onchange="previewMemberImport(this)">
           <button data-action="openMemberModal" class="btn btn-primary">+ Add Member</button>
         </div>
@@ -6707,7 +6718,7 @@ KFS — KIIT Film Society"></textarea>
 <style>
 .cv-btn-open{position:relative;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:8px 16px;border-radius:20px;cursor:pointer;color:#c7d2fe;border:1px solid rgba(129,140,248,.4);background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(168,85,247,.16));transition:transform .15s,box-shadow .2s,border-color .2s}
 .cv-btn-open:hover{transform:translateY(-1px);border-color:rgba(165,180,252,.8);box-shadow:0 6px 22px -6px rgba(129,140,248,.55)}
-#cv-modal{align-items:center;padding:20px}
+#cvf-modal{align-items:center;padding:20px}
 .cv-shell{position:relative;width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--card),var(--black));border:1px solid var(--border);border-radius:22px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
 .cv-x{position:absolute;top:14px;right:14px;z-index:3;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--grey);cursor:pointer;font-size:13px}
 .cv-x:hover{color:var(--white);border-color:var(--grey)}
@@ -6795,9 +6806,41 @@ KFS — KIIT Film Society"></textarea>
 .cv-done-grid b{display:block;font-size:24px;font-weight:800}
 .cv-done-grid span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
 .cv-note{font-size:12px;color:var(--grey);margin:6px 0 12px}.cv-note.cv-warn{color:#fbbf24}
+/* ── Export dropdown + one-by-one wizard ── */
+.cv-exp{position:relative;display:inline-flex}
+.cv-exp-btn{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:8px 16px;border-radius:20px;cursor:pointer;color:#7dd3fc;border:1px solid rgba(88,166,255,.35);background:rgba(88,166,255,.08);transition:all .15s;font-family:inherit}
+.cv-exp-btn:hover{background:rgba(88,166,255,.16);transform:translateY(-1px)}
+.cv-exp-menu{position:absolute;top:100%;right:0;padding-top:6px;display:none;flex-direction:column;min-width:150px;z-index:50}
+.cv-exp:hover .cv-exp-menu,.cv-exp:focus-within .cv-exp-menu{display:flex}
+.cv-exp-menu button{background:var(--card);border:1px solid var(--border);color:var(--white);font-size:12px;padding:9px 14px;text-align:left;cursor:pointer;font-family:inherit}
+.cv-exp-menu button:first-child{border-radius:12px 12px 0 0}.cv-exp-menu button:last-child{border-radius:0 0 12px 12px}
+.cv-exp-menu button+button{border-top:0}
+.cv-exp-menu button:hover{background:rgba(88,166,255,.14);color:#7dd3fc}
+.cv-go{background:linear-gradient(135deg,#6366f1,#a855f7);border:0;color:#fff;font-size:12px;font-weight:700;padding:8px 16px;border-radius:20px;cursor:pointer;font-family:inherit;box-shadow:0 6px 18px -6px rgba(129,140,248,.7);transition:transform .15s}
+.cv-go:hover{transform:translateY(-1px)}
+.cv-wiz{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 4px;animation:cvWizIn .25s ease}
+@keyframes cvWizIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.cv-wiz-bar{width:100%;height:4px;border-radius:4px;background:var(--border);overflow:hidden;margin-bottom:8px}
+.cv-wiz-bar i{display:block;height:100%;background:linear-gradient(90deg,#6366f1,#a855f7,#22d3ee);transition:width .3s}
+.cv-wiz-n{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin-bottom:18px}
+.cv-wiz .cv-av{width:92px;height:92px;font-size:28px;box-shadow:0 0 0 3px rgba(129,140,248,.25),0 14px 40px -10px rgba(129,140,248,.6)}
+.cv-wiz h4{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:16px 0 4px}
+.cv-wiz-sub{font-size:12.5px;color:var(--grey);margin-bottom:6px}
+.cv-wiz-q{font-size:13px;color:var(--grey);margin:14px 0 16px}
+.cv-wiz-q b{color:#fbbf24}
+.cv-wiz-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:520px}
+.cv-wiz-acts button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 8px;border-radius:16px;border:1px solid var(--border);background:rgba(255,255,255,.02);color:var(--white);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.cv-wiz-acts button small{font-size:10.5px;font-weight:500;color:var(--grey)}
+.cv-wiz-acts button kbd{font-size:10px;padding:1px 6px;border-radius:6px;border:1px solid var(--border);color:var(--grey);margin-top:2px;font-family:inherit}
+.cv-wiz-acts button:hover{transform:translateY(-2px)}
+.cv-wiz-acts .k:hover,.cv-wiz-acts .k.on{border-color:rgba(74,222,128,.6);background:rgba(74,222,128,.1);color:#4ade80}
+.cv-wiz-acts .a:hover,.cv-wiz-acts .a.on{border-color:rgba(129,140,248,.7);background:rgba(129,140,248,.16);color:#c7d2fe}
+.cv-wiz-acts .d:hover,.cv-wiz-acts .d.on{border-color:rgba(248,113,113,.7);background:rgba(248,113,113,.14);color:#fca5a5}
+.cv-wiz-nav{display:flex;justify-content:space-between;width:100%;max-width:520px;margin-top:14px}
+@media(max-width:640px){.cv-wiz-acts{grid-template-columns:1fr}}
 @media(max-width:640px){.cv-how{grid-template-columns:1fr}.cv-stats{grid-template-columns:repeat(2,1fr)}.cv-row{flex-wrap:wrap}.cv-search{width:100%;margin-left:0}.cv-stage{padding:24px 16px 14px}}
 </style>
-<div id="cv-modal" class="modal-overlay" style="display:none" data-action="closeCurrentVerify" data-backdrop="true">
+<div id="cvf-modal" class="modal-overlay" style="display:none" data-action="closeCurrentVerify" data-backdrop="true">
   <div class="cv-shell">
     <button class="cv-x" data-action="closeCurrentVerify" aria-label="Close">✕</button>
     <div id="cv-stage" class="cv-stage"></div>
