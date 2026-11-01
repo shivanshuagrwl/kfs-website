@@ -4756,6 +4756,10 @@ body.light-mode .psw-comment-gate a{color:#111}
       <div class="admin-header">
         <div><h2>Members</h2><p>Add and manage society members</p></div>
         <div style="display:flex;gap:10px;align-items:center">
+          <button data-action="openCurrentVerify" class="cv-btn-open" title="Upload the current roster, fill details &amp; sort out anyone missing">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+            Verify Current
+          </button>
           <button data-action="triggerClick_member_xlsx_input" class="btn" style="background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:8px 16px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import Excel
@@ -6696,6 +6700,109 @@ KFS — KIIT Film Society"></textarea>
       <button data-action="saveNotif" class="btn btn-primary">Save</button>
       <button data-action="closeNotifModal" class="btn btn-secondary">Cancel</button>
     </div>
+  </div>
+</div>
+
+<!-- ── Verify Current Members Modal ─────────────────────────────────────────── -->
+<style>
+.cv-btn-open{position:relative;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:8px 16px;border-radius:20px;cursor:pointer;color:#c7d2fe;border:1px solid rgba(129,140,248,.4);background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(168,85,247,.16));transition:transform .15s,box-shadow .2s,border-color .2s}
+.cv-btn-open:hover{transform:translateY(-1px);border-color:rgba(165,180,252,.8);box-shadow:0 6px 22px -6px rgba(129,140,248,.55)}
+#cv-modal{align-items:center;padding:20px}
+.cv-shell{position:relative;width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--card),var(--black));border:1px solid var(--border);border-radius:22px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
+.cv-x{position:absolute;top:14px;right:14px;z-index:3;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--grey);cursor:pointer;font-size:13px}
+.cv-x:hover{color:var(--white);border-color:var(--grey)}
+.cv-stage{padding:30px 30px 18px;overflow:hidden;display:flex;flex-direction:column;min-height:0;flex:1}
+.cv-hero{text-align:center;margin-bottom:22px;position:relative}
+.cv-hero h3{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px}
+.cv-hero p{font-size:13px;line-height:1.6;color:var(--grey);max-width:500px;margin:0 auto}
+.cv-orb{width:54px;height:54px;margin:0 auto 14px;border-radius:50%;background:conic-gradient(from 0deg,#6366f1,#a855f7,#22d3ee,#6366f1);filter:blur(.3px);animation:cvSpin 6s linear infinite;box-shadow:0 0 36px rgba(129,140,248,.45);-webkit-mask:radial-gradient(circle,transparent 48%,#000 50%);mask:radial-gradient(circle,transparent 48%,#000 50%)}
+@keyframes cvSpin{to{transform:rotate(360deg)}}
+.cv-drop{display:flex;flex-direction:column;align-items:center;gap:6px;padding:34px 20px;border-radius:16px;cursor:pointer;color:var(--grey);border:1.5px dashed rgba(129,140,248,.4);background:radial-gradient(120% 140% at 50% 0%,rgba(99,102,241,.1),transparent 70%);transition:all .2s}
+.cv-drop:hover,.cv-drop.over{border-color:#818cf8;color:#c7d2fe;transform:scale(1.008);background:radial-gradient(120% 140% at 50% 0%,rgba(99,102,241,.22),transparent 70%)}
+.cv-drop-t{font-size:14px;font-weight:600;color:var(--white)}
+.cv-drop-s{font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.cv-how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 6px}
+.cv-how>div{padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:11.5px;line-height:1.5;color:var(--grey)}
+.cv-how b{display:block;color:var(--white);font-size:12px;margin-bottom:4px}
+.cv-how i{font-style:normal;color:#818cf8}
+.cv-link{background:none;border:0;color:#818cf8;font-size:12px;cursor:pointer;padding:6px 2px;align-self:flex-start}
+.cv-link:hover{text-decoration:underline}
+.cv-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:70px 20px;font-size:14px}
+.cv-loading small{color:var(--grey);font-size:11px}
+.cv-spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:#818cf8;animation:cvSpin .8s linear infinite}
+.cv-top{display:flex;align-items:center;justify-content:space-between;margin:-6px 36px 10px 0}
+.cv-file{font-size:11px;color:var(--grey)}
+.cv-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.cv-stat{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.02)}
+.cv-stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.cv-stat span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
+.cv-stat.ok b{color:#4ade80}.cv-stat.info b{color:#60a5fa}.cv-stat.warn{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.06)}.cv-stat.warn b{color:#fbbf24}.cv-stat.mute b{color:#a5b4fc}
+.cv-tabs{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.cv-tabs button{background:transparent;border:1px solid var(--border);color:var(--grey);font-size:12px;padding:7px 13px;border-radius:20px;cursor:pointer;transition:all .15s}
+.cv-tabs button em{font-style:normal;margin-left:5px;font-size:11px;opacity:.75}
+.cv-tabs button.on{background:rgba(129,140,248,.16);border-color:rgba(129,140,248,.55);color:#c7d2fe}
+.cv-search{margin-left:auto;padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--black);color:var(--white);font-size:12px;width:150px;outline:none;font-family:inherit}
+.cv-search:focus{border-color:#818cf8}
+.cv-body{overflow-y:auto;min-height:120px;max-height:46vh;padding-right:4px;scrollbar-width:thin}
+.cv-bulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:8px;border-radius:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);font-size:12px;color:var(--grey)}
+.cv-bulk b{color:#fbbf24}
+.cv-sec{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);margin:12px 2px 6px}
+.cv-sec em{font-style:normal;color:#818cf8;margin-left:4px}
+.cv-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;margin-bottom:6px;transition:border-color .2s,background .2s}
+.cv-row.alumni{border-color:rgba(129,140,248,.45);background:rgba(129,140,248,.07)}
+.cv-row.delete{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.07)}
+.cv-row.fz{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.05)}
+.cv-av{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none}
+.cv-av-ph{display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#c7d2fe;background:linear-gradient(135deg,rgba(99,102,241,.35),rgba(168,85,247,.25))}
+.cv-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.cv-who b{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-who>span{font-size:11.5px;color:var(--grey)}
+.cv-who em.cv-tag{font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:1px 7px;border-radius:10px;background:rgba(129,140,248,.15);color:#a5b4fc}
+.cv-who em.cv-tag.bad{background:rgba(248,113,113,.15);color:#f87171}
+.cv-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.cv-chip{font-size:11px;padding:3px 9px;border-radius:10px;border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;max-width:100%}
+.cv-chip i{font-style:normal;font-weight:800}
+.cv-chip.fill{color:#4ade80;border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.08)}
+.cv-chip.bad{color:#f87171;border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
+.cv-chip.conf{color:#fbbf24;border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07);cursor:pointer}
+.cv-chip.conf.on{background:rgba(251,191,36,.2);border-color:#fbbf24}
+.cv-chip.conf input{accent-color:#fbbf24;margin:0}
+.cv-chip s{opacity:.6}
+.cv-seg{display:inline-flex;border:1px solid var(--border);border-radius:20px;overflow:hidden;flex:none}
+.cv-seg button{background:transparent;border:0;color:var(--grey);font-size:11.5px;padding:7px 13px;cursor:pointer;font-family:inherit;transition:background .15s,color .15s}
+.cv-seg button+button{border-left:1px solid var(--border)}
+.cv-seg button:hover{background:rgba(255,255,255,.05);color:var(--white)}
+.cv-seg button.on{background:rgba(74,222,128,.16);color:#4ade80}
+.cv-seg button.al.on{background:rgba(129,140,248,.25);color:#c7d2fe}
+.cv-seg button.dl.on{background:rgba(248,113,113,.22);color:#fca5a5}
+.cv-seg button.ok.on{background:rgba(74,222,128,.2);color:#4ade80}
+.cv-seg button.dl:hover{color:#f87171}
+.cv-empty{padding:44px 16px;text-align:center;font-size:13px;color:var(--grey)}
+.cv-foot{display:none;align-items:center;justify-content:space-between;gap:14px;padding:14px 24px;border-top:1px solid var(--border);background:rgba(0,0,0,.25);flex-wrap:wrap}
+.cv-sum{display:flex;gap:6px;flex-wrap:wrap}
+.cv-sum .p{font-size:11.5px;padding:4px 10px;border-radius:12px;border:1px solid var(--border);color:var(--grey)}
+.cv-sum .p.ok{color:#4ade80;border-color:rgba(74,222,128,.3)}.cv-sum .p.al{color:#a5b4fc;border-color:rgba(129,140,248,.35)}.cv-sum .p.dl{color:#f87171;border-color:rgba(248,113,113,.4)}
+.cv-btn{padding:10px 24px!important;border-radius:20px!important;font-size:13px!important;font-weight:700!important;cursor:pointer}
+.cv-btn[disabled]{opacity:.4;cursor:not-allowed}
+.cv-danger{background:#dc2626!important;color:#fff!important;border-color:#dc2626!important;animation:cvPulse 1s ease-in-out infinite}
+@keyframes cvPulse{50%{box-shadow:0 0 0 6px rgba(220,38,38,.18)}}
+.cv-done{text-align:center;padding:26px 10px 10px}
+.cv-check{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.4);animation:cvPop .45s cubic-bezier(.2,1.4,.4,1)}
+@keyframes cvPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.cv-done h3{font-size:20px;font-weight:800;margin:0 0 16px}
+.cv-done-grid{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+.cv-done-grid>div{min-width:104px;padding:12px 16px;border:1px solid var(--border);border-radius:14px}
+.cv-done-grid b{display:block;font-size:24px;font-weight:800}
+.cv-done-grid span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--grey)}
+.cv-note{font-size:12px;color:var(--grey);margin:6px 0 12px}.cv-note.cv-warn{color:#fbbf24}
+@media(max-width:640px){.cv-how{grid-template-columns:1fr}.cv-stats{grid-template-columns:repeat(2,1fr)}.cv-row{flex-wrap:wrap}.cv-search{width:100%;margin-left:0}.cv-stage{padding:24px 16px 14px}}
+</style>
+<div id="cv-modal" class="modal-overlay" style="display:none" data-action="closeCurrentVerify" data-backdrop="true">
+  <div class="cv-shell">
+    <button class="cv-x" data-action="closeCurrentVerify" aria-label="Close">✕</button>
+    <div id="cv-stage" class="cv-stage"></div>
+    <div id="cv-foot" class="cv-foot"></div>
+    <input type="file" id="cv-file-input" accept=".xlsx,.xls,.csv" style="display:none" data-onchange="cvFileChosen(this)">
   </div>
 </div>
 
