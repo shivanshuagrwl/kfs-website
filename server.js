@@ -5468,6 +5468,60 @@ app.delete(
   },
 );
 
+// ── HERO VIDEO — single admin-managed clip behind the homepage hero text ────
+app.get(
+  "/api/admin/hero-video/sign",
+  requireSection("settings"),
+  (req, res) => {
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = "kfs-media/hero-video";
+    const signature = cloudinary.utils.api_sign_request(
+      { timestamp, folder },
+      process.env.CLOUDINARY_API_SECRET,
+    );
+    res.json({
+      timestamp, folder, signature,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    });
+  },
+);
+
+app.post(
+  "/api/admin/hero-video/save",
+  requireSection("settings"),
+  async (req, res) => {
+    const url = String((req.body && req.body.url) || "");
+    const prefix = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/video/upload/`;
+    if (!url.startsWith(prefix) || url.length > 500)
+      return res.status(400).json({ error: "Invalid video URL" });
+    try {
+      await supabase
+        .from("settings")
+        .upsert({ key: "hero_video_url", value: url }, { onConflict: "key" });
+      memInvalidate("settings");
+      logActivity(req.admin.id, req.admin.name, "update", "settings", "Hero video")
+        .catch(e => console.error("[activity]", e.message));
+      res.json({ url });
+    } catch (e) {
+      console.error("[hero-video] save error:", e);
+      res.status(500).json({ error: "Could not save video" });
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/hero-video",
+  requireSection("settings"),
+  async (req, res) => {
+    await supabase.from("settings").delete().eq("key", "hero_video_url");
+    memInvalidate("settings");
+    logActivity(req.admin.id, req.admin.name, "delete", "settings", "Hero video")
+      .catch(e => console.error("[activity]", e.message));
+    res.json({ success: true });
+  },
+);
+
 // ── ABOUT US VIDEO — single admin-managed clip shown on the About Us page ───
 // Stored as a plain settings key (aboutus_video_url), same pattern already
 // used for aboutus_text — a single value doesn't need its own table.
