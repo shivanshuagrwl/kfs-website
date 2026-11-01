@@ -18065,3 +18065,247 @@ async function cvApply() {
   _cv.result = res; _cv.step = 'done'; _cvRender(); _cvRenderFooter();
   if (typeof loadAdminSection === 'function') loadAdminSection('members');
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   hero-video.js — homepage hero (filled text over an admin-uploaded video)
+   Load AFTER app.js:  <script src="/hero-video.js" defer></script>
+
+   Public side : reads hero_video_url + site_tagline from /api/settings,
+                 plays the video muted/looped behind the big text, and
+                 zooms + fades the text as the visitor scrolls.
+   Admin side  : injects a "Hero Video" uploader into Settings (under the
+                 Hero Tagline field). Uses the same direct-to-Cloudinary
+                 chunked upload as the About Us video.
+   ───────────────────────────────────────────────────────────────────────── */
+(function () {
+  'use strict';
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ══ PUBLIC HERO ═══════════════════════════════════════════════════════ */
+  var section, stage, video, mask, word, foot, cue, ticking = false;
+
+  function clamp(n, a, b) { return Math.min(b, Math.max(a, n)); }
+
+  function setWord(tagline) {
+    if (!word || !tagline) return;
+    // "Lights. Camera. KFS."  ->  three lines
+    var parts = String(tagline).match(/[^.]+\.?/g);
+    if (!parts) return;
+    word.textContent = '';
+    parts.forEach(function (p, i) {
+      if (i) word.appendChild(document.createElement('br'));
+      word.appendChild(document.createTextNode(p.trim()));
+    });
+  }
+
+  function setVideo(url) {
+    if (!video) return;
+    if (!url) {
+      video.removeAttribute('src');
+      video.style.display = 'none';
+      return;
+    }
+    video.style.display = '';
+    // Cloudinary serves a still frame at the same path with .jpg — instant poster.
+    video.poster = url.replace(/\.[a-zA-Z0-9]+$/, '.jpg');
+    video.src = url;
+    video.muted = true;               // required for autoplay
+    video.defaultMuted = true;
+    video.loop = true;
+    video.playsInline = true;
+    var play = function () { var p = video.play(); if (p && p.catch) p.catch(function () {}); };
+    play();
+    // Safari/iOS low-power mode sometimes blocks the first attempt — retry on first touch.
+    document.addEventListener('touchstart', play, { once: true, passive: true });
+  }
+
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      ticking = false;
+      if (!section || !mask) return;
+      var r = section.getBoundingClientRect();
+      var span = Math.max(1, r.height - window.innerHeight);
+      var p = clamp(-r.top / span, 0, 1);
+
+      if (!reduceMotion) {
+        // text grows past the camera and fades out, revealing the clean video
+        var scale = 1 + p * p * 5;
+        word.style.transform = 'scale(' + scale.toFixed(3) + ')';
+        mask.style.opacity = String(clamp(1 - (p - 0.35) / 0.4, 0, 1));
+      }
+      if (foot) foot.style.opacity = String(clamp(1 - p * 3, 0, 1));
+      if (cue)  cue.style.opacity  = String(clamp(0.6 - p * 3, 0, 0.6));
+    });
+  }
+
+  function initHero() {
+    section = document.getElementById('hero-section');
+    stage   = document.getElementById('hero-stage');
+    video   = document.getElementById('hero-video');
+    mask    = document.getElementById('hero-mask');
+    word    = document.getElementById('hero-word');
+    foot    = document.getElementById('hero-foot');
+    cue     = document.getElementById('hero-cue');
+    if (!section || !stage) return;
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+
+    fetch('/api/settings', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (s) {
+        setWord(s.site_tagline);
+        setVideo(s.hero_video_url || '');
+      })
+      .catch(function () { setVideo(''); });
+
+    // Pause the video when the hero is off-screen (saves battery/data).
+    if ('IntersectionObserver' in window && video) {
+      new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!video.src) return;
+          if (e.isIntersecting) { var p = video.play(); if (p && p.catch) p.catch(function () {}); }
+          else video.pause();
+        });
+      }, { threshold: 0.05 }).observe(stage);
+    }
+  }
+
+  /* ══ ADMIN: HERO VIDEO UPLOADER ═══════════════════════════════════════ */
+  function authHeaders() {
+    var tok = (typeof adminToken !== 'undefined') ? adminToken : '';
+    var csrf = (typeof _csrfToken !== 'undefined') ? _csrfToken : '';
+    return { 'Authorization': 'Bearer ' + tok, 'X-CSRF-Token': csrf || '' };
+  }
+
+  window.triggerClick_hero_video_file = function () {
+    var f = document.getElementById('hero-video-file');
+    if (f) f.click();
+  };
+
+  window.renderHeroVideoAdmin = function (url) {
+    var name = document.getElementById('hero-video-filename');
+    var rm = document.getElementById('hero-video-remove-btn');
+    var pv = document.getElementById('hero-video-admin-preview');
+    if (!name || !rm || !pv) return;
+    if (url) {
+      name.textContent = 'Current hero video uploaded';
+      rm.style.display = 'inline-flex';
+      pv.src = url;
+      pv.style.display = 'block';
+    } else {
+      name.textContent = 'No video uploaded';
+      rm.style.display = 'none';
+      pv.removeAttribute('src');
+      pv.style.display = 'none';
+    }
+  };
+
+  window.uploadHeroVideo = async function (inputEl) {
+    var file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    if (file.size > 180 * 1024 * 1024) {
+      alert('Video too large — please use a file under 180MB');
+      inputEl.value = '';
+      return;
+    }
+    var nameEl = document.getElementById('hero-video-filename');
+    var btn = document.getElementById('hero-video-upload-btn');
+    if (btn) btn.disabled = true;
+    var h = authHeaders();
+    try {
+      var sres = await fetch('/api/admin/hero-video/sign', { credentials: 'include', headers: h });
+      var sig = await sres.json().catch(function () { return null; });
+      if (!sres.ok || !sig) throw new Error((sig && sig.error) || 'Could not start upload');
+
+      var endpoint = 'https://api.cloudinary.com/v1_1/' + sig.cloud_name + '/video/upload';
+      var uploadId = Date.now() + '-' + Math.random().toString(36).slice(2);
+      var CHUNK = 20 * 1024 * 1024;
+      var result = null;
+      for (var start = 0; start < file.size; start += CHUNK) {
+        var end = Math.min(start + CHUNK, file.size);
+        var fd = new FormData();
+        fd.append('file', file.slice(start, end), file.name);
+        fd.append('api_key', sig.api_key);
+        fd.append('timestamp', sig.timestamp);
+        fd.append('folder', sig.folder);
+        fd.append('signature', sig.signature);
+        var r = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'X-Unique-Upload-Id': uploadId, 'Content-Range': 'bytes ' + start + '-' + (end - 1) + '/' + file.size },
+          body: fd
+        });
+        var j = await r.json().catch(function () { return null; });
+        if (!r.ok) throw new Error((j && j.error && j.error.message) || 'Cloudinary upload failed');
+        if (nameEl) nameEl.textContent = 'Uploading… ' + Math.round(end / file.size * 100) + '%';
+        result = j;
+      }
+      if (!result || !result.secure_url) throw new Error('Upload did not finish');
+
+      var res = await fetch('/api/admin/hero-video/save', {
+        method: 'POST', credentials: 'include',
+        headers: Object.assign({}, h, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ url: result.secure_url })
+      });
+      var data = await res.json().catch(function () { return null; });
+      if (!res.ok) throw new Error((data && data.error) || 'Could not save video');
+      inputEl.value = '';
+      window.renderHeroVideoAdmin(data.url);
+    } catch (e) {
+      alert(e.message || 'Error uploading video');
+      window.renderHeroVideoAdmin(null);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  window.removeHeroVideo = async function () {
+    if (!confirm('Remove the hero video?')) return;
+    if (typeof apiFetch === 'function') await apiFetch('/api/admin/hero-video', 'DELETE');
+    window.renderHeroVideoAdmin(null);
+  };
+
+  function injectAdminUploader() {
+    var tagline = document.getElementById('set-tagline');
+    if (!tagline || document.getElementById('hero-video-admin-group')) return;
+    var anchor = tagline.closest('.form-group');
+    if (!anchor) return;
+
+    var g = document.createElement('div');
+    g.className = 'form-group';
+    g.id = 'hero-video-admin-group';
+    g.innerHTML =
+      '<label>Hero Video <span style="font-weight:400;color:var(--grey)">(plays behind the big “Lights. Camera. KFS.” text on the homepage — muted, looping)</span></label>' +
+      '<div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<input type="file" id="hero-video-file" accept="video/mp4,video/webm,video/quicktime" style="display:none" data-onchange="uploadHeroVideo(this)">' +
+        '<button data-action="triggerClick_hero_video_file" type="button" class="btn btn-secondary" id="hero-video-upload-btn">+ Upload Video</button>' +
+        '<span id="hero-video-filename" style="font-size:13px;color:var(--grey);opacity:.7">No video uploaded</span>' +
+        '<button data-action="removeHeroVideo" type="button" class="btn btn-secondary" id="hero-video-remove-btn" style="display:none">Remove</button>' +
+      '</div>' +
+      '<video id="hero-video-admin-preview" controls muted style="display:none;margin-top:6px;max-width:360px;width:100%;border-radius:8px;background:#000"></video>' +
+      '<p style="font-size:12px;color:var(--grey);opacity:.7;margin-top:6px">MP4 / WebM / MOV, under 180MB. Tip: 10–30 seconds, 1080p, no audio needed — shorter loads faster. Changes show on the site within about a minute.</p>';
+    anchor.parentNode.insertBefore(g, anchor.nextSibling);
+
+    // Fill in the current video whenever the Settings tab is opened.
+    var sec = document.getElementById('section-settings');
+    if (sec && 'MutationObserver' in window) {
+      var load = function () {
+        if (!sec.classList.contains('active')) return;
+        fetch('/api/settings?_=' + Date.now(), { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : {}; })
+          .then(function (s) { window.renderHeroVideoAdmin(s.hero_video_url || null); })
+          .catch(function () {});
+      };
+      new MutationObserver(load).observe(sec, { attributes: true, attributeFilter: ['class'] });
+      load();
+    }
+  }
+
+  function boot() { initHero(); injectAdminUploader(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
