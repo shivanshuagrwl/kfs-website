@@ -4654,6 +4654,7 @@ app.get("/api/admin/members/export", requireSection("members"), async (req, res)
   const { data: members, error: mErr } = await supabase
     .from("members")
     .select("id,name,roll_no,mobile,email,batch,domain,role,bio,special_tag,sort_order,is_past,hall_of_fame,instagram,linkedin,github,twitter,youtube,website,custom_links")
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
   if (mErr) return res.status(500).json({ error: "Internal server error" });
 
@@ -4665,7 +4666,12 @@ app.get("/api/admin/members/export", requireSection("members"), async (req, res)
   (accounts || []).forEach(a => { accountMap[a.member_id] = a; });
 
   const XLSX = require("xlsx");
-  const rows = (members || []).map(m => {
+  // ?type=current | alumni | all (default all)
+  const expType = ["current", "alumni"].includes(String(req.query.type || "").toLowerCase())
+    ? String(req.query.type).toLowerCase() : "all";
+  const filteredMembers = (members || []).filter(m =>
+    expType === "current" ? !m.is_past : expType === "alumni" ? !!m.is_past : true);
+  const rows = filteredMembers.map(m => {
     const acc = accountMap[m.id];
     return {
       "Name":          m.name || "",
@@ -4707,7 +4713,7 @@ app.get("/api/admin/members/export", requireSection("members"), async (req, res)
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
   const date = new Date().toISOString().slice(0, 10);
-  res.setHeader("Content-Disposition", `attachment; filename="kfs-members-${date}.xlsx"`);
+  res.setHeader("Content-Disposition", `attachment; filename="kfs-members${expType === "all" ? "" : "-" + expType}-${date}.xlsx"`);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.send(buf);
 });
