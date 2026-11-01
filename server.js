@@ -4907,6 +4907,286 @@ app.delete(
   },
 );
 
+// ── CURRENT MEMBERS VERIFY ────────────────────────────────────────────────────
+// Admin uploads a sheet of the *current* roster. We tally it against members who
+// are currently flagged as current (is_past = false), fill in missing details,
+// and surface (a) current members NOT in the sheet → admin chooses Keep / Alumni /
+// Delete, and (b) sheet names that aren't members yet → Ignore / Add / Reinstate.
+//
+//   POST /api/admin/members/current-sync/preview   — read-only, nothing is written
+//   POST /api/admin/members/current-sync/apply     — applies the admin's decisions
+//
+// Deletes are soft (deleted_at) exactly like DELETE /api/admin/members/:id, so the
+// master "Activity → Undo" (30-min window) still works for each deleted member.
+const CS_FIELDS = [
+  { key: "roll_no", label: "Roll No" },
+  { key: "email",   label: "Email" },
+  { key: "mobile",  label: "Mobile" },
+  { key: "batch",   label: "Batch" },
+  { key: "domain",  label: "Domain" },
+  { key: "role",    label: "Role" },
+];
+const CS_MAX_ROWS = 1500;
+
+function _csNorm(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+const _csTokens = (s) => _csNorm(s).split(" ").filter(Boolean).sort().join(" ");
+const _csRoll   = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, "");
+const _csEmail  = (s) => String(s || "").trim().toLowerCase();
+const _csPhone  = (s) => String(s || "").replace(/\D/g, "").slice(-10);
+const _csTxt    = (s, n = 120) => String(s == null ? "" : s).trim().slice(0, n);
+
+// Validate + normalise one incoming field value. Returns { value } or { invalid: reason }.
+function _csCleanField(key, raw) {
+  const v = _csTxt(raw, key === "email" ? 160 : 120);
+  if (!v) return { value: "" };
+  if (key === "email") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return { invalid: "Not a valid email" };
+    if (!isKiitEmail(v)) return { invalid: "Not a KIIT email" };
+    return { value: v.toLowerCase() };
+  }
+  if (key === "mobile") {
+    const d = v.replace(/\D/g, "");
+    if (d.length < 10) return { invalid: "Mobile needs 10 digits" };
+    return { value: d.slice(-10) };
+  }
+  if (key === "roll_no") return { value: _csRoll(v) };
+  return { value: v };
+}
+
+app.post("/api/admin/members/current-sync/preview", requireSection("members"), async (req, res) => {
+  try {
+    const rowsIn = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rowsIn || !rowsIn.length) return res.status(400).json({ error: "The sheet has no rows." });
+    if (rowsIn.length > CS_MAX_ROWS) return res.status(400).json({ error: `Too many rows (max ${CS_MAX_ROWS}).` });
+
+    // rows arrive as objects {name, roll_no, email, mobile, batch, domain, role}
+    const sheet = [];
+    let blank = 0;
+    rowsIn.forEach((r, i) => {
+      const name = _csTxt(r?.name, 120);
+      if (!name) { blank++; return; }
+      const o = { idx: i, name };
+      CS_FIELDS.forEach((f) => { o[f.key] = _csTxt(r?.[f.key], 160); });
+      sheet.push(o);
+    });
+    if (!sheet.length) return res.status(400).json({ error: "No names found in the sheet." });
+
+    const { data: all, error } = await _pageAll(() =>
+      supabase.from("members")
+        .select("id,name,photo,roll_no,email,mobile,batch,domain,role,is_past")
+        .is("deleted_at", null)
+        .order("id", { ascending: true }),
+    );
+    if (error) return res.status(500).json({ error: "Could not load members" });
+
+    const current = (all || []).filter((m) => !m.is_past);
+    const alumni  = (all || []).filter((m) => m.is_past);
+
+    const used = new Set();                 // member ids already claimed
+    const matches = [];                     // { sheetRow, member, how }
+    const unmatchedSheet = [];
+
+    // Index current members for O(1) exact lookups
+    const byRoll = new Map(), byEmail = new Map(), byName = new Map(), byTok = new Map();
+    const push = (map, k, m) => { if (!k) return; if (!map.has(k)) map.set(k, []); map.get(k).push(m); };
+    current.forEach((m) => {
+      push(byRoll, _csRoll(m.roll_no), m);
+      push(byEmail, _csEmail(m.email), m);
+      push(byName, _csNorm(m.name), m);
+      push(byTok, _csTokens(m.name), m);
+    });
+    const firstFree = (list) => (list || []).find((m) => !used.has(m.id)) || null;
+
+    const pending = [];
+    for (const row of sheet) {
+      let m = null, how = null;
+      if (row.roll_no && (m = firstFree(byRoll.get(_csRoll(row.roll_no))))) how = "roll_no";
+      else if (row.email && (m = firstFree(byEmail.get(_csEmail(row.email))))) how = "email";
+      else if ((m = firstFree(byName.get(_csNorm(row.name))))) how = "name";
+      else if ((m = firstFree(byTok.get(_csTokens(row.name))))) how = "name_reordered";
+      if (m) { used.add(m.id); matches.push({ row, member: m, how }); }
+      else pending.push(row);
+    }
+
+    // Fuzzy pass (typos like "Arjun Sharmaa") — flagged for admin confirmation
+    for (const row of pending) {
+      const q = _csNorm(row.name);
+      let best = null, bestD = 99, tie = false;
+      for (const m of current) {
+        if (used.has(m.id)) continue;
+        const n = _csNorm(m.name);
+        if (!n || Math.abs(n.length - q.length) > 3) continue;
+        const d = _levenshtein(n, q);
+        if (d < bestD) { best = m; bestD = d; tie = false; }
+        else if (d === bestD) tie = true;
+      }
+      const limit = Math.max(1, Math.min(3, Math.round(q.length * 0.15)));
+      if (best && !tie && bestD <= limit && q.length >= 5) {
+        used.add(best.id);
+        matches.push({ row, member: best, how: "fuzzy" });
+      } else {
+        unmatchedSheet.push(row);
+      }
+    }
+
+    // Build per-member field diff
+    let fills = 0, conflicts = 0, invalid = 0;
+    const matched = matches.map(({ row, member, how }) => {
+      const fields = [];
+      for (const f of CS_FIELDS) {
+        const clean = _csCleanField(f.key, row[f.key]);
+        if (!row[f.key]) continue;
+        const oldVal = String(member[f.key] || "").trim();
+        if (clean.invalid) { invalid++; fields.push({ key: f.key, label: f.label, old: oldVal, new: row[f.key], status: "invalid", reason: clean.invalid }); continue; }
+        const nv = clean.value;
+        if (!nv) continue;
+        const same = f.key === "mobile" ? _csPhone(oldVal) === nv
+                   : f.key === "email" ? _csEmail(oldVal) === nv
+                   : f.key === "roll_no" ? _csRoll(oldVal) === nv
+                   : _csNorm(oldVal) === _csNorm(nv);
+        if (same) { fields.push({ key: f.key, label: f.label, old: oldVal, new: nv, status: "same" }); continue; }
+        if (!oldVal) { fills++; fields.push({ key: f.key, label: f.label, old: "", new: nv, status: "fill" }); }
+        else { conflicts++; fields.push({ key: f.key, label: f.label, old: oldVal, new: nv, status: "conflict" }); }
+      }
+      return {
+        member: { id: member.id, name: member.name, photo: member.photo || null, batch: member.batch || "", role: member.role || "" },
+        sheet_name: row.name,
+        row_index: row.idx,
+        match: how,
+        fields,
+      };
+    });
+
+    const notInSheet = current
+      .filter((m) => !used.has(m.id))
+      .map((m) => ({ id: m.id, name: m.name, photo: m.photo || null, role: m.role || "", batch: m.batch || "", email: m.email || "", roll_no: m.roll_no || "" }));
+
+    // Sheet names that don't match any current member — check alumni so the admin can reinstate
+    const alumniByName = new Map(alumni.map((m) => [_csTokens(m.name), m]));
+    const alumniByRoll = new Map(alumni.filter((m) => m.roll_no).map((m) => [_csRoll(m.roll_no), m]));
+    const sheetOnly = unmatchedSheet.map((row) => {
+      const am = (row.roll_no && alumniByRoll.get(_csRoll(row.roll_no))) || alumniByName.get(_csTokens(row.name)) || null;
+      const dupName = unmatchedSheet.filter((r) => _csTokens(r.name) === _csTokens(row.name)).length > 1;
+      return {
+        row_index: row.idx,
+        sheet: { name: row.name, roll_no: row.roll_no, email: row.email, mobile: row.mobile, batch: row.batch, domain: row.domain, role: row.role },
+        alumni_match: am ? { id: am.id, name: am.name } : null,
+        duplicate_in_sheet: dupName,
+      };
+    });
+
+    res.json({
+      summary: {
+        sheet_rows: sheet.length, blank_rows: blank, current_total: current.length,
+        matched: matched.length, fuzzy: matched.filter((m) => m.match === "fuzzy").length,
+        fills, conflicts, invalid,
+        not_in_sheet: notInSheet.length, sheet_only: sheetOnly.length,
+      },
+      matched, not_in_sheet: notInSheet, sheet_only: sheetOnly,
+    });
+  } catch (e) {
+    console.error("[current-sync/preview]", e.message);
+    res.status(500).json({ error: "Could not analyse the sheet" });
+  }
+});
+
+app.post("/api/admin/members/current-sync/apply", requireSection("members"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const updates     = Array.isArray(b.updates) ? b.updates.slice(0, CS_MAX_ROWS) : [];
+    const alumniIds   = Array.isArray(b.alumni_ids) ? [...new Set(b.alumni_ids.map(String))].slice(0, CS_MAX_ROWS) : [];
+    const deleteIds   = Array.isArray(b.delete_ids) ? [...new Set(b.delete_ids.map(String))].slice(0, CS_MAX_ROWS) : [];
+    const reinstateIds = Array.isArray(b.reinstate_ids) ? [...new Set(b.reinstate_ids.map(String))].slice(0, CS_MAX_ROWS) : [];
+    const adds        = Array.isArray(b.add) ? b.add.slice(0, CS_MAX_ROWS) : [];
+
+    const result = { updated: 0, alumni: 0, deleted: 0, reinstated: 0, added: 0, skipped: [], failed: [] };
+    const now = new Date().toISOString();
+
+    // An id can't be both deleted and moved to alumni — delete wins only if explicitly sent alone
+    const clash = new Set(deleteIds.filter((id) => alumniIds.includes(id)));
+    if (clash.size) return res.status(400).json({ error: "A member can't be both deleted and moved to alumni." });
+
+    // 1) Fill / overwrite details
+    for (const u of updates) {
+      const id = String(u?.id || "");
+      if (!id || !u.fields || typeof u.fields !== "object") continue;
+      const patch = {};
+      for (const f of CS_FIELDS) {
+        if (u.fields[f.key] === undefined) continue;
+        const clean = _csCleanField(f.key, u.fields[f.key]);
+        if (clean.invalid || !clean.value) { result.skipped.push({ id, field: f.key, reason: clean.invalid || "empty" }); continue; }
+        patch[f.key] = clean.value;
+      }
+      if (!Object.keys(patch).length) continue;
+      const { error } = await supabase.from("members").update(patch).eq("id", id).is("deleted_at", null);
+      if (error) result.failed.push({ id, action: "update", error: error.message });
+      else result.updated++;
+    }
+
+    // 2) Move to alumni
+    if (alumniIds.length) {
+      const { data, error } = await supabase.from("members").update({ is_past: true }).in("id", alumniIds).is("deleted_at", null).select("id");
+      if (error) result.failed.push({ action: "alumni", error: error.message });
+      else result.alumni = (data || []).length;
+    }
+
+    // 3) Reinstate alumni → current
+    if (reinstateIds.length) {
+      const { data, error } = await supabase.from("members").update({ is_past: false }).in("id", reinstateIds).is("deleted_at", null).select("id");
+      if (error) result.failed.push({ action: "reinstate", error: error.message });
+      else result.reinstated = (data || []).length;
+    }
+
+    // 4) Soft-delete (same side-effects as the single-delete route, so Undo still works)
+    for (const id of deleteIds) {
+      try {
+        const { data: m } = await supabase.from("members").select("*").eq("id", id).is("deleted_at", null).maybeSingle();
+        if (!m) { result.skipped.push({ id, reason: "already removed" }); continue; }
+        const { error } = await supabase.from("members").update({ deleted_at: now }).eq("id", id);
+        if (error) { result.failed.push({ id, action: "delete", error: error.message }); continue; }
+        purgeMemberSocialContent(id).catch((e) => console.error("[purgeMemberSocialContent]", e.message));
+        lockOutDeletedMember(id).catch((e) => console.error("[lockOutDeletedMember]", e.message));
+        logActivity(req.admin.id, req.admin.name, "delete", "member", m.name || id, id, m).catch((e) => console.error("[activity]", e.message));
+        result.deleted++;
+      } catch (e) { result.failed.push({ id, action: "delete", error: e.message }); }
+    }
+
+    // 5) Add sheet-only people as new current members
+    for (const a of adds) {
+      const name = _csTxt(a?.name, 120);
+      if (!name) continue;
+      const { data: dup } = await supabase.from("members").select("id").ilike("name", name).is("deleted_at", null).maybeSingle();
+      if (dup) { result.skipped.push({ name, reason: "already exists" }); continue; }
+      const row = { name, role: "Member", is_past: false, sort_order: 99, hall_of_fame: false };
+      for (const f of CS_FIELDS) {
+        const clean = _csCleanField(f.key, a[f.key]);
+        if (clean.value && !clean.invalid) row[f.key] = clean.value;
+      }
+      const { error } = await supabase.from("members").insert([row]);
+      if (error) result.failed.push({ name, action: "add", error: error.message });
+      else result.added++;
+    }
+
+    memInvalidate("members:list");
+    logActivity(
+      req.admin.id, req.admin.name, "update", "member",
+      `Current-members verify: ${result.updated} updated, ${result.alumni} → alumni, ${result.deleted} deleted, ${result.added} added, ${result.reinstated} reinstated`,
+    ).catch((e) => console.error("[activity]", e.message));
+
+    res.json({ success: true, ...result });
+  } catch (e) {
+    console.error("[current-sync/apply]", e.message);
+    res.status(500).json({ error: "Could not apply changes" });
+  }
+});
+
 // ── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get("/api/testimonials", async (req, res) => {
   cacheFor(res, 120);
