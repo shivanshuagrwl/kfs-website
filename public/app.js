@@ -17590,3 +17590,414 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ap?.classList.contains('active') && adminToken) loadModerationBadge();
   }, 90000);
 });
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// VERIFY CURRENT MEMBERS — upload the current roster, tally, fill details,
+// then decide what to do with anyone who isn't on the list.
+// ════════════════════════════════════════════════════════════════════════════
+let _cv = null; // state for the open session
+
+const _CV_HEADER_MAP = [
+  ['name',    /^(full\s*)?name$|^member(\s*name)?$|^student(\s*name)?$/i],
+  ['roll_no', /roll|reg(istration)?\s*(no|num|#)|kiit\s*id|^sap/i],
+  ['email',   /e-?mail|mail\s*id/i],
+  ['mobile',  /mobile|phone|contact|whats\s*app|^ph\b/i],
+  ['batch',   /batch|year|passing/i],
+  ['domain',  /domain|department|dept|team|wing/i],
+  ['role',    /role|position|designation|post/i],
+];
+const _CV_LABELS = { roll_no: 'Roll No', email: 'Email', mobile: 'Mobile', batch: 'Batch', domain: 'Domain', role: 'Role' };
+
+function _cvEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function _cvId(id) { return String(id).replace(/[^\w-]/g, ''); }
+function _cvInitials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?'; }
+function _cvAvatar(m) {
+  return m.photo
+    ? `<img class="cv-av" src="${_cvEsc(m.photo)}" alt="">`
+    : `<span class="cv-av cv-av-ph">${_cvEsc(_cvInitials(m.name))}</span>`;
+}
+function _cvToast(msg, type) {
+  if (typeof showToast === 'function') return showToast(msg, type || 'success');
+  if (type === 'error' && typeof showAdminError === 'function') showAdminError(msg);
+}
+
+// ── open / close ─────────────────────────────────────────────────────────────
+function openCurrentVerify() {
+  _cv = { step: 'upload', data: null, tab: 'matched', fileName: '', rejectFuzzy: new Set(), overwrite: new Set(), act: {}, sheetAct: {}, deleteArmed: false, busy: false };
+  _cvRender();
+  document.getElementById('cv-modal').style.display = 'flex';
+  _cvBindDrop();
+}
+function closeCurrentVerify() {
+  if (_cv?.busy) return;
+  document.getElementById('cv-modal').style.display = 'none';
+  _cv = null;
+}
+function cvPickFile() { document.getElementById('cv-file-input')?.click(); }
+function cvBack() { if (!_cv || _cv.busy) return; _cv.step = 'upload'; _cv.data = null; _cv.deleteArmed = false; _cvRender(); _cvBindDrop(); }
+
+function cvDownloadTemplate() {
+  if (typeof XLSX === 'undefined') { _cvToast('Excel library not loaded yet', 'error'); return; }
+  const aoa = [
+    ['Name', 'Roll No', 'Email', 'Mobile', 'Batch', 'Domain', 'Role'],
+    ['Arjun Sharma', '2205123', 'arjun@kiit.ac.in', '9876543210', '2022', 'Editing', 'Core'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Current Members');
+  XLSX.writeFile(wb, 'kfs-current-members-template.xlsx');
+}
+
+// ── file handling ────────────────────────────────────────────────────────────
+function _cvBindDrop() {
+  const dz = document.getElementById('cv-drop');
+  if (!dz || dz._bound) return;
+  dz._bound = true;
+  ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
+  dz.addEventListener('drop', e => { const f = e.dataTransfer?.files?.[0]; if (f) _cvReadFile(f); });
+}
+function cvFileChosen(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (f) _cvReadFile(f);
+}
+
+function _cvReadFile(file) {
+  if (!_cv) return;
+  if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { _cvToast('Please upload an .xlsx, .xls or .csv file', 'error'); return; }
+  if (typeof XLSX === 'undefined') { _cvToast('Excel library not loaded yet — try again in a moment', 'error'); return; }
+  _cv.fileName = file.name;
+  _cv.busy = true; _cv.step = 'loading'; _cv.loadMsg = 'Reading your sheet…'; _cvRender();
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
+      const rows = _cvParseRows(aoa);
+      if (!rows.length) throw new Error('No names found. Put names in the first column or add a "Name" header.');
+      if (rows.length > 1000) throw new Error('Sheet is too large (max 1000 rows).');
+      _cv.loadMsg = `Tallying ${rows.length} names against current members…`; _cvRender();
+      const data = await apiFetch('/api/admin/members/current-sync/preview', 'POST', { rows });
+      if (!data || data.error) throw new Error(data?.error || 'Could not analyse the sheet');
+      _cv.data = data;
+      // Default decision for everyone missing from the sheet = Keep (nothing destructive happens unless you pick it)
+      data.not_in_sheet.forEach(m => { _cv.act[_cvId(m.id)] = 'keep'; });
+      data.sheet_only.forEach(r => { _cv.sheetAct[r.row_index] = 'ignore'; });
+      _cv.step = 'review';
+      _cv.tab = data.not_in_sheet.length ? 'missing' : 'matched';
+    } catch (err) {
+      _cv.step = 'upload';
+      _cvToast(err.message || 'Could not read that file', 'error');
+    }
+    _cv.busy = false; _cvRender(); _cvBindDrop();
+  };
+  reader.onerror = () => { _cv.busy = false; _cv.step = 'upload'; _cvRender(); _cvToast('Could not read that file', 'error'); };
+  file.name.toLowerCase().endsWith('.csv') ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+}
+
+// array-of-arrays -> [{name, roll_no, email, ...}]. Works with or without a header row.
+function _cvParseRows(aoa) {
+  if (!aoa || !aoa.length) return [];
+  const cell = v => (v == null ? '' : String(v).trim());
+  let hdrIdx = -1, map = {};
+  for (let i = 0; i < Math.min(aoa.length, 6); i++) {
+    const m = {};
+    aoa[i].forEach((c, ci) => {
+      const t = cell(c); if (!t) return;
+      for (const [key, re] of _CV_HEADER_MAP) { if (m[key] === undefined && re.test(t)) { m[key] = ci; break; } }
+    });
+    if (m.name !== undefined) { hdrIdx = i; map = m; break; }
+  }
+  if (hdrIdx === -1) { map = { name: 0 }; }   // plain list of names in column A
+  const out = [];
+  for (let i = hdrIdx + 1; i < aoa.length; i++) {
+    const r = aoa[i]; const name = cell(r[map.name]);
+    if (!name) continue;
+    if (hdrIdx === -1 && i === 0 && /^(name|member|s\.?\s*no|sl)/i.test(name)) continue;
+    const o = { name };
+    Object.keys(map).forEach(k => { if (k !== 'name') o[k] = cell(r[map[k]]); });
+    out.push(o);
+  }
+  return out;
+}
+
+// ── review-state mutations ───────────────────────────────────────────────────
+function cvTab(t) { if (_cv) { _cv.tab = t; _cvRender(); } }
+function cvSetAct(id, a) { if (!_cv) return; _cv.act[_cvId(id)] = a; _cv.deleteArmed = false; _cvRender(); }
+function cvSetAllAct(a) {
+  if (!_cv?.data) return;
+  _cvVisibleMissing().forEach(m => { _cv.act[_cvId(m.id)] = a; });
+  _cv.deleteArmed = false; _cvRender();
+}
+function cvSetSheetAct(idx, a) { if (_cv) { _cv.sheetAct[idx] = a; _cvRender(); } }
+function cvToggleField(id, key) {
+  if (!_cv) return;
+  const k = _cvId(id) + '|' + key;
+  _cv.overwrite.has(k) ? _cv.overwrite.delete(k) : _cv.overwrite.add(k);
+  _cvRenderFooter();
+}
+function cvFuzzy(id, same) {
+  if (!_cv) return;
+  const k = _cvId(id);
+  same ? _cv.rejectFuzzy.delete(k) : _cv.rejectFuzzy.add(k);
+  _cv.deleteArmed = false; _cvRender();
+}
+function cvSearch(v) { if (_cv) { _cv.q = String(v || '').toLowerCase(); _cvRenderBody(); } }
+
+// A rejected fuzzy match turns into (a) a member who's "not in sheet" and (b) a sheet-only row.
+function _cvMissingAll() {
+  const d = _cv.data;
+  const extra = d.matched.filter(m => m.match === 'fuzzy' && _cv.rejectFuzzy.has(_cvId(m.member.id)))
+    .map(m => ({ id: m.member.id, name: m.member.name, photo: m.member.photo, role: m.member.role, batch: m.member.batch }));
+  return [...d.not_in_sheet, ...extra];
+}
+function _cvVisibleMissing() {
+  const q = _cv.q || '';
+  return _cvMissingAll().filter(m => !q || String(m.name).toLowerCase().includes(q));
+}
+function _cvMatchedLive() { return _cv.data.matched.filter(m => !(m.match === 'fuzzy' && _cv.rejectFuzzy.has(_cvId(m.member.id)))); }
+function _cvSheetOnlyAll() {
+  const d = _cv.data;
+  const extra = d.matched.filter(m => m.match === 'fuzzy' && _cv.rejectFuzzy.has(_cvId(m.member.id)))
+    .map(m => ({ row_index: m.row_index, sheet: { name: m.sheet_name }, alumni_match: null, from_fuzzy: true, fieldsRaw: m.fields }));
+  return [...d.sheet_only, ...extra];
+}
+
+function _cvCounts() {
+  const missing = _cvMissingAll();
+  const c = { keep: 0, alumni: 0, delete: 0 };
+  missing.forEach(m => { c[_cv.act[_cvId(m.id)] || 'keep']++; });
+  let fills = 0, over = 0;
+  _cvMatchedLive().forEach(m => m.fields.forEach(f => {
+    if (f.status === 'fill') fills++;
+    if (f.status === 'conflict' && _cv.overwrite.has(_cvId(m.member.id) + '|' + f.key)) over++;
+  }));
+  let add = 0, reinstate = 0;
+  _cvSheetOnlyAll().forEach(r => { const a = _cv.sheetAct[r.row_index]; if (a === 'add') add++; if (a === 'reinstate') reinstate++; });
+  return { ...c, fills, over, add, reinstate };
+}
+
+// ── rendering ────────────────────────────────────────────────────────────────
+function _cvRender() {
+  const prev = document.getElementById('cv-body');
+  const keep = prev ? prev.scrollTop : 0;
+  _cvRenderStage();
+  const nb = document.getElementById('cv-body');
+  if (nb && keep) nb.scrollTop = keep;
+  _cvRenderFooter();
+}
+function _cvRenderStage() {
+  const box = document.getElementById('cv-stage');
+  if (!box || !_cv) return;
+  if (_cv.step === 'upload') {
+    box.innerHTML = `
+      <div class="cv-hero">
+        <div class="cv-orb"></div>
+        <h3>Verify current members</h3>
+        <p>Upload your latest roster. We'll tally it against the members marked <b>Current</b>, fill in their details, and ask you what to do with anyone who isn't on the list.</p>
+      </div>
+      <div id="cv-drop" class="cv-drop" data-action="cvPickFile">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="cv-drop-t">Drop your sheet here, or click to browse</div>
+        <div class="cv-drop-s">.xlsx · .xls · .csv</div>
+      </div>
+      <div class="cv-how">
+        <div><b>Columns we understand</b><span>Name <i>(required)</i>, Roll No, Email, Mobile, Batch, Domain, Role. Header names can vary. A plain list of names in column A works too.</span></div>
+        <div><b>Matching</b><span>By roll no, email, then name. Reordered names and small typos are caught, and typos ask for your confirmation.</span></div>
+        <div><b>Safe by default</b><span>Nothing changes until you press Apply. Existing details are never overwritten unless you tick them.</span></div>
+      </div>
+      <button class="cv-link" data-action="cvDownloadTemplate">↓ Download template</button>`;
+    return;
+  }
+  if (_cv.step === 'loading') {
+    box.innerHTML = `<div class="cv-loading"><div class="cv-spin"></div><div>${_cvEsc(_cv.loadMsg || 'Working…')}</div><small>${_cvEsc(_cv.fileName)}</small></div>`;
+    return;
+  }
+  if (_cv.step === 'applying') {
+    box.innerHTML = `<div class="cv-loading"><div class="cv-spin"></div><div>Applying your changes…</div><small>Please don't close this window</small></div>`;
+    return;
+  }
+  if (_cv.step === 'done') {
+    const r = _cv.result || {};
+    const rows = [
+      ['Details updated', r.updated], ['Moved to Alumni', r.alumni], ['Deleted', r.deleted],
+      ['Added', r.added], ['Reinstated', r.reinstated],
+    ].filter(x => x[1]);
+    box.innerHTML = `
+      <div class="cv-done">
+        <div class="cv-check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <h3>All synced</h3>
+        <div class="cv-done-grid">${rows.length ? rows.map(x => `<div><b>${x[1]}</b><span>${x[0]}</span></div>`).join('') : '<div><b>0</b><span>Nothing to change</span></div>'}</div>
+        ${r.deleted ? '<p class="cv-note">Deleted members can be restored within 30 minutes from the master Activity Log → Undo.</p>' : ''}
+        ${(r.failed && r.failed.length) ? `<p class="cv-note cv-warn">${r.failed.length} item(s) failed. Check the server logs.</p>` : ''}
+        ${(r.skipped && r.skipped.length) ? `<p class="cv-note">${r.skipped.length} item(s) were skipped (invalid value or already removed).</p>` : ''}
+        <button class="btn btn-primary cv-btn" data-action="closeCurrentVerify">Close</button>
+      </div>`;
+    return;
+  }
+  // review
+  const d = _cv.data, s = d.summary;
+  const live = _cvMatchedLive().length;
+  const missingN = _cvMissingAll().length;
+  const soN = _cvSheetOnlyAll().length;
+  box.innerHTML = `
+    <div class="cv-top">
+      <button class="cv-link" data-action="cvBack">← Different file</button>
+      <span class="cv-file">${_cvEsc(_cv.fileName)} · ${s.sheet_rows} rows</span>
+    </div>
+    <div class="cv-stats">
+      <div class="cv-stat ok"><b>${live}</b><span>Matched</span></div>
+      <div class="cv-stat ${_cvCounts().fills ? 'info' : ''}"><b>${_cvCounts().fills}</b><span>Details to fill</span></div>
+      <div class="cv-stat ${missingN ? 'warn' : ''}"><b>${missingN}</b><span>Not in sheet</span></div>
+      <div class="cv-stat ${soN ? 'mute' : ''}"><b>${soN}</b><span>Only in sheet</span></div>
+    </div>
+    <div class="cv-tabs">
+      <button class="${_cv.tab === 'missing' ? 'on' : ''}" data-action="cvTab" data-args='["missing"]'>Not in sheet <em>${missingN}</em></button>
+      <button class="${_cv.tab === 'matched' ? 'on' : ''}" data-action="cvTab" data-args='["matched"]'>Matched <em>${live}</em></button>
+      <button class="${_cv.tab === 'sheetonly' ? 'on' : ''}" data-action="cvTab" data-args='["sheetonly"]'>Only in sheet <em>${soN}</em></button>
+      <input class="cv-search" placeholder="Search…" value="${_cvEsc(_cv.q || '')}" data-oninput="cvSearch(this.value)">
+    </div>
+    <div id="cv-body" class="cv-body"></div>`;
+  _cvRenderBody();
+  _cvRenderFooter();
+}
+
+function _cvRenderBody() {
+  const body = document.getElementById('cv-body');
+  if (!body || !_cv?.data) return;
+  const q = _cv.q || '';
+  if (_cv.tab === 'missing') {
+    const list = _cvVisibleMissing();
+    if (!_cvMissingAll().length) { body.innerHTML = `<div class="cv-empty">🎉 Everyone marked Current is on your sheet.</div>`; return; }
+    body.innerHTML = `
+      <div class="cv-bulk"><span>These current members were <b>not found</b> in your sheet. Choose what happens to each one:</span>
+        <div class="cv-seg">
+          <button data-action="cvSetAllAct" data-args='["keep"]'>All: Keep</button>
+          <button class="al" data-action="cvSetAllAct" data-args='["alumni"]'>All: Alumni</button>
+          <button class="dl" data-action="cvSetAllAct" data-args='["delete"]'>All: Delete</button>
+        </div>
+      </div>` + (list.length ? list.map(m => {
+        const id = _cvId(m.id), a = _cv.act[id] || 'keep';
+        return `<div class="cv-row ${a}">
+          ${_cvAvatar(m)}
+          <div class="cv-who"><b>${_cvEsc(m.name)}</b><span>${_cvEsc([m.role, m.batch].filter(Boolean).join(' · ') || 'Member')}</span></div>
+          <div class="cv-seg sm">
+            <button class="${a === 'keep' ? 'on' : ''}" data-action="cvSetAct" data-args='["${id}","keep"]'>Keep</button>
+            <button class="al ${a === 'alumni' ? 'on' : ''}" data-action="cvSetAct" data-args='["${id}","alumni"]'>Alumni</button>
+            <button class="dl ${a === 'delete' ? 'on' : ''}" data-action="cvSetAct" data-args='["${id}","delete"]'>Delete</button>
+          </div></div>`;
+      }).join('') : `<div class="cv-empty">No matches for “${_cvEsc(q)}”.</div>`);
+    return;
+  }
+  if (_cv.tab === 'matched') {
+    const list = _cvMatchedLive().filter(m => !q || (m.member.name + ' ' + m.sheet_name).toLowerCase().includes(q));
+    // fuzzy matches that were rejected still need a way to be re-accepted
+    const rej = _cv.data.matched.filter(m => m.match === 'fuzzy' && _cv.rejectFuzzy.has(_cvId(m.member.id)) && (!q || m.member.name.toLowerCase().includes(q)));
+    const HOW = { roll_no: 'Roll no', email: 'Email', name: 'Name', name_reordered: 'Name', fuzzy: 'Check me' };
+    const fuzzy = list.filter(m => m.match === 'fuzzy'), rest = list.filter(m => m.match !== 'fuzzy');
+    const row = m => {
+      const id = _cvId(m.member.id);
+      const chips = m.fields.filter(f => f.status !== 'same').map(f => {
+        if (f.status === 'fill') return `<span class="cv-chip fill" title="Will be filled"><i>+</i>${_cvEsc(f.label)}: ${_cvEsc(f.new)}</span>`;
+        if (f.status === 'invalid') return `<span class="cv-chip bad" title="${_cvEsc(f.reason)}">${_cvEsc(f.label)}: ${_cvEsc(f.new)} — ${_cvEsc(f.reason)}</span>`;
+        const on = _cv.overwrite.has(id + '|' + f.key);
+        return `<label class="cv-chip conf ${on ? 'on' : ''}" title="Already has a different value"><input type="checkbox" ${on ? 'checked' : ''} data-onchange="cvToggleField('${id}','${f.key}')">${_cvEsc(f.label)}: <s>${_cvEsc(f.old)}</s> → ${_cvEsc(f.new)}</label>`;
+      }).join('');
+      const same = m.fields.filter(f => f.status === 'same').length;
+      const fz = m.match === 'fuzzy' ? `<div class="cv-seg sm"><button class="on" data-action="cvFuzzy" data-args='["${id}",true]'>Same person ✓</button><button class="dl" data-action="cvFuzzy" data-args='["${id}",false]'>Not them ✕</button></div>` : '';
+      const differs = _cvNormName(m.member.name) !== _cvNormName(m.sheet_name);
+      return `<div class="cv-row ${m.match === 'fuzzy' ? 'fz' : ''}">
+        ${_cvAvatar(m.member)}
+        <div class="cv-who"><b>${_cvEsc(m.member.name)}</b>
+          <span>${differs ? `Sheet: ${_cvEsc(m.sheet_name)} · ` : ''}<em class="cv-tag">${HOW[m.match]}</em>${same ? ` · ${same} already up to date` : ''}</span>
+          ${chips ? `<div class="cv-chips">${chips}</div>` : ''}
+        </div>${fz}</div>`;
+    };
+    body.innerHTML =
+      (fuzzy.length ? `<div class="cv-sec">Needs your confirmation <em>${fuzzy.length}</em></div>` + fuzzy.map(row).join('') : '') +
+      (rest.length ? `<div class="cv-sec">Matched <em>${rest.length}</em></div>` + rest.map(row).join('') : '') +
+      (rej.length ? `<div class="cv-sec">Rejected matches <em>${rej.length}</em></div>` + rej.map(m => `<div class="cv-row"><div class="cv-who"><b>${_cvEsc(m.member.name)}</b><span>Sheet: ${_cvEsc(m.sheet_name)}</span></div><div class="cv-seg sm"><button data-action="cvFuzzy" data-args='["${_cvId(m.member.id)}",true]'>Undo</button></div></div>`).join('') : '') +
+      (!list.length && !rej.length ? `<div class="cv-empty">Nothing here${q ? ` for “${_cvEsc(q)}”` : ''}.</div>` : '');
+    return;
+  }
+  // sheet only
+  const list = _cvSheetOnlyAll().filter(r => !q || r.sheet.name.toLowerCase().includes(q));
+  if (!_cvSheetOnlyAll().length) { body.innerHTML = `<div class="cv-empty">Every name on your sheet already exists as a current member.</div>`; return; }
+  body.innerHTML = `<div class="cv-bulk"><span>These names are on your sheet but <b>aren't current members</b>. Default is to ignore them.</span></div>` +
+    list.map(r => {
+      const a = _cv.sheetAct[r.row_index] || 'ignore';
+      const am = r.alumni_match;
+      return `<div class="cv-row">
+        <span class="cv-av cv-av-ph">${_cvEsc(_cvInitials(r.sheet.name))}</span>
+        <div class="cv-who"><b>${_cvEsc(r.sheet.name)}</b>
+          <span>${am ? `Found in <em class="cv-tag">Alumni</em> as “${_cvEsc(am.name)}”` : (r.from_fuzzy ? 'Rejected a similar-name match' : 'Not in your members list')}${r.duplicate_in_sheet ? ' · <em class="cv-tag bad">duplicate in sheet</em>' : ''}</span></div>
+        <div class="cv-seg sm">
+          <button class="${a === 'ignore' ? 'on' : ''}" data-action="cvSetSheetAct" data-args='[${r.row_index},"ignore"]'>Ignore</button>
+          ${am ? `<button class="al ${a === 'reinstate' ? 'on' : ''}" data-action="cvSetSheetAct" data-args='[${r.row_index},"reinstate"]'>Make current</button>`
+               : (r.from_fuzzy ? '' : `<button class="ok ${a === 'add' ? 'on' : ''}" data-action="cvSetSheetAct" data-args='[${r.row_index},"add"]'>Add member</button>`)}
+        </div></div>`;
+    }).join('') || `<div class="cv-empty">No matches for “${_cvEsc(q)}”.</div>`;
+}
+function _cvNormName(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').sort().join(' '); }
+
+function _cvRenderFooter() {
+  const f = document.getElementById('cv-foot');
+  if (!f) return;
+  if (!_cv || _cv.step !== 'review') { f.innerHTML = ''; f.style.display = 'none'; return; }
+  f.style.display = 'flex';
+  const c = _cvCounts();
+  const bits = [];
+  if (c.fills + c.over) bits.push(`<span class="p ok">${c.fills + c.over} detail${c.fills + c.over > 1 ? 's' : ''} updated</span>`);
+  if (c.alumni) bits.push(`<span class="p al">${c.alumni} → Alumni</span>`);
+  if (c.delete) bits.push(`<span class="p dl">${c.delete} deleted</span>`);
+  if (c.add) bits.push(`<span class="p ok">${c.add} added</span>`);
+  if (c.reinstate) bits.push(`<span class="p al">${c.reinstate} reinstated</span>`);
+  if (c.keep) bits.push(`<span class="p">${c.keep} kept</span>`);
+  const nothing = !(c.fills + c.over + c.alumni + c.delete + c.add + c.reinstate);
+  const armed = _cv.deleteArmed && c.delete > 0;
+  f.innerHTML = `<div class="cv-sum">${bits.join('') || '<span class="p">No changes yet</span>'}</div>
+    <button class="btn cv-btn ${armed ? 'cv-danger' : 'btn-primary'}" ${nothing ? 'disabled' : ''} data-action="cvApply">${armed ? `Yes, delete ${c.delete} & apply` : 'Apply changes'}</button>`;
+}
+
+// ── apply ────────────────────────────────────────────────────────────────────
+async function cvApply() {
+  if (!_cv?.data || _cv.busy) return;
+  const c = _cvCounts();
+  if (c.delete > 0 && !_cv.deleteArmed) { _cv.deleteArmed = true; _cvRenderFooter(); return; }
+
+  const updates = [], alumni_ids = [], delete_ids = [], reinstate_ids = [], add = [];
+  _cvMatchedLive().forEach(m => {
+    const id = _cvId(m.member.id), fields = {};
+    m.fields.forEach(f => {
+      if (f.status === 'fill' || (f.status === 'conflict' && _cv.overwrite.has(id + '|' + f.key))) fields[f.key] = f.new;
+    });
+    if (Object.keys(fields).length) updates.push({ id: m.member.id, fields });
+  });
+  _cvMissingAll().forEach(m => {
+    const a = _cv.act[_cvId(m.id)] || 'keep';
+    if (a === 'alumni') alumni_ids.push(m.id);
+    if (a === 'delete') delete_ids.push(m.id);
+  });
+  _cvSheetOnlyAll().forEach(r => {
+    const a = _cv.sheetAct[r.row_index];
+    if (a === 'add' && !r.from_fuzzy) add.push(r.sheet);
+    if (a === 'reinstate' && r.alumni_match) reinstate_ids.push(r.alumni_match.id);
+  });
+
+  _cv.busy = true; _cv.step = 'applying'; _cvRender(); _cvRenderFooter();
+  const res = await apiFetch('/api/admin/members/current-sync/apply', 'POST', { updates, alumni_ids, delete_ids, reinstate_ids, add });
+  _cv.busy = false;
+  if (!res || res.error || !res.success) {
+    _cv.step = 'review'; _cv.deleteArmed = false; _cvRender();
+    _cvToast(res?.error || 'Could not apply changes', 'error');
+    return;
+  }
+  _cv.result = res; _cv.step = 'done'; _cvRender(); _cvRenderFooter();
+  if (typeof loadAdminSection === 'function') loadAdminSection('members');
+}
