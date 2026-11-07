@@ -3224,7 +3224,7 @@ body.light-mode .psw-comment-gate a{color:#111}
 <!-- NAV -->
 <nav id="main-nav">
   <div class="nav-logo-group">
-    <a data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
+    <a href="/" data-action="navigate" data-args='["home"]' class="nav-logo" style="gap:10px">
       <img class="nav-logo-img" src="/images/kfs-logo-transparent.png" alt="KFS" onerror="this.style.display='none'">
     </a>
     <a href="https://ksac.kiit.ac.in/" target="_blank" rel="noopener" class="nav-partner-logo" title="KSAC">
@@ -3235,14 +3235,14 @@ body.light-mode .psw-comment-gate a{color:#111}
     </a>
   </div>
   <ul class="nav-links" id="nav-links">
-    <li><a data-nav-page="home" class="active" data-page="home">Home</a></li>
-    <li><a data-nav-page="events" data-page="events">Events</a></li>
-    <li><a data-nav-page="blog" data-page="blog">Blog</a></li>
-    <li><a data-nav-page="movies" data-page="movies">Films</a></li>
-    <li><a data-nav-page="members" data-page="members">Members</a></li>
-    <li><a data-nav-page="wrapped" data-page="wrapped">Wrapped</a></li>
-    <li><a data-nav-page="collaborate" data-page="collaborate">Collaborate</a></li>
-    <li><a data-nav-page="strand" data-page="strand">Strand</a></li>
+    <li><a href="/" data-nav-page="home" class="active" data-page="home">Home</a></li>
+    <li><a href="/events" data-nav-page="events" data-page="events">Events</a></li>
+    <li><a href="/blog" data-nav-page="blog" data-page="blog">Blog</a></li>
+    <li><a href="/movies" data-nav-page="movies" data-page="movies">Films</a></li>
+    <li><a href="/members" data-nav-page="members" data-page="members">Members</a></li>
+    <li><a href="/wrapped" data-nav-page="wrapped" data-page="wrapped">Wrapped</a></li>
+    <li><a href="/collaborate" data-nav-page="collaborate" data-page="collaborate">Collaborate</a></li>
+    <li><a href="/social-strand" data-nav-page="strand" data-page="strand">Strand</a></li>
   </ul>
   <div class="nav-right">
     <button data-action="openSearch" style="background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;gap:6px;color:var(--grey);font-size:12px;letter-spacing:.08em;font-family:inherit" title="Search (Ctrl+K)">
@@ -3281,9 +3281,9 @@ body.light-mode .psw-comment-gate a{color:#111}
 
       <div class="hx-foot" id="hero-foot">
         <div class="hx-links">
-          <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
+          <a href="/blog" data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
           <a href="/Social-Strand" class="btn btn-secondary">Social Strand</a>
-          <a class="btn btn-secondary" data-nav-page="events">Upcoming Events</a>
+          <a class="btn btn-secondary" href="/events" data-nav-page="events">Upcoming Events</a>
         </div>
       </div>
       <div class="hx-cue" id="hero-cue"><i></i></div>
@@ -3310,7 +3310,7 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div>
           <h2 class="section-title">We are the<br><em style="color:var(--grey);font-style:normal">cinephiles</em><br>of KIIT.</h2>
           <p class="about-text" style="margin-top:32px" id="about-text">Loading...</p>
-          <a data-action="navigate" data-args='["aboutus"]' class="btn-more-about" style="margin-top:24px">
+          <a href="/aboutus" data-action="navigate" data-args='["aboutus"]' class="btn-more-about" style="margin-top:24px">
             <span>More About Us</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </a>
@@ -3344,7 +3344,7 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div class="loading" style="padding:40px 0">Loading posts...</div>
       </div>
       <div class="section-cta">
-        <a data-action="navigate" data-args='["blog"]' class="btn btn-secondary">All Posts →</a>
+        <a href="/blog" data-action="navigate" data-args='["blog"]' class="btn btn-secondary">All Posts →</a>
       </div>
     </div>
   </section>
@@ -3373,7 +3373,7 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div class="loading" style="padding:40px 0">Loading films...</div>
       </div>
       <div class="section-cta">
-        <a data-action="navigate" data-args='["movies"]' class="btn btn-secondary">All Films →</a>
+        <a href="/movies" data-action="navigate" data-args='["movies"]' class="btn btn-secondary">All Films →</a>
       </div>
     </div>
   </section>
@@ -3390,7 +3390,7 @@ body.light-mode .psw-comment-gate a{color:#111}
         <div class="loading">Loading events...</div>
       </div>
       <div style="margin-top:40px;padding:0 40px 48px">
-        <a class="btn btn-secondary" data-nav-page="events">All Events →</a>
+        <a class="btn btn-secondary" href="/events" data-nav-page="events">All Events →</a>
       </div>
     </div>
   </section>
@@ -3443,11 +3443,11 @@ body.light-mode .psw-comment-gate a{color:#111}
       <p class="footer-copy">&copy; <span id="footer-year"></span> KFS. All rights reserved. By using this site, you agree to our <a href="/terms" style="color:var(--grey);text-underline-offset:3px">Terms</a> &amp; <a href="/privacy" style="color:var(--grey);text-underline-offset:3px">Privacy Policy</a>.</p>
     </div>
     <div class="footer-links">
-      <a data-action="navigate" data-args='["donations"]' style="cursor:pointer">Donate</a>
+      <a href="/donations" data-action="navigate" data-args='["donations"]' style="cursor:pointer">Donate</a>
       <a id="footer-instagram" style="display:none" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a id="footer-youtube" style="display:none" target="_blank" rel="noopener noreferrer">YouTube</a>
       <a id="footer-email" target="_blank" rel="noopener noreferrer">Contact</a>
-      <a data-action="navigate" data-args='["credits"]' style="cursor:pointer">Credits</a>
+      <a href="/credits" data-action="navigate" data-args='["credits"]' style="cursor:pointer">Credits</a>
       <a href="/Social-Strand">Social Strand</a>
     </div>
   </footer>
