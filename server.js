@@ -1256,6 +1256,22 @@ const strictWriteLimit = rateLimit({
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
 });
 
+// ── ONE CANONICAL HOST ───────────────────────────────────────────────────────
+// www.kiitfilmsociety.in, http:// and the *.onrender.com URL all serve the same site.
+// Google treats each as a separate copy -> "Alternate page with proper canonical tag".
+// 301 them all to https://kiitfilmsociety.in so only one version is ever crawled.
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/api/")) return next(); // never redirect API calls / health checks
+  const host = String(req.headers.host || "").toLowerCase().split(":")[0];
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+  if (isLocal) return next();
+  const wrongHost = host === "www.kiitfilmsociety.in" || host.endsWith(".onrender.com");
+  const insecure = host === "kiitfilmsociety.in" && req.protocol !== "https";
+  if (wrongHost || insecure) return res.redirect(301, "https://kiitfilmsociety.in" + req.originalUrl);
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public"), { index: false })); // index:false -> "/" goes through the SEO route below
 
 // Every /api/* response is dynamic, per-request, often per-user data — it
@@ -1808,6 +1824,10 @@ app.get("/robots.txt", (req, res) => {
       "Allow: /api/studio/projects\n" +
       "Allow: /api/recommendations\n" +
       "Allow: /api/reviews\n" +
+      // /collaborate (in the sitemap) and the film list call these while rendering.
+      "Allow: /api/collaborate$\n" +
+      "Allow: /api/films\n" +
+      "Allow: /api/donation/stats\n" +
       "Disallow: /api/\n" +
       // NOTE: /admin is deliberately NOT listed here. robots.txt is public, so a
       // "Disallow: /admin" line tells everyone where the admin login lives. Private
@@ -9735,8 +9755,8 @@ app.get("/social-strand/:username/:postid", async (req, res) => {
     const p = projectResult?.data ?? null;
 
     if (!p) {
-      // Unknown/unpublished post — serve SPA (will show its own empty/404 state)
-      return res.sendFile(path.join(__dirname, "public", "index.html"));
+      // Unknown/unpublished post: real 404 + noindex (was HTTP 200 with the homepage canonical = soft 404)
+      return serveSpaShell(req, res, { status: 404, noindex: true, title: "Post not found — KIIT Film Society" });
     }
 
     const authorName  = p.members?.name || "a KFS member";
@@ -9779,15 +9799,16 @@ app.get("/social-strand/:username/:postid", async (req, res) => {
     });
   } catch (err) {
     console.error("[share/social-strand]", err.message);
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+    res.set("Retry-After", "120");
+    res.status(503).sendFile(path.join(__dirname, "public", "index.html"));
   }
 });
 
 // ── /social-strand (bare) — public Social Strand feed page ───────────────────
 // Serves the SPA (index.html); client router shows the public strand feed.
-app.get("/social-strand", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+app.get("/social-strand", (req, res) =>
+  serveSpaShell(req, res, { title: "Social Strand — KIIT Film Society (KFS)" }),
+);
 
 // ── Legacy redirects → canonical /social-strand/:username/:postid ─────────────
 // /strand/:slug  (old format with title-slug)
