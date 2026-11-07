@@ -42,7 +42,7 @@
 // ctrl/cmd/middle-click open the real URL in a new tab.
 (function kfsNavHrefs() {
   const MAP = { home:'/', movies:'/movies', events:'/events', blog:'/blog', members:'/members',
-                aboutus:'/aboutus', collaborate:'/collaborate', strand:'/social-strand' };
+                aboutus:'/aboutus', collaborate:'/collaborate', strand:'/social-strand', wrapped:'/wrapped' };
   function apply() {
     document.querySelectorAll('a[data-page]').forEach(a => {
       const p = MAP[a.dataset.page];
@@ -50,10 +50,11 @@
     });
   }
   document.addEventListener('click', e => {
-    const a = e.target.closest && e.target.closest('a[data-page]');
-    if (!a || !MAP[a.dataset.page]) return;
+    // Nav links now carry real hrefs in index.html; cancel only the browser's full-page load.
+    const a = e.target.closest && e.target.closest('a[href][data-nav-page], a[href][data-page]');
+    if (!a) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
-    e.preventDefault(); // existing onclick / listeners still run and do the navigation
+    e.preventDefault(); // the app's own click delegation still performs the in-app navigation
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
   else apply();
