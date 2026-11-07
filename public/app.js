@@ -33,6 +33,32 @@
   }
 })();
 
+
+// ── SEO: give the top-nav links real hrefs so Google can follow them ──────────
+// The nav <a data-page="..."> elements navigate via JS only. Without an href Google
+// treats them as plain text and never discovers /movies, /events, /blog ... from the
+// homepage. Setting href is safe: we only cancel the browser's default full-page load
+// on a plain click (the existing handler still performs the in-app navigation), and
+// ctrl/cmd/middle-click open the real URL in a new tab.
+(function kfsNavHrefs() {
+  const MAP = { home:'/', movies:'/movies', events:'/events', blog:'/blog', members:'/members',
+                aboutus:'/aboutus', collaborate:'/collaborate', strand:'/social-strand' };
+  function apply() {
+    document.querySelectorAll('a[data-page]').forEach(a => {
+      const p = MAP[a.dataset.page];
+      if (p && !a.getAttribute('href')) a.setAttribute('href', p);
+    });
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a[data-page]');
+    if (!a || !MAP[a.dataset.page]) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault(); // existing onclick / listeners still run and do the navigation
+  });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+})();
+
 let currentPage = 'home';
 // ── SECURITY: adminToken lives in memory only — never written to localStorage.
 // XSS cannot steal it. Session persistence is handled by the httpOnly refresh
@@ -721,7 +747,7 @@ async function loadHomeData() {
         <div class="hc-blog-body">
           <div class="hc-blog-date">${new Date(b.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<\/div>
           ${hcSpoilerPill}
-          <div class="hc-blog-title">${b.title}<\/div>
+          <div class="hc-blog-title">${kfsCrawlLink('/blog/'+kfsSlug(b.title, b.id), b.title)}<\/div>
           <div class="hc-blog-excerpt">${b.excerpt||''}<\/div>
         <\/div>
       <\/div>`;
@@ -761,7 +787,7 @@ async function loadHomeData() {
       return `<div class="hc-film-card" onclick="openMovie('${m.id}')">
         ${posterHtml}
         <div class="hc-film-info">
-          <div class="hc-film-title">${m.title}<\/div>
+          <div class="hc-film-title">${kfsCrawlLink('/films/'+kfsSlug(m.title, m.id), m.title)}<\/div>
           <div class="hc-film-meta">${[m.release_year, (Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).join(', ')].filter(Boolean).join(' · ')}<\/div>
           ${ratingHtml}
         <\/div>
@@ -911,7 +937,7 @@ function renderTimelineNode(e) {
     <div class="et-card">
       <div class="et-card-body">
         <div class="et-badges">${pill}${countdownPill}<span class="et-date">${dateStr}<\/span><\/div>
-        <div class="et-title">${e.title||''}<\/div>
+        <div class="et-title">${kfsCrawlLink('/events/'+kfsSlug(e.title, e.id), e.title||'')}<\/div>
         <div class="et-desc">${e.description||''}<\/div>
         <div class="et-meta-row">${e.location?`<span>📍 ${e.location}<\/span>`:''}${e.event_time?`<span>🕐 ${e.event_time}<\/span>`:''}<\/div>
         ${actionRow}
@@ -1427,7 +1453,7 @@ function renderRecentlyViewed(currentId) {
             : `<div class="rv-thumb-placeholder"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/><\/svg><\/div>`}
         <\/div>
         <div class="rv-item-info">
-          <div class="rv-item-title">${b.title}<\/div>
+          <div class="rv-item-title">${kfsCrawlLink('/blog/'+kfsSlug(b.title, b.id), b.title)}<\/div>
           <div class="rv-item-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}<\/div>
         <\/div>
       <\/div>`).join('')
@@ -10823,7 +10849,7 @@ function sortHomeFilms(type, btn) {
     return `<div class="hc-film-card" onclick="openMovie('${m.id}')">
       ${posterHtml}
       <div class="hc-film-info">
-        <div class="hc-film-title">${m.title}</div>
+        <div class="hc-film-title">${kfsCrawlLink('/films/'+kfsSlug(m.title, m.id), m.title)}</div>
         <div class="hc-film-meta">${[m.release_year,(Array.isArray(m.genre)?m.genre:(m.genre?[m.genre]:[])).join(', ')].filter(Boolean).join(' · ')}</div>
         ${ratingHtml}
       </div>
@@ -11209,7 +11235,7 @@ async function loadFilmRecommendations(movieId, movieTitle) {
           ? `<img class="film-rec-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy">`
           : `<div class="film-rec-poster-ph">${_recsFilmIcon}</div>`}
         <div class="film-rec-info">
-          <div class="film-rec-title">${m.title}</div>
+          <div class="film-rec-title">${kfsCrawlLink('/films/'+kfsSlug(m.title, m.id), m.title)}</div>
           <div class="film-rec-meta">${m.release_year || ''}</div>
           ${reasonHtml}
         </div>
@@ -12681,114 +12707,21 @@ async function _renderStoryCardBlob(data) {
 }
 
 // ── SCREENSAVER ────────────────────────────────────────────────────────────
-var _ssFilms = [], _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null, _ssTok = 0;
-var _ssStatsCache = {};
-var _SS_IDLE_MS  = 3 * 60 * 1000; // idle time before it starts
-var _SS_SLIDE_MS = 9000;          // how long each film stays on screen
-var _SS_CATS = [['direction','Direction'],['sound','Sound'],['cinematography','Cinemato.'],['script','Script']];
-
-function _ssById(id) { return document.getElementById(id); }
-
-// Crew fields look like "Name||memberId;;Name2||memberId2" (or plain "A, B") — keep names only.
-function _ssNames(v) {
-  return String(v || '').split(';;').map(function(p){ return p.split('||')[0].trim(); }).filter(Boolean).join(', ');
-}
+var _ssFilms = [];
+var _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null;
+var _SS_IDLE_MS = 3 * 60 * 1000; // 3 minutes
 
 function _ssGetFilms() {
-  var m = (window._allMoviesCache || []).slice();
-  for (var i = m.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = m[i]; m[i] = m[j]; m[j] = t; }
-  var films = m.map(function(x) {
-    return {
-      id: x.id, title: x.title || '',
-      year: x.release_year ? String(x.release_year) : '',
-      director: _ssNames(x.director),
-      poster: /^https:\/\//i.test(x.poster_image || '') ? x.poster_image : '',
-      watch:  /^https:\/\//i.test(x.watch_url || '') ? x.watch_url : ''
-    };
-  });
-  return films.length ? films : [{ id: null, title: 'KIIT Film Society', year: '', director: '', poster: '', watch: '' }];
-}
-
-// Average rating + per-category averages for one film (cached; null = no reviews)
-function _ssStats(id) {
-  if (id == null) return Promise.resolve(null);
-  if (_ssStatsCache[id] !== undefined) return Promise.resolve(_ssStatsCache[id]);
-  return fetch('/api/reviews/' + encodeURIComponent(id))
-    .then(function(r) { return r.ok ? r.json() : []; })
-    .catch(function() { return []; })
-    .then(function(rv) {
-      var st = null;
-      if (Array.isArray(rv) && rv.length) {
-        var avg = function(k) {
-          var v = rv.map(function(r) { return Number(r[k]); }).filter(function(n) { return n > 0; });
-          return v.length ? v.reduce(function(a, b) { return a + b; }, 0) / v.length : null;
-        };
-        st = { avg: avg('overall'), count: rv.length, cats: _SS_CATS.map(function(c) { return [c[1], avg(c[0])]; }) };
-      }
-      _ssStatsCache[id] = st;
-      return st;
+  // Use real movies from cache; fall back to placeholder only if nothing loaded yet
+  var movies = window._allMoviesCache || [];
+  if (movies.length > 0) {
+    // Shuffle so order varies each screensaver session
+    var shuffled = movies.slice().sort(function() { return Math.random() - 0.5; });
+    return shuffled.map(function(m) {
+      return { title: m.title, year: m.release_year ? String(m.release_year) : '' };
     });
-}
-
-function _ssRender(f, st) {
-  _ssById('kfs-ss-title').textContent = f.title;
-  _ssById('kfs-ss-year').textContent = f.year;
-  var d = _ssById('kfs-ss-director');
-  d.textContent = f.director; d.style.display = f.director ? '' : 'none';
-
-  var img = _ssById('kfs-ss-poster'), ph = _ssById('kfs-ss-ph');
-  ph.textContent = f.title.charAt(0);
-  if (f.poster) { img.src = f.poster; img.style.display = 'block'; } else { img.removeAttribute('src'); img.style.display = 'none'; }
-  _ssById('kfs-ss-bg').style.backgroundImage = f.poster ? 'url("' + encodeURI(f.poster).replace(/["'()]/g, escape) + '")' : 'none';
-
-  var w = _ssById('kfs-ss-watch');
-  if (f.watch) { w.href = f.watch; w.style.display = 'inline-flex'; } else { w.removeAttribute('href'); w.style.display = 'none'; }
-
-  var box = _ssById('kfs-ss-rating'), bars = _ssById('kfs-ss-bars');
-  if (!st || !st.avg) { box.hidden = true; return; }
-  var n = Math.max(0, Math.min(5, Math.round(st.avg)));
-  _ssById('kfs-ss-avg').textContent = st.avg.toFixed(1);
-  _ssById('kfs-ss-stars').innerHTML = '<i>' + '★'.repeat(n) + '</i>' + '★'.repeat(5 - n);
-  _ssById('kfs-ss-count').textContent = st.count + ' review' + (st.count === 1 ? '' : 's');
-  bars.innerHTML = '';
-  var any = false;
-  st.cats.forEach(function(c) {
-    if (c[1]) any = true;
-    var row = document.createElement('div'); row.className = 'kfs-ss-row';
-    var lab = document.createElement('span'); lab.textContent = c[0];
-    var track = document.createElement('span'); track.className = 'kfs-ss-track';
-    var fill = document.createElement('span'); fill.className = 'kfs-ss-fill';
-    fill.style.width = (c[1] ? Math.min(100, c[1] / 5 * 100) : 0) + '%';
-    track.appendChild(fill);
-    var val = document.createElement('b'); val.textContent = c[1] ? c[1].toFixed(1) : '—';
-    row.appendChild(lab); row.appendChild(track); row.appendChild(val);
-    bars.appendChild(row);
-  });
-  bars.hidden = !any;
-  box.hidden = false;
-}
-
-function _ssNext() {
-  if (!_ssActive) return;
-  if (!_ssFilms.length) _ssFilms = _ssGetFilms();
-  var f = _ssFilms[_ssIdx % _ssFilms.length]; _ssIdx++;
-  var tok = ++_ssTok, el = _ssById('kfs-screensaver');
-  el.classList.add('is-out');
-  var settle = new Promise(function(r) { setTimeout(r, 550); });
-  var loaded = new Promise(function(r) {
-    if (!f.poster) return r();
-    var im = new Image(); im.onload = im.onerror = r; im.src = f.poster; setTimeout(r, 2500);
-  });
-  Promise.all([_ssStats(f.id), settle, loaded]).then(function(res) {
-    if (tok !== _ssTok || !_ssActive) return;
-    _ssRender(f, res[0]);
-    el.classList.remove('is-out');
-    var bar = _ssById('kfs-ss-prog');
-    bar.style.animation = 'none'; void bar.offsetWidth;
-    bar.style.animation = 'kfsSsProg ' + _SS_SLIDE_MS + 'ms linear forwards';
-  });
-  var nx = _ssFilms[_ssIdx % _ssFilms.length];
-  if (nx) _ssStats(nx.id); // warm the next film's reviews
+  }
+  return [{ title: 'KFS', year: '' }];
 }
 
 function _resetIdleTimer() {
@@ -12810,45 +12743,59 @@ function _resetIdleTimer() {
   _resetIdleTimer();
 })();
 
-function _ssKey() { exitKFSScreensaver(); }
-
 function launchKFSScreensaver() {
-  var el = _ssById('kfs-screensaver');
+  var el = document.getElementById('kfs-screensaver');
   if (!el || _ssActive) return;
   _ssActive = true;
-  el.classList.add('is-out');
   el.style.display = 'flex';
-  requestAnimationFrame(function() { requestAnimationFrame(function() { el.style.opacity = '1'; }); });
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.style.opacity = '1'; }); });
 
-  var go = function() {
-    if (!_ssActive) return;
-    _ssFilms = _ssGetFilms(); _ssIdx = 0;
-    _ssNext();
-    _ssTimer = setInterval(_ssNext, _SS_SLIDE_MS);
+  // Load real films — fetch from API if cache is empty
+  var doLaunch = function() {
+    _ssFilms = _ssGetFilms();
+    _ssIdx = 0;
+    _ssCycleFilm();
+    _ssTimer = setInterval(_ssCycleFilm, 3200);
   };
-  if (!window._allMoviesCache || !window._allMoviesCache.length) {
-    fetch('/api/movies').then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; })
-      .then(function(m) { if (m && m.length) window._allMoviesCache = m; go(); });
-  } else { go(); }
 
-  document.addEventListener('keydown', _ssKey);
+  if (!window._allMoviesCache || !window._allMoviesCache.length) {
+    fetch('/api/movies').then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(movies){ window._allMoviesCache = movies || []; doLaunch(); })
+      .catch(function(){ doLaunch(); });
+  } else {
+    doLaunch();
+  }
+
+  document.addEventListener('keydown', exitKFSScreensaver, { once: true });
+}
+
+function _ssCycleFilm() {
+  if (!_ssFilms.length) _ssFilms = _ssGetFilms();
+  var f = _ssFilms[_ssIdx % _ssFilms.length];
+  var titleEl = document.getElementById('kfs-ss-title');
+  var yearEl = document.getElementById('kfs-ss-year');
+  if (!titleEl || !yearEl) return;
+  titleEl.style.opacity = '0'; yearEl.style.opacity = '0';
+  setTimeout(function() {
+    titleEl.textContent = f.title;
+    yearEl.textContent = f.year || '';
+    titleEl.style.opacity = '1';
+    yearEl.style.opacity = f.year ? '1' : '0';
+  }, 500);
+  _ssIdx++;
 }
 
 function exitKFSScreensaver() {
-  var el = _ssById('kfs-screensaver');
-  if (!el || !_ssActive) return;
-  _ssActive = false; _ssTok++;
-  document.removeEventListener('keydown', _ssKey);
-  clearInterval(_ssTimer);
+  var el = document.getElementById('kfs-screensaver');
+  if (!el) return;
+  _ssActive = false;
   el.style.opacity = '0';
-  setTimeout(function() { if (!_ssActive) el.style.display = 'none'; }, 1200);
+  clearInterval(_ssTimer);
+  setTimeout(function(){ el.style.display = 'none'; }, 1200);
   _resetIdleTimer();
 }
-// Any click exits. The "Watch Now" link still opens (no preventDefault), then the screensaver closes.
-(function() {
-  var el = document.getElementById('kfs-screensaver');
-  if (el) el.addEventListener('click', function(e) { e.stopPropagation(); exitKFSScreensaver(); });
-})();
+// Allow clicking inside screensaver to not double-fire via bubbled events
+document.getElementById('kfs-screensaver') && document.getElementById('kfs-screensaver').addEventListener('click', function(e){ e.stopPropagation(); exitKFSScreensaver(); });
 
 // ── COLLABORATE ────────────────────────────────────────────────────────────────
 
