@@ -9470,7 +9470,7 @@ const SPA_PUBLIC_ROUTES = new Set([
 function serveSpaShell(req, res, { status = 200, noindex = false, title } = {}) {
   try {
     let html = readIndexHtml();
-    const cleanPath = req.path.replace(/\/+$/, "") || "/";
+    const cleanPath = (req.path.replace(/\/+$/, "") || "/").toLowerCase(); // Express routes are case-insensitive: /Social-Strand must not become a 2nd canonical
     if (noindex) {
       html = html.replace(
         /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
