@@ -4154,8 +4154,6 @@ body.light-mode .psw-comment-gate a{color:#111}
 .kfs-ss-stage{position:relative;z-index:2;width:min(1080px,88vw);display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:clamp(36px,8vw,120px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.8,.2,1)}
 .kfs-ss.is-out .kfs-ss-stage{opacity:0;transform:translateY(12px)}
 .kfs-ss-info{min-width:0}
-.kfs-ss-kicker{display:flex;align-items:center;gap:14px;margin-bottom:clamp(16px,3vh,28px);font-size:11px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.45);font-variant-numeric:tabular-nums}
-.kfs-ss-kicker::before{content:"";width:36px;height:2px;background:#fff}
 .kfs-ss-title{font-size:clamp(36px,5.8vw,80px);font-weight:800;letter-spacing:-.04em;line-height:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;padding-bottom:.06em;background:linear-gradient(180deg,#fff 40%,#8d8d92 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .kfs-ss-year{margin-top:18px;font-size:clamp(15px,1.6vw,20px);font-weight:600;letter-spacing:.2em;color:rgba(255,255,255,.5)}
 .kfs-ss-dir{margin-top:8px;font-size:clamp(14px,1.5vw,18px);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fff}
@@ -4189,7 +4187,6 @@ body.light-mode .psw-comment-gate a{color:#111}
 <div data-action="exitKFSScreensaver" id="kfs-screensaver" class="kfs-ss" aria-hidden="true">
   <div class="kfs-ss-stage" id="kfs-ss-stage">
     <div class="kfs-ss-info">
-      <div class="kfs-ss-kicker" id="kfs-ss-kicker">Now Showing</div>
       <div class="kfs-ss-title" id="kfs-ss-title"></div>
       <div class="kfs-ss-year" id="kfs-ss-year"></div>
       <div class="kfs-ss-dir" id="kfs-ss-director"></div>
