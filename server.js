@@ -1294,7 +1294,7 @@ app.use('/api', (req, res, next) => {
 // works even if Google never renders the page. They are NOT listed in robots.txt
 // (that would advertise them) — Google must be allowed to fetch the page to see
 // the noindex, and since nothing links to /admin it will rarely even try.
-const PRIVATE_PAGE_RE = /^\/(admin|membersaccess|collaborate\/edit|forms)(\/|$)/i;
+const PRIVATE_PAGE_RE = /^\/(admin|membersaccess|collaborate\/edit|forms|scanner)(\/|$)/i;
 app.use((req, res, next) => {
   if (PRIVATE_PAGE_RE.test(req.path)) {
     res.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
@@ -9283,7 +9283,7 @@ const SEO_PAGES = {
     intro: "All films produced by KIIT Film Society (KFS) members, with cast and crew credits.",
   },
   "/events": {
-    title: "Events & Screenings — KIIT Film Society (KFS)",
+    title: "Events, Screenings & Workshops — KIIT Film Society (KFS)",
     h1: "KIIT Film Society Events",
     description:
       "Upcoming and past events and screenings by KIIT Film Society (KFS) at KIIT University, Bhubaneswar — with registration and event summaries.",
@@ -9566,6 +9566,31 @@ app.get("/blog/:slug", async (req, res) => {
     const dateStr = seoDate(b.created_at);
     const ogImage = b.cover_image ? `${SEO_SITE}/og/blog/${b.id}` : null;
 
+    // Internal links: a few other posts + key sections, in the crawlable HTML
+    let relatedHtml = "";
+    try {
+      const rel = await seoRow(`seo:blog-related:${b.id}`, 300, () =>
+        supabasePublic
+          .from("blogs")
+          .select("id, title, created_at")
+          .eq("published", true)
+          .is("deleted_at", null)
+          .neq("id", b.id)
+          .order("created_at", { ascending: false })
+          .limit(4),
+      );
+      const links = (rel || [])
+        .filter((r) => r.title)
+        .map((r) => `<li><a href="${SEO_SITE}/blog/${slugify(r.title)}-${r.id}">${seoEsc(r.title)}</a></li>`)
+        .join("");
+      if (links) relatedHtml += `<section><h2>More from the KFS Blog</h2><ul>${links}</ul></section>`;
+    } catch (e) {
+      console.warn("[seo/blog] related posts skipped:", e.message);
+    }
+    relatedHtml +=
+      `<p><a href="${SEO_SITE}/movies">KFS Films</a> · <a href="${SEO_SITE}/events">Events &amp; Screenings</a> · ` +
+      `<a href="${SEO_SITE}/aboutus">About KIIT Film Society</a></p>`;
+
     return serveSeoPage(
       res,
       {
@@ -9585,7 +9610,8 @@ app.get("/blog/:slug", async (req, res) => {
           `<article><h1>${seoEsc(title)}</h1>` +
           `<p>By ${seoEsc(authors.join(", ") || SEO_BRAND)}${dateStr ? " · " + seoEsc(dateStr) : ""} · <a href="${SEO_SITE}/blog">KFS Blog</a></p>` +
           seoParas(text) +
-          `</article>`,
+          `</article>` +
+          relatedHtml,
         jsonLdList: [
           {
             "@context": "https://schema.org",
@@ -9803,6 +9829,9 @@ app.get("/social-strand/:username/:postid", async (req, res) => {
     res.status(503).sendFile(path.join(__dirname, "public", "index.html"));
   }
 });
+
+// ── /strand (bare) — was falling through to the 404 catch-all ────────────────
+app.get(["/strand", "/strand/"], (req, res) => res.redirect(301, "/social-strand"));
 
 // ── /social-strand (bare) — public Social Strand feed page ───────────────────
 // Serves the SPA (index.html); client router shows the public strand feed.
