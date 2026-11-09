@@ -253,7 +253,7 @@ async function refreshAdminToken() {
 const KFS_PAGE_META = {
   home:     { title: 'KIIT Film Society (KFS) — Official Website', description: 'KIIT Film Society (KFS) is the official student-run film society of KIIT University, Bhubaneswar. Short films, screenings, events, blogs and creative collaboration.' },
   movies:   { title: 'Films — KIIT Film Society (KFS)', description: 'Watch films and student productions made by KIIT Film Society (KFS), KIIT University, Bhubaneswar — with cast and crew credits.' },
-  events:   { title: 'Events & Screenings — KIIT Film Society (KFS)', description: 'Upcoming and past events and screenings by KIIT Film Society (KFS) at KIIT University, Bhubaneswar — with registration and event summaries.' },
+  events:   { title: 'Events, Screenings & Workshops — KIIT Film Society (KFS)', description: 'Upcoming and past events and screenings by KIIT Film Society (KFS) at KIIT University, Bhubaneswar — with registration and event summaries.' },
   blog:     { title: 'Blog — KIIT Film Society (KFS)', description: 'Film reviews, event summaries and stories from KIIT Film Society (KFS), KIIT University, Bhubaneswar.' },
   members:  { title: 'Members & Team — KIIT Film Society (KFS)', description: 'Meet the current members and alumni of KIIT Film Society (KFS), the student film society of KIIT University, Bhubaneswar.' },
   aboutus:  { title: 'About KIIT Film Society (KFS)', description: 'About KIIT Film Society (KFS): the student-run cinema collective of KIIT University, Bhubaneswar.' },
@@ -1374,6 +1374,7 @@ async function renderBlogDetail(blog, id) {
   }
   // Inject Recently Viewed below content
   renderRecentlyViewed(id);
+  renderRelatedPosts(id);
   window.scrollTo({top:0,behavior:'instant'});
   // Use slug URL — no UUID exposed
   const slug = (blog.title ? blog.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '') + '-' + id;
@@ -1430,6 +1431,46 @@ function switchBlogSection(btn, sectionId) {
   btn.classList.add('active');
   const sec = document.getElementById(sectionId);
   if (sec) sec.classList.add('active');
+}
+
+// "More from KFS" — internal links to other posts + key sections. Unlike Recently Viewed
+// (which needs browsing history), this shows for every visitor, including people who
+// land straight from Google, so each post links onward to others.
+async function renderRelatedPosts(currentId) {
+  const old = document.getElementById('related-posts-section');
+  if (old) old.remove();
+  let all = window._allBlogs;
+  if (!all || !all.length) {
+    try { all = await apiFetch('/api/blogs'); } catch (e) { all = []; }
+    if (all && all.length) window._allBlogs = all;
+  }
+  if (window._currentBlogId !== currentId) return; // reader already moved on
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const items = (all || [])
+    .filter(b => String(b.id) !== String(currentId) && b.title)
+    .sort((x, y) => new Date(y.created_at || 0) - new Date(x.created_at || 0))
+    .slice(0, 4);
+  if (!items.length) return;
+  const section = document.createElement('div');
+  section.id = 'related-posts-section';
+  section.className = 'recently-viewed';
+  section.innerHTML = '<div class="recently-viewed-label">More from the KFS Blog</div>'
+    + '<div class="recently-viewed-list">'
+    + items.map(b => `
+      <div class="rv-item" onclick="openBlog('${esc(b.id)}')">
+        <div class="rv-item-info">
+          <div class="rv-item-title">${kfsCrawlLink('/blog/' + kfsSlug(b.title, b.id), esc(b.title))}</div>
+          <div class="rv-item-date">${b.created_at ? new Date(b.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+        </div>
+      </div>`).join('')
+    + '</div>'
+    + '<div style="margin-top:18px;font-size:12px;color:var(--grey);display:flex;flex-wrap:wrap;gap:6px 18px">'
+    + '<a href="/blog" style="color:inherit">All posts</a>'
+    + '<a href="/movies" style="color:inherit">KFS Films</a>'
+    + '<a href="/events" style="color:inherit">Events &amp; Screenings</a>'
+    + '<a href="/aboutus" style="color:inherit">About KFS</a>'
+    + '</div>';
+  document.getElementById('blog-detail-body').after(section);
 }
 
 function renderRecentlyViewed(currentId) {
