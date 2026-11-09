@@ -12755,6 +12755,16 @@ var _ssReviewCache = {};
 var _SS_IDLE_MS = 3 * 60 * 1000; // 3 minutes
 var _SS_CYCLE_MS = 7000;         // time each film stays on screen
 
+// Director/crew fields are stored as "Name||userId;;Name||userId" — show names only.
+function _ssNames(val) {
+  var list = Array.isArray(val) ? val : String(val || '').split(';;');
+  return list.map(function(p) {
+    p = String(p || '');
+    var i = p.indexOf('||');
+    return (i !== -1 ? p.slice(0, i) : p).trim();
+  }).filter(Boolean).join(', ');
+}
+
 function _ssGetFilms() {
   var movies = window._allMoviesCache || [];
   if (movies.length > 0) {
@@ -12765,7 +12775,7 @@ function _ssGetFilms() {
         id: m.id,
         title: m.title,
         year: m.release_year ? String(m.release_year) : '',
-        director: Array.isArray(m.director) ? m.director.join(', ') : (m.director || ''),
+        director: _ssNames(m.director),
         poster: m.poster_image || '',
         watch: (m.watch_url && /^https:\/\//i.test(m.watch_url)) ? m.watch_url : ''
       };
@@ -12837,7 +12847,6 @@ function launchKFSScreensaver() {
 function _ssSet(id, text) { var n = document.getElementById(id); if (n) n.textContent = text; }
 
 function _ssFillFilm(f, reviews, pos, total) {
-  _ssSet('kfs-ss-kicker', 'Now Showing  ·  ' + String(pos).padStart(2, '0') + ' / ' + String(total).padStart(2, '0'));
   _ssSet('kfs-ss-title', f.title || '');
   _ssSet('kfs-ss-year', f.year || '');
   _ssSet('kfs-ss-director', f.director || '');
