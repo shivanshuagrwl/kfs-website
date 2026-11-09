@@ -12750,20 +12750,40 @@ async function _renderStoryCardBlob(data) {
 
 // ── SCREENSAVER ────────────────────────────────────────────────────────────
 var _ssFilms = [];
-var _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null;
+var _ssIdx = 0, _ssTimer = null, _ssActive = false, _ssIdleTimer = null, _ssRun = 0;
+var _ssReviewCache = {};
 var _SS_IDLE_MS = 3 * 60 * 1000; // 3 minutes
+var _SS_CYCLE_MS = 7000;         // time each film stays on screen
 
 function _ssGetFilms() {
-  // Use real movies from cache; fall back to placeholder only if nothing loaded yet
   var movies = window._allMoviesCache || [];
   if (movies.length > 0) {
     // Shuffle so order varies each screensaver session
     var shuffled = movies.slice().sort(function() { return Math.random() - 0.5; });
     return shuffled.map(function(m) {
-      return { title: m.title, year: m.release_year ? String(m.release_year) : '' };
+      return {
+        id: m.id,
+        title: m.title,
+        year: m.release_year ? String(m.release_year) : '',
+        director: Array.isArray(m.director) ? m.director.join(', ') : (m.director || ''),
+        poster: m.poster_image || '',
+        watch: (m.watch_url && /^https:\/\//i.test(m.watch_url)) ? m.watch_url : ''
+      };
     });
   }
-  return [{ title: 'KFS', year: '' }];
+  return [{ id: null, title: 'KFS', year: '', director: '', poster: '', watch: '' }];
+}
+
+// Reviews for one film (cached). Resolves to [] if the request fails or takes too long.
+function _ssReviews(id) {
+  if (!id) return Promise.resolve([]);
+  if (!_ssReviewCache[id]) {
+    _ssReviewCache[id] = fetch('/api/reviews/' + encodeURIComponent(id))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(d){ return Array.isArray(d) ? d : []; })
+      .catch(function(){ return []; });
+  }
+  return Promise.race([_ssReviewCache[id], new Promise(function(res){ setTimeout(function(){ res([]); }, 1500); })]);
 }
 
 function _resetIdleTimer() {
@@ -12789,17 +12809,20 @@ function launchKFSScreensaver() {
   var el = document.getElementById('kfs-screensaver');
   if (!el || _ssActive) return;
   _ssActive = true;
+  _ssRun++;
   el.style.display = 'flex';
+  el.classList.add('is-out');
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.style.opacity = '1'; }); });
 
-  // Load real films — fetch from API if cache is empty
   var doLaunch = function() {
+    if (!_ssActive) return;
     _ssFilms = _ssGetFilms();
     _ssIdx = 0;
     _ssCycleFilm();
-    _ssTimer = setInterval(_ssCycleFilm, 3200);
+    _ssTimer = setInterval(_ssCycleFilm, _SS_CYCLE_MS);
   };
 
+  // Load real films — fetch from API if cache is empty
   if (!window._allMoviesCache || !window._allMoviesCache.length) {
     fetch('/api/movies').then(function(r){ return r.ok ? r.json() : []; })
       .then(function(movies){ window._allMoviesCache = movies || []; doLaunch(); })
@@ -12811,29 +12834,97 @@ function launchKFSScreensaver() {
   document.addEventListener('keydown', exitKFSScreensaver, { once: true });
 }
 
-function _ssCycleFilm() {
+function _ssSet(id, text) { var n = document.getElementById(id); if (n) n.textContent = text; }
+
+function _ssFillFilm(f, reviews, pos, total) {
+  _ssSet('kfs-ss-kicker', 'Now Showing  ·  ' + String(pos).padStart(2, '0') + ' / ' + String(total).padStart(2, '0'));
+  _ssSet('kfs-ss-title', f.title || '');
+  _ssSet('kfs-ss-year', f.year || '');
+  _ssSet('kfs-ss-director', f.director || '');
+
+  // Poster (plain rectangle; letter placeholder if no image)
+  var img = document.getElementById('kfs-ss-poster');
+  var ph = document.getElementById('kfs-ss-ph');
+  if (ph) ph.textContent = (f.title || 'K').trim().charAt(0).toUpperCase();
+  if (img) {
+    img.style.display = 'none';
+    img.onload = null; img.onerror = null;
+    if (f.poster) {
+      img.onload = function(){ img.style.display = 'block'; if (ph) ph.style.display = 'none'; };
+      img.onerror = function(){ img.style.display = 'none'; if (ph) ph.style.display = 'flex'; };
+      img.style.animation = 'none'; void img.offsetWidth; img.style.animation = '';
+      img.src = f.poster;
+    } else if (ph) { ph.style.display = 'flex'; }
+  }
+
+  // Ratings
+  var box = document.getElementById('kfs-ss-rating');
+  var cats = [['direction','Direction'],['sound','Sound'],['cinematography','Cinemato.'],['script','Script']];
+  var overall = reviews.map(function(r){ return r.overall; }).filter(Boolean);
+  if (box) {
+    if (!overall.length) {
+      box.hidden = true;
+    } else {
+      var avg = overall.reduce(function(a, b){ return a + b; }, 0) / overall.length;
+      var full = Math.round(avg);
+      _ssSet('kfs-ss-avg', avg.toFixed(1));
+      var stars = document.getElementById('kfs-ss-stars');
+      if (stars) stars.innerHTML = '<i>' + '\u2605'.repeat(full) + '</i>' + '\u2605'.repeat(5 - full);
+      _ssSet('kfs-ss-count', overall.length + (overall.length === 1 ? ' review' : ' reviews'));
+      var bars = document.getElementById('kfs-ss-bars');
+      if (bars) {
+        bars.innerHTML = cats.map(function(c) {
+          var v = reviews.map(function(r){ return r[c[0]]; }).filter(Boolean);
+          var a = v.length ? v.reduce(function(x, y){ return x + y; }, 0) / v.length : null;
+          return '<div class="kfs-ss-row"><span>' + c[1] + '</span>'
+            + '<span class="kfs-ss-track"><span class="kfs-ss-fill" style="width:' + (a ? (a / 5 * 100) : 0) + '%"></span></span>'
+            + '<b>' + (a ? a.toFixed(1) : '\u2014') + '</b></div>';
+        }).join('');
+      }
+      box.hidden = false;
+    }
+  }
+
+  // Watch Now (only when the film has a link)
+  var w = document.getElementById('kfs-ss-watch');
+  if (w) {
+    if (f.watch) { w.href = f.watch; w.style.display = 'inline-flex'; }
+    else { w.removeAttribute('href'); w.style.display = 'none'; }
+  }
+
+  // Restart the thin progress line along the bottom edge
+  var prog = document.getElementById('kfs-ss-prog');
+  if (prog) {
+    prog.style.animation = 'none'; void prog.offsetWidth;
+    prog.style.animation = 'kfsSsProg ' + _SS_CYCLE_MS + 'ms linear forwards';
+  }
+}
+
+async function _ssCycleFilm() {
   if (!_ssFilms.length) _ssFilms = _ssGetFilms();
+  var el = document.getElementById('kfs-screensaver');
+  if (!el || !_ssActive) return;
+  var run = _ssRun;
   var f = _ssFilms[_ssIdx % _ssFilms.length];
-  var titleEl = document.getElementById('kfs-ss-title');
-  var yearEl = document.getElementById('kfs-ss-year');
-  if (!titleEl || !yearEl) return;
-  titleEl.style.opacity = '0'; yearEl.style.opacity = '0';
-  setTimeout(function() {
-    titleEl.textContent = f.title;
-    yearEl.textContent = f.year || '';
-    titleEl.style.opacity = '1';
-    yearEl.style.opacity = f.year ? '1' : '0';
-  }, 500);
+  var pos = (_ssIdx % _ssFilms.length) + 1;
   _ssIdx++;
+  el.classList.add('is-out');
+  var reviews = await _ssReviews(f.id);
+  setTimeout(function() {
+    if (!_ssActive || run !== _ssRun) return;
+    _ssFillFilm(f, reviews, pos, _ssFilms.length);
+    el.classList.remove('is-out');
+  }, 450);
 }
 
 function exitKFSScreensaver() {
   var el = document.getElementById('kfs-screensaver');
   if (!el) return;
   _ssActive = false;
+  _ssRun++;
   el.style.opacity = '0';
   clearInterval(_ssTimer);
-  setTimeout(function(){ el.style.display = 'none'; }, 1200);
+  setTimeout(function(){ if (!_ssActive) el.style.display = 'none'; }, 1200);
   _resetIdleTimer();
 }
 // Allow clicking inside screensaver to not double-fire via bubbled events
