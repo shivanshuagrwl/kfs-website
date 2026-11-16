@@ -890,7 +890,13 @@ body{overflow-x:clip}
 .hx-grid{position:absolute;inset:0;z-index:0;pointer-events:none}
 .hx-grid i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.1)}
 .hx-grid i:nth-child(1){left:25%}.hx-grid i:nth-child(2){left:50%}.hx-grid i:nth-child(3){left:75%}
-.hx-num{position:absolute;right:-1vw;top:9vh;z-index:0;font-family:Anton,Impact,sans-serif;font-size:min(44vw,70vh);line-height:.85;letter-spacing:-.01em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.3);white-space:nowrap;user-select:none;will-change:transform,opacity;animation:hxIn 1.4s var(--ease) .1s backwards}
+.hx-num{position:absolute;right:-1vw;top:9vh;z-index:0;font-family:Anton,Impact,sans-serif;font-size:min(44vw,70vh);line-height:.85;letter-spacing:-.01em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.3);white-space:nowrap;user-select:none;will-change:opacity}
+.hx-num span{display:inline-block;background:linear-gradient(105deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.2) 50%,rgba(255,255,255,0) 62%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;will-change:transform;animation:hxLetter 1.3s var(--ease) backwards,hxSweep 7s linear 1.6s infinite}
+.hx-num .k{transform:translate3d(calc(var(--kx,0px) + var(--mx,0)*14px),calc(var(--my,0)*8px),0);animation-delay:.2s,1.6s}
+.hx-num .f{transform:translate3d(calc(var(--mx,0)*24px),calc(var(--fy,0px) + var(--my,0)*14px),0);animation-delay:.34s,2.1s}
+.hx-num .s{transform:translate3d(calc(var(--sx,0px) + var(--mx,0)*34px),calc(var(--my,0)*20px),0);animation-delay:.48s,2.6s}
+@keyframes hxLetter{from{opacity:0;transform:translate3d(0,14vh,0)}to{opacity:1}}
+@keyframes hxSweep{from{background-position:130% 0}to{background-position:-130% 0}}
 .hx-frame{position:absolute;inset:0;z-index:1;clip-path:inset(22% 6% 26% 54%);transform:perspective(1400px) rotateY(-24deg) rotateX(6deg);transform-origin:72% 50%;background:radial-gradient(ellipse at 70% 60%,#2b3d40 0,transparent 60%),radial-gradient(ellipse at 20% 85%,#4a3320 0,transparent 55%),#0d0f0f;animation:hxIn 1.2s var(--ease) .35s backwards}
 .hx-frame video{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;background:#000;transform-origin:0 0;will-change:transform;backface-visibility:hidden;filter:contrast(1.05) saturate(.85) brightness(.88)}
 .hx-frame::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(8,9,9,.3),rgba(8,9,9,.1) 50%,rgba(8,9,9,.5))}
@@ -925,7 +931,7 @@ body{overflow-x:clip}
   .hx-links .btn{justify-content:center;width:100%;padding:10px 16px;min-height:42px}
   .hx-cue{display:none}
 }
-@media(prefers-reduced-motion:reduce){.hx-foot,.hx-mask span,.hx-frame,.hx-num{animation:none;opacity:1}.hx-grain,.hx-cue i{animation:none}.hx-frame{transform:none}.hx-end{display:none}}
+@media(prefers-reduced-motion:reduce){.hx-foot,.hx-mask span,.hx-frame,.hx-num{animation:none;opacity:1}.hx-grain,.hx-cue i,.hx-num span{animation:none}.hx-frame{transform:none}.hx-end{display:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;
@@ -3293,7 +3299,7 @@ body.light-mode .psw-comment-gate a{color:#111}
   <section id="hero-section" aria-label="KIIT Film Society">
     <div class="hx-stage" id="hero-stage">
       <div class="hx-grid" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="hx-num" id="hero-num" aria-hidden="true">KFS</div>
+      <div class="hx-num" id="hero-num" aria-hidden="true"><span class="k">K</span><span class="f">F</span><span class="s">S</span></div>
 
       <div class="hx-frame" id="hero-frame" aria-hidden="true">
         <video id="hero-video" muted loop playsinline autoplay preload="auto" aria-hidden="true" style="display:none"></video>
