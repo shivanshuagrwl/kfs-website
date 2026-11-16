@@ -18339,7 +18339,10 @@ async function cvApply() {
         mask.style.transform = 'scale(' + (1 + t * t * 5).toFixed(3) + ')';
         mask.style.opacity = String(clamp(1 - (t - 0.3) / 0.45, 0, 1));
         if (num) {
-          num.style.transform = 'translate3d(' + (p * 30).toFixed(2) + 'vw,0,0)';
+          var vw = window.innerWidth, vh = window.innerHeight;
+          num.style.setProperty('--kx', (-p * 0.3 * vw).toFixed(1) + 'px');
+          num.style.setProperty('--sx', (p * 0.34 * vw).toFixed(1) + 'px');
+          num.style.setProperty('--fy', (-p * 0.12 * vh).toFixed(1) + 'px');
           num.style.opacity = String(clamp(1 - p * 2.2, 0, 1));
         }
         if (tag) tag.style.opacity = String(clamp(0.85 - p * 4, 0, 0.85));
@@ -18352,6 +18355,25 @@ async function cvApply() {
       if (foot) foot.style.opacity = String(clamp(1 - p * 4, 0, 1));
       if (cue)  cue.style.opacity  = String(clamp(0.7 - p * 4, 0, 0.7));
     });
+  }
+
+
+  // desktop only: the ghost KFS letters drift a little with the pointer (different depth per letter)
+  function initParallax() {
+    if (reduceMotion || !stage || !num) return;
+    if (!window.matchMedia || !window.matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+    var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0;
+    function step() {
+      cx += (tx - cx) * 0.08; cy += (ty - cy) * 0.08;
+      num.style.setProperty('--mx', cx.toFixed(3));
+      num.style.setProperty('--my', cy.toFixed(3));
+      raf = (Math.abs(tx - cx) > 0.002 || Math.abs(ty - cy) > 0.002) ? requestAnimationFrame(step) : 0;
+    }
+    stage.addEventListener('pointermove', function (e) {
+      tx = (e.clientX / window.innerWidth - 0.5) * 2;
+      ty = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!raf) raf = requestAnimationFrame(step);
+    }, { passive: true });
   }
 
   function initHero() {
@@ -18370,6 +18392,7 @@ async function cvApply() {
     slot    = document.getElementById('hero-slot');
     if (!section || !stage) return;
 
+    initParallax();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
