@@ -18323,6 +18323,14 @@ async function cvApply() {
       if (frame) {
         frame.style.clipPath = 'inset(' + lerp(s[0], 0, f).toFixed(2) + '% ' + lerp(s[1], 0, f).toFixed(2) + '% ' +
           lerp(s[2], 0, f).toFixed(2) + '% ' + lerp(s[3], 0, f).toFixed(2) + '%)';
+        if (video) {
+          var W = stage.clientWidth, Hh = stage.clientHeight;
+          var l = lerp(s[3], 0, f), tp = lerp(s[0], 0, f), rr = lerp(s[1], 0, f), bb = lerp(s[2], 0, f);
+          var bw = W * (100 - l - rr) / 100, bh = Hh * (100 - tp - bb) / 100;
+          var sc = Math.max(bw / W, bh / Hh);
+          var cx = W * (l + (100 - l - rr) / 2) / 100, cy = Hh * (tp + (100 - tp - bb) / 2) / 100;
+          video.style.transform = 'translate3d(' + (cx - sc * W / 2).toFixed(2) + 'px,' + (cy - sc * Hh / 2).toFixed(2) + 'px,0) scale(' + sc.toFixed(4) + ')';
+        }
         if (!reduceMotion) frame.style.transform = mob ? 'none' : 'perspective(1400px) rotateY(' + lerp(-24, 0, f).toFixed(2) + 'deg) rotateX(' + lerp(6, 0, f).toFixed(2) + 'deg)';
       }
       if (!reduceMotion) {
@@ -18336,12 +18344,10 @@ async function cvApply() {
         }
         if (tag) tag.style.opacity = String(clamp(0.85 - p * 4, 0, 0.85));
         if (endEl) {
-          var e = ease(clamp((p - 0.55) / 0.25, 0, 1));
-          var out = clamp((p - 0.88) / 0.08, 0, 1);
+          var e = ease(clamp((p - 0.5) / 0.3, 0, 1));
           endEl.style.transform = 'translate3d(0,' + ((1 - e) * 45).toFixed(1) + 'vh,0)';
-          endEl.style.opacity = String(clamp(e - out, 0, 1));
+          endEl.style.opacity = String(e);
         }
-        if (dim) dim.style.opacity = String(clamp((p - 0.88) / 0.12, 0, 1));
       }
       if (foot) foot.style.opacity = String(clamp(1 - p * 4, 0, 1));
       if (cue)  cue.style.opacity  = String(clamp(0.7 - p * 4, 0, 0.7));
