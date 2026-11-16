@@ -18288,6 +18288,26 @@ async function cvApply() {
     document.addEventListener('touchstart', play, { once: true, passive: true });
   }
 
+  var frame, num, tag, endEl, dim, slot, mobStart = [40, 5, 30, 5];
+  function ease(t) { return t * t * (3 - 2 * t); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // mobile: the video box starts exactly where the empty slot sits in the flex layout
+  function measure() {
+    var nav = document.getElementById('main-nav');
+    if (stage && nav) stage.style.setProperty('--hx-nav', nav.offsetHeight + 'px');
+    if (window.innerWidth > 700 || !slot || !stage) return;
+    var sr = slot.getBoundingClientRect(), st = stage.getBoundingClientRect();
+    if (!st.width || !st.height) return;
+    mobStart = [
+      (sr.top - st.top) / st.height * 100,
+      (st.right - sr.right) / st.width * 100,
+      (st.bottom - sr.bottom) / st.height * 100,
+      (sr.left - st.left) / st.width * 100
+    ].map(function (v) { return Math.max(0, v); });
+    onScroll();
+  }
+
   function onScroll() {
     if (ticking) return;
     ticking = true;
@@ -18297,15 +18317,34 @@ async function cvApply() {
       var r = section.getBoundingClientRect();
       var span = Math.max(1, r.height - window.innerHeight);
       var p = clamp(-r.top / span, 0, 1);
-
-      if (!reduceMotion) {
-        // text grows past the camera and fades out, revealing the clean video
-        var scale = 1 + p * p * 5;
-        word.style.transform = 'scale(' + scale.toFixed(3) + ')';
-        mask.style.opacity = String(clamp(1 - (p - 0.35) / 0.4, 0, 1));
+      var mob = window.innerWidth <= 700;
+      var f = reduceMotion ? 0 : ease(clamp(p / 0.5, 0, 1));
+      var s = mob ? mobStart : [22, 6, 26, 54];
+      if (frame) {
+        frame.style.clipPath = 'inset(' + lerp(s[0], 0, f).toFixed(2) + '% ' + lerp(s[1], 0, f).toFixed(2) + '% ' +
+          lerp(s[2], 0, f).toFixed(2) + '% ' + lerp(s[3], 0, f).toFixed(2) + '%)';
+        if (!reduceMotion) frame.style.transform = mob ? 'none' : 'perspective(1400px) rotateY(' + lerp(-24, 0, f).toFixed(2) + 'deg) rotateX(' + lerp(6, 0, f).toFixed(2) + 'deg)';
       }
-      if (foot) foot.style.opacity = String(clamp(1 - p * 3, 0, 1));
-      if (cue)  cue.style.opacity  = String(clamp(0.6 - p * 3, 0, 0.6));
+      if (!reduceMotion) {
+        // headline grows past the camera and fades, revealing the footage (like the old hero)
+        var t = clamp(p / 0.55, 0, 1);
+        mask.style.transform = 'scale(' + (1 + t * t * 5).toFixed(3) + ')';
+        mask.style.opacity = String(clamp(1 - (t - 0.3) / 0.45, 0, 1));
+        if (num) {
+          num.style.transform = 'translate3d(' + (p * 30).toFixed(2) + 'vw,0,0)';
+          num.style.opacity = String(clamp(1 - p * 2.2, 0, 1));
+        }
+        if (tag) tag.style.opacity = String(clamp(0.85 - p * 4, 0, 0.85));
+        if (endEl) {
+          var e = ease(clamp((p - 0.55) / 0.25, 0, 1));
+          var out = clamp((p - 0.88) / 0.08, 0, 1);
+          endEl.style.transform = 'translate3d(0,' + ((1 - e) * 45).toFixed(1) + 'vh,0)';
+          endEl.style.opacity = String(clamp(e - out, 0, 1));
+        }
+        if (dim) dim.style.opacity = String(clamp((p - 0.88) / 0.12, 0, 1));
+      }
+      if (foot) foot.style.opacity = String(clamp(1 - p * 4, 0, 1));
+      if (cue)  cue.style.opacity  = String(clamp(0.7 - p * 4, 0, 0.7));
     });
   }
 
@@ -18317,10 +18356,19 @@ async function cvApply() {
     word    = document.getElementById('hero-word');
     foot    = document.getElementById('hero-foot');
     cue     = document.getElementById('hero-cue');
+    frame   = document.getElementById('hero-frame');
+    num     = document.getElementById('hero-num');
+    tag     = document.getElementById('hero-tag');
+    endEl   = document.getElementById('hero-end');
+    dim     = document.getElementById('hero-dim');
+    slot    = document.getElementById('hero-slot');
     if (!section || !stage) return;
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    measure();
     onScroll();
 
     fetch('/api/settings', { credentials: 'same-origin' })
