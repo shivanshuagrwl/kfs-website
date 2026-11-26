@@ -9290,7 +9290,8 @@ async function _rpFetch(path, opt) {
   if (!r.ok) throw Object.assign(new Error(d.error || ('HTTP ' + r.status)), { detail: d.detail });
   return d;
 }
-function _rpStop() { if (_rpTimer) { clearInterval(_rpTimer); _rpTimer = null; } }
+let _rpKS = null;   // live (editable) sheet instance — see /live-sheet.js
+function _rpStop() { if (_rpTimer) { clearInterval(_rpTimer); _rpTimer = null; } if (_rpKS) { try { _rpKS.destroy(); } catch (e) {} _rpKS = null; } }
 function _rpPane(name) { return document.getElementById('rp-pane-' + name); }
 
 function rvTab(name) {
@@ -9319,7 +9320,31 @@ async function _rpLoadDs(force) {
 }
 
 // ── SHEET ───────────────────────────────────────────────────────────────────
+function _rpLoadLive() {
+  if (window.KFSLive) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = '/live-sheet.js?t=' + Math.floor(Date.now() / 300000);
+    s.onload = res; s.onerror = () => rej(new Error('live-sheet.js failed to load'));
+    document.head.appendChild(s);
+  });
+}
+// Editable, real-time, Google-Sheets-style sheet. Admins always edit; viewers/editors use the share link.
 async function _rpOpenSheet() {
+  const pane = _rpPane('sheet'), seq = ++_rpSeq;
+  pane.innerHTML = '<div class="fb-rv-loading">Opening live sheet…</div>';
+  try { await _rpLoadLive(); } catch (e) { return _rpOpenSheetLegacy(); }
+  if (seq !== _rpSeq || _rpTab !== 'sheet') return;
+  pane.innerHTML = '<div id="rp-ks" class="rp-grid" style="padding:0"></div>';
+  _rpKS = KFSLive.mount(document.getElementById('rp-ks'), {
+    kind: _rpKind(), id: _rpId(), light: _rpLight(),
+    admin: { headers: () => ({ 'Authorization': 'Bearer ' + adminToken, 'X-CSRF-Token': _csrfToken || '' }) },
+    onShare: () => rvTab('share'),
+  });
+}
+
+// Previous read-only grid — only used if /live-sheet.js can't be loaded.
+async function _rpOpenSheetLegacy() {
   const pane = _rpPane('sheet');
   if (!window.KFSSheetGrid) { pane.innerHTML = '<div class="fb-rv-empty"><span>Sheet engine not loaded (sheet-view.js). Hard-refresh the page.</span></div>'; return; }
   pane.innerHTML =
@@ -9479,15 +9504,15 @@ async function _rpOpenShare() {
   let ds;
   try { ds = (await _rpLoadDs(false)).ds; } catch (e) { pane.innerHTML = '<div class="fb-rv-empty"><span>' + _rpEsc(e.message) + '</span></div>'; return; }
   pane.innerHTML = '<div class="rp-scroll">' +
-    '<div class="rp-card"><div class="rp-q">Create a live, read-only sheet link</div>' +
-    '<div class="rp-mut" style="margin-bottom:10px">Anyone with the link sees an Excel-style sheet that updates live — no login, no edit access. Link is random, stored hashed, expires automatically, and can be revoked any time.</div>' +
+    '<div class="rp-card"><div class="rp-q">Create a live sheet link</div>' +
+    '<div class="rp-mut" style="margin-bottom:10px">Anyone with the link sees the sheet update live (view only). To let specific people edit, open the Live Sheet tab, choose Access and add their name and password. They unlock editing on this same link. The link is random, stored hashed, expires automatically, and can be revoked any time.</div>' +
     '<div class="rp-form">' +
       '<label>Label<input class="rp-in" id="rp-sh-label" maxlength="80" placeholder="e.g. Volunteers view"></label>' +
       '<label>Expires in<select class="rp-in" id="rp-sh-exp"><option value="24">24 hours</option><option value="72" selected>3 days</option><option value="168">7 days</option><option value="720">30 days</option><option value="2160">90 days</option></select></label>' +
       '<label>PIN (optional, 4–8 digits)<input class="rp-in" id="rp-sh-pin" inputmode="numeric" maxlength="8" placeholder="none"></label>' +
     '</div>' +
     '<label class="rp-chk"><input type="checkbox" id="rp-sh-mask" checked> Mask emails &amp; phones (ab***@gmail.com, 98****21)</label>' +
-    '<label class="rp-chk"><input type="checkbox" id="rp-sh-dl" checked> Allow CSV download</label>' +
+    '<label class="rp-chk"><input type="checkbox" id="rp-sh-dl" checked> Allow Excel download</label>' +
     '<div class="rp-mut" style="margin:8px 0 4px">Columns visible to viewers (untick to hide):</div>' +
     '<div class="rp-cols">' + ds.columns.map(c => '<label class="rp-chk"><input type="checkbox" class="rp-sh-col" value="' + _rpEsc(c.id) + '" checked> ' + _rpEsc(c.label) + '</label>').join('') + '</div>' +
     '<div style="margin-top:12px"><button class="rp-btn pri" id="rp-sh-make">Create link</button> <span class="rp-mut" id="rp-sh-out"></span></div>' +
@@ -9502,7 +9527,7 @@ async function _rpOpenShare() {
       listEl.innerHTML = '<div class="rp-tbl-w"><table class="rp-tbl"><thead><tr><th>Label</th><th>By</th><th>Expires</th><th>Views</th><th>Status</th><th></th></tr></thead><tbody>' +
         rows.map(r => {
           const dead = r.revoked_at ? 'Revoked' : (new Date(r.expires_at) < new Date() ? 'Expired' : 'Active');
-          return '<tr><td>' + _rpEsc(r.title || '—') + (r.has_pin ? ' 🔒' : '') + (r.mask_pii ? ' · masked' : '') + '</td><td>' + _rpEsc(r.created_by_name || '') + '</td><td>' + _rpEsc(new Date(r.expires_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + (r.view_count || 0) + '</td><td>' + dead + '</td><td>' +
+          return '<tr><td>' + _rpEsc(r.title || '—') + (r.has_pin ? ' <span class="rp-mut">(PIN)</span>' : '') + (r.mask_pii ? ' · masked' : '') + '</td><td>' + _rpEsc(r.created_by_name || '') + '</td><td>' + _rpEsc(new Date(r.expires_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + (r.view_count || 0) + '</td><td>' + dead + '</td><td>' +
             '<button class="rp-btn" data-vw="' + _rpEsc(r.id) + '" data-vt="' + _rpEsc(r.title || 'link') + '">Viewers</button> ' +
             (dead === 'Active' ? '<button class="rp-btn" data-rev="' + _rpEsc(r.id) + '">Revoke</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div><div class="rp-mut" style="margin-top:6px">The full URL is shown only once, at creation. Lost it? Revoke and create a new one.</div>';
@@ -18288,26 +18313,6 @@ async function cvApply() {
     document.addEventListener('touchstart', play, { once: true, passive: true });
   }
 
-  var frame, num, tag, endEl, dim, slot, mobStart = [40, 5, 30, 5];
-  function ease(t) { return t * t * (3 - 2 * t); }
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  // mobile: the video box starts exactly where the empty slot sits in the flex layout
-  function measure() {
-    var nav = document.getElementById('main-nav');
-    if (stage && nav) stage.style.setProperty('--hx-nav', nav.offsetHeight + 'px');
-    if (window.innerWidth > 700 || !slot || !stage) return;
-    var sr = slot.getBoundingClientRect(), st = stage.getBoundingClientRect();
-    if (!st.width || !st.height) return;
-    mobStart = [
-      (sr.top - st.top) / st.height * 100,
-      (st.right - sr.right) / st.width * 100,
-      (st.bottom - sr.bottom) / st.height * 100,
-      (sr.left - st.left) / st.width * 100
-    ].map(function (v) { return Math.max(0, v); });
-    onScroll();
-  }
-
   function onScroll() {
     if (ticking) return;
     ticking = true;
@@ -18317,63 +18322,16 @@ async function cvApply() {
       var r = section.getBoundingClientRect();
       var span = Math.max(1, r.height - window.innerHeight);
       var p = clamp(-r.top / span, 0, 1);
-      var mob = window.innerWidth <= 700;
-      var f = reduceMotion ? 0 : ease(clamp(p / 0.5, 0, 1));
-      var s = mob ? mobStart : [22, 6, 26, 54];
-      if (frame) {
-        frame.style.clipPath = 'inset(' + lerp(s[0], 0, f).toFixed(2) + '% ' + lerp(s[1], 0, f).toFixed(2) + '% ' +
-          lerp(s[2], 0, f).toFixed(2) + '% ' + lerp(s[3], 0, f).toFixed(2) + '%)';
-        if (video) {
-          var W = stage.clientWidth, Hh = stage.clientHeight;
-          var l = lerp(s[3], 0, f), tp = lerp(s[0], 0, f), rr = lerp(s[1], 0, f), bb = lerp(s[2], 0, f);
-          var bw = W * (100 - l - rr) / 100, bh = Hh * (100 - tp - bb) / 100;
-          var sc = Math.max(bw / W, bh / Hh);
-          var cx = W * (l + (100 - l - rr) / 2) / 100, cy = Hh * (tp + (100 - tp - bb) / 2) / 100;
-          video.style.transform = 'translate3d(' + (cx - sc * W / 2).toFixed(2) + 'px,' + (cy - sc * Hh / 2).toFixed(2) + 'px,0) scale(' + sc.toFixed(4) + ')';
-        }
-        if (!reduceMotion) frame.style.transform = mob ? 'none' : 'perspective(1400px) rotateY(' + lerp(-24, 0, f).toFixed(2) + 'deg) rotateX(' + lerp(6, 0, f).toFixed(2) + 'deg)';
-      }
+
       if (!reduceMotion) {
-        // headline grows past the camera and fades, revealing the footage (like the old hero)
-        var t = clamp(p / 0.55, 0, 1);
-        mask.style.transform = 'scale(' + (1 + t * t * 5).toFixed(3) + ')';
-        mask.style.opacity = String(clamp(1 - (t - 0.3) / 0.45, 0, 1));
-        if (num) {
-          var vw = window.innerWidth, vh = window.innerHeight;
-          num.style.setProperty('--kx', (-p * 0.3 * vw).toFixed(1) + 'px');
-          num.style.setProperty('--sx', (p * 0.34 * vw).toFixed(1) + 'px');
-          num.style.setProperty('--fy', (-p * 0.12 * vh).toFixed(1) + 'px');
-          num.style.opacity = String(clamp(1 - p * 2.2, 0, 1));
-        }
-        if (tag) tag.style.opacity = String(clamp(0.85 - p * 4, 0, 0.85));
-        if (endEl) {
-          var e = ease(clamp((p - 0.5) / 0.3, 0, 1));
-          endEl.style.transform = 'translate3d(0,' + ((1 - e) * 45).toFixed(1) + 'vh,0)';
-          endEl.style.opacity = String(e);
-        }
+        // text grows past the camera and fades out, revealing the clean video
+        var scale = 1 + p * p * 5;
+        word.style.transform = 'scale(' + scale.toFixed(3) + ')';
+        mask.style.opacity = String(clamp(1 - (p - 0.35) / 0.4, 0, 1));
       }
-      if (foot) foot.style.opacity = String(clamp(1 - p * 4, 0, 1));
-      if (cue)  cue.style.opacity  = String(clamp(0.7 - p * 4, 0, 0.7));
+      if (foot) foot.style.opacity = String(clamp(1 - p * 3, 0, 1));
+      if (cue)  cue.style.opacity  = String(clamp(0.6 - p * 3, 0, 0.6));
     });
-  }
-
-
-  // desktop only: the ghost KFS letters drift a little with the pointer (different depth per letter)
-  function initParallax() {
-    if (reduceMotion || !stage || !num) return;
-    if (!window.matchMedia || !window.matchMedia('(hover:hover) and (pointer:fine)').matches) return;
-    var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0;
-    function step() {
-      cx += (tx - cx) * 0.08; cy += (ty - cy) * 0.08;
-      num.style.setProperty('--mx', cx.toFixed(3));
-      num.style.setProperty('--my', cy.toFixed(3));
-      raf = (Math.abs(tx - cx) > 0.002 || Math.abs(ty - cy) > 0.002) ? requestAnimationFrame(step) : 0;
-    }
-    stage.addEventListener('pointermove', function (e) {
-      tx = (e.clientX / window.innerWidth - 0.5) * 2;
-      ty = (e.clientY / window.innerHeight - 0.5) * 2;
-      if (!raf) raf = requestAnimationFrame(step);
-    }, { passive: true });
   }
 
   function initHero() {
@@ -18384,20 +18342,10 @@ async function cvApply() {
     word    = document.getElementById('hero-word');
     foot    = document.getElementById('hero-foot');
     cue     = document.getElementById('hero-cue');
-    frame   = document.getElementById('hero-frame');
-    num     = document.getElementById('hero-num');
-    tag     = document.getElementById('hero-tag');
-    endEl   = document.getElementById('hero-end');
-    dim     = document.getElementById('hero-dim');
-    slot    = document.getElementById('hero-slot');
     if (!section || !stage) return;
 
-    initParallax();
     window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', measure);
-    window.addEventListener('orientationchange', measure);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
-    measure();
+    window.addEventListener('resize', onScroll);
     onScroll();
 
     fetch('/api/settings', { credentials: 'same-origin' })
