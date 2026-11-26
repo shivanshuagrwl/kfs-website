@@ -18260,7 +18260,7 @@ async function cvApply() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   hero-video.js — homepage hero (glow tagline, then an admin-uploaded video that enlarges on scroll)
+   hero-video.js — homepage hero (big tagline + tilted video card; scroll zooms text and fills screen with the admin-uploaded video)
    Load AFTER app.js:  <script src="/hero-video.js" defer></script>
 
    Public side : reads hero_video_url + site_tagline from /api/settings,
@@ -18276,7 +18276,7 @@ async function cvApply() {
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ══ PUBLIC HERO ═══════════════════════════════════════════════════════ */
-  var section, stage, video, media, scrim, intro, story, cue, word, ticking = false;
+  var section, stage, video, media, scrim, intro, title, foot, story, cue, word, ticking = false;
 
   function clamp(n, a, b) { return Math.min(b, Math.max(a, n)); }
 
@@ -18327,37 +18327,39 @@ async function cvApply() {
       var p = clamp(-r.top / span, 0, 1);
 
       var W = stage.clientWidth, H = stage.clientHeight;
-      var small = W < 700;
-      // starting card (below the tagline + buttons) -> full screen
-      var sh = small ? H * 0.26 : Math.min(H * 0.34, 340);
-      var sw = small ? W * 0.8 : Math.min(W * 0.44, 720);
-      var st = H - sh - H * 0.06;
-      var g = ease(clamp(p / 0.55, 0, 1));
+      var small = W < 768;
+      // resting card: tilted, on the right (desktop) or under the text (mobile)
+      var sw, sh, sx, sy, tilt;
+      if (small) { sw = W * 0.84; sh = H * 0.25; sx = (W - sw) / 2; sy = H * 0.52; tilt = -8; }
+      else { sw = W * 0.38; sh = Math.min(H * 0.56, sw * 0.8); sx = W * 0.56; sy = (H - sh) / 2 + 24; tilt = -14; }
 
+      var g = ease(clamp(p / 0.5, 0, 1));          // 0 = card, 1 = full screen
+      media.style.left = lerp(sx, 0, g).toFixed(1) + 'px';
+      media.style.top = lerp(sy, 0, g).toFixed(1) + 'px';
       media.style.width = lerp(sw, W, g).toFixed(1) + 'px';
       media.style.height = lerp(sh, H, g).toFixed(1) + 'px';
-      media.style.top = lerp(st, 0, g).toFixed(1) + 'px';
-      media.style.borderRadius = lerp(22, 0, g).toFixed(1) + 'px';
-      if (video) video.style.transform = 'scale(' + lerp(1.15, 1, g).toFixed(3) + ')';
-      if (scrim) scrim.style.opacity = (g * 0.9).toFixed(3);
+      media.style.transform = 'perspective(1400px) rotateY(' + lerp(tilt, 0, g).toFixed(2) + 'deg)';
+      media.style.boxShadow = g > 0.98 ? 'none' : '';
+      if (scrim) scrim.style.opacity = g.toFixed(3);
+      stage.style.setProperty('--g', g.toFixed(3));
+      stage.classList.toggle('hx-over', p > 0.02 && !document.body.classList.contains('light-mode'));
 
-      // tagline + buttons fade up and away while the video grows
-      if (intro) {
-        var io = clamp(1 - (p - 0.03) / 0.3, 0, 1);
-        intro.style.opacity = io.toFixed(3);
-        intro.style.transform = 'translateY(' + (-p * 90).toFixed(1) + 'px)';
-        intro.style.pointerEvents = io > 0.15 ? 'auto' : 'none';
-        intro.style.visibility = io <= 0 ? 'hidden' : 'visible';
+      // "Lights. Camera. KFS." zooms past the camera and fades; buttons drop out first
+      if (title) {
+        var z = ease(clamp(p / 0.42, 0, 1));
+        title.style.transform = 'scale(' + (1 + 2.2 * z).toFixed(3) + ')';
+        title.style.opacity = clamp(1 - (p - 0.08) / 0.3, 0, 1).toFixed(3);
       }
+      if (foot) foot.style.opacity = clamp(1 - p / 0.1, 0, 1).toFixed(3);
+      if (intro) intro.style.visibility = p > 0.4 ? 'hidden' : 'visible';
 
-      // "Films. Stories. Creativity." line arrives once the video is full screen
+      // "Stories in motion." arrives once the video fills the screen
       if (story) {
-        var so = clamp((p - 0.6) / 0.18, 0, 1);
+        var so = clamp((p - 0.5) / 0.18, 0, 1);
         story.style.opacity = so.toFixed(3);
-        story.style.transform = 'translateY(' + lerp(28, 0, so).toFixed(1) + 'px)';
+        story.style.transform = 'translateY(' + lerp(40, 0, so).toFixed(1) + 'px)';
       }
-
-      if (cue) cue.style.opacity = String(clamp(0.6 - p * 6, 0, 0.6));
+      if (cue) cue.style.opacity = String(clamp(0.6 - p * 8, 0, 0.6));
     });
   }
 
@@ -18368,6 +18370,8 @@ async function cvApply() {
     media   = document.getElementById('hero-media');
     scrim   = document.getElementById('hero-scrim');
     intro   = document.getElementById('hero-intro');
+    title   = document.getElementById('hero-tagline');
+    foot    = document.getElementById('hero-foot');
     story   = document.getElementById('hero-story');
     word    = null; // tagline text is handled by the glow-word code (site_tagline) above
     cue     = document.getElementById('hero-cue');
