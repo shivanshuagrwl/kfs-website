@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
 <link rel="dns-prefetch" href="https://supabase.co">
 <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" data-static="1">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet" data-static="1">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
@@ -882,39 +882,54 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 @keyframes hint-slide{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(5px);opacity:1}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── HERO (glow tagline → video card enlarges on scroll → "Films. Stories. Creativity." line) ── */
+/* ── HERO (big condensed tagline + tilted video card → scroll zooms text, video fills screen → "Stories in motion.") ── */
 #page-home{padding-top:0}
 body{overflow-x:clip}
-#hero-section{position:relative;height:300vh}
-.hx-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate}
-/* intro: glow tagline + buttons (fades away as the video grows) */
-.hx-intro{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;padding:calc(72px + 5vh) 24px 0;will-change:opacity,transform}
-.hero-tagline{font-size:clamp(2.5rem,min(7vw,9.5vh),6rem);font-weight:800;letter-spacing:-.045em;line-height:.98;color:var(--white);position:relative;z-index:1}
+#hero-section{--hx-font:'Anton','Bebas Neue','Oswald',Impact,'Haettenschweiler','Arial Narrow Bold',sans-serif;position:relative;height:250vh}
+.hx-stage{--g:0;position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate}
+/* faint grid lines + giant outlined "KFS" behind the card */
+.hx-lines{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:calc(1 - var(--g) * 1.6)}
+.hx-lines i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.14)}
+.hx-lines i:nth-child(1){left:25%}.hx-lines i:nth-child(2){left:50%}.hx-lines i:nth-child(3){left:75%}
+body.light-mode .hx-lines i{background:rgba(0,0,0,.12)}
+.hx-ghost{position:absolute;z-index:0;right:-3vw;top:6vh;font-family:var(--hx-font);font-size:min(46vw,80vh);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap;pointer-events:none;user-select:none;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.17);opacity:calc(1 - var(--g) * 1.6)}
+body.light-mode .hx-ghost{-webkit-text-stroke-color:rgba(0,0,0,.16)}
+/* the video: a tilted 3D card that JS straightens and grows to fill the screen */
+.hx-media{position:absolute;left:56%;top:20%;width:38%;height:56%;z-index:1;overflow:hidden;background:radial-gradient(ellipse at 30% 40%,#2a2a2a 0,#141414 55%,#0a0a0a 90%);transform:perspective(1400px) rotateY(-14deg);will-change:transform,left,top,width,height;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.hx-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.hx-scrim{position:absolute;inset:0;pointer-events:none;opacity:0;background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.08) 62%),linear-gradient(0deg,rgba(0,0,0,.55),transparent 55%)}
+/* intro: tagline (top-left) + buttons (bottom-left) */
+.hx-intro{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;padding:calc(72px + 1.5vh) 3.3vw 5.5vh;pointer-events:none}
+.hero-tagline{font-family:var(--hx-font);font-weight:400;font-size:min(12vw,23.5vh);line-height:.9;letter-spacing:-.005em;text-transform:uppercase;color:var(--white);transform-origin:0 45%;will-change:transform,opacity}
 .hero-tagline em{font-style:normal}
-.glow-word{color:rgba(245,245,245,.55);transition:color .6s ease,text-shadow .8s ease}
-.glow-word.lit{color:#fff;text-shadow:0 0 12px rgba(255,255,255,.55),0 0 34px rgba(255,255,255,.3),0 0 80px rgba(255,255,255,.15)}
-.hx-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:clamp(16px,3.2vh,34px)}
-.hx-links .btn{color:var(--white);border-color:var(--white);background:transparent}
-.hx-links .btn:hover{background:var(--white);color:var(--black)}
-/* the video: starts as a rounded card, JS grows it to fill the whole screen */
-.hx-media{position:absolute;left:50%;top:60%;width:44vw;height:30vh;transform:translateX(-50%);border-radius:22px;overflow:hidden;z-index:1;background:radial-gradient(ellipse at 30% 40%,#2a2a2a 0,#141414 55%,#0a0a0a 90%);will-change:width,height,top}
-.hx-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;will-change:transform}
-.hx-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.55));opacity:0;pointer-events:none}
-/* story line that appears once the video is full screen */
-.hx-story{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:0 24px;text-align:center;pointer-events:none;opacity:0;will-change:opacity,transform}
-.hx-story p{font-size:clamp(2rem,6.4vw,6rem);font-weight:800;letter-spacing:-.045em;line-height:1.02;color:#fff;text-shadow:0 6px 40px rgba(0,0,0,.5)}
-.hx-story em{font-style:normal;opacity:.7}
+.glow-word{transition:text-shadow .8s ease,color .4s ease}
+.glow-word.lit{text-shadow:0 0 50px rgba(255,255,255,.16)}
+/* once the text starts zooming over the video it must stay white, even in light mode */
+.hx-stage.hx-over .hero-tagline .glow-word{color:#fff !important;text-shadow:none !important}
+.hx-links{display:flex;gap:12px;flex-wrap:wrap;pointer-events:auto}
+.hx-links .btn{font-family:'DM Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:500;letter-spacing:.1em;padding:14px 22px;border-radius:0;color:var(--black);background:var(--white);border:1px solid var(--white)}
+.hx-links .btn:hover{background:transparent;color:var(--white)}
+.hx-stage.hx-over .hx-links .btn{pointer-events:none}
+/* "Stories in motion." — appears once the video is full screen */
+.hx-story{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:0 3.3vw 9vh;pointer-events:none;opacity:0;will-change:opacity,transform}
+.hx-story p{font-family:var(--hx-font);font-weight:400;font-size:min(11.8vw,22vh);line-height:.9;letter-spacing:-.005em;text-transform:uppercase;color:#fff;background:linear-gradient(180deg,#fff 40%,#cfcfcf);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 /* scroll cue */
-.hero-scroll{position:absolute;bottom:60px;right:80px;z-index:3;display:flex;align-items:center;flex-direction:row;gap:10px;opacity:.6;pointer-events:none}
+.hero-scroll{position:absolute;bottom:24px;right:3.3vw;z-index:3;display:flex;align-items:center;gap:10px;opacity:.6;pointer-events:none}
 .hero-scroll span{writing-mode:vertical-rl;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--grey)}
-.scroll-line{width:1px;height:56px;background:linear-gradient(to bottom,var(--white),transparent);transform-origin:top;animation:hxCue 2.4s var(--ease) infinite}
+.scroll-line{width:1px;height:48px;background:linear-gradient(to bottom,var(--white),transparent);transform-origin:top;animation:hxCue 2.4s var(--ease) infinite}
 @keyframes hxCue{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
-@media(max-width:768px){.hero-scroll{right:20px;bottom:24px}}
-@media(max-width:480px){
-  .hx-links{flex-direction:column;align-items:center;width:100%;max-width:260px;margin-left:auto;margin-right:auto}
-  .hx-links .btn{width:100%;justify-content:center;padding:10px 16px}
+@media(max-width:768px){
+  .hx-ghost{display:none}
+  .hx-intro{padding-top:calc(72px + 3.5vh)}
+  .hx-lines i:nth-child(2){display:none}
+  .hero-tagline{font-size:min(23vw,17vh)}
+  .hx-story p{font-size:min(21vw,16vh)}
+  .hx-media{box-shadow:none}
+  .hx-links{flex-direction:column;gap:8px;width:min(240px,64vw)}
+  .hx-links .btn{width:100%;justify-content:center;padding:12px 16px}
+  .hero-scroll{display:none}
 }
-@media(prefers-reduced-motion:reduce){.scroll-line{animation:none}.glow-word{transition:none}}
+@media(prefers-reduced-motion:reduce){.scroll-line{animation:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;
@@ -3281,13 +3296,15 @@ body.light-mode .psw-comment-gate a{color:#111}
 <div class="page active" id="page-home">
   <section id="hero-section" aria-label="KIIT Film Society">
     <div class="hx-stage" id="hero-stage">
+      <div class="hx-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="hx-ghost" aria-hidden="true">KFS</div>
 
       <div class="hx-media" id="hero-media">
         <video id="hero-video" muted loop playsinline autoplay preload="auto" aria-hidden="true" style="display:none"></video>
         <div class="hx-scrim" id="hero-scrim"></div>
       </div>
 
-      <div class="hx-story" id="hero-story"><p>Films. <em>Stories.</em> Creativity.</p></div>
+      <div class="hx-story" id="hero-story"><p>Stories<br>in motion.</p></div>
 
       <div class="hx-intro" id="hero-intro">
         <h1 class="hero-tagline" id="hero-tagline"><span class="glow-word" id="glow-lights">Lights.</span><br><em><span class="glow-word" id="glow-camera">Camera.</span></em><br><span class="glow-word" id="glow-kfs">KFS.</span></h1>
