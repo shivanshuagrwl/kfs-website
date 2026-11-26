@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
 <link rel="dns-prefetch" href="https://supabase.co">
 <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" data-static="1">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" data-static="1">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
@@ -882,56 +882,39 @@ body.light-mode .nav-logo-img{content:url('/images/KFS_LOGO_DARK.png')}
 @keyframes hint-slide{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(5px);opacity:1}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── HERO · tilted projection ─────────────────────────────────────────── */
+/* ── HERO (glow tagline → video card enlarges on scroll → "Films. Stories. Creativity." line) ── */
 #page-home{padding-top:0}
 body{overflow-x:clip}
-#hero-section{--hx-bg:#080909;--hx-fg:#fff;position:relative;height:250vh;color:var(--hx-fg)}
-.hx-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate;background:#0a0a0a;font-family:'DM Mono',monospace;color:#fff}
-.hx-grid{position:absolute;inset:0;z-index:0;pointer-events:none}
-.hx-grid i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.1)}
-.hx-grid i:nth-child(1){left:25%}.hx-grid i:nth-child(2){left:50%}.hx-grid i:nth-child(3){left:75%}
-.hx-num{position:absolute;right:-1vw;top:9vh;z-index:0;font-family:Anton,Impact,sans-serif;font-size:min(44vw,70vh);line-height:.85;letter-spacing:-.01em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.3);white-space:nowrap;user-select:none;will-change:opacity}
-.hx-num span{display:inline-block;background:linear-gradient(105deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.2) 50%,rgba(255,255,255,0) 62%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;will-change:transform;animation:hxLetter 1.3s var(--ease) backwards,hxSweep 7s linear 1.6s infinite}
-.hx-num .k{transform:translate3d(calc(var(--kx,0px) + var(--mx,0)*14px),calc(var(--my,0)*8px),0);animation-delay:.2s,1.6s}
-.hx-num .f{transform:translate3d(calc(var(--mx,0)*24px),calc(var(--fy,0px) + var(--my,0)*14px),0);animation-delay:.34s,2.1s}
-.hx-num .s{transform:translate3d(calc(var(--sx,0px) + var(--mx,0)*34px),calc(var(--my,0)*20px),0);animation-delay:.48s,2.6s}
-@keyframes hxLetter{from{opacity:0;transform:translate3d(0,14vh,0)}to{opacity:1}}
-@keyframes hxSweep{from{background-position:130% 0}to{background-position:-130% 0}}
-.hx-frame{position:absolute;inset:0;z-index:1;clip-path:inset(22% 6% 26% 54%);transform:perspective(1400px) rotateY(-24deg) rotateX(6deg);transform-origin:72% 50%;background:radial-gradient(ellipse at 70% 60%,#2b3d40 0,transparent 60%),radial-gradient(ellipse at 20% 85%,#4a3320 0,transparent 55%),#0d0f0f;animation:hxIn 1.2s var(--ease) .35s backwards}
-.hx-frame video{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;background:#000;transform-origin:0 0;will-change:transform;backface-visibility:hidden;filter:contrast(1.05) saturate(.85) brightness(.88)}
-.hx-frame::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(8,9,9,.3),rgba(8,9,9,.1) 50%,rgba(8,9,9,.5))}
-.hx-grain{position:absolute;inset:-50%;z-index:2;pointer-events:none;opacity:.07;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");animation:hxGrain .8s steps(4) infinite}
-@keyframes hxGrain{0%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}100%{transform:translate(0,0)}}
-.hx-mask{position:absolute;left:clamp(20px,3.2vw,48px);top:15vh;z-index:3;pointer-events:none;transform-origin:14% 50%;will-change:transform,opacity}
-.hx-mask span{display:block;font-family:Anton,Impact,sans-serif;font-weight:400;font-size:min(13.5vw,25vh);line-height:.88;text-transform:uppercase;color:#fff;user-select:none;animation:hxRise 1.1s var(--ease) .15s backwards}
-.hx-tag{position:absolute;z-index:3;left:54%;bottom:18%;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#fff;opacity:.85;will-change:opacity}
-.hx-slot{display:none}
-.hx-end{position:absolute;z-index:3;left:clamp(20px,3.2vw,48px);right:20px;bottom:11vh;pointer-events:none;opacity:0;font-family:Anton,Impact,sans-serif;font-size:min(14vw,26vh);line-height:.9;text-transform:uppercase;color:#fff;will-change:transform,opacity}
-.hx-dim{display:none;position:absolute;inset:0;z-index:5;background:#0a0a0a;opacity:0;pointer-events:none}
-.hx-foot{position:absolute;left:clamp(20px,3.2vw,48px);right:24px;z-index:4;bottom:calc(env(safe-area-inset-bottom,0px) + 7vh);opacity:1;animation:hxRise 1.1s var(--ease) .9s backwards}
-.hx-links{display:flex;gap:12px;flex-wrap:wrap}
-.hx-links .btn{color:#080909;background:#fff;border:1px solid #fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.14em;padding:15px 22px;min-height:44px}
-.hx-links .btn:hover{background:transparent;color:#fff}
-@keyframes hxRise{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
-@keyframes hxIn{from{opacity:0}to{opacity:1}}
-.hx-cue{position:absolute;right:clamp(20px,3.2vw,48px);bottom:calc(env(safe-area-inset-bottom,0px) + 7vh);width:1px;height:46px;z-index:4;opacity:.7}
-.hx-cue i{display:block;width:100%;height:100%;background:linear-gradient(#fff,transparent);transform-origin:top;animation:hxCue 2.4s var(--ease) infinite}
+#hero-section{position:relative;height:300vh}
+.hx-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate}
+/* intro: glow tagline + buttons (fades away as the video grows) */
+.hx-intro{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;padding:calc(72px + 5vh) 24px 0;will-change:opacity,transform}
+.hero-tagline{font-size:clamp(2.5rem,min(7vw,9.5vh),6rem);font-weight:800;letter-spacing:-.045em;line-height:.98;color:var(--white);position:relative;z-index:1}
+.hero-tagline em{font-style:normal}
+.glow-word{color:rgba(245,245,245,.55);transition:color .6s ease,text-shadow .8s ease}
+.glow-word.lit{color:#fff;text-shadow:0 0 12px rgba(255,255,255,.55),0 0 34px rgba(255,255,255,.3),0 0 80px rgba(255,255,255,.15)}
+.hx-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:clamp(16px,3.2vh,34px)}
+.hx-links .btn{color:var(--white);border-color:var(--white);background:transparent}
+.hx-links .btn:hover{background:var(--white);color:var(--black)}
+/* the video: starts as a rounded card, JS grows it to fill the whole screen */
+.hx-media{position:absolute;left:50%;top:60%;width:44vw;height:30vh;transform:translateX(-50%);border-radius:22px;overflow:hidden;z-index:1;background:radial-gradient(ellipse at 30% 40%,#2a2a2a 0,#141414 55%,#0a0a0a 90%);will-change:width,height,top}
+.hx-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;will-change:transform}
+.hx-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.55));opacity:0;pointer-events:none}
+/* story line that appears once the video is full screen */
+.hx-story{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:0 24px;text-align:center;pointer-events:none;opacity:0;will-change:opacity,transform}
+.hx-story p{font-size:clamp(2rem,6.4vw,6rem);font-weight:800;letter-spacing:-.045em;line-height:1.02;color:#fff;text-shadow:0 6px 40px rgba(0,0,0,.5)}
+.hx-story em{font-style:normal;opacity:.7}
+/* scroll cue */
+.hero-scroll{position:absolute;bottom:60px;right:80px;z-index:3;display:flex;align-items:center;flex-direction:row;gap:10px;opacity:.6;pointer-events:none}
+.hero-scroll span{writing-mode:vertical-rl;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:var(--grey)}
+.scroll-line{width:1px;height:56px;background:linear-gradient(to bottom,var(--white),transparent);transform-origin:top;animation:hxCue 2.4s var(--ease) infinite}
 @keyframes hxCue{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
-@media(max-width:700px){
-  .hx-stage{display:flex;flex-direction:column;padding:calc(var(--hx-nav,84px) + 18px) 20px calc(env(safe-area-inset-bottom,0px) + 20px)}
-  .hx-frame{clip-path:inset(40% 5% 30% 5%);transform:none;transform-origin:50% 50%}
-  .hx-mask{position:relative;left:auto;top:auto;flex:none}
-  .hx-mask span{font-size:min(17vw,12svh)}
-  .hx-slot{display:block;flex:1 1 auto;min-height:100px;margin:16px 0 10px;pointer-events:none}
-  .hx-tag{position:static;flex:none;margin:0 0 16px;font-size:10px}
-  .hx-num{top:auto;bottom:30%;right:-4vw;font-size:46vw;-webkit-text-stroke:1px rgba(255,255,255,.16)}
-  .hx-end{bottom:14svh;font-size:18vw}
-  .hx-foot{position:static;flex:none;right:auto;left:auto;bottom:auto}
-  .hx-links{flex-direction:column;gap:8px}
-  .hx-links .btn{justify-content:center;width:100%;padding:10px 16px;min-height:42px}
-  .hx-cue{display:none}
+@media(max-width:768px){.hero-scroll{right:20px;bottom:24px}}
+@media(max-width:480px){
+  .hx-links{flex-direction:column;align-items:center;width:100%;max-width:260px;margin-left:auto;margin-right:auto}
+  .hx-links .btn{width:100%;justify-content:center;padding:10px 16px}
 }
-@media(prefers-reduced-motion:reduce){.hx-foot,.hx-mask span,.hx-frame,.hx-num{animation:none;opacity:1}.hx-grain,.hx-cue i,.hx-num span{animation:none}.hx-frame{transform:none}.hx-end{display:none}}
+@media(prefers-reduced-motion:reduce){.scroll-line{animation:none}.glow-word{transition:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes logoReveal{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;
@@ -3298,29 +3281,25 @@ body.light-mode .psw-comment-gate a{color:#111}
 <div class="page active" id="page-home">
   <section id="hero-section" aria-label="KIIT Film Society">
     <div class="hx-stage" id="hero-stage">
-      <div class="hx-grid" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="hx-num" id="hero-num" aria-hidden="true"><span class="k">K</span><span class="f">F</span><span class="s">S</span></div>
 
-      <div class="hx-frame" id="hero-frame" aria-hidden="true">
+      <div class="hx-media" id="hero-media">
         <video id="hero-video" muted loop playsinline autoplay preload="auto" aria-hidden="true" style="display:none"></video>
+        <div class="hx-scrim" id="hero-scrim"></div>
       </div>
-      <div class="hx-grain" aria-hidden="true"></div>
 
-      <div class="hx-mask" id="hero-mask" aria-hidden="true"><span id="hero-word">Lights.<br>Camera.<br>KFS.</span></div>
-      <div class="hx-slot" id="hero-slot" aria-hidden="true"></div>
-      <div class="hx-end" id="hero-end" aria-hidden="true">Stories<br>in motion.</div>
+      <div class="hx-story" id="hero-story"><p>Films. <em>Stories.</em> Creativity.</p></div>
 
-      <h1 class="seo-only" id="hero-tagline">Lights. Camera. KFS. &mdash; KIIT Film Society</h1>
-
-      <div class="hx-foot" id="hero-foot">
-        <div class="hx-links">
+      <div class="hx-intro" id="hero-intro">
+        <h1 class="hero-tagline" id="hero-tagline"><span class="glow-word" id="glow-lights">Lights.</span><br><em><span class="glow-word" id="glow-camera">Camera.</span></em><br><span class="glow-word" id="glow-kfs">KFS.</span></h1>
+        <p class="seo-only">KIIT Film Society</p>
+        <div class="hx-links" id="hero-foot">
           <a href="/blog" data-action="navigate" data-args='["blog"]' class="btn btn-secondary">Read Our Blog</a>
           <a href="/Social-Strand" class="btn btn-secondary">Social Strand</a>
           <a class="btn btn-secondary" href="/events" data-nav-page="events">Upcoming Events</a>
         </div>
       </div>
-      <div class="hx-cue" id="hero-cue"><i></i></div>
-      <div class="hx-dim" id="hero-dim" aria-hidden="true"></div>
+
+      <div class="hero-scroll" id="hero-cue"><span>Scroll</span><div class="scroll-line"></div></div>
     </div>
   </section>
 
