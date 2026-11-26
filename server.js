@@ -2893,6 +2893,1279 @@ const _SHEET_VIEW_JS = `/* KFS Sheet — Excel-like live grid.
   start();
 })();
 `;
+// ─────────────────────────────────────────────────────────────────────────────
+// KFS LIVE SHEETS (editable, real-time, Google-Sheets style), inlined here so no
+// extra files are needed. Run live-sheets.sql ONCE in Supabase to enable editing
+// (until then every sheet simply stays read-only; nothing else is affected).
+//   /sheet/<token>   public live sheet (view-only; editors unlock with name + password)
+//   /live-sheet.js   the sheet client (also used by the admin panel's Sheet tab)
+//   /api/ls/*        sessions, data, SSE stream, cell / row / column writes
+//   global.__ksLive.notify(kind, id)  instant push (scanner check-in, new submits)
+// Mounted BEFORE the older Responses-Pro block so /sheet/<token> serves the new page.
+// ─────────────────────────────────────────────────────────────────────────────
+const _LS_ICONS = {"plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>","minus":"<path d=\"M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z\"/>","x":"<path d=\"M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z\"/>","check":"<path d=\"M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z\"/>","lock-simple":"<path d=\"M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z\"/>","lock-key-open":"<path d=\"M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-80-96a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Z\"/>","trash":"<path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>","arrow-counter-clockwise":"<path d=\"M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z\"/>","arrow-clockwise":"<path d=\"M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z\"/>","download-simple":"<path d=\"M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z\"/>","magnifying-glass":"<path d=\"M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z\"/>","users":"<path d=\"M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z\"/>","user-circle":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z\"/>","eye":"<path d=\"M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z\"/>","eye-slash":"<path d=\"M53.92,34.62A8,8,0,1,0,42.08,45.38L61.32,66.55C25,88.84,9.38,123.2,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208a127.11,127.11,0,0,0,52.07-10.83l22,24.21a8,8,0,1,0,11.84-10.76Zm47.33,75.84,41.67,45.85a32,32,0,0,1-41.67-45.85ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.16,133.16,0,0,1,25,128c4.69-8.79,19.66-33.39,47.35-49.38l18,19.75a48,48,0,0,0,63.66,70l14.73,16.2A112,112,0,0,1,128,192Zm6-95.43a8,8,0,0,1,3-15.72,48.16,48.16,0,0,1,38.77,42.64,8,8,0,0,1-7.22,8.71,6.39,6.39,0,0,1-.75,0,8,8,0,0,1-8-7.26A32.09,32.09,0,0,0,134,96.57Zm113.28,34.69c-.42.94-10.55,23.37-33.36,43.8a8,8,0,1,1-10.67-11.92A132.77,132.77,0,0,0,231.05,128a133.15,133.15,0,0,0-23.12-30.77C185.67,75.19,158.78,64,128,64a118.37,118.37,0,0,0-19.36,1.57A8,8,0,1,1,106,49.79,134,134,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41A8,8,0,0,1,247.31,131.26Z\"/>","columns":"<path d=\"M104,32H64A16,16,0,0,0,48,48V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32Zm0,176H64V48h40ZM192,32H152a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,192,32Zm0,176H152V48h40Z\"/>","rows":"<path d=\"M208,136H48a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,56H48V152H208v40Zm0-144H48A16,16,0,0,0,32,64v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V64A16,16,0,0,0,208,48Zm0,56H48V64H208v40Z\"/>","table":"<path d=\"M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM40,112H80v32H40Zm56,0H216v32H96ZM216,64V96H40V64ZM40,160H80v32H40Zm176,32H96V160H216v32Z\"/>","copy":"<path d=\"M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z\"/>","clipboard":"<path d=\"M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm-72,0a32,32,0,0,1,32,32H96A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.93,47.93,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.93,47.93,0,0,0-2.75-16H200Z\"/>","sun":"<path d=\"M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z\"/>","moon":"<path d=\"M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z\"/>","warning-circle":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z\"/>","check-circle":"<path d=\"M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>","info":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z\"/>","key":"<path d=\"M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z\"/>","shield-check":"<path d=\"M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z\"/>","dots-three":"<path d=\"M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm56-12a12,12,0,1,0,12,12A12,12,0,0,0,196,116ZM60,116a12,12,0,1,0,12,12A12,12,0,0,0,60,116Z\"/>","caret-down":"<path d=\"M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z\"/>","caret-up":"<path d=\"M213.66,165.66a8,8,0,0,1-11.32,0L128,91.31,53.66,165.66a8,8,0,0,1-11.32-11.32l80-80a8,8,0,0,1,11.32,0l80,80A8,8,0,0,1,213.66,165.66Z\"/>","sort-ascending":"<path d=\"M128,128a8,8,0,0,1-8,8H48a8,8,0,0,1,0-16h72A8,8,0,0,1,128,128ZM48,72H184a8,8,0,0,0,0-16H48a8,8,0,0,0,0,16Zm56,112H48a8,8,0,0,0,0,16h56a8,8,0,0,0,0-16Zm125.66-21.66a8,8,0,0,0-11.32,0L192,188.69V112a8,8,0,0,0-16,0v76.69l-26.34-26.35a8,8,0,0,0-11.32,11.32l40,40a8,8,0,0,0,11.32,0l40-40A8,8,0,0,0,229.66,162.34Z\"/>","sort-descending":"<path d=\"M40,128a8,8,0,0,1,8-8h72a8,8,0,0,1,0,16H48A8,8,0,0,1,40,128Zm8-56h56a8,8,0,0,0,0-16H48a8,8,0,0,0,0,16ZM184,184H48a8,8,0,0,0,0,16H184a8,8,0,0,0,0-16ZM229.66,82.34l-40-40a8,8,0,0,0-11.32,0l-40,40a8,8,0,0,0,11.32,11.32L176,67.31V144a8,8,0,0,0,16,0V67.31l26.34,26.35a8,8,0,0,0,11.32-11.32Z\"/>","text-align-left":"<path d=\"M32,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H40A8,8,0,0,1,32,64Zm8,48H168a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16Zm176,24H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm-48,40H40a8,8,0,0,0,0,16H168a8,8,0,0,0,0-16Z\"/>","hash":"<path d=\"M224,88H175.4l8.47-46.57a8,8,0,0,0-15.74-2.86l-9,49.43H111.4l8.47-46.57a8,8,0,0,0-15.74-2.86L95.14,88H48a8,8,0,0,0,0,16H92.23L83.5,152H32a8,8,0,0,0,0,16H80.6l-8.47,46.57a8,8,0,0,0,6.44,9.3A7.79,7.79,0,0,0,80,224a8,8,0,0,0,7.86-6.57l9-49.43H144.6l-8.47,46.57a8,8,0,0,0,6.44,9.3A7.79,7.79,0,0,0,144,224a8,8,0,0,0,7.86-6.57l9-49.43H208a8,8,0,0,0,0-16H163.77l8.73-48H224a8,8,0,0,0,0-16Zm-76.5,64H99.77l8.73-48h47.73Z\"/>","calendar-blank":"<path d=\"M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z\"/>","clock":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z\"/>","wifi-high":"<path d=\"M140,204a12,12,0,1,1-12-12A12,12,0,0,1,140,204ZM237.08,87A172,172,0,0,0,18.92,87,8,8,0,0,0,29.08,99.37a156,156,0,0,1,197.84,0A8,8,0,0,0,237.08,87ZM205,122.77a124,124,0,0,0-153.94,0A8,8,0,0,0,61,135.31a108,108,0,0,1,134.06,0,8,8,0,0,0,11.24-1.3A8,8,0,0,0,205,122.77Zm-32.26,35.76a76.05,76.05,0,0,0-89.42,0,8,8,0,0,0,9.42,12.94,60,60,0,0,1,70.58,0,8,8,0,1,0,9.42-12.94Z\"/>","wifi-slash":"<path d=\"M213.92,210.62a8,8,0,1,1-11.84,10.76l-52-57.15a60,60,0,0,0-57.41,7.24,8,8,0,1,1-9.42-12.93A75.43,75.43,0,0,1,128,144c1.28,0,2.55,0,3.82.1L104.9,114.49A108,108,0,0,0,61,135.31,8,8,0,0,1,49.73,134,8,8,0,0,1,51,122.77a124.27,124.27,0,0,1,41.71-21.66L69.37,75.4a155.43,155.43,0,0,0-40.29,24A8,8,0,0,1,18.92,87,171.87,171.87,0,0,1,58,62.86L42.08,45.38A8,8,0,1,1,53.92,34.62ZM128,192a12,12,0,1,0,12,12A12,12,0,0,0,128,192ZM237.08,87A172.3,172.3,0,0,0,106,49.4a8,8,0,1,0,2,15.87A158.33,158.33,0,0,1,128,64a156.25,156.25,0,0,1,98.92,35.37A8,8,0,0,0,237.08,87ZM195,135.31a8,8,0,0,0,11.24-1.3,8,8,0,0,0-1.3-11.24,124.25,124.25,0,0,0-51.73-24.2A8,8,0,1,0,150,114.24,108.12,108.12,0,0,1,195,135.31Z\"/>","link":"<path d=\"M240,88.23a54.43,54.43,0,0,1-16,37L189.25,160a54.27,54.27,0,0,1-38.63,16h-.05A54.63,54.63,0,0,1,96,119.84a8,8,0,0,1,16,.45A38.62,38.62,0,0,0,150.58,160h0a38.39,38.39,0,0,0,27.31-11.31l34.75-34.75a38.63,38.63,0,0,0-54.63-54.63l-11,11A8,8,0,0,1,135.7,59l11-11A54.65,54.65,0,0,1,224,48,54.86,54.86,0,0,1,240,88.23ZM109,185.66l-11,11A38.41,38.41,0,0,1,70.6,208h0a38.63,38.63,0,0,1-27.29-65.94L78,107.31A38.63,38.63,0,0,1,144,135.71a8,8,0,0,0,16,.45A54.86,54.86,0,0,0,144,96a54.65,54.65,0,0,0-77.27,0L32,130.75A54.62,54.62,0,0,0,70.56,224h0a54.28,54.28,0,0,0,38.64-16l11-11A8,8,0,0,0,109,185.66Z\"/>","pencil-simple":"<path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>","sign-out":"<path d=\"M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H112a8,8,0,0,0,0,16h92.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z\"/>","user-plus":"<path d=\"M256,136a8,8,0,0,1-8,8H232v16a8,8,0,0,1-16,0V144H200a8,8,0,0,1,0-16h16V112a8,8,0,0,1,16,0v16h16A8,8,0,0,1,256,136Zm-57.87,58.85a8,8,0,0,1-12.26,10.3C165.75,181.19,138.09,168,108,168s-57.75,13.19-77.87,37.15a8,8,0,0,1-12.25-10.3c14.94-17.78,33.52-30.41,54.17-37.17a68,68,0,1,1,71.9,0C164.6,164.44,183.18,177.07,198.13,194.85ZM108,152a52,52,0,1,0-52-52A52.06,52.06,0,0,0,108,152Z\"/>","list-checks":"<path d=\"M224,128a8,8,0,0,1-8,8H128a8,8,0,0,1,0-16h88A8,8,0,0,1,224,128ZM128,72h88a8,8,0,0,0,0-16H128a8,8,0,0,0,0,16Zm88,112H128a8,8,0,0,0,0,16h88a8,8,0,0,0,0-16ZM82.34,42.34,56,68.69,45.66,58.34A8,8,0,0,0,34.34,69.66l16,16a8,8,0,0,0,11.32,0l32-32A8,8,0,0,0,82.34,42.34Zm0,64L56,132.69,45.66,122.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Zm0,64L56,196.69,45.66,186.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Z\"/>","funnel":"<path d=\"M230.6,49.53A15.81,15.81,0,0,0,216,40H40A16,16,0,0,0,28.19,66.76l.08.09L96,139.17V216a16,16,0,0,0,24.87,13.32l32-21.34A16,16,0,0,0,160,194.66V139.17l67.74-72.32.08-.09A15.8,15.8,0,0,0,230.6,49.53ZM40,56h0Zm106.18,74.58A8,8,0,0,0,144,136v58.66L112,216V136a8,8,0,0,0-2.16-5.47L40,56H216Z\"/>","arrows-clockwise":"<path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/>","pulse":"<path d=\"M240,128a8,8,0,0,1-8,8H204.94l-37.78,75.58A8,8,0,0,1,160,216h-.4a8,8,0,0,1-7.08-5.14L95.35,60.76,63.28,131.31A8,8,0,0,1,56,136H24a8,8,0,0,1,0-16H50.85L88.72,36.69a8,8,0,0,1,14.76.46l57.51,151,31.85-63.71A8,8,0,0,1,200,120h32A8,8,0,0,1,240,128Z\"/>","file-xls":"<path d=\"M156,208a8,8,0,0,1-8,8H120a8,8,0,0,1-8-8V152a8,8,0,0,1,16,0v48h20A8,8,0,0,1,156,208ZM92.65,145.49a8,8,0,0,0-11.16,1.86L68,166.24,54.51,147.35a8,8,0,1,0-13,9.3L58.17,180,41.49,203.35a8,8,0,0,0,13,9.3L68,193.76l13.49,18.89a8,8,0,0,0,13-9.3L77.83,180l16.68-23.35A8,8,0,0,0,92.65,145.49Zm98.94,25.82c-4-1.16-8.14-2.35-10.45-3.84-1.25-.82-1.23-1-1.12-1.9a4.54,4.54,0,0,1,2-3.67c4.6-3.12,15.34-1.72,19.82-.56a8,8,0,0,0,4.07-15.48c-2.11-.55-21-5.22-32.83,2.76a20.58,20.58,0,0,0-8.95,14.95c-2,15.88,13.65,20.41,23,23.11,12.06,3.49,13.12,4.92,12.78,7.59-.31,2.41-1.26,3.33-2.15,3.93-4.6,3.06-15.16,1.55-19.54.35A8,8,0,0,0,173.93,214a60.63,60.63,0,0,0,15.19,2c5.82,0,12.3-1,17.49-4.46a20.81,20.81,0,0,0,9.18-15.23C218,179,201.48,174.17,191.59,171.31ZM40,112V40A16,16,0,0,1,56,24h96a8,8,0,0,1,5.66,2.34l56,56A8,8,0,0,1,216,88v24a8,8,0,1,1-16,0V96H152a8,8,0,0,1-8-8V40H56v72a8,8,0,0,1-16,0ZM160,80h28.68L160,51.31Z\"/>","circle-notch":"<path d=\"M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z\"/>"};
+const _LS_CLIENT_FN = function (ICONS) {
+'use strict';
+var CSS = `
+.ks,.ks *{box-sizing:border-box}
+.ks{--bg:oklch(.165 .012 262);--pn:oklch(.205 .014 262);--pn2:oklch(.245 .016 262);--ln:oklch(.31 .016 262);--ln2:oklch(.27 .014 262);
+--ink:oklch(.965 .005 262);--ink2:oklch(.82 .01 262);--mut:oklch(.69 .014 262);--acc:oklch(.74 .15 252);--acc-s:oklch(.74 .15 252/.16);--acc-l:oklch(.74 .15 252/.55);--acc-i:oklch(.18 .04 252);
+--ok:oklch(.76 .15 162);--ok-s:oklch(.76 .15 162/.15);--wn:oklch(.82 .14 82);--wn-s:oklch(.82 .14 82/.14);--bd:oklch(.7 .19 25);--bd-s:oklch(.7 .19 25/.14);
+--ro:oklch(.19 .012 262);--sh:0 24px 60px -12px oklch(0 0 0/.55),0 0 0 1px oklch(1 0 0/.06);
+--e:cubic-bezier(.25,1,.5,1);--f:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+position:relative;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--bg);color:var(--ink);font:13px/1.4 var(--f);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden;color-scheme:dark}
+.ks[data-theme=light]{--bg:oklch(.975 .003 262);--pn:#fff;--pn2:oklch(.965 .004 262);--ln:oklch(.88 .007 262);--ln2:oklch(.92 .005 262);--ink:oklch(.2 .02 262);--ink2:oklch(.36 .02 262);--mut:oklch(.48 .02 262);
+--acc:oklch(.53 .2 258);--acc-s:oklch(.53 .2 258/.1);--acc-l:oklch(.53 .2 258/.5);--acc-i:#fff;--ok:oklch(.5 .14 162);--ok-s:oklch(.5 .14 162/.12);--wn:oklch(.5 .13 70);--wn-s:oklch(.7 .15 80/.18);--bd:oklch(.52 .2 25);--bd-s:oklch(.52 .2 25/.1);--ro:oklch(.955 .004 262);
+--sh:0 24px 60px -16px oklch(.2 .03 262/.28),0 0 0 1px oklch(.2 .03 262/.08);color-scheme:light}
+.ks button{font:inherit;color:inherit;cursor:pointer}
+.ks .i{flex:none;display:block}
+.ks :focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.ks-top{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--pn);border-bottom:1px solid var(--ln);flex-wrap:wrap;position:relative;z-index:20}
+.ks-brand{display:flex;align-items:center;gap:10px;min-width:0;margin-right:4px}
+.ks-mark{width:28px;height:28px;border-radius:8px;background:var(--acc);color:var(--acc-i);display:grid;place-items:center;font-weight:700;font-size:11px;letter-spacing:.02em}
+.ks-ttl{font-size:14px;font-weight:650;letter-spacing:-.005em;max-width:min(38vw,420px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ks-sub{font-size:11.5px;color:var(--mut);white-space:nowrap}
+.ks-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:99px;font-size:11.5px;font-weight:600;background:var(--pn2);color:var(--ink2);border:1px solid var(--ln2);transition:background .2s var(--e),color .2s var(--e),border-color .2s var(--e)}
+.ks-chip .d{width:7px;height:7px;border-radius:50%;background:var(--mut)}
+.ks-chip[data-s=live]{color:var(--ok);background:var(--ok-s);border-color:transparent}.ks-chip[data-s=live] .d{background:var(--ok);box-shadow:0 0 0 0 var(--ok);animation:ksPulse 2.4s var(--e) infinite}
+.ks-chip[data-s=saving]{color:var(--acc);background:var(--acc-s);border-color:transparent}.ks-chip[data-s=saving] .d{background:var(--acc);animation:ksBlink 1s linear infinite}
+.ks-chip[data-s=off]{color:var(--wn);background:var(--wn-s);border-color:transparent}.ks-chip[data-s=off] .d{background:var(--wn)}
+.ks-chip[data-s=view]{color:var(--ink2)}
+.ks-sp{flex:1}
+.ks-search{position:relative;display:flex;align-items:center}.ks-search .i{position:absolute;left:9px;color:var(--mut);pointer-events:none}
+.ks-search input{width:210px;max-width:44vw;height:32px;padding:0 10px 0 30px;border-radius:9px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);font:inherit;transition:border-color .2s var(--e),box-shadow .2s var(--e),width .3s var(--e)}
+.ks-search input::placeholder{color:var(--mut)}.ks-search input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s);width:270px}
+.ks-btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:9px;border:1px solid var(--ln);background:var(--pn2);font-weight:550;font-size:12.5px;white-space:nowrap;transition:background .15s var(--e),border-color .15s var(--e),transform .15s var(--e)}
+.ks-btn:hover:not(:disabled){background:var(--ln2);border-color:var(--ln)}.ks-btn:active:not(:disabled){transform:scale(.97)}
+.ks-btn:disabled{opacity:.42;cursor:not-allowed}.ks-btn.pri{background:var(--acc);border-color:transparent;color:var(--acc-i)}.ks-btn.pri:hover:not(:disabled){background:var(--acc);filter:brightness(1.08)}
+.ks-btn.ic{width:32px;padding:0;justify-content:center}.ks-btn.dg{color:var(--bd)}
+.ks-grp{display:flex;gap:6px;align-items:center}
+.ks-av{display:flex;align-items:center}.ks-av b{width:24px;height:24px;border-radius:50%;margin-left:-6px;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:var(--acc-i);border:2px solid var(--pn);animation:ksPop .35s var(--e) both}
+.ks-av b:first-child{margin-left:0}.ks-av .more{background:var(--pn2);color:var(--ink2)}
+.ks-fx{display:flex;align-items:stretch;border-bottom:1px solid var(--ln);background:var(--pn);font-size:12.5px;min-height:30px}
+.ks-fx .nm{min-width:130px;max-width:220px;padding:6px 12px;border-right:1px solid var(--ln);color:var(--ink2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ks-fx .vl{flex:1;padding:6px 12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ks-fx .vl.e{color:var(--mut)}
+.ks-banner{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--wn-s);color:var(--wn);font-size:12.5px;border-bottom:1px solid var(--ln)}
+.ks-grid{position:relative;flex:1;min-height:0;overflow:auto;outline:none;background:var(--bg);overscroll-behavior:contain;scrollbar-color:var(--ln) transparent}
+.ks-grid::-webkit-scrollbar{width:12px;height:12px}.ks-grid::-webkit-scrollbar-thumb{background:var(--ln);border-radius:9px;border:3px solid var(--bg)}.ks-grid::-webkit-scrollbar-corner{background:transparent}
+.ks-in{position:relative}
+.ks-hd{position:sticky;top:0;z-index:12;background:var(--pn)}
+.ks-corner{position:sticky;left:0;z-index:14;background:var(--pn);box-shadow:inset -1px -1px 0 var(--ln);display:flex;align-items:center;justify-content:center;color:var(--mut)}
+.ks-hc{position:absolute;top:0;display:flex;align-items:center;gap:6px;padding:0 6px 0 10px;box-shadow:inset -1px -1px 0 var(--ln);font-weight:600;font-size:12px;color:var(--ink2);cursor:default;user-select:none;transition:background .15s var(--e),color .15s var(--e)}
+.ks-hc:hover,.ks-hc.on{background:var(--pn2);color:var(--ink)}.ks-hc.on{box-shadow:inset -1px -1px 0 var(--ln),inset 0 -2px 0 var(--acc)}
+.ks-hc .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ks-hc .i{color:var(--mut)}
+.ks-hc .mn{opacity:0;width:22px;height:22px;border:0;background:none;border-radius:6px;display:grid;place-items:center;transition:opacity .15s}.ks-hc:hover .mn,.ks-hc.on .mn{opacity:1}.ks-hc .mn:hover{background:var(--ln2)}
+.ks-hc.hid{opacity:.55}.ks-hc .rz{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2}.ks-hc .rz:hover,.ks-hc .rz.on{background:var(--acc-l)}
+.ks-add{position:absolute;top:0;display:grid;place-items:center;border:0;background:none;color:var(--mut);box-shadow:inset -1px -1px 0 var(--ln);transition:background .15s,color .15s}.ks-add:hover{background:var(--pn2);color:var(--acc)}
+.ks-rows{position:absolute;left:0}
+.ks-r{position:absolute;left:0}
+.ks-g{position:sticky;left:0;z-index:8;background:var(--pn);box-shadow:inset -1px -1px 0 var(--ln);color:var(--mut);font-size:11.5px;display:flex;align-items:center;justify-content:center;cursor:default;user-select:none;font-variant-numeric:tabular-nums;transition:background .15s var(--e),color .15s var(--e)}
+.ks-r:hover .ks-g{background:var(--pn2)}.ks-g.on{background:var(--acc-s);color:var(--acc);font-weight:700;box-shadow:inset -1px -1px 0 var(--ln),inset -2px 0 0 var(--acc)}
+.ks-c{position:absolute;top:0;padding:0 10px;display:flex;align-items:center;box-shadow:inset -1px -1px 0 var(--ln2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:cell;color:var(--ink)}
+.ks-c>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ks-c.ro{background:var(--ro);color:var(--ink2);cursor:default}.ks-c.num{justify-content:flex-end;font-variant-numeric:tabular-nums}
+.ks-c.fl{animation:ksFlash 1.6s var(--e) both}.ks-r.nw .ks-c{animation:ksFlash 2.2s var(--e) both}
+.ks-r:hover .ks-c:not(.ro){background:oklch(.74 .15 252/.045)}
+.ks-pill{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px 0 6px;border-radius:99px;font-size:11.5px;font-weight:650;background:var(--ok-s);color:var(--ok)}
+.ks-dash{color:var(--mut);opacity:.6}
+.ks-sel{position:absolute;pointer-events:none;z-index:5;border:1.5px solid var(--acc);background:var(--acc-s);border-radius:2px}
+.ks-act{position:absolute;pointer-events:none;z-index:6;border:2px solid var(--acc);border-radius:2px;box-shadow:0 0 0 1px var(--bg)}
+.ks-ed{position:absolute;z-index:16;resize:none;border:2px solid var(--acc);background:var(--pn);color:var(--ink);font:inherit;padding:5px 9px;margin:0;border-radius:2px;outline:none;box-shadow:var(--sh);overflow:hidden;line-height:1.35}
+.ks-foot{display:flex;align-items:center;gap:12px;padding:7px 14px;background:var(--pn);border-top:1px solid var(--ln);font-size:12px;color:var(--mut);flex-wrap:wrap}
+.ks-foot b{color:var(--ink2);font-weight:600;font-variant-numeric:tabular-nums}
+.ks-foot input{width:52px;height:26px;border-radius:7px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);text-align:center;font:inherit}
+.ks-empty{position:absolute;left:0;right:0;top:90px;text-align:center;color:var(--mut);pointer-events:none}.ks-empty .t{color:var(--ink2);font-weight:600;margin-bottom:2px}
+.ks-menu{position:fixed;z-index:40;min-width:200px;padding:5px;border-radius:12px;background:var(--pn);box-shadow:var(--sh);animation:ksIn .16s var(--e) both;transform-origin:top left}
+.ks-menu button{display:flex;width:100%;align-items:center;gap:10px;height:32px;padding:0 10px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px}
+.ks-menu button:hover:not(:disabled){background:var(--pn2)}.ks-menu button:disabled{opacity:.4;cursor:not-allowed}.ks-menu button.dg{color:var(--bd)}.ks-menu hr{border:0;border-top:1px solid var(--ln2);margin:5px 4px}
+.ks-bk{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:oklch(0 0 0/.52);backdrop-filter:blur(3px);animation:ksFade .2s var(--e) both}
+.ks-md{width:min(520px,100%);max-height:88vh;overflow:auto;border-radius:16px;background:var(--pn);box-shadow:var(--sh);padding:22px;animation:ksIn .24s var(--e) both}
+.ks-md h3{margin:0 0 4px;font-size:16px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}.ks-md p{margin:0 0 14px;color:var(--mut);font-size:12.5px;max-width:62ch}
+.ks-fld{display:block;margin:0 0 12px}.ks-fld span{display:block;font-size:11.5px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.ks-fld input,.ks-fld select{width:100%;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);font:inherit;font-size:14px;transition:border-color .2s,box-shadow .2s}.ks-fld input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
+.ks-row{display:flex;gap:8px;align-items:center}.ks-row>*{min-width:0}.ks-err{color:var(--bd);font-size:12.5px;min-height:18px;margin:2px 0 8px}
+.ks-act2{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.ks-ed-li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--ln2)}.ks-ed-li .n{font-weight:600}.ks-ed-li .m{font-size:11.5px;color:var(--mut)}
+.ks-tag{font-size:11px;font-weight:650;padding:2px 8px;border-radius:99px;background:var(--bd-s);color:var(--bd)}
+.ks-toast{position:fixed;left:50%;bottom:58px;z-index:60;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:550;box-shadow:var(--sh);animation:ksUp .3s var(--e) both;max-width:92vw}
+.ks-toast button{border:0;background:none;color:var(--acc);font-weight:700;padding:2px 6px;border-radius:6px}.ks[data-theme=dark] .ks-toast button{color:oklch(.45 .17 255)}
+.ks-center{flex:1;display:grid;place-items:center;padding:20px}
+.ks-card{width:min(380px,100%);padding:28px;border-radius:18px;background:var(--pn);box-shadow:var(--sh);text-align:center;animation:ksIn .3s var(--e) both}
+.ks-card .ico{width:46px;height:46px;border-radius:14px;margin:0 auto 14px;display:grid;place-items:center;background:var(--acc-s);color:var(--acc)}.ks-card .ico.bad{background:var(--bd-s);color:var(--bd)}
+.ks-card h2{margin:0 0 6px;font-size:18px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}.ks-card p{margin:0 0 16px;color:var(--mut);font-size:13px;text-wrap:pretty}
+.ks-card input{width:100%;height:44px;border-radius:12px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);text-align:center;font:600 20px/1 var(--f);letter-spacing:.3em;margin-bottom:10px}.ks-card input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
+.ks-card .ks-btn{width:100%;justify-content:center;height:40px}
+.ks-sk{flex:1;padding:18px;display:grid;gap:10px;align-content:start}.ks-sk i{display:block;height:28px;border-radius:8px;background:linear-gradient(90deg,var(--pn) 0,var(--pn2) 50%,var(--pn) 100%);background-size:200% 100%;animation:ksSh 1.4s linear infinite}
+.ks .spin{animation:ksSpin .8s linear infinite}
+@keyframes ksFlash{0%{background:oklch(.76 .15 162/.4)}100%{background:transparent}}
+@keyframes ksPulse{0%{box-shadow:0 0 0 0 oklch(.76 .15 162/.55)}70%,100%{box-shadow:0 0 0 7px transparent}}
+@keyframes ksBlink{50%{opacity:.25}}@keyframes ksSpin{to{transform:rotate(360deg)}}@keyframes ksSh{to{background-position:-200% 0}}
+@keyframes ksIn{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}@keyframes ksFade{from{opacity:0}to{opacity:1}}
+@keyframes ksUp{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}@keyframes ksPop{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
+@media (max-width:640px){.ks-sub,.ks-btn .tx{display:none}.ks-search input,.ks-search input:focus{width:150px}.ks-top{padding:8px 10px}}
+@media (prefers-reduced-motion:reduce){.ks *,.ks-bk,.ks-menu,.ks-toast{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+`;
+
+var RH = 32, HH = 36, GUT = 56, ADDW = 48;
+var D = document;
+function ic(n, s) { s = s || 16; return '<svg class="i" width="' + s + '" height="' + s + '" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function h(tag, cls, html) { var e = D.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function fmtTime(x) { if (!x) return ''; var d = new Date(x); if (isNaN(d)) return String(x); return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }); }
+function initials(n) { var p = String(n || '?').trim().split(/\s+/); return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase(); }
+function hue(n) { var x = 0, s = String(n); for (var i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) % 360; return x; }
+function parseTSV(t) {
+  var rows = [], row = [], cell = '', q = false, i = 0;
+  t = String(t).replace(/\r\n?/g, '\n');
+  for (; i < t.length; i++) {
+    var ch = t[i];
+    if (q) { if (ch === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"' && cell === '') q = true;
+    else if (ch === '\t') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function toTSV(rows) { return rows.map(function (r) { return r.map(function (c) { return /[\t\n"]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join('\t'); }).join('\n'); }
+
+var styled = false;
+function injectCss() { if (styled) return; styled = true; var s = D.createElement('style'); s.setAttribute('data-ks', '1'); s.textContent = CSS; D.head.appendChild(s); }
+
+function mount(host, opts) {
+  injectCss();
+  opts = opts || {};
+  var cid = Math.random().toString(36).slice(2, 12);
+  var root = h('div', 'ks'); root.setAttribute('data-theme', opts.light ? 'light' : (function () { try { return localStorage.getItem('ks-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); } catch (e) { return 'dark'; } })());
+  host.innerHTML = ''; host.appendChild(root);
+  var S = { session: null, exp: 0, role: 'viewer', name: null, data: null, version: '', creds: {}, es: null, sseOpen: false, pending: new Map(), flushing: false, undo: [], redo: [],
+    q: '', sort: null, view: [], colX: [], colW: [], totalW: 0, act: null, anc: null, foc: null, editing: null, flash: new Map(), newRows: new Map(), people: [], n: 0,
+    status: 'view', refreshing: false, again: false, hintAt: 0, rowIdx: new Map(), dead: false, drag: null };
+  var G = [];
+  function on(t, ev, fn, o) { t.addEventListener(ev, fn, o); G.push([t, ev, fn, o]); }
+  var tokenPath = opts.token ? '/api/ls/' + encodeURIComponent(opts.token) : null;
+  var admin = !!opts.admin;
+
+  /* ── network ─────────────────────────────────────────────── */
+  function api(path, o) {
+    o = o || {};
+    var hd = { 'x-ls-cid': cid };
+    if (S.session) hd['x-ls-session'] = S.session;
+    if (o.body !== undefined) hd['Content-Type'] = 'application/json';
+    if (o.headers) for (var k in o.headers) hd[k] = o.headers[k];
+    return fetch(path, { method: o.method || 'GET', headers: hd, body: o.body !== undefined ? JSON.stringify(o.body) : undefined, cache: 'no-store', credentials: 'include' }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) { var e = new Error(d.error || ('Request failed (' + r.status + ')')); e.status = r.status; e.d = d; throw e; }
+        return d;
+      });
+    });
+  }
+  function setSession(d) { S.session = d.session; S.exp = d.exp; S.role = d.role; S.name = d.name; try { if (opts.token) sessionStorage.setItem('ks-s-' + opts.token, JSON.stringify({ s: d.session, exp: d.exp, role: d.role, name: d.name })); } catch (e) {} }
+  function newSession() {
+    if (admin) return api('/api/admin/ls/' + opts.kind + '/' + encodeURIComponent(opts.id) + '/session', { method: 'POST', body: {}, headers: opts.admin.headers() }).then(setSession);
+    var b = {}; if (S.creds.pin) b.pin = S.creds.pin; if (S.creds.name) { b.name = S.creds.name; b.password = S.creds.password; }
+    return api(tokenPath + '/session', { method: 'POST', body: b }).then(setSession);
+  }
+  var sessTimer = null;
+  function armSession() { clearTimeout(sessTimer); var ms = Math.max(15000, S.exp - Date.now() - 300000); sessTimer = setTimeout(function () { newSession().then(function () { armSession(); connect(); }).catch(function () { armSession(); }); }, ms); }
+
+  /* ── toast / modal / menu ────────────────────────────────── */
+  var toastEl = null, toastT = null;
+  function toast(msg, action, fn) {
+    if (toastEl) toastEl.remove(); clearTimeout(toastT);
+    toastEl = h('div', 'ks-toast'); toastEl.setAttribute('role', 'status'); toastEl.appendChild(h('span', '', esc(msg)));
+    if (action) { var b = h('button', '', esc(action)); b.onclick = function () { toastEl.remove(); fn && fn(); }; toastEl.appendChild(b); }
+    root.appendChild(toastEl); toastT = setTimeout(function () { toastEl && toastEl.remove(); }, action ? 7000 : 3200);
+  }
+  function modal(html, wire) {
+    var bk = h('div', 'ks-bk'), md = h('div', 'ks-md', html); bk.appendChild(md); root.appendChild(bk);
+    function close() { bk.remove(); D.removeEventListener('keydown', esc2, true); grid && grid.focus({ preventScroll: true }); }
+    function esc2(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    bk.addEventListener('mousedown', function (e) { if (e.target === bk) close(); }); D.addEventListener('keydown', esc2, true);
+    wire && wire(md, close); var f = md.querySelector('input'); f && setTimeout(function () { f.focus(); }, 30);
+    return close;
+  }
+  var menuEl = null;
+  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+  function menu(x, y, items) {
+    closeMenu(); menuEl = h('div', 'ks-menu'); menuEl.setAttribute('role', 'menu');
+    items.forEach(function (it) {
+      if (it === '-') { menuEl.appendChild(h('hr')); return; }
+      var b = h('button', it.danger ? 'dg' : '', ic(it.icon || 'caret-right', 15) + '<span>' + esc(it.label) + '</span>'); b.disabled = !!it.off;
+      b.onclick = function () { closeMenu(); it.fn && it.fn(); }; menuEl.appendChild(b);
+    });
+    root.appendChild(menuEl); var r = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; menuEl.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  }
+  on(D, 'mousedown', function (e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
+
+  /* ── skeleton DOM ────────────────────────────────────────── */
+  var top = h('div', 'ks-top'), fx = h('div', 'ks-fx'), grid = h('div', 'ks-grid'), foot = h('div', 'ks-foot');
+  grid.tabIndex = 0; grid.setAttribute('role', 'grid'); grid.setAttribute('aria-label', 'Live sheet');
+  var inner = h('div', 'ks-in'), hd = h('div', 'ks-hd'), rowsEl = h('div', 'ks-rows'), selEl = h('div', 'ks-sel'), actEl = h('div', 'ks-act'), ed = h('textarea', 'ks-ed');
+  ed.style.display = 'none'; selEl.style.display = actEl.style.display = 'none'; ed.setAttribute('aria-label', 'Edit cell');
+  inner.appendChild(hd); inner.appendChild(rowsEl); rowsEl.appendChild(selEl); rowsEl.appendChild(actEl); rowsEl.appendChild(ed); grid.appendChild(inner);
+  function skeleton() { root.innerHTML = ''; var s = h('div', 'ks-sk'); for (var i = 0; i < 9; i++) s.appendChild(h('i')); root.appendChild(s); }
+  function centerCard(icon, title, msg, bad, extra) {
+    root.innerHTML = ''; var c = h('div', 'ks-center'), k = h('div', 'ks-card', '<div class="ico' + (bad ? ' bad' : '') + '">' + ic(icon, 22) + '</div><h2>' + esc(title) + '</h2><p>' + esc(msg) + '</p>'); c.appendChild(k); root.appendChild(c); extra && extra(k); return k;
+  }
+
+  /* ── dataset ─────────────────────────────────────────────── */
+  function cols() { return S.data ? S.data.columns : []; }
+  function canEdit() { return !!(S.data && S.data.can_edit); }
+  function colWidth(c) {
+    if (c.width) return c.width;
+    if (c.id === '__ts' || c.id === '__in_at') return 160;
+    if (c.type === 'check') return 118; if (c.type === 'number') return 110; if (c.type === 'email') return 230; if (c.type === 'phone') return 150;
+    var m = c.label ? c.label.length * 7.4 + 54 : 120; return Math.max(130, Math.min(260, Math.round(m)));
+  }
+  function layout() {
+    var x = 0; S.colX = []; S.colW = [];
+    cols().forEach(function (c) { var w = colWidth(c); S.colX.push(x); S.colW.push(w); x += w; });
+    S.totalW = GUT + x + (canEdit() ? ADDW : 0);
+  }
+  function reindex() { S.rowIdx = new Map(); S.data.rows.forEach(function (r, i) { S.rowIdx.set(r.key, i); }); }
+  function rebuildView() {
+    var rows = S.data ? S.data.rows : [], idx = rows.map(function (_, i) { return i; }), q = S.q.trim().toLowerCase(), cs = cols();
+    if (q) idx = idx.filter(function (i) { var v = rows[i].v; for (var k = 0; k < cs.length; k++) { var x = v[cs[k].id]; if (x && String(x).toLowerCase().indexOf(q) > -1) return true; } return false; });
+    if (S.sort) {
+      var id = S.sort.id, dir = S.sort.dir, num = cs.some(function (c) { return c.id === id && c.type === 'number'; });
+      idx.sort(function (a, b) {
+        var x = rows[a].v[id] || '', y = rows[b].v[id] || '', r;
+        if (x === '' && y !== '') return 1; if (y === '' && x !== '') return -1;
+        r = num ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' });
+        return (r || a - b) * dir;
+      });
+    }
+    S.view = idx;
+  }
+  function applyDataset(d, first) {
+    var old = S.data, oldMap = new Map();
+    if (old) old.rows.forEach(function (r) { oldMap.set(r.key, r); });
+    var byKey = new Map(d.rows.map(function (r) { return [r.key, r]; }));
+    S.pending.forEach(function (p) { var r = byKey.get(p.r); if (r) r.v[p.c] = p.v; });
+    if (old && !first) {
+      var n = 0;
+      d.rows.forEach(function (r) {
+        var o = oldMap.get(r.key);
+        if (!o) { S.newRows.set(r.key, Date.now()); return; }
+        if (n > 200) return;
+        for (var k in r.v) if (o.v[k] !== r.v[k] && !S.pending.has(r.key + '|' + k)) { S.flash.set(r.key + '|' + k, Date.now()); n++; }
+      });
+    }
+    S.data = d; S.version = d.version; S.role = d.role; S.name = d.me || S.name;
+    reindex(); layout(); rebuildView();
+    if (S.act && S.act.key != null) { var i = S.view.indexOf(S.rowIdx.get(S.act.key)); if (i < 0) { S.act = null; S.anc = S.foc = null; } else if (i !== S.act.r) { S.act.r = i; S.anc = { r: i, c: S.act.c }; S.foc = { r: i, c: S.act.c }; } }
+    renderAll();
+  }
+  function refresh(force) {
+    if (S.refreshing) { S.again = true; return Promise.resolve(); }
+    S.refreshing = true;
+    return api('/api/ls/x/data' + (!force && S.version ? '?since=' + encodeURIComponent(S.version) : '')).then(function (d) {
+      if (!d.unchanged) applyDataset(d, !S.data);
+    }).catch(function (e) { onApiError(e, true); }).then(function () { S.refreshing = false; if (S.again) { S.again = false; refresh(); } });
+  }
+  function onApiError(e, silent) {
+    if (e.status === 401 && e.d && e.d.reauth) { return newSession().then(function () { armSession(); connect(); return refresh(true); }).catch(function () { if (!admin && opts.token) bootShare(); }); }
+    if (e.status === 404 && e.d && e.d.gone) { stop(); centerCard('warning-circle', 'Link unavailable', e.message, true); return; }
+    if (!silent) toast(e.message);
+    if (e.status === undefined) setStatus('off');
+  }
+  function stop() { S.dead = true; closeSse(); clearTimeout(sessTimer); clearInterval(pollT); }
+
+  /* ── live: SSE with polling fallback ─────────────────────── */
+  var pollT = null;
+  function closeSse() { if (S.es) { try { S.es.close(); } catch (e) {} S.es = null; } S.sseOpen = false; }
+  function connect() {
+    closeSse(); if (S.dead || !S.session || !window.EventSource) return;
+    var es = new EventSource('/api/ls/x/stream?s=' + encodeURIComponent(S.session)); S.es = es;
+    es.onopen = function () { S.sseOpen = true; setStatus(null); };
+    es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } onEvent(ev); };
+    es.onerror = function () { S.sseOpen = false; setStatus('off'); if (es.readyState === 2) { setTimeout(function () { if (!S.dead && S.es === es) newSession().then(function () { armSession(); connect(); }).catch(function () {}); }, 4000); } };
+  }
+  function onEvent(ev) {
+    if (ev.t === 'hello') { setStatus(null); refresh(); }
+    else if (ev.t === 'presence') { S.people = ev.people || []; S.n = ev.n || 0; renderTop(); }
+    else if (ev.t === 'changed') { if (ev.cid !== cid) refresh(); }
+    else if (ev.t === 'cells') {
+      if (ev.cid === cid || !S.data) return;
+      ev.cells.forEach(function (c) { var i = S.rowIdx.get(c.r); if (i == null || S.pending.has(c.r + '|' + c.c)) return; S.data.rows[i].v[c.c] = c.v; S.flash.set(c.r + '|' + c.c, Date.now()); });
+      S.version = ''; if (S.q || S.sort) rebuildView(); paintRows(true); updateFx();
+    } else if (ev.t === 'expired') { newSession().then(function () { armSession(); connect(); }).catch(function () {}); }
+  }
+  pollT = setInterval(function () { if (!S.dead && S.data && !S.sseOpen && !D.hidden) refresh(); }, 7000);
+  on(D, 'visibilitychange', function () { if (!D.hidden && S.data && !S.dead) refresh(); });
+  on(window, 'online', function () { if (S.session) { connect(); refresh(); flush(); } }); on(window, 'offline', function () { setStatus('off'); });
+
+  /* ── status chip ─────────────────────────────────────────── */
+  var statusT = null;
+  function setStatus(s) { if (s === 'saved') { S.status = 'saved'; clearTimeout(statusT); statusT = setTimeout(function () { S.status = null; renderTop(); }, 1400); } else S.status = s; renderTop(); }
+  function chip() {
+    var saving = S.pending.size || S.flushing, s = saving ? 'saving' : (S.status === 'off' || navigator.onLine === false ? 'off' : 'live');
+    var label = { live: 'Live', saving: 'Saving', off: 'Reconnecting' }[s];
+    if (s === 'live' && S.status === 'saved') label = 'Saved';
+    return '<span class="ks-chip" data-s="' + s + '" aria-live="polite"><i class="d"></i>' + label + '</span>';
+  }
+
+  /* ── toolbar ─────────────────────────────────────────────── */
+  function renderTop() {
+    if (!S.data) return; var d = S.data, ce = canEdit(), pe = (S.people || []).slice(0, 4), more = Math.max(0, (S.n || 0) - pe.length);
+    var av = pe.map(function (p) { return '<b title="' + esc(p) + '" style="background:oklch(.78 .12 ' + hue(p) + ')">' + esc(initials(p)) + '</b>'; }).join('') + (more ? '<b class="more" title="' + (S.n) + ' viewing">+' + more + '</b>' : '');
+    var ae = D.activeElement, keep = ae && ae.matches && ae.matches('.ks-search input') ? [ae.selectionStart, ae.selectionEnd] : null;
+    top.innerHTML =
+      '<div class="ks-brand"><div class="ks-mark">KFS</div><div style="min-width:0"><div class="ks-ttl">' + esc(d.title) + '</div><div class="ks-sub">' + (ce ? 'Editing' + (S.name ? ' as ' + esc(S.name) : '') : 'View only') + ' · ' + d.rows.length + ' rows</div></div></div>' +
+      chip() + '<div class="ks-sp"></div>' +
+      '<label class="ks-search">' + ic('magnifying-glass', 15) + '<input type="search" placeholder="Search sheet" value="' + esc(S.q) + '" aria-label="Search sheet"></label>' +
+      '<div class="ks-av" aria-label="People here">' + av + '</div>' +
+      '<div class="ks-grp">' +
+      (ce ? '<button class="ks-btn ic" data-a="undo" title="Undo (Ctrl+Z)" aria-label="Undo"' + (S.undo.length ? '' : ' disabled') + '>' + ic('arrow-counter-clockwise') + '</button><button class="ks-btn ic" data-a="redo" title="Redo (Ctrl+Y)" aria-label="Redo"' + (S.redo.length ? '' : ' disabled') + '>' + ic('arrow-clockwise') + '</button>' : '') +
+      (d.allow_download ? '<button class="ks-btn" data-a="export" title="Download Excel">' + ic('file-xls') + '<span class="tx">Excel</span></button>' : '') +
+      (admin ? '<button class="ks-btn" data-a="access">' + ic('users') + '<span class="tx">Access</span></button>' + (opts.onShare ? '<button class="ks-btn" data-a="share">' + ic('link') + '<span class="tx">Share link</span></button>' : '') : (!ce && d.editing_ready ? '<button class="ks-btn pri" data-a="login">' + ic('lock-key-open') + '<span class="tx">Unlock editing</span></button>' : (ce ? '<button class="ks-btn" data-a="logout" title="Back to view only">' + ic('sign-out') + '<span class="tx">Lock</span></button>' : ''))) +
+      (opts.light === undefined ? '<button class="ks-btn ic" data-a="theme" aria-label="Toggle theme">' + ic(root.getAttribute('data-theme') === 'light' ? 'moon' : 'sun') + '</button>' : '') + '</div>';
+    var si = top.querySelector('input'); si.oninput = function () { S.q = si.value; rebuildView(); setSel(null); renderAll(); };
+    if (keep) { si.focus(); try { si.setSelectionRange(keep[0], keep[1]); } catch (x) {} }
+    var bn = root.querySelector('.ks-banner'); if (bn) bn.remove();
+    if (admin && !d.editing_ready) { var b = h('div', 'ks-banner', ic('warning-circle', 16) + '<span>Editing is not enabled yet. Run live-sheets.sql once in Supabase, then reload.</span>'); root.insertBefore(b, fx); }
+  }
+  top.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-a]'); if (!b) return; var a = b.getAttribute('data-a');
+    if (a === 'undo') undo(); else if (a === 'redo') redo(); else if (a === 'export') exportXlsx(); else if (a === 'access') accessModal();
+    else if (a === 'share') opts.onShare(); else if (a === 'login') loginModal(); else if (a === 'logout') { S.creds.name = S.creds.password = null; newSession().then(function () { armSession(); connect(); refresh(true); toast('Back to view only'); }); }
+    else if (a === 'theme') { var t = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light'; root.setAttribute('data-theme', t); try { localStorage.setItem('ks-theme', t); } catch (x) {} renderTop(); }
+  });
+
+  /* ── grid render ─────────────────────────────────────────── */
+  var rendered = new Map(), lastRange = [-1, -1];
+  function cellHtml(c, v) {
+    if (c.type === 'check') return v ? '<span class="ks-pill">' + ic('check', 13) + 'Present</span>' : '<span class="ks-dash">&mdash;</span>';
+    if (c.type === 'time') return v ? '<span>' + esc(fmtTime(v)) + '</span>' : '';
+    return v ? '<span>' + esc(v) + '</span>' : '';
+  }
+  function rowEl(vi) {
+    var row = S.data.rows[S.view[vi]], cs = cols(), el = h('div', 'ks-r'), now = Date.now();
+    if (S.newRows.has(row.key) && now - S.newRows.get(row.key) < 2400) el.classList.add('nw');
+    el.style.cssText = 'top:' + vi * RH + 'px;height:' + RH + 'px;width:' + S.totalW + 'px';
+    var html = '<div class="ks-g" style="width:' + GUT + 'px;height:' + RH + 'px">' + row.n + '</div>';
+    for (var i = 0; i < cs.length; i++) {
+      var c = cs[i], v = row.v[c.id] || '', k = row.key + '|' + c.id, cl = 'ks-c' + (c.ro || !canEdit() ? ' ro' : '') + (c.type === 'number' ? ' num' : '');
+      if (S.flash.has(k) && now - S.flash.get(k) < 1700) cl += ' fl';
+      html += '<div class="' + cl + '" data-c="' + i + '" style="left:' + (GUT + S.colX[i]) + 'px;width:' + S.colW[i] + 'px;height:' + RH + 'px">' + cellHtml(c, v) + '</div>';
+    }
+    el.innerHTML = html; return el;
+  }
+  function paintRows(force) {
+    if (!S.data) return;
+    var st = grid.scrollTop, vh = grid.clientHeight, a = Math.max(0, Math.floor(st / RH) - 6), b = Math.min(S.view.length - 1, Math.ceil((st + vh) / RH) + 6);
+    if (S.flash.size > 600) { var nw = Date.now(); S.flash.forEach(function (t, k) { if (nw - t > 1800) S.flash.delete(k); }); S.newRows.forEach(function (t, k) { if (nw - t > 2500) S.newRows.delete(k); }); }
+    if (force) { rendered.forEach(function (el) { el.remove(); }); rendered.clear(); }
+    rendered.forEach(function (el, vi) { if (vi < a || vi > b) { el.remove(); rendered.delete(vi); } });
+    for (var i = a; i <= b; i++) if (!rendered.has(i)) { var el = rowEl(i); rowsEl.insertBefore(el, selEl); rendered.set(i, el); }
+    lastRange = [a, b]; paintSel();
+  }
+  function renderHead() {
+    var cs = cols(), html = '<div class="ks-corner" style="width:' + GUT + 'px;height:' + HH + 'px">' + ic('hash', 14) + '</div>';
+    cs.forEach(function (c, i) {
+      var sorted = S.sort && S.sort.id === c.id;
+      html += '<div class="ks-hc' + (c.hidden ? ' hid' : '') + (S.act && S.act.c === i ? ' on' : '') + '" data-c="' + i + '" style="left:' + (GUT + S.colX[i]) + 'px;width:' + S.colW[i] + 'px;height:' + HH + 'px" title="' + esc(c.label) + '">' +
+        (c.ro ? ic('lock-simple', 13) : '') + (c.hidden ? ic('eye-slash', 13) : '') + '<span class="lb">' + esc(c.label) + '</span>' + (sorted ? ic(S.sort.dir > 0 ? 'sort-ascending' : 'sort-descending', 14) : '') +
+        '<button class="mn" data-m="' + i + '" aria-label="Column menu">' + ic('caret-down', 13) + '</button><i class="rz" data-rz="' + i + '"></i></div>';
+    });
+    if (canEdit()) html += '<button class="ks-add" data-add="1" aria-label="Add column" title="Add column" style="left:' + (GUT + (S.colX.length ? S.colX[S.colX.length - 1] + S.colW[S.colW.length - 1] : 0)) + 'px;width:' + ADDW + 'px;height:' + HH + 'px">' + ic('plus', 15) + '</button>';
+    hd.style.cssText = 'width:' + S.totalW + 'px;height:' + HH + 'px'; hd.innerHTML = html;
+  }
+  function renderFoot() {
+    if (!S.data || (D.activeElement && foot.contains(D.activeElement))) return;
+    var sel = selStats(), n = S.view.length, tot = S.data.rows.length;
+    foot.innerHTML = (canEdit() ? '<button class="ks-btn" data-f="add">' + ic('plus', 14) + 'Add rows</button><input type="number" min="1" max="100" value="' + (foot._n || 1) + '" aria-label="Number of rows"><span class="ks-sp"></span>' : '<span class="ks-sp"></span>') +
+      (sel ? '<span>' + sel + '</span>' : '') + '<span><b>' + n + '</b>' + (n !== tot ? ' of ' + tot : '') + ' rows</span>';
+  }
+  foot.addEventListener('click', function (e) { if (e.target.closest('[data-f=add]')) { var i = foot.querySelector('input'); foot._n = i.value; addRows(Math.max(1, Math.min(100, parseInt(i.value, 10) || 1))); } });
+  function renderAll() {
+    if (!S.data) return;
+    inner.style.cssText = 'width:' + S.totalW + 'px;height:' + (HH + S.view.length * RH + 24) + 'px';
+    rowsEl.style.cssText = 'top:' + HH + 'px;width:' + S.totalW + 'px;height:' + S.view.length * RH + 'px';
+    renderTop(); renderHead(); paintRows(true); renderFoot(); updateFx();
+    var em = inner.querySelector('.ks-empty'); if (em) em.remove();
+    if (!S.view.length) inner.appendChild(h('div', 'ks-empty', '<div class="t">' + (S.q ? 'No matching rows' : 'No responses yet') + '</div><div>' + (S.q ? 'Try a different search.' : 'New form submissions appear here instantly.') + '</div>'));
+  }
+  var raf = 0; grid.addEventListener('scroll', function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; paintRows(); closeMenu(); }); });
+  /* ── selection ───────────────────────────────────────────── */
+  function rowObj(vi) { return S.data.rows[S.view[vi]]; }
+  function setSel(a, f, keepAnchor) {
+    if (!a) { S.act = S.anc = S.foc = null; paintSel(); updateFx(); renderHeadOn(); renderFoot(); return; }
+    var r = Math.max(0, Math.min(S.view.length - 1, a.r)), c = Math.max(0, Math.min(cols().length - 1, a.c));
+    if (!S.view.length || !cols().length) return setSel(null);
+    S.act = { r: r, c: c, key: rowObj(r).key }; if (!keepAnchor) S.anc = { r: r, c: c };
+    S.foc = f ? { r: Math.max(0, Math.min(S.view.length - 1, f.r)), c: Math.max(0, Math.min(cols().length - 1, f.c)) } : { r: r, c: c };
+    paintSel(); updateFx(); renderHeadOn(); renderFoot(); scrollTo(S.foc.r, S.foc.c);
+  }
+  function renderHeadOn() { hd.querySelectorAll('.ks-hc').forEach(function (e, i) { var lo = Math.min(S.anc ? S.anc.c : -1, S.foc ? S.foc.c : -1), hi = Math.max(S.anc ? S.anc.c : -1, S.foc ? S.foc.c : -1); e.classList.toggle('on', !!S.act && i >= lo && i <= hi); }); rendered.forEach(function (el, vi) { var g = el.firstChild, lo = S.anc ? Math.min(S.anc.r, S.foc.r) : -1, hi = S.anc ? Math.max(S.anc.r, S.foc.r) : -2; g.classList.toggle('on', vi >= lo && vi <= hi); }); }
+  function range() { if (!S.anc || !S.foc) return null; return { r0: Math.min(S.anc.r, S.foc.r), r1: Math.max(S.anc.r, S.foc.r), c0: Math.min(S.anc.c, S.foc.c), c1: Math.max(S.anc.c, S.foc.c) }; }
+  function box(el, r0, c0, r1, c1) { el.style.display = 'block'; el.style.left = GUT + S.colX[c0] + 'px'; el.style.top = r0 * RH + 'px'; el.style.width = (S.colX[c1] + S.colW[c1] - S.colX[c0]) + 'px'; el.style.height = (r1 - r0 + 1) * RH + 'px'; }
+  function paintSel() {
+    var g = range(); if (!g || !S.act || !S.data) { selEl.style.display = actEl.style.display = 'none'; return; }
+    var multi = g.r0 !== g.r1 || g.c0 !== g.c1; if (multi) box(selEl, g.r0, g.c0, g.r1, g.c1); else selEl.style.display = 'none';
+    box(actEl, S.act.r, S.act.c, S.act.r, S.act.c); renderHeadOn();
+  }
+  function scrollTo(r, c) {
+    var top0 = r * RH, bot = top0 + RH, sT = grid.scrollTop, vh = grid.clientHeight - HH;
+    if (top0 < sT) grid.scrollTop = top0; else if (bot > sT + vh) grid.scrollTop = bot - vh;
+    var l = GUT + S.colX[c], rr = l + S.colW[c], sL = grid.scrollLeft, vw = grid.clientWidth;
+    if (l - GUT < sL) grid.scrollLeft = Math.max(0, l - GUT); else if (rr > sL + vw) grid.scrollLeft = rr - vw + 8;
+  }
+  function selStats() {
+    var g = range(); if (!g || !S.data || (g.r0 === g.r1 && g.c0 === g.c1)) return ''; var n = 0, sum = 0, nums = 0;
+    for (var r = g.r0; r <= g.r1; r++) for (var c = g.c0; c <= g.c1; c++) { var v = rowObj(r).v[cols()[c].id]; if (v !== '' && v != null) { n++; if (v !== '' && isFinite(+v)) { sum += +v; nums++; } } }
+    return 'Count <b>' + n + '</b>' + (nums ? ' &nbsp; Sum <b>' + (Math.round(sum * 100) / 100) + '</b>' : '');
+  }
+  function updateFx() {
+    if (!S.data) return; var el = fx.querySelector('.vl');
+    if (!S.act || !S.view.length) { fx.innerHTML = '<div class="nm">No cell selected</div><div class="vl e">Select a cell to see its full value</div>'; return; }
+    var c = cols()[S.act.c], r = rowObj(S.act.r); if (!c || !r) return; var v = r.v[c.id] || '';
+    fx.innerHTML = '<div class="nm">' + esc(c.label) + ' &middot; row ' + r.n + '</div><div class="vl' + (v ? '' : ' e') + '">' + (v ? esc(c.type === 'time' ? fmtTime(v) : v) : 'Empty') + '</div>';
+  }
+
+  /* ── pointer ─────────────────────────────────────────────── */
+  function hit(e) {
+    var rc = rowsEl.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top, r = Math.floor(y / RH), c = -1;
+    for (var i = 0; i < S.colX.length; i++) if (x - GUT >= S.colX[i] && x - GUT < S.colX[i] + S.colW[i]) { c = i; break; }
+    if (c === -1 && x - GUT >= (S.colX.length ? S.colX[S.colX.length - 1] + S.colW[S.colW.length - 1] : 0)) c = -2;
+    return { r: Math.max(0, Math.min(S.view.length - 1, r)), c: c, gut: !!(e.target && e.target.closest && e.target.closest('.ks-g')) };
+  }
+  grid.addEventListener('mousedown', function (e) {
+    if (e.button !== 0 || !S.data) return; closeMenu();
+    var rz = e.target.closest('[data-rz]'); if (rz) return startResize(e, +rz.getAttribute('data-rz'));
+    if (e.target.closest('[data-m]')) { var i = +e.target.closest('[data-m]').getAttribute('data-m'), r = e.target.closest('[data-m]').getBoundingClientRect(); e.preventDefault(); return colMenu(i, r.left, r.bottom + 4); }
+    if (e.target.closest('[data-add]')) { e.preventDefault(); return addColumn(); }
+    if (e.target === ed) return;
+    var hc = e.target.closest('.ks-hc'); if (hc) { var ci = +hc.getAttribute('data-c'); if (!S.view.length) return; e.preventDefault(); grid.focus(); if (e.shiftKey && S.anc) setSel(S.act, { r: S.view.length - 1, c: ci }, true); else { setSel({ r: 0, c: ci }); S.anc = { r: 0, c: ci }; S.foc = { r: S.view.length - 1, c: ci }; paintSel(); } return; }
+    if (!e.target.closest('.ks-rows') || !S.view.length) return;
+    var p = hit(e); if (p.c === -2) return; commitEdit(true); e.preventDefault(); grid.focus({ preventScroll: true });
+    if (p.gut) { if (e.shiftKey && S.anc) setSel(S.act, { r: p.r, c: cols().length - 1 }, true); else { setSel({ r: p.r, c: 0 }); S.foc = { r: p.r, c: cols().length - 1 }; paintSel(); } S.drag = 'row'; }
+    else if (e.shiftKey && S.anc) { setSel(S.act, { r: p.r, c: p.c }, true); S.drag = 'cell'; } else { setSel({ r: p.r, c: p.c }); S.drag = 'cell'; }
+  });
+  on(window, 'mousemove', function (e) {
+    if (!S.drag || !S.anc) return; var p = hit(e); var c = S.drag === 'row' ? cols().length - 1 : (p.c < 0 ? S.foc.c : p.c);
+    if (S.foc.r !== p.r || S.foc.c !== c) { S.foc = { r: p.r, c: c }; paintSel(); renderFoot(); }
+    var rc = grid.getBoundingClientRect(); if (e.clientY > rc.bottom - 24) grid.scrollTop += 22; else if (e.clientY < rc.top + HH + 24) grid.scrollTop -= 22; if (e.clientX > rc.right - 24) grid.scrollLeft += 22; else if (e.clientX < rc.left + GUT + 24) grid.scrollLeft -= 22;
+  });
+  on(window, 'mouseup', function () { S.drag = null; });
+  grid.addEventListener('dblclick', function (e) { if (e.target.closest('.ks-rows') && !hit(e).gut && S.act) startEdit(); });
+  grid.addEventListener('contextmenu', function (e) {
+    if (!S.data) return; var hc = e.target.closest('.ks-hc'); if (hc) { e.preventDefault(); return colMenu(+hc.getAttribute('data-c'), e.clientX, e.clientY); }
+    if (!e.target.closest('.ks-rows') || !S.view.length) return; e.preventDefault(); var p = hit(e), g = range();
+    if (!g || p.r < g.r0 || p.r > g.r1) { if (p.gut) { setSel({ r: p.r, c: 0 }); S.foc = { r: p.r, c: cols().length - 1 }; paintSel(); } else setSel({ r: p.r, c: Math.max(0, p.c) }); g = range(); }
+    var n = g.r1 - g.r0 + 1, ce = canEdit();
+    menu(e.clientX, e.clientY, [{ label: 'Copy', icon: 'copy', fn: function () { doCopy(); } }, { label: 'Paste', icon: 'clipboard', off: !ce, fn: function () { if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(doPaste).catch(function () { toast('Press Ctrl+V to paste'); }); else toast('Press Ctrl+V to paste'); } }, { label: 'Clear cells', icon: 'x', off: !ce, fn: clearSel }, '-', { label: 'Delete ' + n + ' row' + (n > 1 ? 's' : ''), icon: 'trash', danger: true, off: !ce, fn: deleteRows }]);
+  });
+  function startResize(e, i) {
+    e.preventDefault(); e.stopPropagation(); var x0 = e.clientX, w0 = S.colW[i], handle = e.target; handle.classList.add('on');
+    function mv(ev) { var w = Math.max(60, Math.min(700, w0 + ev.clientX - x0)); cols()[i].width = w; layout(); renderHead(); inner.style.width = S.totalW + 'px'; rowsEl.style.width = S.totalW + 'px'; paintRows(true); }
+    function up() { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); var c = cols()[i]; if (canEdit() && c.id.indexOf('__') !== 0) api('/api/ls/x/cols/update', { method: 'POST', body: { id: c.id, width: c.width } }).catch(function () {}); }
+    addEventListener('mousemove', mv); addEventListener('mouseup', up);
+  }
+
+  /* ── columns ─────────────────────────────────────────────── */
+  function colMenu(i, x, y) {
+    var c = cols()[i], ce = canEdit(), sys = c.id.indexOf('__') === 0;
+    menu(x, y, [
+      { label: 'Sort A to Z', icon: 'sort-ascending', fn: function () { S.sort = { id: c.id, dir: 1 }; rebuildView(); renderAll(); } },
+      { label: 'Sort Z to A', icon: 'sort-descending', fn: function () { S.sort = { id: c.id, dir: -1 }; rebuildView(); renderAll(); } },
+      { label: 'Clear sort', icon: 'arrows-clockwise', off: !S.sort, fn: function () { S.sort = null; rebuildView(); renderAll(); } }, '-',
+      { label: 'Rename column', icon: 'pencil-simple', off: !ce || sys, fn: function () { renameCol(i); } },
+      { label: c.hidden ? 'Unhide column' : 'Hide from viewers', icon: c.hidden ? 'eye' : 'eye-slash', off: !ce || sys, fn: function () { colCall('update', { id: c.id, hidden: !c.hidden }); } },
+      { label: 'Delete column', icon: 'trash', danger: true, off: !ce || !c.custom, fn: function () { if (confirm('Delete column "' + c.label + '" and all its values?')) colCall('delete', { id: c.id }); } }
+    ]);
+  }
+  function colCall(a, body) { return api('/api/ls/x/cols/' + a, { method: 'POST', body: body }).then(function (r) { return refresh(true).then(function () { return r; }); }).catch(function (e) { onApiError(e); }); }
+  function addColumn() { colCall('add', { label: 'Column ' + (cols().filter(function (c) { return c.custom; }).length + 1), type: 'text' }).then(function (r) { if (!r || !r.id) return; var i = cols().findIndex(function (c) { return c.id === r.id; }); if (i > -1) { grid.scrollLeft = grid.scrollWidth; renameCol(i); } }); }
+  function renameCol(i) {
+    var c = cols()[i], el = hd.querySelector('.ks-hc[data-c="' + i + '"]'); if (!el) return;
+    var inp = h('input'); inp.value = c.label; inp.maxLength = 60; inp.style.cssText = 'position:absolute;inset:4px;width:calc(100% - 8px);border-radius:6px;border:2px solid var(--acc);background:var(--pn);color:var(--ink);font:inherit;font-weight:600;padding:0 8px;outline:none;z-index:3';
+    el.appendChild(inp); inp.focus(); inp.select(); var done = false;
+    function fin(ok) { if (done) return; done = true; var v = inp.value.trim(); inp.remove(); if (ok && v && v !== c.label) colCall('update', { id: c.id, label: v }); grid.focus(); }
+    inp.onkeydown = function (e) { e.stopPropagation(); if (e.key === 'Enter') fin(true); else if (e.key === 'Escape') fin(false); }; inp.onblur = function () { fin(true); }; inp.onmousedown = function (e) { e.stopPropagation(); };
+  }
+
+  /* ── editing ─────────────────────────────────────────────── */
+  function guard() { if (canEdit()) return true; var now = Date.now(); if (now - S.hintAt > 6000) { S.hintAt = now; if (S.data && S.data.editing_ready && !admin) toast('View only. Unlock editing to make changes.', 'Unlock', loginModal); else toast('View only'); } return false; }
+  function editable(vi, ci) { var c = cols()[ci]; return !!(c && !c.ro && canEdit()); }
+  function startEdit(init) {
+    if (!S.act) return; if (!canEdit()) { guard(); return; }
+    var c = cols()[S.act.c]; if (c.ro) { toast(c.masked ? 'Hidden for privacy' : '"' + c.label + '" is filled automatically'); return; }
+    var r = rowObj(S.act.r), v = r.v[c.id] || ''; S.editing = { r: S.act.r, c: S.act.c, orig: v, key: r.key };
+    ed.style.display = 'block'; ed.style.left = GUT + S.colX[S.act.c] + 'px'; ed.style.top = S.act.r * RH + 'px'; ed.style.width = Math.max(S.colW[S.act.c], 180) + 'px'; ed.style.height = RH + 'px';
+    ed.value = init != null ? init : v; if (c.options && c.options.length && c.options.length < 60) { var dl = rowsEl.querySelector('datalist') || rowsEl.appendChild(h('datalist')); dl.id = 'ks-dl-' + cid; dl.innerHTML = c.options.map(function (o) { return '<option value="' + esc(o) + '">'; }).join(''); ed.setAttribute('list', dl.id); } else ed.removeAttribute('list');
+    ed.focus(); if (init == null) ed.select(); else ed.setSelectionRange(ed.value.length, ed.value.length); autosize();
+  }
+  function autosize() { var n = Math.min(5, ed.value.split('\n').length); ed.style.height = Math.max(RH, n * 18 + 14) + 'px'; }
+  ed.addEventListener('input', autosize);
+  ed.addEventListener('keydown', function (e) {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.altKey) { e.preventDefault(); commitEdit(true, e.shiftKey ? -1 : 1, 0); }
+    else if (e.key === 'Enter' && e.altKey) { var s = ed.selectionStart; ed.value = ed.value.slice(0, s) + '\n' + ed.value.slice(ed.selectionEnd); ed.setSelectionRange(s + 1, s + 1); autosize(); }
+    else if (e.key === 'Tab') { e.preventDefault(); commitEdit(true, 0, e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); commitEdit(false); }
+  });
+  ed.addEventListener('blur', function () { commitEdit(true); });
+  function commitEdit(save, dr, dc) {
+    if (!S.editing) return; var e0 = S.editing; S.editing = null; ed.style.display = 'none';
+    var val = ed.value; if (save && val !== e0.orig) { var r = S.data.rows[S.rowIdx.get(e0.key)]; if (r) setCells([{ row: r, col: cols()[e0.c].id, v: val }]); }
+    grid.focus({ preventScroll: true }); if (dr || dc) setSel({ r: S.act.r + (dr || 0), c: S.act.c + (dc || 0) }); else paintRows(true);
+  }
+  function setCells(list, noUndo) {
+    var ch = [], undo = [];
+    list.forEach(function (x) { var c = cols().find(function (k) { return k.id === x.col; }); if (!c || c.ro || !x.row) return; var old = x.row.v[x.col] || '', nv = String(x.v == null ? '' : x.v).slice(0, 2000); if (old === nv) return; undo.push({ key: x.row.key, col: x.col, o: old, n: nv }); x.row.v[x.col] = nv; S.pending.set(x.row.key + '|' + x.col, { r: x.row.key, c: x.col, v: nv }); ch.push(x); });
+    if (!ch.length) return; if (!noUndo) { S.undo.push(undo); if (S.undo.length > 100) S.undo.shift(); S.redo = []; }
+    if (S.q || S.sort) rebuildView(); paintRows(true); updateFx(); renderTop(); schedule();
+  }
+  var flushT = null, backoff = 0;
+  function schedule() { clearTimeout(flushT); flushT = setTimeout(flush, 280); }
+  function flush() {
+    if (S.flushing || !S.pending.size || !S.session) return; S.flushing = true; var batch = []; S.pending.forEach(function (p) { if (batch.length < 300) batch.push(p); }); renderTop();
+    api('/api/ls/x/cells', { method: 'POST', body: { cells: batch.map(function (p) { return { r: p.r, c: p.c, v: p.v }; }) } }).then(function (res) {
+      batch.forEach(function (p) { var k = p.r + '|' + p.c, cur = S.pending.get(k); if (cur && cur.v === p.v) S.pending.delete(k); }); backoff = 0; S.flushing = false;
+      if (res.rejected && res.rejected.length) { toast('Some cells could not be saved'); refresh(true); }
+      setStatus('saved'); if (S.pending.size) schedule();
+    }).catch(function (e) {
+      S.flushing = false;
+      if (e.status === 401 && e.d && e.d.reauth) { newSession().then(function () { armSession(); connect(); flush(); }).catch(function () { toast('Session expired. Reload the page.'); }); return; }
+      if (e.status && e.status < 500 && e.status !== 429) { batch.forEach(function (p) { S.pending.delete(p.r + '|' + p.c); }); toast(e.message); refresh(true); setStatus(null); return; }
+      setStatus('off'); backoff = Math.min(15000, (backoff || 1000) * 2); setTimeout(flush, backoff);
+    });
+  }
+  on(window, 'beforeunload', function (e) { if (S.pending.size) { e.preventDefault(); e.returnValue = ''; } });
+
+  function undo() { var b = S.undo.pop(); if (!b) return; var redo = []; var l = b.map(function (x) { var r = S.data.rows[S.rowIdx.get(x.key)]; redo.push(x); return { row: r, col: x.col, v: x.o }; }); setCells(l, true); S.redo.push(redo); renderTop(); }
+  function redo() { var b = S.redo.pop(); if (!b) return; var l = b.map(function (x) { return { row: S.data.rows[S.rowIdx.get(x.key)], col: x.col, v: x.n }; }); setCells(l, true); S.undo.push(b); renderTop(); }
+
+  /* ── clipboard ───────────────────────────────────────────── */
+  function selText() { var g = range(); if (!g) return ''; var out = []; for (var r = g.r0; r <= g.r1; r++) { var line = []; for (var c = g.c0; c <= g.c1; c++) { var col = cols()[c], v = rowObj(r).v[col.id] || ''; line.push(col.type === 'time' ? fmtTime(v) : v); } out.push(line); } return toTSV(out); }
+  function doCopy() { var t = selText(); if (!t) return; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { toast('Copied'); }).catch(function () {}); }
+  grid.addEventListener('copy', function (e) { var t = selText(); if (!t) return; e.clipboardData.setData('text/plain', t); e.preventDefault(); });
+  grid.addEventListener('cut', function (e) { var t = selText(); if (!t) return; e.clipboardData.setData('text/plain', t); e.preventDefault(); if (guard()) clearSel(); });
+  grid.addEventListener('paste', function (e) { if (S.editing) return; e.preventDefault(); doPaste((e.clipboardData || window.clipboardData).getData('text')); });
+  function doPaste(text) {
+    if (!S.act || !guard() || !text) return; var data = parseTSV(text); if (data.length === 1 && data[0].length === 1 && data[0][0] === '') return;
+    var g = range(), r0 = g.r0, c0 = g.c0, need = r0 + data.length - S.view.length;
+    function apply() {
+      var l = []; for (var i = 0; i < data.length; i++) { if (r0 + i >= S.view.length) break; for (var j = 0; j < data[i].length; j++) { var ci = c0 + j; if (ci >= cols().length) break; if (editable(r0 + i, ci)) l.push({ row: rowObj(r0 + i), col: cols()[ci].id, v: data[i][j] }); } }
+      setCells(l); setSel({ r: r0, c: c0 }, { r: Math.min(S.view.length - 1, r0 + data.length - 1), c: Math.min(cols().length - 1, c0 + (data[0] || []).length - 1) }); toast('Pasted ' + l.length + ' cell' + (l.length === 1 ? '' : 's'));
+    }
+    if (need > 0 && !S.q && !S.sort) addRows(Math.min(100, need), apply); else apply();
+  }
+  function clearSel() { var g = range(); if (!g || !guard()) return; var l = []; for (var r = g.r0; r <= g.r1; r++) for (var c = g.c0; c <= g.c1; c++) if (editable(r, c)) l.push({ row: rowObj(r), col: cols()[c].id, v: '' }); setCells(l); }
+
+  /* ── rows ────────────────────────────────────────────────── */
+  function addRows(n, cb) {
+    if (!guard()) return; api('/api/ls/x/rows/add', { method: 'POST', body: { count: n } }).then(function () { return refresh(true); }).then(function () { if (!cb) { setSel({ r: S.view.length - n, c: Math.max(0, S.act ? S.act.c : 0) }); grid.focus(); toast(n + ' row' + (n > 1 ? 's' : '') + ' added'); } cb && cb(); }).catch(function (e) { onApiError(e); });
+  }
+  function deleteRows() {
+    var g = range(); if (!g || !guard()) return; var keys = []; for (var r = g.r0; r <= g.r1; r++) keys.push(rowObj(r).key);
+    api('/api/ls/x/rows/delete', { method: 'POST', body: { keys: keys } }).then(function () { return refresh(true); }).then(function () { setSel(null); toast(keys.length + ' row' + (keys.length > 1 ? 's' : '') + ' deleted', 'Undo', function () { api('/api/ls/x/rows/restore', { method: 'POST', body: { keys: keys } }).then(function () { refresh(true); }).catch(onApiError); }); }).catch(function (e) { onApiError(e); });
+  }
+
+  /* ── keyboard ────────────────────────────────────────────── */
+  grid.addEventListener('keydown', function (e) {
+    if (!S.data || S.editing) return; var m = e.ctrlKey || e.metaKey, k = e.key, a = S.act;
+    if (m && (k === 'z' || k === 'Z')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; } if (m && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
+    if (m && (k === 'a' || k === 'A')) { e.preventDefault(); if (S.view.length) { setSel({ r: 0, c: 0 }, { r: S.view.length - 1, c: cols().length - 1 }); } return; }
+    if (m && (k === 'c' || k === 'x' || k === 'v' || k === 'C' || k === 'X' || k === 'V')) return;
+    if (!a) { if (S.view.length && /^Arrow|Tab|Enter/.test(k)) { e.preventDefault(); setSel({ r: 0, c: 0 }); } return; }
+    var f = S.foc || a, mv = null, ext = e.shiftKey, last = S.view.length - 1, lc = cols().length - 1, rowsPg = Math.max(1, Math.floor(grid.clientHeight / RH) - 2);
+    if (k === 'ArrowDown') mv = { r: m ? last : f.r + 1, c: f.c }; else if (k === 'ArrowUp') mv = { r: m ? 0 : f.r - 1, c: f.c }; else if (k === 'ArrowRight') mv = { r: f.r, c: m ? lc : f.c + 1 }; else if (k === 'ArrowLeft') mv = { r: f.r, c: m ? 0 : f.c - 1 };
+    else if (k === 'PageDown') mv = { r: f.r + rowsPg, c: f.c }; else if (k === 'PageUp') mv = { r: f.r - rowsPg, c: f.c }; else if (k === 'Home') mv = { r: m ? 0 : f.r, c: 0 }; else if (k === 'End') mv = { r: m ? last : f.r, c: lc };
+    else if (k === 'Tab') { e.preventDefault(); var nc = a.c + (e.shiftKey ? -1 : 1), nr = a.r; if (nc > lc) { nc = 0; nr++; } if (nc < 0) { nc = lc; nr--; } setSel({ r: nr, c: nc }); return; }
+    if (mv) { e.preventDefault(); if (ext) setSel(S.act, mv, true); else setSel(mv); return; }
+    if (k === 'Enter' || k === 'F2') { e.preventDefault(); startEdit(); return; }
+    if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); clearSel(); return; }
+    if (k === 'Escape') { setSel(a); return; }
+    if (k.length === 1 && !m && !e.altKey) { e.preventDefault(); if (guard()) startEdit(k); }
+  });
+
+  /* ── export / access / login ─────────────────────────────── */
+  function exportXlsx() {
+    fetch('/api/ls/x/export', { headers: { 'x-ls-session': S.session }, cache: 'no-store' }).then(function (r) { if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Export failed'); }); return r.blob(); }).then(function (b) {
+      var a = D.createElement('a'), u = URL.createObjectURL(b); a.href = u; a.download = 'kfs-' + String(S.data.title || 'sheet').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50) + '.xlsx'; D.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+    }).catch(function (e) { toast(e.message); });
+  }
+  function loginModal() {
+    modal('<h3>' + ic('lock-key-open', 20) + 'Unlock editing</h3><p>Use the name and password the admin gave you. Everyone else with the link can still view the sheet live.</p>' +
+      '<label class="ks-fld"><span>Your name</span><input id="ks-ln" autocomplete="username" maxlength="60"></label><label class="ks-fld"><span>Password</span><input id="ks-lp" type="password" autocomplete="current-password"></label><div class="ks-err" id="ks-le"></div>' +
+      '<div class="ks-act2"><button class="ks-btn" data-x="1">Cancel</button><button class="ks-btn pri" data-ok="1">Unlock</button></div>', function (md, close) {
+        var n = md.querySelector('#ks-ln'), p = md.querySelector('#ks-lp'), er = md.querySelector('#ks-le');
+        function go() { er.textContent = ''; var prev = S.creds; S.creds = { pin: prev.pin, name: n.value.trim(), password: p.value }; var b = md.querySelector('[data-ok]'); b.disabled = true;
+          newSession().then(function () { armSession(); connect(); return refresh(true); }).then(function () { close(); toast('Editing unlocked. Welcome, ' + S.name); }).catch(function (e) { S.creds = prev; b.disabled = false; er.textContent = e.message; }); }
+        md.querySelector('[data-x]').onclick = close; md.querySelector('[data-ok]').onclick = go; md.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+      });
+  }
+  function accessModal() {
+    var close = modal('<h3>' + ic('users', 20) + 'Who can edit</h3><p>Anyone with the share link can view. Only people listed here can edit, using the name and password you set. Revoking removes access immediately.</p><div id="ks-el" class="ks-sk" style="padding:0"><i></i><i></i></div>' +
+      '<div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:14px"><div class="ks-row"><label class="ks-fld" style="flex:1;margin:0"><span>Name</span><input id="ks-en" maxlength="60" placeholder="e.g. Aarav (volunteer)"></label><label class="ks-fld" style="flex:1;margin:0"><span>Password (6+)</span><input id="ks-ep" maxlength="64" placeholder="Set a password"></label></div>' +
+      '<div class="ks-err" id="ks-ee"></div><div class="ks-act2"><button class="ks-btn" data-gen="1">Generate password</button><button class="ks-btn pri" data-add="1">' + ic('user-plus', 15) + 'Add editor</button></div></div>', function (md) {
+      var list = md.querySelector('#ks-el'), er = md.querySelector('#ks-ee');
+      function load() { api('/api/ls/x/editors').then(function (d) {
+        if (!d.ready) { list.className = ''; list.innerHTML = '<div class="ks-banner" style="border-radius:10px">' + esc(d.hint || 'Run live-sheets.sql in Supabase first.') + '</div>'; return; }
+        list.className = ''; var act = d.editors.filter(function (x) { return !x.revoked_at; });
+        list.innerHTML = act.length ? act.map(function (x) { return '<div class="ks-ed-li"><div style="flex:1;min-width:0"><div class="n">' + esc(x.name) + '</div><div class="m">' + (x.last_login_at ? 'Last active ' + esc(fmtTime(x.last_login_at)) : 'Never signed in') + '</div></div><button class="ks-btn dg" data-rv="' + esc(x.id) + '">Revoke</button></div>'; }).join('') : '<div class="ks-sub" style="padding:6px 0">No editors yet. Add one below.</div>';
+      }).catch(function (e) { list.className = ''; list.textContent = e.message; }); }
+      load();
+      md.addEventListener('click', function (e) {
+        var rv = e.target.closest('[data-rv]'); if (rv) { if (!confirm('Revoke this editor? They will be signed out of editing.')) return; api('/api/ls/x/editors/revoke', { method: 'POST', body: { id: rv.getAttribute('data-rv') } }).then(load).catch(function (x) { er.textContent = x.message; }); return; }
+        if (e.target.closest('[data-gen]')) { var al = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789', a = new Uint32Array(10), s = ''; crypto.getRandomValues(a); for (var i = 0; i < 10; i++) s += al[a[i] % al.length]; md.querySelector('#ks-ep').value = s; return; }
+        if (e.target.closest('[data-add]')) { er.textContent = ''; var nm = md.querySelector('#ks-en'), pw = md.querySelector('#ks-ep');
+          api('/api/ls/x/editors', { method: 'POST', body: { name: nm.value, password: pw.value } }).then(function () { var msg = 'Name: ' + nm.value.trim() + '\nPassword: ' + pw.value; if (navigator.clipboard) navigator.clipboard.writeText(msg).catch(function () {}); nm.value = pw.value = ''; toast('Editor added. Login details copied.'); load(); }).catch(function (x) { er.textContent = x.message; }); }
+      });
+    });
+  }
+
+  /* ── boot ────────────────────────────────────────────────── */
+  function start() {
+    skeleton();
+    root.innerHTML = ''; root.appendChild(top); root.appendChild(fx); root.appendChild(grid); root.appendChild(foot);
+    return refresh(true).then(function () { if (!S.data) { if (!root.querySelector('.ks-center')) centerCard('warning-circle', 'Could not load sheet', 'Check your connection and reload the page.', true); return; } armSession(); connect(); if (opts.full && S.data.title) D.title = S.data.title + ' · KFS Live Sheet'; });
+  }
+  function bootShare() {
+    skeleton(); try { var c = JSON.parse(sessionStorage.getItem('ks-s-' + opts.token) || 'null'); if (c && c.exp > Date.now() + 60000) { S.session = c.s; S.exp = c.exp; S.role = c.role; S.name = c.name; } } catch (e) {}
+    function go() { return start(); }
+    if (S.session) { return api('/api/ls/x/data?since=x').then(go).catch(function () { S.session = null; bootShare2(); }); }
+    bootShare2();
+    function bootShare2() {
+      api(tokenPath + '/meta').then(function (m) {
+        if (!m.needs_pin) return newSession().then(go);
+        pinCard();
+      }).catch(function (e) { centerCard('warning-circle', 'Link unavailable', e.message || 'This link is invalid, expired or has been revoked.', true); });
+    }
+  }
+  function pinCard() {
+    centerCard('lock-simple', 'Enter PIN', 'This sheet is protected. Ask whoever shared it for the PIN.', false, function (k) {
+      var inp = h('input'); inp.type = 'password'; inp.inputMode = 'numeric'; inp.maxLength = 8; inp.autocomplete = 'one-time-code'; inp.setAttribute('aria-label', 'PIN');
+      var er = h('div', 'ks-err'), b = h('button', 'ks-btn pri', 'Open sheet'); k.appendChild(inp); k.appendChild(er); k.appendChild(b); setTimeout(function () { inp.focus(); }, 40);
+      function go() { er.textContent = ''; b.disabled = true; S.creds.pin = inp.value.trim(); newSession().then(start).catch(function (e) { b.disabled = false; S.creds.pin = null; er.textContent = e.message; inp.select(); }); }
+      b.onclick = go; inp.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+    });
+  }
+  if (admin) { S.role = 'admin'; skeleton(); newSession().then(start).catch(function (e) { centerCard('warning-circle', 'Could not open sheet', e.message, true); }); }
+  else if (opts.token) bootShare();
+  return { refresh: function () { return refresh(true); }, destroy: function () { stop(); closeMenu(); closeSse(); G.forEach(function (g) { g[0].removeEventListener(g[1], g[2], g[3]); }); G = []; root.remove(); }, setLight: function (l) { root.setAttribute('data-theme', l ? 'light' : 'dark'); renderTop(); } };
+}
+
+window.KFSLive = { mount: mount };
+var m = location.pathname.match(/^\/(?:sheet|live)\/([^\/]+)\/?$/), rootEl = D.getElementById('root');
+if (rootEl && m && m[1] !== 'admin') { rootEl.style.cssText = 'height:100vh;height:100dvh'; mount(rootEl, { token: decodeURIComponent(m[1]), full: true }); }
+else if (rootEl && /^\/live\/admin\//.test(location.pathname)) { rootEl.style.cssText = 'height:100vh'; mount(rootEl, {}); rootEl.innerHTML = '<div style="color:#bbb;font:14px system-ui;padding:40px;text-align:center">Open this sheet from the admin panel: Responses, then the Sheet tab.</div>'; }
+
+};
+const _LS_CLIENT = "(" + _LS_CLIENT_FN.toString() + ")(" + JSON.stringify(_LS_ICONS) + ");";
+const _LS_VER = crypto.createHash("sha1").update(_LS_CLIENT).digest("hex").slice(0, 8);
+app.get("/live-sheet.js", (req, res) => {
+  res.type("application/javascript");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(_LS_CLIENT);
+});
+/* ─────────────────────────────────────────────────────────────────────────────
+ * KFS Live Sheets — editable, real-time, Google-Sheets-style sheets
+ *
+ *  • Rows  = form responses (auto-added live) + manual rows
+ *  • Cols  = form questions + auto columns (Submitted, Paid, Checked-in …) + custom columns
+ *  • Edits are stored as an overlay (live_sheet_cells) — original responses never change
+ *  • Check-in from the scanner shows up live (matched by email), read-only
+ *  • Push updates over SSE (/api/ls/x/stream); clients fall back to polling
+ *  • Access:  admin (panel login)  |  editor (name + password, set by admin)  |  viewer (link [+PIN])
+ *
+ * Mount ABOVE the old Responses-Pro block so /sheet/<token> serves the new page:
+ *   require("./live-sheets")(app, { supabase, requireSection, logActivity,
+ *     parseFormSchema, pickTargetEmail, rateLimit, ipKeyGenerator, crypto, secret: JWT_SECRET });
+ * Needs live-sheets.sql. Single Node instance assumed (same as the rest of KFS).
+ * ───────────────────────────────────────────────────────────────────────────── */
+const _lsMount = function mountLiveSheets(app, deps) {
+  const { supabase, requireSection, logActivity, parseFormSchema, pickTargetEmail, rateLimit, ipKeyGenerator, crypto } = deps;
+  const SECRET = deps.secret || process.env.LIVE_SHEET_SECRET || process.env.JWT_SECRET;
+  if (!SECRET) throw new Error("[live-sheets] JWT_SECRET (or LIVE_SHEET_SECRET) is required");
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+  const PAGE = 1000, MAX_VAL = 2000, MAX_CELLS = 400;
+  const SESSION_MS = { share: 12 * 3600e3, admin: 3600e3 };
+  const SQL_HINT = "Run live-sheets.sql in Supabase to enable editing.";
+
+  /* ── small helpers ─────────────────────────────────────────────────────────── */
+  const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+  const normEmail = (s) => String(s || "").trim().toLowerCase();
+  const safeJson = (s) => { try { return typeof s === "object" && s ? s : JSON.parse(s || "{}"); } catch { return {}; } };
+  const isMissing = (e) => !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/i.test(e.message || ""));
+  const cleanVal = (v) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").slice(0, MAX_VAL);
+  const cleanLabel = (v, d) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 60) || d;
+  const hash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString("hex");
+  const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+  const rid = (n) => crypto.randomBytes(n).toString("hex");
+  const wrap = (fn) => async (req, res) => { try { await fn(req, res); } catch (e) { console.error("[live-sheets]", req.method, req.path, e.message); if (!res.headersSent) res.status(e.status || 500).json({ error: e.status ? e.message : "Something went wrong" }); } };
+  const noStore = (res) => { res.setHeader("Cache-Control", "no-store"); res.setHeader("X-Robots-Tag", "noindex, nofollow"); res.setHeader("Referrer-Policy", "no-referrer"); };
+
+  async function fetchAll(build) {
+    const out = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await build().range(from, from + PAGE - 1);
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      out.push(...(data || []));
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  }
+  function serial(map, key, fn) {            // run async jobs for one key strictly one after another
+    const next = (map.get(key) || Promise.resolve()).then(fn, fn);
+    map.set(key, next.catch(() => {}));
+    return next;
+  }
+
+  /* ── signed sessions (no cookies → no CSRF surface on the public side) ──────── */
+  function sign(p) {
+    const b = Buffer.from(JSON.stringify(p)).toString("base64url");
+    return b + "." + crypto.createHmac("sha256", SECRET).update(b).digest("base64url");
+  }
+  function verify(t) {
+    if (typeof t !== "string" || t.length > 1500) return null;
+    const [b, s] = t.split(".");
+    if (!b || !s) return null;
+    if (!safeEq(s, crypto.createHmac("sha256", SECRET).update(b).digest("base64url"))) return null;
+    try { const p = JSON.parse(Buffer.from(b, "base64url").toString()); return p.exp > Date.now() ? p : null; } catch { return null; }
+  }
+
+  /* ── share links (re-uses the existing response_share_links table) ─────────── */
+  const shareCache = new Map();
+  async function loadShare(by, val) {
+    const key = by + ":" + val, hit = shareCache.get(key);
+    if (hit && Date.now() - hit.t < 5000) return hit.v;
+    const q = supabase.from("response_share_links").select("*");
+    const { data } = await (by === "token" ? q.eq("token_hash", sha256(val)) : q.eq("id", val)).maybeSingle();
+    const v = !data || data.revoked_at || new Date(data.expires_at) < new Date() ? null : data;
+    shareCache.set(key, { t: Date.now(), v });
+    if (shareCache.size > 500) for (const [k, e] of shareCache) if (Date.now() - e.t > 30000) shareCache.delete(k);
+    return v;
+  }
+  const pinOk = (s, pin) => !s.pin_hash || (!!pin && safeEq(hash(pin, s.pin_salt), s.pin_hash));
+
+  /* ── sheet registry (overlay tables may not exist yet → degrade to read-only) ── */
+  const sheetCache = new Map();
+  async function getSheet(kind, id, create) {
+    const key = kind + ":" + id, hit = sheetCache.get(key);
+    if (hit && hit.v && Date.now() - hit.t < 2000) return hit.v;
+    let { data, error } = await supabase.from("live_sheets").select("*").eq("kind", kind).eq("target_id", id).maybeSingle();
+    if (error) { if (isMissing(error)) return null; throw new Error(error.message); }
+    if (!data && create) {
+      const ins = await supabase.from("live_sheets").insert([{ kind, target_id: id }]).select("*").single();
+      data = ins.data;
+      if (!data) ({ data } = await supabase.from("live_sheets").select("*").eq("kind", kind).eq("target_id", id).maybeSingle());
+    }
+    if (data) sheetCache.set(key, { t: Date.now(), v: data });
+    return data || null;
+  }
+
+  /* ── dataset: base (form + check-in) + overlay (edits / custom cols / manual rows) ── */
+  function flat(raw) {
+    const { sections, targetEmailQuestionId } = parseFormSchema(raw);
+    const qs = []; for (const s of sections) for (const q of s.questions || []) qs.push(q);
+    return { qs, targetEmailQuestionId };
+  }
+  function personEmails(qs, tq, a) {
+    const set = new Set(), p = normEmail(pickTargetEmail(qs, a, tq) || "");
+    if (p) set.add(p);
+    for (const x of Object.values(a)) if (typeof x === "string" && EMAIL_RE.test(x.trim())) set.add(normEmail(x));
+    return [...set];
+  }
+
+  async function loadBase(kind, id) {
+    let title = "", qs = [], tq = null, issues = null, rows = [], regs = [];
+    if (kind === "event") {
+      const [{ data: ev }, { data: form }] = await Promise.all([
+        supabase.from("events").select("title").eq("id", id).maybeSingle(),
+        supabase.from("event_forms").select("*").eq("event_id", id).maybeSingle(),
+      ]);
+      title = ev?.title || "Event";
+      if (form) { const f = flat(form.questions); qs = f.qs; tq = f.targetEmailQuestionId; issues = form.issues_ticket !== false; }
+      rows = await fetchAll(() => supabase.from("form_responses").select("*").eq("event_id", id).order("submitted_at", { ascending: true }).order("id", { ascending: true }));
+      regs = await fetchAll(() => supabase.from("event_registrations").select("id,email,checked_in,checked_in_at,checked_in_by").eq("event_id", id).order("created_at", { ascending: true }).order("id", { ascending: true }));
+    } else {
+      const { data: form } = await supabase.from("standalone_forms").select("*").eq("id", id).maybeSingle();
+      title = form?.title || "Form";
+      if (form) { const f = flat(form.questions); qs = f.qs; tq = f.targetEmailQuestionId; }
+      rows = await fetchAll(() => supabase.from("standalone_form_responses").select("*").eq("form_id", id).order("submitted_at", { ascending: true }).order("id", { ascending: true }));
+    }
+    const hasIn = kind === "event" && (regs.length > 0 || issues !== false);
+    const hasPaid = rows.some((r) => r.amount_paise > 0);
+    const regBy = new Map(regs.map((r) => [normEmail(r.email), r]));
+    const cols = [{ id: "__ts", label: "Submitted", type: "time", ro: true }];
+    if (hasPaid) cols.push({ id: "__paid", label: "Paid (₹)", type: "number", ro: true });
+    for (const q of qs) cols.push({ id: q.id, label: q.label || q.id, type: q.type || "text", options: (q.options || []).filter(Boolean) });
+    if (hasIn) cols.push({ id: "__in", label: "Checked in", type: "check", ro: true }, { id: "__in_at", label: "Check-in time", type: "time", ro: true }, { id: "__in_by", label: "Checked in by", type: "text", ro: true });
+
+    const out = rows.map((r) => {
+      const a = safeJson(r.answers), v = {};
+      for (const q of qs) { const x = a[q.id] ?? a[q.label] ?? ""; v[q.id] = Array.isArray(x) ? x.join(", ") : String(x ?? ""); }
+      v.__ts = r.submitted_at || r.created_at || "";
+      if (hasPaid) v.__paid = r.amount_paise > 0 ? String(Math.round(r.amount_paise / 100)) : "";
+      if (hasIn) {
+        const reg = personEmails(qs, tq, a).map((e) => regBy.get(e)).find(Boolean);
+        v.__in = reg && reg.checked_in ? "Yes" : ""; v.__in_at = (reg && reg.checked_in_at) || ""; v.__in_by = (reg && reg.checked_in_by) || "";
+      }
+      return { key: String(r.id), v };
+    });
+    return { title, cols, rows: out };
+  }
+
+  async function loadOverlay(sheet) {
+    if (!sheet) return { cells: [], rows: [] };
+    const [cells, rows] = await Promise.all([
+      fetchAll(() => supabase.from("live_sheet_cells").select("row_key,col_key,value").eq("sheet_id", sheet.id).order("row_key").order("col_key")),
+      fetchAll(() => supabase.from("live_sheet_rows").select("row_key,manual,deleted,created_at").eq("sheet_id", sheet.id).order("row_key")),
+    ]);
+    return { cells, rows };
+  }
+
+  function compose(kind, id, base, sheet, ov, version) {
+    const meta = (sheet && sheet.col_meta) || {};
+    const cols = base.cols.map((c) => { const m = meta[c.id]; return m ? { ...c, label: m.label || c.label, width: m.width, hidden: !!m.hidden } : c; });
+    for (const [cid, m] of Object.entries(meta)) if (m && m.custom) cols.push({ id: cid, label: m.label || "Column", type: m.type || "text", custom: true, width: m.width, hidden: !!m.hidden });
+    const colIds = new Set(cols.map((c) => c.id)), roIds = new Set(cols.filter((c) => c.ro).map((c) => c.id));
+    const rmeta = new Map(ov.rows.map((r) => [r.row_key, r]));
+    const by = new Map();
+    for (const c of ov.cells) { let m = by.get(c.row_key); if (!m) by.set(c.row_key, (m = {})); m[c.col_key] = c.value ?? ""; }
+    const rows = [];
+    for (const r of base.rows) {
+      if (rmeta.get(r.key) && rmeta.get(r.key).deleted) continue;
+      const o = by.get(r.key); if (o) for (const k in o) if (colIds.has(k) && !roIds.has(k)) r.v[k] = o[k];
+      rows.push(r);
+    }
+    const manual = ov.rows.filter((r) => r.manual && !r.deleted).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.row_key.localeCompare(b.row_key));
+    for (const m of manual) {
+      const o = by.get(m.row_key) || {}, v = {};
+      for (const c of cols) v[c.id] = c.id in o && !roIds.has(c.id) ? o[c.id] : "";
+      if (colIds.has("__ts")) v.__ts = m.created_at || "";
+      rows.push({ key: m.row_key, v, manual: true });
+    }
+    rows.forEach((r, i) => { r.n = i + 1; });
+    return { kind, id, title: base.title, columns: cols, rows, version, editing_ready: !!sheet, sheet_id: sheet ? sheet.id : null, rowKeys: new Set(rows.map((r) => r.key)), deletedKeys: new Set(ov.rows.filter((r) => r.deleted).map((r) => r.row_key)) };
+  }
+
+  /* cheap "did anything change?" probe — 5 tiny queries */
+  async function probe(kind, id) {
+    const rt = kind === "form" ? "standalone_form_responses" : "form_responses", rk = kind === "form" ? "form_id" : "event_id";
+    const sheet = await getSheet(kind, id, false);
+    const jobs = [
+      supabase.from(rt).select("submitted_at", { count: "exact" }).eq(rk, id).order("submitted_at", { ascending: false }).limit(1),
+      supabase.from(rt).select("edited_at").eq(rk, id).not("edited_at", "is", null).order("edited_at", { ascending: false }).limit(1),
+      kind === "event" ? supabase.from("event_registrations").select("checked_in_at", { count: "exact" }).eq("event_id", id).eq("checked_in", true).order("checked_in_at", { ascending: false }).limit(1) : Promise.resolve({}),
+      sheet ? supabase.from("live_sheet_cells").select("updated_at").eq("sheet_id", sheet.id).order("updated_at", { ascending: false }).limit(1) : Promise.resolve({}),
+    ];
+    const [r, ed, ci, ce] = await Promise.all(jobs);
+    const f = (x, k) => (x && x.data && x.data[0] && x.data[0][k]) || "";
+    return [r.count || 0, f(r, "submitted_at"), f(ed, "edited_at"), ci.count || 0, f(ci, "checked_in_at"), f(ce, "updated_at"), sheet ? sheet.updated_at : ""].join("|");
+  }
+
+  const dsCache = new Map();
+  const bust = (kind, id) => { dsCache.delete(kind + ":" + id); sheetCache.delete(kind + ":" + id); };
+  function getDataset(kind, id, fresh) {
+    const key = kind + ":" + id, hit = dsCache.get(key);
+    if (!fresh && hit && Date.now() - hit.t < 2000) return hit.p;
+    const p = (async () => {
+      const version = await probe(kind, id);
+      const [base, sheet] = await Promise.all([loadBase(kind, id), getSheet(kind, id, false)]);
+      return compose(kind, id, base, sheet, await loadOverlay(sheet), version);
+    })();
+    dsCache.set(key, { t: Date.now(), p });
+    p.catch(() => dsCache.delete(key));
+    if (dsCache.size > 100) for (const [k, e] of dsCache) if (Date.now() - e.t > 30000) dsCache.delete(k);
+    return p;
+  }
+
+  /* ── what a given role may see ─────────────────────────────────────────────── */
+  const isPii = (c) => c.type === "email" || c.type === "phone" || /e[\s-]?mail|phone|mobile|whatsapp/i.test(c.label || "");
+  const maskEmail = (v) => v.replace(/^([^@]{1,2})[^@]*(@.*)$/, "$1***$2");
+  const maskPhone = (v) => { const d = v.replace(/\s/g, ""); return d.length > 4 ? d.slice(0, 2) + "****" + d.slice(-2) : "****"; };
+  const privileged = (ctx) => ctx.role === "admin" || ctx.role === "editor";
+
+  function visibleColumns(ds, ctx) {
+    const hid = new Set((ctx.share && ctx.share.hidden_columns) || []);
+    return ds.columns.filter((c) => !hid.has(c.id) && (!c.hidden || privileged(ctx))).map((c) => ({
+      ...c, masked: !!(ctx.share && ctx.share.mask_pii && isPii(c)),
+    })).map((c) => ({ ...c, ro: !!c.ro || c.masked }));
+  }
+  function present(ds, ctx) {
+    const columns = visibleColumns(ds, ctx);
+    const rows = ds.rows.map((r) => {
+      const v = {};
+      for (const c of columns) {
+        let x = r.v[c.id] || "";
+        if (c.masked && x) x = c.type === "phone" || /phone|mobile|whatsapp/i.test(c.label) ? maskPhone(x) : EMAIL_RE.test(x.trim()) ? maskEmail(x.trim()) : x;
+        v[c.id] = x;
+      }
+      return { key: r.key, n: r.n, v };
+    });
+    return {
+      title: (ctx.share && ctx.share.title) || ds.title, columns, rows, version: ds.version,
+      role: ctx.role, can_edit: privileged(ctx) && ds.editing_ready, me: ctx.name || null,
+      editing_ready: ds.editing_ready, allow_download: ctx.role === "admin" || !ctx.share || ctx.share.allow_download !== false,
+      masked: !!(ctx.share && ctx.share.mask_pii), expires_at: (ctx.share && ctx.share.expires_at) || null,
+    };
+  }
+
+  /* ── live hub (SSE) ─────────────────────────────────────────────────────────── */
+  const hubs = new Map();
+  const hubKey = (k, i) => k + ":" + i;
+  function hubFor(kind, id) {
+    const key = hubKey(kind, id); let h = hubs.get(key);
+    if (!h) { h = { kind, id, key, subs: new Set(), version: null, holds: 0, busy: false, timer: null }; hubs.set(key, h); }
+    return h;
+  }
+  const emit = (sub, ev) => { try { sub.res.write("data: " + JSON.stringify(ev) + "\n\n"); } catch {} };
+  function broadcast(h, ev) {
+    let metaHidden = null;
+    for (const s of h.subs) {
+      if (ev.t === "cells") {
+        if (metaHidden === null) { const sh = (sheetCache.get(h.key) || {}).v; metaHidden = new Set(Object.entries((sh && sh.col_meta) || {}).filter(([, m]) => m && m.hidden).map(([k]) => k)); }
+        const hid = new Set((s.share && s.share.hidden_columns) || []);
+        const list = ev.cells.filter((c) => !hid.has(c.c) && (privileged(s) || !metaHidden.has(c.c)));
+        if (list.length) emit(s, { ...ev, cells: list });
+      } else emit(s, ev);
+    }
+  }
+  function presence(h) {
+    const people = [...new Set([...h.subs].filter((s) => s.name).map((s) => s.name))].slice(0, 12);
+    broadcast(h, { t: "presence", n: h.subs.size, people });
+  }
+  function ensureTimer(h) {
+    if (h.timer) return;
+    h.timer = setInterval(async () => {
+      if (h.busy || h.holds > 0 || !h.subs.size) return;
+      h.busy = true;
+      try {
+        const v = await probe(h.kind, h.id);
+        if (h.version !== null && v !== h.version) { h.version = v; bust(h.kind, h.id); broadcast(h, { t: "changed" }); } else h.version = v;
+      } catch {} finally { h.busy = false; }
+    }, 3000);
+    h.timer.unref && h.timer.unref();
+  }
+  setInterval(() => {
+    for (const h of hubs.values()) for (const s of [...h.subs]) {
+      if (s.exp < Date.now()) { emit(s, { t: "expired" }); try { s.res.end(); } catch {} continue; }
+      try { s.res.write(": hb\n\n"); } catch {}
+    }
+  }, 15000).unref();
+
+  /* run a write while the hub is "held" so our own change doesn't trigger a second refetch */
+  async function held(kind, id, fn) {
+    const h = hubFor(kind, id); h.holds++;
+    try { return await fn(); }
+    finally { try { h.version = await probe(kind, id); } catch {} h.holds--; if (!h.subs.size && !h.holds && !h.timer) hubs.delete(h.key); }
+  }
+
+  /* ── auth: every data/edit route resolves a signed session ─────────────────── */
+  const editorCache = new Map();
+  async function editorActive(eid, share) {
+    const hit = editorCache.get(eid);
+    if (hit && Date.now() - hit.t < 15000) return hit.v;
+    const sheet = await getSheet(share.kind, String(share.target_id), false);
+    const { data } = await supabase.from("live_sheet_editors").select("id,sheet_id,revoked_at").eq("id", eid).maybeSingle();
+    const v = !!(data && !data.revoked_at && sheet && data.sheet_id === sheet.id);
+    editorCache.set(eid, { t: Date.now(), v });
+    return v;
+  }
+  async function resolve(req, res, need) {
+    const p = verify(req.headers["x-ls-session"] || req.query.s);
+    if (!p) { res.status(401).json({ error: "Session expired", reauth: true }); return null; }
+    let ctx;
+    if (p.k === "admin") ctx = { role: "admin", name: p.name, aid: p.aid, kind: p.kind, id: p.id, share: null, exp: p.exp };
+    else {
+      const share = await loadShare("id", p.sid);
+      if (!share) { res.status(404).json({ error: "This link is invalid, expired or has been revoked.", gone: true }); return null; }
+      ctx = { role: "viewer", name: null, kind: share.kind, id: String(share.target_id), share, exp: p.exp };
+      if (p.role === "editor") {
+        if (!(await editorActive(p.eid, share))) { res.status(401).json({ error: "Editing access was removed", reauth: true }); return null; }
+        ctx.role = "editor"; ctx.name = p.name; ctx.eid = p.eid;
+      }
+    }
+    if (need === "edit" && !privileged(ctx)) { res.status(403).json({ error: "View only — unlock editing with your editor password." }); return null; }
+    if (need === "admin" && ctx.role !== "admin") { res.status(403).json({ error: "Admin only" }); return null; }
+    return ctx;
+  }
+  const actor = (ctx) => (ctx.role === "admin" ? "admin:" : "") + (ctx.name || "viewer");
+
+  /* ── rate limits ───────────────────────────────────────────────────────────── */
+  const ipKey = (req, res) => ipKeyGenerator(req, res);
+  const sessLimit = rateLimit({ windowMs: 15 * 60e3, max: 15, standardHeaders: true, legacyHeaders: false, skipSuccessfulRequests: true, keyGenerator: (req, res) => `${ipKey(req, res)}:${String(req.params.token || "").slice(0, 12)}`, message: { error: "Too many wrong attempts. Try again in a few minutes." } });
+  const readLimit = rateLimit({ windowMs: 60e3, max: 600, standardHeaders: true, legacyHeaders: false, keyGenerator: ipKey, message: { error: "Too many requests" } });
+  const writeLimit = rateLimit({ windowMs: 60e3, max: 600, standardHeaders: true, legacyHeaders: false, keyGenerator: ipKey, message: { error: "Slow down a little — too many edits" } });
+
+  /* ── page shells ───────────────────────────────────────────────────────────── */
+  const SHELL = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>KFS · Live Sheet</title><link rel="icon" href="data:,"></head><body style="margin:0;background:#0b0b0d"><div id="root"></div><script src="/live-sheet.js?v=' + (deps.clientVer || '1') + '"></script></body></html>';
+  const shell = (req, res) => { noStore(res); res.type("html").send(SHELL); };
+  app.get("/sheet/:token", shell);                       // upgrades existing share links in place
+  app.get("/live/admin/:kind/:id", shell);
+  app.get("/live/:token", shell);
+
+  /* ── sessions ──────────────────────────────────────────────────────────────── */
+  app.get("/api/ls/:token/meta", readLimit, wrap(async (req, res) => {
+    noStore(res);
+    const s = await loadShare("token", req.params.token);
+    if (!s) return res.status(404).json({ error: "This link is invalid, expired or has been revoked." });
+    res.json({ needs_pin: !!s.pin_hash, label: s.title || null, expires_at: s.expires_at });
+  }));
+
+  const seen = new Map();
+  function logVisit(share, req) {
+    const ip = String(req.ip || "").replace(/^::ffff:/, ""), ua = String(req.headers["user-agent"] || "").slice(0, 400), k = share.id + "|" + ip + "|" + ua;
+    if (seen.get(k) && Date.now() - seen.get(k) < 600e3) return;
+    seen.set(k, Date.now()); if (seen.size > 5000) for (const [x, t] of seen) if (Date.now() - t > 600e3) seen.delete(x);
+    const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Unknown";
+    const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad|iOS/.test(ua) ? "iOS" : /Mac OS X/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "Unknown";
+    const device = /iPad|Tablet/.test(ua) ? "Tablet" : /Mobi|Android|iPhone/.test(ua) ? "Mobile" : "Desktop";
+    supabase.from("response_share_links").update({ last_viewed_at: new Date().toISOString(), view_count: (share.view_count || 0) + 1 }).eq("id", share.id).then(() => {}, () => {});
+    supabase.from("response_share_views").insert([{ share_id: share.id, ip, user_agent: ua, browser, os, device }]).then(() => {}, () => {});
+  }
+
+  // body: { pin?, name?, password? } → viewer session, or editor session when name+password are valid
+  app.post("/api/ls/:token/session", sessLimit, wrap(async (req, res) => {
+    noStore(res);
+    const share = await loadShare("token", req.params.token);
+    if (!share) return res.status(404).json({ error: "This link is invalid, expired or has been revoked." });
+    const b = req.body || {};
+    if (!pinOk(share, b.pin)) return res.status(401).json({ error: "Incorrect PIN", needs_pin: true });
+    let role = "viewer", name = null, eid = null;
+    if (b.name || b.password) {
+      const sheet = await getSheet(share.kind, String(share.target_id), false);
+      const { data: eds } = sheet ? await supabase.from("live_sheet_editors").select("id,name,pass_salt,pass_hash").eq("sheet_id", sheet.id).is("revoked_at", null) : { data: [] };
+      const want = String(b.name || "").trim().toLowerCase();
+      const ed = (eds || []).find((e) => e.name.toLowerCase() === want);
+      const ok = safeEq(hash(b.password || "", ed ? ed.pass_salt : "0".repeat(32)), ed ? ed.pass_hash : "x".repeat(64));   // constant-ish time
+      if (!ed || !ok) return res.status(401).json({ error: "Wrong name or password", editor_failed: true });
+      role = "editor"; name = ed.name; eid = ed.id;
+      supabase.from("live_sheet_editors").update({ last_login_at: new Date().toISOString() }).eq("id", ed.id).then(() => {}, () => {});
+    }
+    logVisit(share, req);
+    const exp = Math.min(Date.now() + SESSION_MS.share, new Date(share.expires_at).getTime());
+    res.json({ session: sign({ k: "share", sid: share.id, role, name, eid, exp }), role, name, exp });
+  }));
+
+  app.post("/api/admin/ls/:kind/:id/session", (req, res, next) => {
+    if (!["event", "form"].includes(req.params.kind) || !ID_RE.test(req.params.id)) return res.status(400).json({ error: "Bad sheet" });
+    return requireSection(req.params.kind === "form" ? "forms" : "events")(req, res, next);
+  }, wrap(async (req, res) => {
+    noStore(res);
+    const name = req.admin.name || req.admin.username || "Admin", exp = Date.now() + SESSION_MS.admin;
+    res.json({ session: sign({ k: "admin", kind: req.params.kind, id: req.params.id, aid: req.admin.id, name, exp }), role: "admin", name, exp });
+  }));
+
+  /* ── read ──────────────────────────────────────────────────────────────────── */
+  app.get("/api/ls/x/data", readLimit, wrap(async (req, res) => {
+    noStore(res);
+    const ctx = await resolve(req, res); if (!ctx) return;
+    const ds = await getDataset(ctx.kind, ctx.id, false);
+    if (req.query.since && req.query.since === ds.version) return res.json({ unchanged: true, version: ds.version });
+    res.json(present(ds, ctx));
+  }));
+
+  app.get("/api/ls/x/stream", readLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res); if (!ctx) return;
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.write("retry: 3000\n\n");
+    const h = hubFor(ctx.kind, ctx.id), sub = { res, role: ctx.role, name: ctx.name, share: ctx.share, exp: ctx.exp };
+    h.subs.add(sub); ensureTimer(h);
+    if (h.version === null) { try { h.version = await probe(ctx.kind, ctx.id); } catch {} }
+    emit(sub, { t: "hello" }); presence(h);
+    req.on("close", () => {
+      h.subs.delete(sub);
+      if (!h.subs.size) { clearInterval(h.timer); h.timer = null; if (!h.holds) hubs.delete(h.key); } else presence(h);
+    });
+  }));
+
+  app.get("/api/ls/x/export", readLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res); if (!ctx) return;
+    if (ctx.role !== "admin" && ctx.share && ctx.share.allow_download === false) return res.status(403).json({ error: "Downloads are disabled for this link" });
+    const p = present(await getDataset(ctx.kind, ctx.id, true), ctx), XLSX = require("xlsx");
+    const fmt = (c, x) => (c.type === "time" && x ? new Date(x).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : x);
+    const aoa = [["#"].concat(p.columns.map((c) => c.label))].concat(p.rows.map((r) => [r.n].concat(p.columns.map((c) => fmt(c, r.v[c.id] || "")))));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = aoa[0].map((h, i) => ({ wch: Math.min(40, Math.max(8, String(h).length + 2, ...aoa.slice(1, 120).map((r) => String(r[i] == null ? "" : r[i]).length + 1))) }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, String(p.title || "Sheet").replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Sheet");
+    const safe = String(p.title || "sheet").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+    res.setHeader("Content-Disposition", `attachment; filename="kfs-${safe}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.send(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+  }));
+
+  /* ── write: cells ──────────────────────────────────────────────────────────── */
+  function writeLog(sheet, ctx, rows) {
+    if (!rows.length) return;
+    supabase.from("live_sheet_log").insert(rows.map((r) => ({ sheet_id: sheet.id, actor: actor(ctx), role: ctx.role, ...r }))).then(() => {}, () => {});
+  }
+  async function needSheet(ctx) {
+    const sheet = await getSheet(ctx.kind, ctx.id, true);
+    if (!sheet) throw Object.assign(new Error(SQL_HINT), { status: 503 });
+    return sheet;
+  }
+
+  app.post("/api/ls/x/cells", writeLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "edit"); if (!ctx) return;
+    const list = Array.isArray(req.body && req.body.cells) ? req.body.cells.slice(0, MAX_CELLS) : [];
+    if (!list.length) return res.status(400).json({ error: "No cells" });
+    const sheet = await needSheet(ctx), cid = String(req.headers["x-ls-cid"] || "").slice(0, 24);
+    const result = await held(ctx.kind, ctx.id, async () => {
+      const ds = await getDataset(ctx.kind, ctx.id, false);
+      const okCols = new Map(visibleColumns(ds, ctx).filter((c) => !c.ro).map((c) => [c.id, c]));
+      const rowByKey = new Map(ds.rows.map((r) => [r.key, r]));
+      const now = new Date().toISOString(), up = [], logs = [], patch = [], rejected = [];
+      for (const c of list) {
+        const row = rowByKey.get(String(c.r)), col = okCols.get(String(c.c));
+        if (!row || !col) { rejected.push({ r: c.r, c: c.c }); continue; }
+        const val = cleanVal(c.v);
+        if ((row.v[col.id] || "") === val) continue;
+        up.push({ sheet_id: sheet.id, row_key: row.key, col_key: col.id, value: val, updated_by: actor(ctx), updated_at: now });
+        logs.push({ action: "edit", row_key: row.key, col_key: col.id, old_value: String(row.v[col.id] || "").slice(0, 500), new_value: val.slice(0, 500) });
+        row.v[col.id] = val; patch.push({ r: row.key, c: col.id, v: val });     // keep the cached dataset in sync
+      }
+      if (up.length) {
+        const { error } = await supabase.from("live_sheet_cells").upsert(up, { onConflict: "sheet_id,row_key,col_key" });
+        if (error) throw new Error(error.message);
+        writeLog(sheet, ctx, logs);
+      }
+      return { patch, rejected };
+    });
+    if (result.patch.length) broadcast(hubFor(ctx.kind, ctx.id), { t: "cells", cells: result.patch, by: ctx.name || "Admin", cid });
+    res.json({ ok: true, saved: result.patch.length, rejected: result.rejected });
+  }));
+
+  /* ── write: rows ───────────────────────────────────────────────────────────── */
+  async function structural(ctx, sheet, cid, fn) {
+    const out = await held(ctx.kind, ctx.id, async () => {
+      const r = await fn();
+      await supabase.from("live_sheets").update({ updated_at: new Date().toISOString() }).eq("id", sheet.id);
+      bust(ctx.kind, ctx.id);
+      return r;
+    });
+    broadcast(hubFor(ctx.kind, ctx.id), { t: "changed", cid });
+    return out;
+  }
+
+  app.post("/api/ls/x/rows/add", writeLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "edit"); if (!ctx) return;
+    const sheet = await needSheet(ctx), count = Math.max(1, Math.min(parseInt(req.body && req.body.count, 10) || 1, 100));
+    const t0 = Date.now(), keys = Array.from({ length: count }, () => "m_" + rid(6));
+    await structural(ctx, sheet, String(req.headers["x-ls-cid"] || ""), async () => {
+      const { error } = await supabase.from("live_sheet_rows").insert(keys.map((k, i) => ({ sheet_id: sheet.id, row_key: k, manual: true, created_by: actor(ctx), created_at: new Date(t0 + i).toISOString() })));
+      if (error) throw new Error(error.message);
+      writeLog(sheet, ctx, [{ action: "add_rows", new_value: String(count) }]);
+    });
+    res.json({ ok: true, keys });
+  }));
+
+  const keyList = (b) => (Array.isArray(b && b.keys) ? b.keys.map(String).filter((k) => k.length < 80).slice(0, 200) : []);
+  const rowFlag = (deleted) => wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "edit"); if (!ctx) return;
+    const keys = keyList(req.body); if (!keys.length) return res.status(400).json({ error: "No rows" });
+    const sheet = await needSheet(ctx);
+    await structural(ctx, sheet, String(req.headers["x-ls-cid"] || ""), async () => {
+      const { error } = await supabase.from("live_sheet_rows").upsert(keys.map((k) => ({ sheet_id: sheet.id, row_key: k, manual: k.startsWith("m_"), deleted, created_by: actor(ctx) })), { onConflict: "sheet_id,row_key", ignoreDuplicates: false });
+      if (error) throw new Error(error.message);
+      writeLog(sheet, ctx, keys.map((k) => ({ action: deleted ? "delete_row" : "restore_row", row_key: k })));
+    });
+    res.json({ ok: true });
+  });
+  app.post("/api/ls/x/rows/delete", writeLimit, rowFlag(true));
+  app.post("/api/ls/x/rows/restore", writeLimit, rowFlag(false));
+
+  /* ── write: columns ────────────────────────────────────────────────────────── */
+  const metaLocks = new Map();
+  async function mutateMeta(ctx, sheet, fn) {
+    return serial(metaLocks, sheet.id, async () => {
+      const { data } = await supabase.from("live_sheets").select("col_meta").eq("id", sheet.id).single();
+      const meta = (data && data.col_meta) || {};
+      const out = await fn(meta);
+      const { error } = await supabase.from("live_sheets").update({ col_meta: meta, updated_at: new Date().toISOString() }).eq("id", sheet.id);
+      if (error) throw new Error(error.message);
+      bust(ctx.kind, ctx.id);
+      return out;
+    });
+  }
+  const colWrite = (action, fn) => wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "edit"); if (!ctx) return;
+    const sheet = await needSheet(ctx), cid = String(req.headers["x-ls-cid"] || "");
+    const out = await held(ctx.kind, ctx.id, () => mutateMeta(ctx, sheet, (meta) => fn(req.body || {}, meta, sheet, ctx)));
+    writeLog(sheet, ctx, [{ action, col_key: out && out.id, new_value: JSON.stringify(req.body || {}).slice(0, 300) }]);
+    broadcast(hubFor(ctx.kind, ctx.id), { t: "changed", cid });
+    res.json({ ok: true, ...(out || {}) });
+  });
+
+  app.post("/api/ls/x/cols/add", writeLimit, colWrite("add_col", (b, meta) => {
+    if (Object.keys(meta).filter((k) => meta[k] && meta[k].custom).length >= 60) throw Object.assign(new Error("Column limit reached"), { status: 400 });
+    const id = "c_" + rid(4); meta[id] = { custom: true, label: cleanLabel(b.label, "New column"), type: ["text", "number", "date"].includes(b.type) ? b.type : "text" };
+    return { id };
+  }));
+  app.post("/api/ls/x/cols/update", writeLimit, colWrite("update_col", (b, meta) => {
+    const id = String(b.id || ""); if (!id || id.startsWith("__")) throw Object.assign(new Error("This column can't be changed"), { status: 400 });
+    const m = (meta[id] = meta[id] || {});
+    if (b.label !== undefined) m.label = cleanLabel(b.label, m.label || "Column");
+    if (b.width !== undefined) m.width = Math.max(60, Math.min(700, parseInt(b.width, 10) || 140));
+    if (b.hidden !== undefined) m.hidden = !!b.hidden;
+    return { id };
+  }));
+  app.post("/api/ls/x/cols/delete", writeLimit, colWrite("delete_col", async (b, meta, sheet) => {
+    const id = String(b.id || "");
+    if (!meta[id] || !meta[id].custom) throw Object.assign(new Error("Only added columns can be deleted — hide this one instead."), { status: 400 });
+    delete meta[id];
+    await supabase.from("live_sheet_cells").delete().eq("sheet_id", sheet.id).eq("col_key", id);
+    return { id };
+  }));
+
+  /* ── editors (admin only) ──────────────────────────────────────────────────── */
+  app.get("/api/ls/x/editors", readLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "admin"); if (!ctx) return;
+    const sheet = await getSheet(ctx.kind, ctx.id, false);
+    if (!sheet) return res.json({ ready: false, editors: [], hint: SQL_HINT });
+    const { data } = await supabase.from("live_sheet_editors").select("id,name,created_at,last_login_at,revoked_at,created_by").eq("sheet_id", sheet.id).order("created_at", { ascending: false });
+    res.json({ ready: true, editors: data || [] });
+  }));
+  app.post("/api/ls/x/editors", writeLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "admin"); if (!ctx) return;
+    const name = cleanLabel(req.body && req.body.name, ""), pw = String((req.body && req.body.password) || "");
+    if (name.length < 2) return res.status(400).json({ error: "Enter the person's name (2+ characters)" });
+    if (pw.length < 6 || pw.length > 64) return res.status(400).json({ error: "Password must be 6–64 characters" });
+    const sheet = await needSheet(ctx);
+    const { data: ex } = await supabase.from("live_sheet_editors").select("id,name").eq("sheet_id", sheet.id).is("revoked_at", null);
+    if ((ex || []).some((e) => e.name.toLowerCase() === name.toLowerCase())) return res.status(409).json({ error: "An editor with this name already exists" });
+    const salt = rid(16), { data, error } = await supabase.from("live_sheet_editors").insert([{ sheet_id: sheet.id, name, pass_salt: salt, pass_hash: hash(pw, salt), created_by: ctx.name }]).select("id,name").single();
+    if (error) return res.status(500).json({ error: "Could not add editor" });
+    logActivity(ctx.aid, ctx.name, "live_sheet_editor_add", "live_sheet", `${ctx.kind}:${ctx.id} → ${name}`).catch(() => {});
+    res.json({ ok: true, editor: data });
+  }));
+  app.post("/api/ls/x/editors/revoke", writeLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "admin"); if (!ctx) return;
+    const sheet = await needSheet(ctx), id = String((req.body && req.body.id) || "");
+    await supabase.from("live_sheet_editors").update({ revoked_at: new Date().toISOString() }).eq("id", id).eq("sheet_id", sheet.id);
+    editorCache.delete(id);
+    logActivity(ctx.aid, ctx.name, "live_sheet_editor_revoke", "live_sheet", `${ctx.kind}:${ctx.id} → ${id}`).catch(() => {});
+    res.json({ ok: true });
+  }));
+
+  /* instant push for things that happen outside the sheet (scanner check-in, new form submit) */
+  function notify(kind, id) {
+    try {
+      id = String(id); bust(kind, id);
+      const h = hubs.get(hubKey(kind, id));
+      if (h && h.subs.size) { broadcast(h, { t: "changed" }); probe(kind, id).then((v) => { h.version = v; }).catch(() => {}); }
+    } catch {}
+  }
+
+  console.log("[live-sheets] mounted: /sheet/:token, /live/admin/:kind/:id, /api/ls/*");
+  return { probe, getDataset, present, notify, _internals: { sign, verify, compose } };
+};
+
+global.__ksLive = _lsMount(app, {
+  supabase, requireSection, logActivity, parseFormSchema, pickTargetEmail,
+  rateLimit, ipKeyGenerator, crypto, secret: JWT_SECRET, clientVer: _LS_VER,
+});
+
 app.get("/sheet-view.js", (req, res) => {
   res.type("application/javascript");
   res.setHeader("Cache-Control", "public, max-age=300");
@@ -7690,6 +8963,7 @@ app.post("/api/events/:id/form/submit", strictWriteLimit, upload.any(), async (r
     .single();
 
   if (insertErr) return res.status(500).json({ error: "Internal server error" });
+  if (global.__ksLive) global.__ksLive.notify("event", req.params.id);
 
   // 7. Send confirmation email (non-blocking — never fail the response)
   try {
@@ -8134,6 +9408,7 @@ app.post("/api/events/:id/form/edit/submit", strictWriteLimit, upload.any(), asy
     if (updErr) return res.status(500).json({ error: "Internal server error" });
 
     await supabase.from("form_response_edit_otps").update({ used_at: new Date().toISOString() }).eq("id", otpRow.id);
+    if (global.__ksLive) global.__ksLive.notify("event", req.params.id);
 
     res.json({ success: true });
   } catch (e) {
@@ -8537,6 +9812,7 @@ app.post("/api/forms/:slug/submit", strictWriteLimit, upload.any(), async (req, 
     .select()
     .single();
   if (insertErr) return res.status(500).json({ error: "Internal server error" });
+  if (global.__ksLive) global.__ksLive.notify("form", form.id);
 
   // Confirmation email — non-blocking, never fails the response.
   try {
@@ -13175,6 +14451,7 @@ app.post("/api/admin/scan-qr/confirm", authMiddleware, async (req, res) => {
   }
 
   logActivity(req.admin.id, req.admin.name, "scan", "event_registration", `${reg.name} — event ${reg.event_id}`).catch(() => {});
+  if (global.__ksLive) global.__ksLive.notify("event", reg.event_id); // live sheet shows "Present" instantly
 
   console.log(`[scan-confirm] ✓ ${reg.name} (id=${registration_id}) checked in by ${req.admin.username} for event ${reg.event_id}`);
   res.json({ success: true, name: reg.name });
@@ -13352,6 +14629,7 @@ app.delete("/api/admin/events/:eventId/registrations/:regId", authMiddleware, as
 
   await supabase.from("event_registrations").delete().eq("id", regId);
   logActivity(req.admin.id, req.admin.name, "delete", "event_registration", reg.name).catch(() => {});
+  if (global.__ksLive) global.__ksLive.notify("event", eventId);
   res.json({ success: true });
 });
 
