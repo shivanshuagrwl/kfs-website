@@ -18260,7 +18260,7 @@ async function cvApply() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   hero-video.js — homepage hero (filled text over an admin-uploaded video)
+   hero-video.js — homepage hero (glow tagline, then an admin-uploaded video that enlarges on scroll)
    Load AFTER app.js:  <script src="/hero-video.js" defer></script>
 
    Public side : reads hero_video_url + site_tagline from /api/settings,
@@ -18276,7 +18276,7 @@ async function cvApply() {
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ══ PUBLIC HERO ═══════════════════════════════════════════════════════ */
-  var section, stage, video, mask, word, foot, cue, ticking = false;
+  var section, stage, video, media, scrim, intro, story, cue, word, ticking = false;
 
   function clamp(n, a, b) { return Math.min(b, Math.max(a, n)); }
 
@@ -18313,24 +18313,51 @@ async function cvApply() {
     document.addEventListener('touchstart', play, { once: true, passive: true });
   }
 
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
   function onScroll() {
     if (ticking) return;
     ticking = true;
     requestAnimationFrame(function () {
       ticking = false;
-      if (!section || !mask) return;
+      if (!section || !stage || !media) return;
       var r = section.getBoundingClientRect();
       var span = Math.max(1, r.height - window.innerHeight);
       var p = clamp(-r.top / span, 0, 1);
 
-      if (!reduceMotion) {
-        // text grows past the camera and fades out, revealing the clean video
-        var scale = 1 + p * p * 5;
-        word.style.transform = 'scale(' + scale.toFixed(3) + ')';
-        mask.style.opacity = String(clamp(1 - (p - 0.35) / 0.4, 0, 1));
+      var W = stage.clientWidth, H = stage.clientHeight;
+      var small = W < 700;
+      // starting card (below the tagline + buttons) -> full screen
+      var sh = small ? H * 0.26 : Math.min(H * 0.34, 340);
+      var sw = small ? W * 0.8 : Math.min(W * 0.44, 720);
+      var st = H - sh - H * 0.06;
+      var g = ease(clamp(p / 0.55, 0, 1));
+
+      media.style.width = lerp(sw, W, g).toFixed(1) + 'px';
+      media.style.height = lerp(sh, H, g).toFixed(1) + 'px';
+      media.style.top = lerp(st, 0, g).toFixed(1) + 'px';
+      media.style.borderRadius = lerp(22, 0, g).toFixed(1) + 'px';
+      if (video) video.style.transform = 'scale(' + lerp(1.15, 1, g).toFixed(3) + ')';
+      if (scrim) scrim.style.opacity = (g * 0.9).toFixed(3);
+
+      // tagline + buttons fade up and away while the video grows
+      if (intro) {
+        var io = clamp(1 - (p - 0.03) / 0.3, 0, 1);
+        intro.style.opacity = io.toFixed(3);
+        intro.style.transform = 'translateY(' + (-p * 90).toFixed(1) + 'px)';
+        intro.style.pointerEvents = io > 0.15 ? 'auto' : 'none';
+        intro.style.visibility = io <= 0 ? 'hidden' : 'visible';
       }
-      if (foot) foot.style.opacity = String(clamp(1 - p * 3, 0, 1));
-      if (cue)  cue.style.opacity  = String(clamp(0.6 - p * 3, 0, 0.6));
+
+      // "Films. Stories. Creativity." line arrives once the video is full screen
+      if (story) {
+        var so = clamp((p - 0.6) / 0.18, 0, 1);
+        story.style.opacity = so.toFixed(3);
+        story.style.transform = 'translateY(' + lerp(28, 0, so).toFixed(1) + 'px)';
+      }
+
+      if (cue) cue.style.opacity = String(clamp(0.6 - p * 6, 0, 0.6));
     });
   }
 
@@ -18338,9 +18365,11 @@ async function cvApply() {
     section = document.getElementById('hero-section');
     stage   = document.getElementById('hero-stage');
     video   = document.getElementById('hero-video');
-    mask    = document.getElementById('hero-mask');
-    word    = document.getElementById('hero-word');
-    foot    = document.getElementById('hero-foot');
+    media   = document.getElementById('hero-media');
+    scrim   = document.getElementById('hero-scrim');
+    intro   = document.getElementById('hero-intro');
+    story   = document.getElementById('hero-story');
+    word    = null; // tagline text is handled by the glow-word code (site_tagline) above
     cue     = document.getElementById('hero-cue');
     if (!section || !stage) return;
 
