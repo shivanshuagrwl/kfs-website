@@ -3007,6 +3007,73 @@ position:relative;display:flex;flex-direction:column;height:100%;min-height:0;ba
 @media (prefers-reduced-motion:reduce){.ks *,.ks-bk,.ks-menu,.ks-toast{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 `;
 
+/* ── formatting palette + styles (dropdown chips, checkbox, stars, format bar, dialog) ── */
+var PAL = ['gray', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink'];
+var HUES = { gray: [262, .02], red: [25, .17], orange: [55, .16], yellow: [95, .15], green: [155, .15], teal: [190, .12], blue: [250, .16], purple: [300, .16], pink: [350, .16] };
+var FILLS = ['#fecaca', '#fed7aa', '#fef08a', '#bbf7d0', '#99f6e4', '#bfdbfe', '#ddd6fe', '#fbcfe8', '#e5e7eb', '#374151'];
+var INKS = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0d9488', '#2563eb', '#7c3aed', '#db2777', '#6b7280', '#ffffff'];
+var STYLE_KEYS = ['bg', 'fg', 'b', 'i', 'al'];
+var FKEYS = ['t', 'opts', 'multi', 'max', 'nf', 'bg', 'fg', 'b', 'i', 'al'];
+var CLEARP = {}, CLEARSTYLE = {}, EMPTYF = {};
+FKEYS.forEach(function (k) { CLEARP[k] = null; if (STYLE_KEYS.indexOf(k) > -1) CLEARSTYLE[k] = null; });
+CSS += '\n' + PAL.map(function (k) {
+  var hh = HUES[k][0], cc = HUES[k][1];
+  return '.ks-ch.c-' + k + '{background:oklch(.72 ' + cc + ' ' + hh + '/.2);color:oklch(.84 ' + cc + ' ' + hh + ')}' +
+    '.ks[data-theme=light] .ks-ch.c-' + k + '{background:oklch(.72 ' + cc + ' ' + hh + '/.22);color:oklch(.4 ' + cc + ' ' + hh + ')}' +
+    '.ks-dot.c-' + k + '{background:oklch(.7 ' + (k === 'gray' ? .02 : cc) + ' ' + hh + ')}';
+}).join('\n');
+CSS += `
+.ks-fb{display:flex;align-items:center;gap:2px;padding:4px 12px;background:var(--pn);border-bottom:1px solid var(--ln);overflow-x:auto;flex:none;scrollbar-width:none}
+.ks-fb::-webkit-scrollbar{display:none}
+.ks-fb .ks-btn{height:28px;padding:0 8px;gap:5px;font-size:12px;border-color:transparent;background:none;flex:none}
+.ks-fb .ks-btn:hover:not(:disabled){background:var(--pn2);border-color:transparent}
+.ks-fb .ks-btn.on{background:var(--acc-s);color:var(--acc)}
+.ks-fb .sep{width:1px;height:18px;background:var(--ln);margin:0 4px;flex:none}
+.ks-sw{width:14px;height:14px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--ln);flex:none;display:inline-block}
+.ks-gl{width:15px;text-align:center;flex:none;font-size:13px;line-height:1}
+.ks-c.ctr{justify-content:center}
+.ks-c.al-l{justify-content:flex-start}.ks-c.al-c{justify-content:center}.ks-c.al-r{justify-content:flex-end}
+.ks-cb{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--mut);display:grid;place-items:center;color:var(--acc-i);cursor:pointer;flex:none;transition:background .12s var(--e),border-color .12s var(--e),transform .12s var(--e)}
+.ks-cb:hover{border-color:var(--acc)}.ks-cb:active{transform:scale(.88)}.ks-cb.on{background:var(--acc);border-color:var(--acc)}
+.ks-c.ro .ks-cb{cursor:default;opacity:.7}
+.ks-st{display:inline-flex;gap:2px;font-size:16px;line-height:1;overflow:visible!important}
+.ks-st i{font-style:normal;color:var(--mut);opacity:.35;cursor:pointer}.ks-st i.on{color:oklch(.8 .16 85);opacity:1}
+.ks-c.ro .ks-st i{cursor:default}
+.ks-chs{display:flex;gap:4px;flex:1;min-width:0;overflow:hidden}
+.ks-ch{display:inline-flex;align-items:center;height:21px;padding:0 9px;border-radius:99px;font-size:11.5px;font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;flex:none}
+.ks-dd{margin-left:6px;display:grid;place-items:center;width:20px;height:20px;border-radius:6px;color:var(--mut);opacity:.55;cursor:pointer;flex:none}
+.ks-dd:hover{background:var(--ln2);opacity:1}
+.ks-tg{color:var(--acc);font-size:12px;flex:none;line-height:1}
+.ks-pick{position:fixed;z-index:45;display:flex;flex-direction:column;gap:6px;max-height:320px;padding:8px;border-radius:12px;background:var(--pn);box-shadow:var(--sh);animation:ksIn .16s var(--e) both;transform-origin:top left}
+.ks-pick>input{height:32px;padding:0 10px;border-radius:9px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+.ks-pick>input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
+.ks-pl{overflow:auto;display:flex;flex-direction:column;gap:2px;min-height:0}
+.ks-po{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;padding:3px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px}
+.ks-po:hover,.ks-po.hi{background:var(--pn2)}.ks-po.clr{color:var(--mut)}.ks-po .ks-ok{margin-left:auto;color:var(--acc)}
+.ks-pe{padding:8px;color:var(--mut);font-size:12.5px}
+.ks-cbx{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--mut);display:grid;place-items:center;flex:none;color:var(--acc-i);font-style:normal}.ks-cbx.on{background:var(--acc);border-color:var(--acc)}
+.ks-pdr{display:flex;gap:6px}.ks-pdr .ks-btn{flex:1;justify-content:center}
+.ks-pick>input[type=date]{color-scheme:inherit}
+.ks-seg{display:flex;flex-wrap:wrap;gap:6px}
+.ks-seg button{height:30px;padding:0 12px;border-radius:99px;border:1px solid var(--ln);background:var(--bg);font-size:12.5px;font-weight:550}
+.ks-seg button:hover{border-color:var(--mut)}.ks-seg button.on{background:var(--acc-s);border-color:var(--acc);color:var(--acc)}
+.ks-opt{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.ks-opt input{flex:1;height:34px;padding:0 10px;border-radius:9px;border:1px solid var(--ln);background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+.ks-opt input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
+.ks-dot{width:24px;height:24px;border-radius:50%;border:0;flex:none;box-shadow:inset 0 0 0 1px oklch(0 0 0/.15)}
+.ks-xb{width:28px;height:28px;border:0;background:none;border-radius:8px;display:grid;place-items:center;color:var(--mut);flex:none}.ks-xb:hover{background:var(--ln2);color:var(--bd)}
+.ks-swg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ks-swg button{width:24px;height:24px;border-radius:7px;border:1px solid var(--ln);color:var(--mut);font-size:12px;line-height:1;padding:0}
+.ks-swg button.on{outline:2px solid var(--acc);outline-offset:1px}
+.ks-swg label{position:relative;height:24px;padding:0 9px;border-radius:7px;border:1px solid var(--ln);display:inline-flex;align-items:center;font-size:11.5px;color:var(--ink2);cursor:pointer}
+.ks-swg input[type=color],.ks-swf input[type=color]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0}
+.ks-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:8px 0;cursor:pointer}
+.ks-pv{font-size:12.5px;color:var(--mut);margin:4px 0 10px}.ks-pv b{color:var(--ink)}
+.ks-hint{margin:0 0 12px;color:var(--mut);font-size:12.5px}
+.ks-sp2{padding:10px}.ks-sp2 .ks-swg{max-width:190px}.ks-swf{display:flex;gap:6px;margin-top:8px}.ks-swf .ks-btn{position:relative;height:28px;font-size:12px}
+.ks-dots{display:grid;grid-template-columns:repeat(5,24px);gap:8px;padding:4px}
+`;
+
 var RH = 32, HH = 36, GUT = 56, ADDW = 48;
 var D = document;
 function ic(n, s) { s = s || 16; return '<svg class="i" width="' + s + '" height="' + s + '" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
@@ -3093,16 +3160,16 @@ function mount(host, opts) {
     closeMenu(); menuEl = h('div', 'ks-menu'); menuEl.setAttribute('role', 'menu');
     items.forEach(function (it) {
       if (it === '-') { menuEl.appendChild(h('hr')); return; }
-      var b = h('button', it.danger ? 'dg' : '', ic(it.icon || 'caret-right', 15) + '<span>' + esc(it.label) + '</span>'); b.disabled = !!it.off;
+      var b = h('button', it.danger ? 'dg' : '', (it.glyph ? '<span class="ks-gl">' + it.glyph + '</span>' : ic(it.icon || 'caret-right', 15)) + '<span>' + esc(it.label) + '</span>'); b.disabled = !!it.off;
       b.onclick = function () { closeMenu(); it.fn && it.fn(); }; menuEl.appendChild(b);
     });
     root.appendChild(menuEl); var r = menuEl.getBoundingClientRect();
     menuEl.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; menuEl.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   }
-  on(D, 'mousedown', function (e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
+  on(D, 'mousedown', function (e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); if (pickEl && !pickEl.contains(e.target)) closePicker(); }, true);
 
   /* ── skeleton DOM ────────────────────────────────────────── */
-  var top = h('div', 'ks-top'), fx = h('div', 'ks-fx'), grid = h('div', 'ks-grid'), foot = h('div', 'ks-foot');
+  var top = h('div', 'ks-top'), fb = h('div', 'ks-fb'), fx = h('div', 'ks-fx'), grid = h('div', 'ks-grid'), foot = h('div', 'ks-foot');
   grid.tabIndex = 0; grid.setAttribute('role', 'grid'); grid.setAttribute('aria-label', 'Live sheet');
   var inner = h('div', 'ks-in'), hd = h('div', 'ks-hd'), rowsEl = h('div', 'ks-rows'), selEl = h('div', 'ks-sel'), actEl = h('div', 'ks-act'), ed = h('textarea', 'ks-ed');
   ed.style.display = 'none'; selEl.style.display = actEl.style.display = 'none'; ed.setAttribute('aria-label', 'Edit cell');
@@ -3118,7 +3185,7 @@ function mount(host, opts) {
   function colWidth(c) {
     if (c.width) return c.width;
     if (c.id === '__ts' || c.id === '__in_at') return 160;
-    if (c.type === 'check') return 118; if (c.type === 'number') return 110; if (c.type === 'email') return 230; if (c.type === 'phone') return 150;
+    var ft = c.fmt && c.fmt.t; if (ft === 'checkbox') return 100; if (ft === 'rating') return (c.fmt.max || 5) * 18 + 36; if (ft === 'drop') return 170; if (ft === 'date') return 130; if (ft === 'number') return 120; if (c.type === 'check') return 118; if (c.type === 'number') return 110; if (c.type === 'email') return 230; if (c.type === 'phone') return 150;
     var m = c.label ? c.label.length * 7.4 + 54 : 120; return Math.max(130, Math.min(260, Math.round(m)));
   }
   function layout() {
@@ -3131,7 +3198,7 @@ function mount(host, opts) {
     var rows = S.data ? S.data.rows : [], idx = rows.map(function (_, i) { return i; }), q = S.q.trim().toLowerCase(), cs = cols();
     if (q) idx = idx.filter(function (i) { var v = rows[i].v; for (var k = 0; k < cs.length; k++) { var x = v[cs[k].id]; if (x && String(x).toLowerCase().indexOf(q) > -1) return true; } return false; });
     if (S.sort) {
-      var id = S.sort.id, dir = S.sort.dir, num = cs.some(function (c) { return c.id === id && c.type === 'number'; });
+      var id = S.sort.id, dir = S.sort.dir, num = cs.some(function (c) { return c.id === id && isNumCol(c); });
       idx.sort(function (a, b) {
         var x = rows[a].v[id] || '', y = rows[b].v[id] || '', r;
         if (x === '' && y !== '') return 1; if (y === '' && x !== '') return -1;
@@ -3238,10 +3305,10 @@ function mount(host, opts) {
 
   /* ── grid render ─────────────────────────────────────────── */
   var rendered = new Map(), lastRange = [-1, -1];
-  function cellHtml(c, v) {
+  function cellHtml(c, v, f) {
     if (c.type === 'check') return v ? '<span class="ks-pill">' + ic('check', 13) + 'Present</span>' : '<span class="ks-dash">&mdash;</span>';
     if (c.type === 'time') return v ? '<span>' + esc(fmtTime(v)) + '</span>' : '';
-    return v ? '<span>' + esc(v) + '</span>' : '';
+    return fmtCell(c, v, f || EMPTYF);
   }
   function rowEl(vi) {
     var row = S.data.rows[S.view[vi]], cs = cols(), el = h('div', 'ks-r'), now = Date.now();
@@ -3249,9 +3316,9 @@ function mount(host, opts) {
     el.style.cssText = 'top:' + vi * RH + 'px;height:' + RH + 'px;width:' + S.totalW + 'px';
     var html = '<div class="ks-g" style="width:' + GUT + 'px;height:' + RH + 'px">' + row.n + '</div>';
     for (var i = 0; i < cs.length; i++) {
-      var c = cs[i], v = row.v[c.id] || '', k = row.key + '|' + c.id, cl = 'ks-c' + (c.ro || !canEdit() ? ' ro' : '') + (c.type === 'number' ? ' num' : '');
+      var c = cs[i], v = row.v[c.id] || '', k = row.key + '|' + c.id, f = effFmt(c, row), kd = kindOf(c, f), cl = 'ks-c' + (c.ro || !canEdit() ? ' ro' : '') + (kd === 'number' ? ' num' : '') + (kd === 'checkbox' ? ' ctr' : '') + (f.al ? ' al-' + f.al : '');
       if (S.flash.has(k) && now - S.flash.get(k) < 1700) cl += ' fl';
-      html += '<div class="' + cl + '" data-c="' + i + '" style="left:' + (GUT + S.colX[i]) + 'px;width:' + S.colW[i] + 'px;height:' + RH + 'px">' + cellHtml(c, v) + '</div>';
+      html += '<div class="' + cl + '" data-c="' + i + '" style="left:' + (GUT + S.colX[i]) + 'px;width:' + S.colW[i] + 'px;height:' + RH + 'px;' + cellStyle(f) + '">' + cellHtml(c, v, f) + '</div>';
     }
     el.innerHTML = html; return el;
   }
@@ -3269,7 +3336,7 @@ function mount(host, opts) {
     cs.forEach(function (c, i) {
       var sorted = S.sort && S.sort.id === c.id;
       html += '<div class="ks-hc' + (c.hidden ? ' hid' : '') + (S.act && S.act.c === i ? ' on' : '') + '" data-c="' + i + '" style="left:' + (GUT + S.colX[i]) + 'px;width:' + S.colW[i] + 'px;height:' + HH + 'px" title="' + esc(c.label) + '">' +
-        (c.ro ? ic('lock-simple', 13) : '') + (c.hidden ? ic('eye-slash', 13) : '') + '<span class="lb">' + esc(c.label) + '</span>' + (sorted ? ic(S.sort.dir > 0 ? 'sort-ascending' : 'sort-descending', 14) : '') +
+        (c.ro ? ic('lock-simple', 13) : '') + (c.hidden ? ic('eye-slash', 13) : '') + tg(c) + '<span class="lb">' + esc(c.label) + '</span>' + (sorted ? ic(S.sort.dir > 0 ? 'sort-ascending' : 'sort-descending', 14) : '') +
         '<button class="mn" data-m="' + i + '" aria-label="Column menu">' + ic('caret-down', 13) + '</button><i class="rz" data-rz="' + i + '"></i></div>';
     });
     if (canEdit()) html += '<button class="ks-add" data-add="1" aria-label="Add column" title="Add column" style="left:' + (GUT + (S.colX.length ? S.colX[S.colX.length - 1] + S.colW[S.colW.length - 1] : 0)) + 'px;width:' + ADDW + 'px;height:' + HH + 'px">' + ic('plus', 15) + '</button>';
@@ -3286,11 +3353,11 @@ function mount(host, opts) {
     if (!S.data) return;
     inner.style.cssText = 'width:' + S.totalW + 'px;height:' + (HH + S.view.length * RH + 24) + 'px';
     rowsEl.style.cssText = 'top:' + HH + 'px;width:' + S.totalW + 'px;height:' + S.view.length * RH + 'px';
-    renderTop(); renderHead(); paintRows(true); renderFoot(); updateFx();
+    renderTop(); renderHead(); paintRows(true); renderFoot(); renderFmtBar(true); updateFx();
     var em = inner.querySelector('.ks-empty'); if (em) em.remove();
     if (!S.view.length) inner.appendChild(h('div', 'ks-empty', '<div class="t">' + (S.q ? 'No matching rows' : 'No responses yet') + '</div><div>' + (S.q ? 'Try a different search.' : 'New form submissions appear here instantly.') + '</div>'));
   }
-  var raf = 0; grid.addEventListener('scroll', function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; paintRows(); closeMenu(); }); });
+  var raf = 0; grid.addEventListener('scroll', function () { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; paintRows(); closeMenu(); closePicker(); }); });
   /* ── selection ───────────────────────────────────────────── */
   function rowObj(vi) { return S.data.rows[S.view[vi]]; }
   function setSel(a, f, keepAnchor) {
@@ -3321,6 +3388,7 @@ function mount(host, opts) {
     return 'Count <b>' + n + '</b>' + (nums ? ' &nbsp; Sum <b>' + (Math.round(sum * 100) / 100) + '</b>' : '');
   }
   function updateFx() {
+    renderFmtBar();
     if (!S.data) return; var el = fx.querySelector('.vl');
     if (!S.act || !S.view.length) { fx.innerHTML = '<div class="nm">No cell selected</div><div class="vl e">Select a cell to see its full value</div>'; return; }
     var c = cols()[S.act.c], r = rowObj(S.act.r); if (!c || !r) return; var v = r.v[c.id] || '';
@@ -3338,13 +3406,14 @@ function mount(host, opts) {
     if (e.button !== 0 || !S.data) return; closeMenu();
     var rz = e.target.closest('[data-rz]'); if (rz) return startResize(e, +rz.getAttribute('data-rz'));
     if (e.target.closest('[data-m]')) { var i = +e.target.closest('[data-m]').getAttribute('data-m'), r = e.target.closest('[data-m]').getBoundingClientRect(); e.preventDefault(); return colMenu(i, r.left, r.bottom + 4); }
-    if (e.target.closest('[data-add]')) { e.preventDefault(); return addColumn(); }
+    if (e.target.closest('[data-add]')) { e.preventDefault(); var ab = e.target.closest('[data-add]').getBoundingClientRect(); return addColMenu(ab.left, ab.bottom + 4); }
     if (e.target === ed) return;
     var hc = e.target.closest('.ks-hc'); if (hc) { var ci = +hc.getAttribute('data-c'); if (!S.view.length) return; e.preventDefault(); grid.focus(); if (e.shiftKey && S.anc) setSel(S.act, { r: S.view.length - 1, c: ci }, true); else { setSel({ r: 0, c: ci }); S.anc = { r: 0, c: ci }; S.foc = { r: S.view.length - 1, c: ci }; paintSel(); } return; }
     if (!e.target.closest('.ks-rows') || !S.view.length) return;
-    var p = hit(e); if (p.c === -2) return; commitEdit(true); e.preventDefault(); grid.focus({ preventScroll: true });
+    var p = hit(e); if (p.c === -2) return; var was = !!(S.act && S.act.r === p.r && S.act.c === p.c); commitEdit(true); e.preventDefault(); grid.focus({ preventScroll: true });
     if (p.gut) { if (e.shiftKey && S.anc) setSel(S.act, { r: p.r, c: cols().length - 1 }, true); else { setSel({ r: p.r, c: 0 }); S.foc = { r: p.r, c: cols().length - 1 }; paintSel(); } S.drag = 'row'; }
     else if (e.shiftKey && S.anc) { setSel(S.act, { r: p.r, c: p.c }, true); S.drag = 'cell'; } else { setSel({ r: p.r, c: p.c }); S.drag = 'cell'; }
+    if (!p.gut && p.c >= 0 && !e.shiftKey) cellClick(e, p, was);
   });
   on(window, 'mousemove', function (e) {
     if (!S.drag || !S.anc) return; var p = hit(e); var c = S.drag === 'row' ? cols().length - 1 : (p.c < 0 ? S.foc.c : p.c);
@@ -3352,19 +3421,357 @@ function mount(host, opts) {
     var rc = grid.getBoundingClientRect(); if (e.clientY > rc.bottom - 24) grid.scrollTop += 22; else if (e.clientY < rc.top + HH + 24) grid.scrollTop -= 22; if (e.clientX > rc.right - 24) grid.scrollLeft += 22; else if (e.clientX < rc.left + GUT + 24) grid.scrollLeft -= 22;
   });
   on(window, 'mouseup', function () { S.drag = null; });
-  grid.addEventListener('dblclick', function (e) { if (e.target.closest('.ks-rows') && !hit(e).gut && S.act) startEdit(); });
+  grid.addEventListener('dblclick', function (e) { if (e.target.closest('.ks-rows') && !hit(e).gut && S.act) startEdit(null, true); });
   grid.addEventListener('contextmenu', function (e) {
     if (!S.data) return; var hc = e.target.closest('.ks-hc'); if (hc) { e.preventDefault(); return colMenu(+hc.getAttribute('data-c'), e.clientX, e.clientY); }
     if (!e.target.closest('.ks-rows') || !S.view.length) return; e.preventDefault(); var p = hit(e), g = range();
     if (!g || p.r < g.r0 || p.r > g.r1) { if (p.gut) { setSel({ r: p.r, c: 0 }); S.foc = { r: p.r, c: cols().length - 1 }; paintSel(); } else setSel({ r: p.r, c: Math.max(0, p.c) }); g = range(); }
     var n = g.r1 - g.r0 + 1, ce = canEdit();
-    menu(e.clientX, e.clientY, [{ label: 'Copy', icon: 'copy', fn: function () { doCopy(); } }, { label: 'Paste', icon: 'clipboard', off: !ce, fn: function () { if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(doPaste).catch(function () { toast('Press Ctrl+V to paste'); }); else toast('Press Ctrl+V to paste'); } }, { label: 'Clear cells', icon: 'x', off: !ce, fn: clearSel }, '-', { label: 'Delete ' + n + ' row' + (n > 1 ? 's' : ''), icon: 'trash', danger: true, off: !ce, fn: deleteRows }]);
+    menu(e.clientX, e.clientY, [{ label: 'Copy', icon: 'copy', fn: function () { doCopy(); } }, { label: 'Paste', icon: 'clipboard', off: !ce, fn: function () { if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(doPaste).catch(function () { toast('Press Ctrl+V to paste'); }); else toast('Press Ctrl+V to paste'); } }, { label: 'Clear cells', icon: 'x', off: !ce, fn: clearSel }, { label: 'Format cells\u2026', icon: 'pencil-simple', off: !ce, fn: function () { formatDialog(); } }, { label: 'Clear formatting', icon: 'arrows-clockwise', off: !ce, fn: function () { clearFormat(); } }, '-', { label: 'Delete ' + n + ' row' + (n > 1 ? 's' : ''), icon: 'trash', danger: true, off: !ce, fn: deleteRows }]);
   });
   function startResize(e, i) {
     e.preventDefault(); e.stopPropagation(); var x0 = e.clientX, w0 = S.colW[i], handle = e.target; handle.classList.add('on');
     function mv(ev) { var w = Math.max(60, Math.min(700, w0 + ev.clientX - x0)); cols()[i].width = w; layout(); renderHead(); inner.style.width = S.totalW + 'px'; rowsEl.style.width = S.totalW + 'px'; paintRows(true); }
     function up() { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); var c = cols()[i]; if (canEdit() && c.id.indexOf('__') !== 0) api('/api/ls/x/cols/update', { method: 'POST', body: { id: c.id, width: c.width } }).catch(function () {}); }
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
+  }
+
+  /* ═════════ formatting: dropdowns, checkboxes, stars, units, colours (column / cell / row) ═════════ */
+  function mergeF(base, patch) {
+    var o = {}, k, v; if (base) for (k in base) o[k] = base[k];
+    for (k in patch) { v = patch[k]; if (v == null || v === '' || v === false) delete o[k]; else o[k] = v; }
+    if (patch.t !== undefined) { if (o.t !== 'drop') { delete o.opts; delete o.multi; } if (o.t !== 'rating') delete o.max; if (o.t !== 'number') delete o.nf; }
+    return o;
+  }
+  function effFmt(c, row) {
+    var f = c.fmt, rf = row && row.f; if (!f && !rf) return EMPTYF;
+    return mergeF(mergeF(f, (rf && rf['*']) || {}), (rf && rf[c.id]) || {});
+  }
+  function kindOf(c, f) { if (f.t) return f.t; return c.type === 'number' ? 'number' : (c.type === 'date' ? 'date' : 'text'); }
+  function isNumCol(c) { var t = c.fmt && c.fmt.t; return t ? (t === 'number' || t === 'rating') : c.type === 'number'; }
+  function fmtable(c) { return !!c && !c.ro && c.id.indexOf('__') !== 0; }
+  function isTrue(v) { return /^(true|yes|y|1|\u2713)$/i.test(String(v == null ? '' : v).trim()); }
+  function fmtNum(v, nf) {
+    var raw = String(v).replace(/,/g, '').trim(), n = Number(raw);
+    if (raw === '' || !isFinite(n)) return String(v);
+    nf = nf || {}; var dec = nf.dec == null ? null : nf.dec;
+    var body = Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: dec == null ? 0 : dec, maximumFractionDigits: dec == null ? 6 : dec, useGrouping: !!nf.sep });
+    return (n < 0 ? '-' : '') + (nf.pre || '') + body + (nf.suf ? (nf.suf === '%' ? '' : ' ') + nf.suf : '');
+  }
+  function fmtDate(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v)); if (!m) return String(v);
+    var d = new Date(+m[1], +m[2] - 1, +m[3]); return isNaN(d) ? String(v) : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function lum(hex) { var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+  var HEXRE = /^#[0-9a-f]{6}$/i;
+  function cellStyle(f) {
+    var s = '';
+    if (f.bg && HEXRE.test(f.bg)) { s += 'background:' + f.bg + ';'; if (!f.fg) s += 'color:' + (lum(f.bg) > .55 ? '#111' : '#fff') + ';'; }
+    if (f.fg && HEXRE.test(f.fg)) s += 'color:' + f.fg + ';';
+    if (f.b) s += 'font-weight:700;'; if (f.i) s += 'font-style:italic;';
+    return s;
+  }
+  function fmtCell(c, v, f) {
+    var kd = kindOf(c, f), i;
+    if (kd === 'checkbox') { var on = isTrue(v); return '<span class="ks-cb' + (on ? ' on' : '') + '" data-cb="1" role="checkbox" aria-checked="' + on + '">' + (on ? ic('check', 12) : '') + '</span>'; }
+    if (kd === 'rating') {
+      var mx = f.max || 5, n = Math.max(0, Math.min(mx, Math.round(parseFloat(v) || 0))), s = '';
+      for (i = 1; i <= mx; i++) s += '<i data-st="' + i + '"' + (i <= n ? ' class="on"' : '') + '>\u2605</i>';
+      return '<span class="ks-st" role="img" aria-label="' + n + ' of ' + mx + '">' + s + '</span>';
+    }
+    if (kd === 'drop') {
+      var opts = f.opts || [], parts = f.multi ? String(v).split(/\s*,\s*/).filter(Boolean) : (v ? [v] : []);
+      var chips = parts.map(function (p) { var o = null; for (var j = 0; j < opts.length; j++) if (opts[j].v === p) { o = opts[j]; break; } return '<span class="ks-ch c-' + (o && PAL.indexOf(o.c) > -1 ? o.c : 'gray') + '">' + esc(p) + '</span>'; }).join('');
+      return '<span class="ks-chs">' + chips + '</span>' + (!c.ro && canEdit() ? '<i class="ks-dd" data-dd="1">' + ic('caret-down', 12) + '</i>' : '');
+    }
+    if (kd === 'number') return v ? '<span>' + esc(fmtNum(v, f.nf)) + '</span>' : '';
+    if (kd === 'date') return v ? '<span>' + esc(fmtDate(v)) + '</span>' : '';
+    return v ? '<span>' + esc(v) + '</span>' : '';
+  }
+  function tg(c) { var t = c.fmt && c.fmt.t, g = t === 'checkbox' ? '\u2611' : t === 'drop' ? '\u25be' : t === 'rating' ? '\u2605' : t === 'date' ? '\u25a6' : ''; return g ? '<span class="ks-tg">' + g + '</span>' : ''; }
+
+  /* ── popups (colour swatches, option colours) ── */
+  function popup(x, y, node) {
+    closeMenu(); menuEl = node; node.classList.add('ks-menu'); node.style.zIndex = 70; root.appendChild(node);
+    var r = node.getBoundingClientRect(); node.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; node.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  }
+  function swatchPop(x, y, list, cb) {
+    var n = h('div', 'ks-sp2');
+    n.innerHTML = '<div class="ks-swg">' + list.map(function (c) { return '<button data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>'; }).join('') + '</div><div class="ks-swf"><button class="ks-btn" data-none="1">None</button><label class="ks-btn">Custom<input type="color" value="#3b82f6"></label></div>';
+    n.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (b) { closeMenu(); cb(b.getAttribute('data-c')); } else if (e.target.closest('[data-none]')) { closeMenu(); cb(null); } });
+    n.querySelector('input').addEventListener('change', function (e) { closeMenu(); cb(e.target.value); });
+    popup(x, y, n);
+  }
+  function dotPop(x, y, cb) {
+    var n = h('div', 'ks-sp2'); n.innerHTML = '<div class="ks-dots">' + PAL.map(function (k) { return '<button class="ks-dot c-' + k + '" data-k="' + k + '" aria-label="' + k + '"></button>'; }).join('') + '</div>';
+    n.addEventListener('click', function (e) { var b = e.target.closest('[data-k]'); if (b) { closeMenu(); cb(b.getAttribute('data-k')); } });
+    popup(x, y, n);
+  }
+
+  /* ── pickers anchored to a cell ── */
+  var pickEl = null;
+  function closePicker() { if (pickEl) { pickEl.remove(); pickEl = null; } }
+  function placePop(el, vi, ci, w) {
+    var rc = rowsEl.getBoundingClientRect(), left = rc.left + GUT + S.colX[ci], top = rc.top + vi * RH;
+    el.style.width = w + 'px'; var r = el.getBoundingClientRect();
+    el.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
+    var t = top + RH + 2; if (t + r.height > innerHeight - 8) t = Math.max(8, top - r.height - 2); el.style.top = t + 'px';
+  }
+  function liveRow(key) { var i = S.rowIdx.get(key); return i == null ? null : S.data.rows[i]; }
+  function openPicker(vi, ci, init) {
+    closePicker(); closeMenu();
+    var col = cols()[ci], row = rowObj(vi); if (!col || !row) return;
+    var key = row.key, f = effFmt(col, row), opts = f.opts || [], multi = !!f.multi, hi = 0;
+    var el = h('div', 'ks-pick'), inp = h('input'), list = h('div', 'ks-pl');
+    inp.placeholder = opts.length ? 'Search options' : 'No options yet'; inp.value = init && init !== ' ' ? init : ''; inp.setAttribute('aria-label', 'Search options');
+    el.appendChild(inp); el.appendChild(list); root.appendChild(el); pickEl = el;
+    function cur() { var r = liveRow(key); return r ? (r.v[col.id] || '') : ''; }
+    function sel() { var v = cur(); return multi ? v.split(/\s*,\s*/).filter(Boolean) : (v ? [v] : []); }
+    function shown() { var q = inp.value.trim().toLowerCase(); return opts.filter(function (o) { return !q || o.v.toLowerCase().indexOf(q) > -1; }); }
+    function draw() {
+      var s = sel(), sh = shown(); if (hi >= sh.length) hi = Math.max(0, sh.length - 1);
+      list.innerHTML = sh.map(function (o, i) {
+        var on = s.indexOf(o.v) > -1;
+        return '<button class="ks-po' + (i === hi ? ' hi' : '') + '" data-v="' + esc(o.v) + '">' + (multi ? '<i class="ks-cbx' + (on ? ' on' : '') + '">' + (on ? ic('check', 11) : '') + '</i>' : '') + '<span class="ks-ch c-' + o.c + '">' + esc(o.v) + '</span>' + (on && !multi ? '<span class="ks-ok">' + ic('check', 14) + '</span>' : '') + '</button>';
+      }).join('') + (!sh.length ? '<div class="ks-pe">' + (opts.length ? 'No match' : 'Add options from Format\u2026') + '</div>' : '') + (s.length ? '<button class="ks-po clr" data-clear="1">' + ic('x', 13) + '<span>Clear</span></button>' : '');
+    }
+    function choose(v) {
+      var r = liveRow(key); if (!r) { closePicker(); return; }
+      var s = sel(), nv;
+      if (v === null) nv = ''; else if (multi) { var i = s.indexOf(v); if (i > -1) s.splice(i, 1); else s.push(v); nv = s.join(', '); } else nv = v;
+      setCells([{ row: r, col: col.id, v: nv }]);
+      if (!multi || v === null) { closePicker(); grid.focus({ preventScroll: true }); } else draw();
+    }
+    list.addEventListener('click', function (e) { var b = e.target.closest('.ks-po'); if (!b) return; if (b.hasAttribute('data-clear')) choose(null); else choose(b.getAttribute('data-v')); });
+    inp.addEventListener('input', function () { hi = 0; draw(); });
+    inp.addEventListener('keydown', function (e) {
+      e.stopPropagation(); var sh = shown();
+      if (e.key === 'ArrowDown') { e.preventDefault(); hi = Math.min(sh.length - 1, hi + 1); draw(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, hi - 1); draw(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (sh[hi]) choose(sh[hi].v); }
+      else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closePicker(); grid.focus({ preventScroll: true }); }
+    });
+    draw(); placePop(el, vi, ci, Math.max(220, S.colW[ci])); inp.focus();
+  }
+  function openDate(vi, ci) {
+    closePicker(); closeMenu(); var col = cols()[ci], row = rowObj(vi); if (!col || !row) return; var key = row.key;
+    var el = h('div', 'ks-pick'), inp = h('input'), act = h('div', 'ks-pdr', '<button class="ks-btn" data-t="1">Today</button><button class="ks-btn" data-c="1">Clear</button>'), v = row.v[col.id] || '';
+    inp.type = 'date'; inp.value = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; inp.setAttribute('aria-label', 'Pick a date');
+    el.appendChild(inp); el.appendChild(act); root.appendChild(el); pickEl = el;
+    function put(val) { var r = liveRow(key); if (r) setCells([{ row: r, col: col.id, v: val }]); closePicker(); grid.focus({ preventScroll: true }); }
+    inp.addEventListener('change', function () { if (inp.value) put(inp.value); });
+    act.addEventListener('click', function (e) { if (e.target.closest('[data-t]')) { var d = new Date(); put(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2)); } else if (e.target.closest('[data-c]')) put(''); });
+    inp.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') { closePicker(); grid.focus({ preventScroll: true }); } });
+    placePop(el, vi, ci, 230); inp.focus();
+  }
+
+  /* ── checkbox / stars: direct clicks + keyboard ── */
+  function toggleSel() {
+    var g = range(); if (!g || !guard()) return; var cs = cols(), l = [], first = null;
+    for (var r = g.r0; r <= g.r1; r++) { var row = rowObj(r); for (var c = g.c0; c <= g.c1; c++) { var col = cs[c]; if (col.ro || kindOf(col, effFmt(col, row)) !== 'checkbox') continue; if (first === null) first = !isTrue(row.v[col.id]); l.push({ row: row, col: col.id, v: first ? 'TRUE' : '' }); } }
+    setCells(l);
+  }
+  function cellClick(e, p, was) {
+    var c = cols()[p.c], row = rowObj(p.r); if (!c || !row || c.ro || !canEdit()) return;
+    var f = effFmt(c, row), kd = kindOf(c, f);
+    if (kd === 'checkbox' && e.target.closest('[data-cb]')) setCells([{ row: row, col: c.id, v: isTrue(row.v[c.id]) ? '' : 'TRUE' }]);
+    else if (kd === 'rating') { var st = e.target.closest('[data-st]'); if (st) { var n = +st.getAttribute('data-st'), cur = Math.round(parseFloat(row.v[c.id]) || 0); setCells([{ row: row, col: c.id, v: cur === n ? '' : String(n) }]); } }
+    else if (kd === 'drop' && (was || e.target.closest('[data-dd]'))) openPicker(p.r, p.c);
+  }
+
+  /* ── applying formats (column scope = col_meta, cell scope = overlay, full-width rows = row style) ── */
+  function isFullCols(g) { return !S.q && g.r0 === 0 && g.r1 === S.view.length - 1; }
+  function autoScope() { var g = range(); return g && isFullCols(g) ? 'col' : 'cells'; }
+  function setOverride(row, cid, patch) {
+    var nv = mergeF(row.f && row.f[cid], patch), has = Object.keys(nv).length > 0; if (!row.f) row.f = {};
+    if (has) row.f[cid] = nv; else delete row.f[cid];
+    return { r: row.key, c: cid, f: has ? nv : null };
+  }
+  function sendFmt(items, ups) {
+    var p = Promise.resolve(), i;
+    for (i = 0; i < items.length; i += 300) (function (chunk) { p = p.then(function () { return api('/api/ls/x/fmt', { method: 'POST', body: { items: chunk } }); }); })(items.slice(i, i + 300));
+    ups.forEach(function (u) { p = p.then(function () { return api('/api/ls/x/cols/update', { method: 'POST', body: u }); }); });
+    return p.then(function () { return refresh(true); }).catch(function (e) { onApiError(e); refresh(true); });
+  }
+  function applyFmt(patch, scope, g) {
+    if (!guard()) return false; g = g || range(); if (!g) { toast('Select a cell or column first'); return false; }
+    var cs = cols(), items = [], ups = [], any = false, r, c, k, isClear = true;
+    for (k in patch) if (patch[k] != null) isClear = false;
+    var styleOnly = Object.keys(patch).every(function (x) { return STYLE_KEYS.indexOf(x) > -1; });
+    if (scope === 'col') {
+      for (c = g.c0; c <= g.c1; c++) { if (!fmtable(cs[c])) continue; any = true; var nf = mergeF(cs[c].fmt, patch); cs[c].fmt = Object.keys(nf).length ? nf : undefined; ups.push({ id: cs[c].id, fmt: nf }); }
+    } else {
+      var rowMode = styleOnly && g.c0 === 0 && g.c1 === cs.length - 1;
+      for (r = g.r0; r <= g.r1; r++) {
+        var row = S.view.length ? rowObj(r) : null; if (!row) continue;
+        if (rowMode) { any = true; if (isClear && !(row.f && row.f['*'])) continue; items.push(setOverride(row, '*', patch)); continue; }
+        for (c = g.c0; c <= g.c1; c++) { if (!fmtable(cs[c])) continue; any = true; if (isClear && !(row.f && row.f[cs[c].id])) continue; items.push(setOverride(row, cs[c].id, patch)); }
+      }
+    }
+    if (!any) { toast("These columns are filled automatically and can't be formatted"); return false; }
+    var n = scope === 'col' ? ups.length : items.length;
+    if (n) { S.version = ''; layout(); renderAll(); sendFmt(items, ups); }
+    return { n: n, scope: scope, g: g };
+  }
+  function autoApply(patch, msg) {
+    var g = range(); if (!g) { toast('Select a cell or column first'); return; }
+    var sc = isFullCols(g) ? 'col' : 'cells', res = applyFmt(patch, sc, g); if (!res || !msg) return;
+    if (sc === 'cells' && g.c0 === g.c1) toast(msg + ' \u00b7 ' + res.n + ' cell' + (res.n > 1 ? 's' : ''), 'Whole column', function () { applyFmt(patch, 'col', g); });
+    else toast(msg + (sc === 'col' ? ' \u00b7 whole column' : ''));
+  }
+  function clearFormat(scope, g) {
+    g = g || range(); if (!g) { toast('Select a cell or column first'); return; }
+    var sc = scope || (isFullCols(g) ? 'col' : 'cells'), allC = g.c0 === 0 && g.c1 === cols().length - 1;
+    applyFmt(CLEARP, sc, g);
+    if (sc === 'col') applyFmt(CLEARP, 'cells', g); else if (allC) applyFmt(CLEARSTYLE, 'cells', g);
+    toast('Formatting cleared');
+  }
+  function quickType(kind) {
+    if (kind === 'drop' || kind === 'number') return formatDialog({ type: kind });
+    var patch = { t: kind }; if (kind === 'rating') patch.max = 5;
+    autoApply(patch, { checkbox: 'Checkbox added', rating: 'Star rating added', date: 'Date picker added' }[kind] || 'Format applied');
+  }
+  function toggleStyle(key) { if (!S.act || !guard()) return; var f = effFmt(cols()[S.act.c], rowObj(S.act.r)), p = {}; p[key] = f[key] ? null : 1; autoApply(p); }
+
+  /* ── format bar (Insert / number format / colours / bold / italic / align) ── */
+  var NUMFMTS = [
+    ['Automatic', { t: null, nf: null }],
+    ['Number    1,234.56', { t: 'number', nf: { dec: 2, sep: 1 } }],
+    ['Whole number    1,234', { t: 'number', nf: { dec: 0, sep: 1 } }],
+    ['Rupees    \u20b91,234.50', { t: 'number', nf: { dec: 2, pre: '\u20b9', sep: 1 } }],
+    ['Percent    12.5%', { t: 'number', nf: { dec: 1, suf: '%' } }]
+  ];
+  function renderFmtBar(force) {
+    var show = canEdit(); fb.style.display = show ? '' : 'none'; if (!show) return;
+    var f = EMPTYF; if (S.data && S.act && S.view.length) { var c = cols()[S.act.c], r = rowObj(S.act.r); if (c && r) f = effFmt(c, r); }
+    var sig = [f.b, f.i, f.bg, f.fg, f.al, S.act ? 1 : 0].join('|'); if (!force && fb._sig === sig) return; fb._sig = sig;
+    fb.innerHTML = '<button class="ks-btn" data-fb="insert" title="Insert checkbox, dropdown, stars\u2026">' + ic('list-checks', 15) + '<span class="tx">Insert</span>' + ic('caret-down', 12) + '</button>' +
+      '<button class="ks-btn" data-fb="num" title="Number format &amp; units"><b>123</b>' + ic('caret-down', 12) + '</button><i class="sep"></i>' +
+      '<button class="ks-btn" data-fb="fill" title="Fill colour"><span class="ks-sw" style="background:' + (f.bg && HEXRE.test(f.bg) ? f.bg : 'transparent') + '"></span><span class="tx">Fill</span></button>' +
+      '<button class="ks-btn" data-fb="ink" title="Text colour"><span class="ks-sw" style="background:' + (f.fg && HEXRE.test(f.fg) ? f.fg : 'var(--ink)') + '"></span><span class="tx">Text</span></button>' +
+      '<button class="ks-btn' + (f.b ? ' on' : '') + '" data-fb="b" title="Bold (Ctrl+B)"><b>B</b></button><button class="ks-btn' + (f.i ? ' on' : '') + '" data-fb="i" title="Italic (Ctrl+I)"><i style="font-family:serif">I</i></button>' +
+      '<button class="ks-btn" data-fb="al" title="Align">' + ic('text-align-left', 15) + ic('caret-down', 12) + '</button><i class="sep"></i>' +
+      '<button class="ks-btn" data-fb="fmt" title="All format options">' + ic('pencil-simple', 14) + '<span class="tx">Format\u2026</span></button>' +
+      '<button class="ks-btn" data-fb="clr" title="Clear formatting">' + ic('x', 14) + '<span class="tx">Clear</span></button>';
+  }
+  fb.addEventListener('mousedown', function (e) { if (!e.target.closest('input')) e.preventDefault(); });
+  fb.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-fb]'); if (!b || !S.data) return; var a = b.getAttribute('data-fb'), rc = b.getBoundingClientRect(), x = rc.left, y = rc.bottom + 4;
+    if (!S.act) { toast('Select a cell or column first'); return; }
+    if (a === 'insert') menu(x, y, [
+      { label: 'Checkbox', icon: 'check', fn: function () { quickType('checkbox'); } },
+      { label: 'Dropdown\u2026', icon: 'caret-down', fn: function () { quickType('drop'); } },
+      { label: 'Star rating', glyph: '\u2605', fn: function () { quickType('rating'); } },
+      { label: 'Date picker', icon: 'calendar-blank', fn: function () { quickType('date'); } },
+      { label: 'Number / units\u2026', icon: 'hash', fn: function () { quickType('number'); } }, '-',
+      { label: 'Plain text', icon: 'text-align-left', fn: function () { autoApply({ t: 'text' }, 'Plain text'); } }]);
+    else if (a === 'num') menu(x, y, NUMFMTS.map(function (n) { return { label: n[0], glyph: '#', fn: function () { autoApply(n[1], 'Number format set'); } }; }).concat(['-', { label: 'Custom units\u2026', icon: 'pencil-simple', fn: function () { formatDialog({ type: 'number' }); } }]));
+    else if (a === 'fill') swatchPop(x, y, FILLS, function (c) { applyFmt({ bg: c }, autoScope()); });
+    else if (a === 'ink') swatchPop(x, y, INKS, function (c) { applyFmt({ fg: c }, autoScope()); });
+    else if (a === 'b') toggleStyle('b'); else if (a === 'i') toggleStyle('i');
+    else if (a === 'al') menu(x, y, [['Align left', 'l'], ['Align centre', 'c'], ['Align right', 'r'], ['Default alignment', null]].map(function (n) { return { label: n[0], icon: 'text-align-left', fn: function () { applyFmt({ al: n[1] }, autoScope()); } }; }));
+    else if (a === 'fmt') formatDialog(); else if (a === 'clr') clearFormat();
+    grid.focus({ preventScroll: true });
+  });
+
+  /* ── Format dialog: type, dropdown options, number units, colours; whole column OR selected cells ── */
+  var TYPES = [['text', 'Text'], ['number', 'Number'], ['checkbox', 'Checkbox'], ['drop', 'Dropdown'], ['rating', 'Rating \u2605'], ['date', 'Date']];
+  function distinctFor(c, cap) {
+    var seen = {}, out = [], multi = false;
+    function add(x) { x = String(x).replace(/[\u0000-\u001f]/g, ' ').trim(); if (x && !seen[x.toLowerCase()]) { seen[x.toLowerCase()] = 1; out.push(x); } }
+    (c.options || []).forEach(add);
+    S.data.rows.forEach(function (r) { var v = r.v[c.id]; if (!v) return; var parts = String(v).split(/\s*,\s*/); if (parts.length > 1) multi = true; parts.forEach(add); });
+    return { list: out.slice(0, cap || 40), total: out.length, multi: multi };
+  }
+  function formatDialog(o) {
+    o = o || {}; if (!guard()) return;
+    var cs = cols(), g = o.col != null ? { r0: 0, r1: Math.max(0, S.view.length - 1), c0: o.col, c1: o.col } : range();
+    if (!g) { toast('Select a cell or column first'); return; }
+    var c0 = cs[g.c0]; if (!fmtable(c0)) { toast(c0 && c0.masked ? 'Hidden for privacy' : 'This column is filled automatically and cannot be formatted'); return; }
+    var multiCols = g.c1 > g.c0, ncell = (g.r1 - g.r0 + 1) * (g.c1 - g.c0 + 1), dirty = false, st;
+    var scope = o.col != null ? 'col' : (isFullCols(g) ? 'col' : 'cells');
+    function baseFor(sc) { var b = sc === 'col' || !S.view.length ? c0.fmt : effFmt(c0, rowObj(g.r0)); return JSON.parse(JSON.stringify(b || {})); }
+    function curType() { return st.t || (c0.type === 'number' ? 'number' : c0.type === 'date' ? 'date' : 'text'); }
+    function autoImport() {
+      if (st.t !== 'drop' || (st.opts && st.opts.length)) { if (st.t === 'drop') st.opts = st.opts || []; return; }
+      var d = distinctFor(c0, 15); st.opts = []; if (d.total && d.total <= 15) { st.opts = d.list.map(function (x, i) { return { v: x, c: PAL[1 + (i % 8)] }; }); if (d.multi) st.multi = 1; }
+    }
+    st = baseFor(scope); if (o.type) { st.t = o.type; dirty = true; } autoImport();
+    modal('<h3>' + ic('pencil-simple', 20) + 'Format</h3><p id="ks-fs"></p><div id="ks-fm"></div>', function (md, close) {
+      var body = md.querySelector('#ks-fm'), sub = md.querySelector('#ks-fs');
+      function pv() { var e = body.querySelector('#ks-pv'); if (e) e.textContent = fmtNum('1234.5', st.nf) || '1234.5'; }
+      function swatches(key, list) {
+        return '<div class="ks-swg"><button data-sw="' + key + '" data-c="" title="None"' + (!st[key] ? ' class="on"' : '') + '>\u00d7</button>' + list.map(function (c) { return '<button data-sw="' + key + '" data-c="' + c + '" style="background:' + c + '"' + (st[key] === c ? ' class="on"' : '') + ' aria-label="' + c + '"></button>'; }).join('') + '<label>Custom<input type="color" data-swc="' + key + '" value="' + (HEXRE.test(st[key] || '') ? st[key] : '#3b82f6') + '"></label></div>';
+      }
+      function draw() {
+        var t = curType(), h2 = '', nf = st.nf || {};
+        sub.textContent = '\u201c' + c0.label + '\u201d' + (multiCols ? ' + ' + (g.c1 - g.c0) + ' more' : '') + ' \u00b7 ' + (scope === 'col' ? 'whole column, including new rows' : ncell + ' selected cell' + (ncell > 1 ? 's' : ''));
+        if (o.col == null) h2 += '<div class="ks-fld"><span>Apply to</span><div class="ks-seg">' + [['col', multiCols ? 'Entire columns' : 'Entire column'], ['cells', ncell + ' selected cell' + (ncell > 1 ? 's' : '')]].map(function (x) { return '<button data-sc="' + x[0] + '"' + (scope === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div></div>';
+        h2 += '<div class="ks-fld"><span>Type</span><div class="ks-seg">' + TYPES.map(function (x) { return '<button data-ty="' + x[0] + '"' + (t === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div></div>';
+        if (t === 'number') {
+          h2 += '<div class="ks-row"><label class="ks-fld" style="flex:1"><span>Decimals</span><select data-nf="dec"><option value="">Auto</option>' + [0, 1, 2, 3, 4].map(function (d) { return '<option value="' + d + '"' + (nf.dec === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select></label>' +
+            '<label class="ks-fld" style="flex:1"><span>Prefix</span><input data-nf="pre" maxlength="8" placeholder="\u20b9  $" value="' + esc(nf.pre || '') + '"></label>' +
+            '<label class="ks-fld" style="flex:1"><span>Unit / suffix</span><input data-nf="suf" maxlength="12" placeholder="kg, km, %" value="' + esc(nf.suf || '') + '"></label></div>' +
+            '<label class="ks-chk"><input type="checkbox" data-nf="sep"' + (nf.sep ? ' checked' : '') + '> Thousands separator (1,23,456)</label><div class="ks-pv">Preview: <b id="ks-pv"></b></div>';
+        } else if (t === 'drop') {
+          var ops = st.opts = st.opts || [];
+          h2 += '<div class="ks-fld"><span>Options</span><div>' + ops.map(function (op, i) { return '<div class="ks-opt"><button class="ks-dot c-' + op.c + '" data-oc="' + i + '" aria-label="Colour" title="Change colour"></button><input data-ov="' + i + '" maxlength="40" value="' + esc(op.v) + '" placeholder="Option ' + (i + 1) + '"><button class="ks-xb" data-od="' + i + '" aria-label="Remove option">' + ic('x', 14) + '</button></div>'; }).join('') + '</div>' +
+            '<div class="ks-row"><button class="ks-btn" data-addop="1">' + ic('plus', 14) + 'Add option</button><button class="ks-btn" data-imp="1">Import existing values</button></div></div>' +
+            '<label class="ks-chk"><input type="checkbox" data-multi="1"' + (st.multi ? ' checked' : '') + '> Allow multiple selections</label>';
+        } else if (t === 'rating') {
+          h2 += '<label class="ks-fld"><span>Number of stars</span><select data-max="1">' + [3, 4, 5, 6, 7, 8, 10].map(function (d) { return '<option value="' + d + '"' + ((st.max || 5) === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select></label>';
+        } else h2 += '<p class="ks-hint">' + (t === 'checkbox' ? 'Click the box (or press Space) to tick. Saved as TRUE, or empty when unticked.' : t === 'date' ? 'Pick from a calendar. Saved as YYYY-MM-DD.' : 'Plain text.') + '</p>';
+        h2 += '<div class="ks-fld"><span>Fill colour</span>' + swatches('bg', FILLS) + '</div><div class="ks-fld"><span>Text colour</span>' + swatches('fg', INKS) + '</div>' +
+          '<div class="ks-fld"><span>Style</span><div class="ks-seg"><button data-tg="b"' + (st.b ? ' class="on"' : '') + '><b>Bold</b></button><button data-tg="i"' + (st.i ? ' class="on"' : '') + '><i>Italic</i></button>' + [['l', 'Left'], ['c', 'Centre'], ['r', 'Right']].map(function (x) { return '<button data-al="' + x[0] + '"' + (st.al === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="ks-act2"><button class="ks-btn dg" data-reset="1">Remove formatting</button><span class="ks-sp"></span><button class="ks-btn" data-x="1">Cancel</button><button class="ks-btn pri" data-ok="1">Apply</button></div>';
+        body.innerHTML = h2; pv();
+      }
+      function addOp() { st.opts = st.opts || []; if (st.opts.length >= 40) return; st.opts.push({ v: '', c: PAL[1 + (st.opts.length % 8)] }); dirty = true; draw(); var ins = body.querySelectorAll('[data-ov]'); if (ins.length) ins[ins.length - 1].focus(); }
+      function go() {
+        var patch = {}; if (curType() === 'drop') { st.opts = (st.opts || []).filter(function (x) { return x.v && x.v.trim(); }); if (!st.opts.length) { toast('Add at least one option'); return; } }
+        FKEYS.forEach(function (k) { patch[k] = st[k] == null ? null : st[k]; });
+        close(); var res = applyFmt(patch, scope, g); if (res && res.n) toast('Formatting applied' + (scope === 'col' ? ' to the whole column' : ' to ' + res.n + ' cell' + (res.n > 1 ? 's' : '')));
+      }
+      body.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.hasAttribute('data-sc')) { scope = b.getAttribute('data-sc'); if (!dirty) { st = baseFor(scope); autoImport(); } draw(); }
+        else if (b.hasAttribute('data-ty')) { st.t = b.getAttribute('data-ty'); dirty = true; autoImport(); draw(); }
+        else if (b.hasAttribute('data-oc')) { var i = +b.getAttribute('data-oc'), rc = b.getBoundingClientRect(); dotPop(rc.left, rc.bottom + 4, function (nm) { st.opts[i].c = nm; dirty = true; draw(); }); }
+        else if (b.hasAttribute('data-od')) { st.opts.splice(+b.getAttribute('data-od'), 1); dirty = true; draw(); }
+        else if (b.hasAttribute('data-addop')) addOp();
+        else if (b.hasAttribute('data-imp')) { var d = distinctFor(c0, 40), have = {}; st.opts.forEach(function (x) { have[x.v.toLowerCase()] = 1; }); d.list.forEach(function (x) { if (!have[x.toLowerCase()] && st.opts.length < 40) st.opts.push({ v: x, c: PAL[1 + (st.opts.length % 8)] }); }); if (d.multi) st.multi = 1; dirty = true; draw(); if (!d.list.length) toast('No existing values to import'); }
+        else if (b.hasAttribute('data-sw')) { var k = b.getAttribute('data-sw'), cv = b.getAttribute('data-c'); if (cv) st[k] = cv; else delete st[k]; dirty = true; draw(); }
+        else if (b.hasAttribute('data-tg')) { var k2 = b.getAttribute('data-tg'); if (st[k2]) delete st[k2]; else st[k2] = 1; dirty = true; draw(); }
+        else if (b.hasAttribute('data-al')) { var a = b.getAttribute('data-al'); if (st.al === a) delete st.al; else st.al = a; dirty = true; draw(); }
+        else if (b.hasAttribute('data-reset')) { close(); clearFormat(scope, g); }
+        else if (b.hasAttribute('data-x')) close();
+        else if (b.hasAttribute('data-ok')) go();
+      });
+      function onField(e) {
+        var t = e.target; dirty = true;
+        if (t.hasAttribute('data-nf')) { var k = t.getAttribute('data-nf'); st.nf = st.nf || {}; if (k === 'sep') st.nf.sep = t.checked ? 1 : 0; else if (k === 'dec') st.nf.dec = t.value === '' ? null : +t.value; else st.nf[k] = t.value; pv(); }
+        else if (t.hasAttribute('data-ov')) st.opts[+t.getAttribute('data-ov')].v = t.value;
+        else if (t.hasAttribute('data-multi')) st.multi = t.checked ? 1 : undefined;
+        else if (t.hasAttribute('data-max')) st.max = +t.value;
+        else if (t.hasAttribute('data-swc') && e.type === 'change') { st[t.getAttribute('data-swc')] = t.value; draw(); }
+      }
+      body.addEventListener('input', onField); body.addEventListener('change', onField);
+      body.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.hasAttribute('data-ov')) { e.preventDefault(); addOp(); } });
+      draw();
+    });
+  }
+  function addColMenu(x, y) {
+    var T = [['Text', 'text', 'text-align-left'], ['Number', 'number', 'hash'], ['Checkbox', 'checkbox', 'check'], ['Dropdown', 'drop', 'caret-down'], ['Star rating', 'rating', null], ['Date', 'date', 'calendar-blank']];
+    menu(x, y, T.map(function (t) { return { label: t[0], icon: t[2] || 'check', glyph: t[1] === 'rating' ? '\u2605' : null, fn: function () { addColumn(t[1]); } }; }));
+  }
+  function addColumn(kind) {
+    var body = { label: 'Column ' + (cols().filter(function (c) { return c.custom; }).length + 1), type: kind === 'number' || kind === 'date' ? kind : 'text' };
+    if (kind && kind !== 'text') { body.fmt = { t: kind }; if (kind === 'rating') body.fmt.max = 5; if (kind === 'drop') body.fmt = { t: 'drop', opts: [] }; }
+    colCall('add', body).then(function (r) {
+      if (!r || !r.id) return; var i = cols().findIndex(function (c) { return c.id === r.id; }); if (i < 0) return;
+      grid.scrollLeft = grid.scrollWidth;
+      if (kind === 'drop') formatDialog({ col: i, type: 'drop' }); else renameCol(i);
+    });
   }
 
   /* ── columns ─────────────────────────────────────────────── */
@@ -3375,12 +3782,14 @@ function mount(host, opts) {
       { label: 'Sort Z to A', icon: 'sort-descending', fn: function () { S.sort = { id: c.id, dir: -1 }; rebuildView(); renderAll(); } },
       { label: 'Clear sort', icon: 'arrows-clockwise', off: !S.sort, fn: function () { S.sort = null; rebuildView(); renderAll(); } }, '-',
       { label: 'Rename column', icon: 'pencil-simple', off: !ce || sys, fn: function () { renameCol(i); } },
+      { label: 'Format column\u2026', icon: 'list-checks', off: !ce || sys, fn: function () { formatDialog({ col: i }); } },
+      { label: 'Reset column format', icon: 'arrows-clockwise', off: !ce || sys || !c.fmt, fn: function () { clearFormat('col', { r0: 0, r1: Math.max(0, S.view.length - 1), c0: i, c1: i }); } },
       { label: c.hidden ? 'Unhide column' : 'Hide from viewers', icon: c.hidden ? 'eye' : 'eye-slash', off: !ce || sys, fn: function () { colCall('update', { id: c.id, hidden: !c.hidden }); } },
       { label: 'Delete column', icon: 'trash', danger: true, off: !ce || !c.custom, fn: function () { if (confirm('Delete column "' + c.label + '" and all its values?')) colCall('delete', { id: c.id }); } }
     ]);
   }
   function colCall(a, body) { return api('/api/ls/x/cols/' + a, { method: 'POST', body: body }).then(function (r) { return refresh(true).then(function () { return r; }); }).catch(function (e) { onApiError(e); }); }
-  function addColumn() { colCall('add', { label: 'Column ' + (cols().filter(function (c) { return c.custom; }).length + 1), type: 'text' }).then(function (r) { if (!r || !r.id) return; var i = cols().findIndex(function (c) { return c.id === r.id; }); if (i > -1) { grid.scrollLeft = grid.scrollWidth; renameCol(i); } }); }
+
   function renameCol(i) {
     var c = cols()[i], el = hd.querySelector('.ks-hc[data-c="' + i + '"]'); if (!el) return;
     var inp = h('input'); inp.value = c.label; inp.maxLength = 60; inp.style.cssText = 'position:absolute;inset:4px;width:calc(100% - 8px);border-radius:6px;border:2px solid var(--acc);background:var(--pn);color:var(--ink);font:inherit;font-weight:600;padding:0 8px;outline:none;z-index:3';
@@ -3392,10 +3801,15 @@ function mount(host, opts) {
   /* ── editing ─────────────────────────────────────────────── */
   function guard() { if (canEdit()) return true; var now = Date.now(); if (now - S.hintAt > 6000) { S.hintAt = now; if (S.data && S.data.editing_ready && !admin) toast('View only. Unlock editing to make changes.', 'Unlock', loginModal); else toast('View only'); } return false; }
   function editable(vi, ci) { var c = cols()[ci]; return !!(c && !c.ro && canEdit()); }
-  function startEdit(init) {
+  function startEdit(init, fromDbl) {
     if (!S.act) return; if (!canEdit()) { guard(); return; }
     var c = cols()[S.act.c]; if (c.ro) { toast(c.masked ? 'Hidden for privacy' : '"' + c.label + '" is filled automatically'); return; }
-    var r = rowObj(S.act.r), v = r.v[c.id] || ''; S.editing = { r: S.act.r, c: S.act.c, orig: v, key: r.key };
+    var r = rowObj(S.act.r), v = r.v[c.id] || '', ef = effFmt(c, r), kd = kindOf(c, ef);
+    if (kd === 'checkbox') { if (!fromDbl && (init == null || init === ' ')) toggleSel(); return; }
+    if (kd === 'rating') { if (!fromDbl && init != null && /^\d{1,2}$/.test(init)) { var rn = Math.min(+init, ef.max || 5); setCells([{ row: r, col: c.id, v: rn ? String(rn) : '' }]); } return; }
+    if (kd === 'drop') { openPicker(S.act.r, S.act.c, init); return; }
+    if (kd === 'date') { openDate(S.act.r, S.act.c); return; }
+    S.editing = { r: S.act.r, c: S.act.c, orig: v, key: r.key };
     ed.style.display = 'block'; ed.style.left = GUT + S.colX[S.act.c] + 'px'; ed.style.top = S.act.r * RH + 'px'; ed.style.width = Math.max(S.colW[S.act.c], 180) + 'px'; ed.style.height = RH + 'px';
     ed.value = init != null ? init : v; if (c.options && c.options.length && c.options.length < 60) { var dl = rowsEl.querySelector('datalist') || rowsEl.appendChild(h('datalist')); dl.id = 'ks-dl-' + cid; dl.innerHTML = c.options.map(function (o) { return '<option value="' + esc(o) + '">'; }).join(''); ed.setAttribute('list', dl.id); } else ed.removeAttribute('list');
     ed.focus(); if (init == null) ed.select(); else ed.setSelectionRange(ed.value.length, ed.value.length); autosize();
@@ -3472,6 +3886,7 @@ function mount(host, opts) {
     if (!S.data || S.editing) return; var m = e.ctrlKey || e.metaKey, k = e.key, a = S.act;
     if (m && (k === 'z' || k === 'Z')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; } if (m && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
     if (m && (k === 'a' || k === 'A')) { e.preventDefault(); if (S.view.length) { setSel({ r: 0, c: 0 }, { r: S.view.length - 1, c: cols().length - 1 }); } return; }
+    if (m && (k === 'b' || k === 'B')) { e.preventDefault(); toggleStyle('b'); return; } if (m && (k === 'i' || k === 'I')) { e.preventDefault(); toggleStyle('i'); return; }
     if (m && (k === 'c' || k === 'x' || k === 'v' || k === 'C' || k === 'X' || k === 'V')) return;
     if (!a) { if (S.view.length && /^Arrow|Tab|Enter/.test(k)) { e.preventDefault(); setSel({ r: 0, c: 0 }); } return; }
     var f = S.foc || a, mv = null, ext = e.shiftKey, last = S.view.length - 1, lc = cols().length - 1, rowsPg = Math.max(1, Math.floor(grid.clientHeight / RH) - 2);
@@ -3524,7 +3939,7 @@ function mount(host, opts) {
   /* ── boot ────────────────────────────────────────────────── */
   function start() {
     skeleton();
-    root.innerHTML = ''; root.appendChild(top); root.appendChild(fx); root.appendChild(grid); root.appendChild(foot);
+    root.innerHTML = ''; root.appendChild(top); root.appendChild(fb); root.appendChild(fx); root.appendChild(grid); root.appendChild(foot);
     return refresh(true).then(function () { if (!S.data) { if (!root.querySelector('.ks-center')) centerCard('warning-circle', 'Could not load sheet', 'Check your connection and reload the page.', true); return; } armSession(); connect(); if (opts.full && S.data.title) D.title = S.data.title + ' · KFS Live Sheet'; });
   }
   function bootShare() {
@@ -3601,6 +4016,42 @@ const _lsMount = function mountLiveSheets(app, deps) {
   const hash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString("hex");
   const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
   const rid = (n) => crypto.randomBytes(n).toString("hex");
+
+  /* ── cell / column formatting: stored in col_meta[col].fmt and as "~f:<col>" overlay cells ── */
+  const PAL = ["gray", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
+  const HEX = /^#[0-9a-fA-F]{6}$/;
+  const FTYPES = ["text", "number", "checkbox", "drop", "rating", "date"];
+  function sanitizeFmt(f, rowLevel) {
+    if (!f || typeof f !== "object") return null;
+    const o = {};
+    if (HEX.test(f.bg)) o.bg = f.bg.toLowerCase();
+    if (HEX.test(f.fg)) o.fg = f.fg.toLowerCase();
+    if (f.b) o.b = 1;
+    if (f.i) o.i = 1;
+    if (["l", "c", "r"].includes(f.al)) o.al = f.al;
+    if (rowLevel) return o;
+    if (FTYPES.includes(f.t)) o.t = f.t;
+    if (o.t === "drop") {
+      const seen = new Set(), opts = [];
+      for (const x0 of Array.isArray(f.opts) ? f.opts : []) {
+        const x = x0 || {}, v = String(x.v ?? "").replace(/[\u0000-\u001f,]/g, " ").trim().slice(0, 40);
+        if (!v || seen.has(v.toLowerCase())) continue;
+        seen.add(v.toLowerCase()); opts.push({ v, c: PAL.includes(x.c) ? x.c : "gray" });
+        if (opts.length >= 40) break;
+      }
+      o.opts = opts; if (f.multi) o.multi = 1;
+    }
+    if (o.t === "rating") o.max = Math.max(3, Math.min(10, parseInt(f.max, 10) || 5));
+    if (o.t === "number" && f.nf && typeof f.nf === "object") {
+      const nf = {}, d = f.nf.dec, clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f"]/g, "").slice(0, n);
+      if (d !== null && d !== undefined && d !== "" && isFinite(+d)) nf.dec = Math.max(0, Math.min(6, Math.round(+d)));
+      if (clean(f.nf.pre, 8)) nf.pre = clean(f.nf.pre, 8);
+      if (clean(f.nf.suf, 12)) nf.suf = clean(f.nf.suf, 12);
+      if (f.nf.sep) nf.sep = 1;
+      if (Object.keys(nf).length) o.nf = nf;
+    }
+    return o;
+  }
   const wrap = (fn) => async (req, res) => { try { await fn(req, res); } catch (e) { console.error("[live-sheets]", req.method, req.path, e.message); if (!res.headersSent) res.status(e.status || 500).json({ error: e.status ? e.message : "Something went wrong" }); } };
   const noStore = (res) => { res.setHeader("Cache-Control", "no-store"); res.setHeader("X-Robots-Tag", "noindex, nofollow"); res.setHeader("Referrer-Policy", "no-referrer"); };
 
@@ -3726,16 +4177,24 @@ const _lsMount = function mountLiveSheets(app, deps) {
 
   function compose(kind, id, base, sheet, ov, version) {
     const meta = (sheet && sheet.col_meta) || {};
-    const cols = base.cols.map((c) => { const m = meta[c.id]; return m ? { ...c, label: m.label || c.label, width: m.width, hidden: !!m.hidden } : c; });
-    for (const [cid, m] of Object.entries(meta)) if (m && m.custom) cols.push({ id: cid, label: m.label || "Column", type: m.type || "text", custom: true, width: m.width, hidden: !!m.hidden });
+    const cols = base.cols.map((c) => { const m = meta[c.id]; return m ? { ...c, label: m.label || c.label, width: m.width, hidden: !!m.hidden, ...(m.fmt ? { fmt: m.fmt } : {}) } : c; });
+    for (const [cid, m] of Object.entries(meta)) if (m && m.custom) cols.push({ id: cid, label: m.label || "Column", type: m.type || "text", custom: true, width: m.width, hidden: !!m.hidden, ...(m.fmt ? { fmt: m.fmt } : {}) });
     const colIds = new Set(cols.map((c) => c.id)), roIds = new Set(cols.filter((c) => c.ro).map((c) => c.id));
     const rmeta = new Map(ov.rows.map((r) => [r.row_key, r]));
-    const by = new Map();
-    for (const c of ov.cells) { let m = by.get(c.row_key); if (!m) by.set(c.row_key, (m = {})); m[c.col_key] = c.value ?? ""; }
+    const by = new Map(), fby = new Map();
+    for (const c of ov.cells) {
+      if (String(c.col_key).startsWith("~f:")) {             // formatting override (not a value)
+        const j = safeJson(c.value);
+        if (j && Object.keys(j).length) { let m = fby.get(c.row_key); if (!m) fby.set(c.row_key, (m = {})); m[c.col_key.slice(3)] = j; }
+        continue;
+      }
+      let m = by.get(c.row_key); if (!m) by.set(c.row_key, (m = {})); m[c.col_key] = c.value ?? "";
+    }
     const rows = [];
     for (const r of base.rows) {
       if (rmeta.get(r.key) && rmeta.get(r.key).deleted) continue;
       const o = by.get(r.key); if (o) for (const k in o) if (colIds.has(k) && !roIds.has(k)) r.v[k] = o[k];
+      const fo = fby.get(r.key); if (fo) r.f = fo;
       rows.push(r);
     }
     const manual = ov.rows.filter((r) => r.manual && !r.deleted).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.row_key.localeCompare(b.row_key));
@@ -3743,7 +4202,7 @@ const _lsMount = function mountLiveSheets(app, deps) {
       const o = by.get(m.row_key) || {}, v = {};
       for (const c of cols) v[c.id] = c.id in o && !roIds.has(c.id) ? o[c.id] : "";
       if (colIds.has("__ts")) v.__ts = m.created_at || "";
-      rows.push({ key: m.row_key, v, manual: true });
+      rows.push({ key: m.row_key, v, manual: true, ...(fby.get(m.row_key) ? { f: fby.get(m.row_key) } : {}) });
     }
     rows.forEach((r, i) => { r.n = i + 1; });
     return { kind, id, title: base.title, columns: cols, rows, version, editing_ready: !!sheet, sheet_id: sheet ? sheet.id : null, rowKeys: new Set(rows.map((r) => r.key)), deletedKeys: new Set(ov.rows.filter((r) => r.deleted).map((r) => r.row_key)) };
@@ -3793,7 +4252,7 @@ const _lsMount = function mountLiveSheets(app, deps) {
     })).map((c) => ({ ...c, ro: !!c.ro || c.masked }));
   }
   function present(ds, ctx) {
-    const columns = visibleColumns(ds, ctx);
+    const columns = visibleColumns(ds, ctx), colIds = new Set(columns.map((c) => c.id));
     const rows = ds.rows.map((r) => {
       const v = {};
       for (const c of columns) {
@@ -3801,7 +4260,9 @@ const _lsMount = function mountLiveSheets(app, deps) {
         if (c.masked && x) x = c.type === "phone" || /phone|mobile|whatsapp/i.test(c.label) ? maskPhone(x) : EMAIL_RE.test(x.trim()) ? maskEmail(x.trim()) : x;
         v[c.id] = x;
       }
-      return { key: r.key, n: r.n, v };
+      const out = { key: r.key, n: r.n, v };
+      if (r.f) { const f = {}; for (const k in r.f) if (k === "*" || colIds.has(k)) f[k] = r.f[k]; if (Object.keys(f).length) out.f = f; }
+      return out;
     });
     return {
       title: (ctx.share && ctx.share.title) || ds.title, columns, rows, version: ds.version,
@@ -3984,9 +4445,21 @@ const _lsMount = function mountLiveSheets(app, deps) {
     const ctx = await resolve(req, res); if (!ctx) return;
     if (ctx.role !== "admin" && ctx.share && ctx.share.allow_download === false) return res.status(403).json({ error: "Downloads are disabled for this link" });
     const p = present(await getDataset(ctx.kind, ctx.id, true), ctx), XLSX = require("xlsx");
-    const fmt = (c, x) => (c.type === "time" && x ? new Date(x).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : x);
-    const aoa = [["#"].concat(p.columns.map((c) => c.label))].concat(p.rows.map((r) => [r.n].concat(p.columns.map((c) => fmt(c, r.v[c.id] || "")))));
+    const fmt = (c, x, r) => {
+      if (c.type === "time" && x) return new Date(x).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      const f = Object.assign({}, c.fmt, r && r.f && r.f["*"], r && r.f && r.f[c.id]);
+      if (f.t === "checkbox") return /^(true|yes|y|1)$/i.test(String(x).trim());
+      const num = f.t ? f.t === "number" || f.t === "rating" : c.type === "number", n = +String(x).replace(/,/g, "");
+      return num && x !== "" && isFinite(n) ? n : x;
+    };
+    const aoa = [["#"].concat(p.columns.map((c) => c.label))].concat(p.rows.map((r) => [r.n].concat(p.columns.map((c) => fmt(c, r.v[c.id] || "", r)))));
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    p.columns.forEach((c, ci) => {                       // unit / decimals as real Excel number formats
+      const nf = c.fmt && c.fmt.t === "number" && c.fmt.nf; if (!nf) return;
+      const dd = nf.dec ? "." + "0".repeat(nf.dec) : "", body = nf.sep ? "#,##0" + dd : nf.dec != null ? "0" + dd : "General";
+      const z = (nf.pre ? `"${nf.pre}"` : "") + body + (nf.suf ? ` "${nf.suf}"` : "");
+      for (let ri = 1; ri < aoa.length; ri++) { const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci + 1 })]; if (cell && cell.t === "n") cell.z = z; }
+    });
     ws["!cols"] = aoa[0].map((h, i) => ({ wch: Math.min(40, Math.max(8, String(h).length + 2, ...aoa.slice(1, 120).map((r) => String(r[i] == null ? "" : r[i]).length + 1))) }));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, String(p.title || "Sheet").replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Sheet");
     const safe = String(p.title || "sheet").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
@@ -4100,6 +4573,7 @@ const _lsMount = function mountLiveSheets(app, deps) {
   app.post("/api/ls/x/cols/add", writeLimit, colWrite("add_col", (b, meta) => {
     if (Object.keys(meta).filter((k) => meta[k] && meta[k].custom).length >= 60) throw Object.assign(new Error("Column limit reached"), { status: 400 });
     const id = "c_" + rid(4); meta[id] = { custom: true, label: cleanLabel(b.label, "New column"), type: ["text", "number", "date"].includes(b.type) ? b.type : "text" };
+    const fm = sanitizeFmt(b.fmt); if (fm && Object.keys(fm).length) meta[id].fmt = fm;
     return { id };
   }));
   app.post("/api/ls/x/cols/update", writeLimit, colWrite("update_col", (b, meta) => {
@@ -4108,14 +4582,44 @@ const _lsMount = function mountLiveSheets(app, deps) {
     if (b.label !== undefined) m.label = cleanLabel(b.label, m.label || "Column");
     if (b.width !== undefined) m.width = Math.max(60, Math.min(700, parseInt(b.width, 10) || 140));
     if (b.hidden !== undefined) m.hidden = !!b.hidden;
+    if (b.fmt !== undefined) { const fm = sanitizeFmt(b.fmt); if (fm && Object.keys(fm).length) m.fmt = fm; else delete m.fmt; }
     return { id };
   }));
   app.post("/api/ls/x/cols/delete", writeLimit, colWrite("delete_col", async (b, meta, sheet) => {
     const id = String(b.id || "");
     if (!meta[id] || !meta[id].custom) throw Object.assign(new Error("Only added columns can be deleted — hide this one instead."), { status: 400 });
     delete meta[id];
-    await supabase.from("live_sheet_cells").delete().eq("sheet_id", sheet.id).eq("col_key", id);
+    await supabase.from("live_sheet_cells").delete().eq("sheet_id", sheet.id).in("col_key", [id, "~f:" + id]);
     return { id };
+  }));
+
+  /* ── write: formats (per cell, or per row via col "*") ─────────────────────── */
+  app.post("/api/ls/x/fmt", writeLimit, wrap(async (req, res) => {
+    const ctx = await resolve(req, res, "edit"); if (!ctx) return;
+    const items = Array.isArray(req.body && req.body.items) ? req.body.items.slice(0, MAX_CELLS) : [];
+    if (!items.length) return res.status(400).json({ error: "Nothing to format" });
+    const sheet = await needSheet(ctx), cid = String(req.headers["x-ls-cid"] || "").slice(0, 24);
+    let saved = 0;
+    await structural(ctx, sheet, cid, async () => {
+      const ds = await getDataset(ctx.kind, ctx.id, false);
+      const okCols = new Set(visibleColumns(ds, ctx).filter((c) => !c.ro && !c.id.startsWith("__")).map((c) => c.id));
+      const now = new Date().toISOString(), up = new Map(), del = new Map();
+      for (const it of items) {
+        const r = String(it && it.r), c = String(it && it.c);
+        if (!ds.rowKeys.has(r) || !(c === "*" || okCols.has(c))) continue;
+        const f = sanitizeFmt(it.f, c === "*"), val = f && Object.keys(f).length ? JSON.stringify(f) : "";
+        if (val && val.length <= 3500) { up.set(r + "|" + c, { sheet_id: sheet.id, row_key: r, col_key: "~f:" + c, value: val, updated_by: actor(ctx), updated_at: now }); del.get(c)?.delete(r); }
+        else { up.delete(r + "|" + c); if (!del.has(c)) del.set(c, new Set()); del.get(c).add(r); }
+        saved++;
+      }
+      if (up.size) { const { error } = await supabase.from("live_sheet_cells").upsert([...up.values()], { onConflict: "sheet_id,row_key,col_key" }); if (error) throw new Error(error.message); }
+      for (const [c, set] of del) {
+        const keys = [...set];
+        for (let i = 0; i < keys.length; i += 100) await supabase.from("live_sheet_cells").delete().eq("sheet_id", sheet.id).eq("col_key", "~f:" + c).in("row_key", keys.slice(i, i + 100));
+      }
+      writeLog(sheet, ctx, [{ action: "format", new_value: saved + " cell(s)" }]);
+    });
+    res.json({ ok: true, saved });
   }));
 
   /* ── editors (admin only) ──────────────────────────────────────────────────── */
