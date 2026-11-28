@@ -1,36 +1,57 @@
 // app.js — KFS Frontend (extracted from inline scripts)
 // Blocks: theme-applier, main-app, search, member-import, form-builder, collab, donations
 
-// Apply banner + hero overrides from theme loaded in <head>
-(function() {
-  var t = window.__kfsEventTheme;
+// Apply banner / logo / hero overrides from the event theme loaded in <head>.
+// kfsApplyThemeOverrides is global so the admin panel can apply or undo a theme live.
+var _kfsThemeOrig = {};
+function _kfsThemeSet(el, key, val) {
+  if (!el) return;
+  if (!(key in _kfsThemeOrig)) _kfsThemeOrig[key] = { el: el, prop: key.split(':')[0], v: key.split(':')[0] === 'src' ? el.src : el.textContent };
+  if (_kfsThemeOrig[key].prop === 'src') el.src = val; else el.textContent = val;
+}
+function kfsApplyThemeOverrides(t) {
   if (!t) return;
-  // Banner
-  if (t.banner_message) {
-    var b = document.getElementById('event-banner');
+  var b = document.getElementById('event-banner');
+  if (b && t.banner_message) {
     b.textContent = t.banner_message;
     b.style.background = t.banner_bg || 'var(--accent)';
     b.style.color = t.banner_text_color || 'var(--black)';
     b.classList.add('visible');
   }
-  // Logo swap
-  if (t.logo_url) {
-    var img = document.querySelector('.nav-logo-img');
-    if (img) img.src = t.logo_url;
-  }
-  // Hero title/tagline overrides — applied after DOM ready
-  if (t.hero_title || t.hero_tagline) {
-    document.addEventListener('DOMContentLoaded', function() {
-      if (t.hero_title) {
-        var el = document.querySelector('.hero-title, .glow-word, h1');
-        if (el) el.textContent = t.hero_title;
-      }
-      if (t.hero_tagline) {
-        var el2 = document.querySelector('.hero-tagline');
-        if (el2) el2.textContent = t.hero_tagline;
-      }
+  if (t.logo_url) _kfsThemeSet(document.querySelector('.nav-logo-img'), 'src:logo', t.logo_url);
+  // Hero: the tagline is three <span class="glow-word"> lines (ids are used by the hero animation, so keep them).
+  if (t.hero_tagline) {
+    var parts = String(t.hero_tagline).match(/[^.!?\n]+[.!?]?/g) || [];
+    parts = parts.map(function (p) { return p.trim(); }).filter(Boolean);
+    if (parts.length > 3) parts = parts.slice(0, 2).concat(parts.slice(2).join(' '));
+    ['glow-lights', 'glow-camera', 'glow-kfs'].forEach(function (id, i) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      _kfsThemeSet(el, 'text:' + id, parts[i] || '');
+      el.style.display = parts[i] ? '' : 'none';
     });
   }
+  // Hero title: the big ghost word behind the hero (and the crawler-only heading).
+  if (t.hero_title) {
+    _kfsThemeSet(document.querySelector('.hx-ghost'), 'text:ghost', String(t.hero_title));
+    _kfsThemeSet(document.querySelector('#hero-intro .seo-only'), 'text:seo', String(t.hero_title));
+  }
+}
+function kfsRemoveThemeOverrides() {
+  var b = document.getElementById('event-banner');
+  if (b) { b.classList.remove('visible'); b.textContent = ''; b.style.background = ''; b.style.color = ''; }
+  Object.keys(_kfsThemeOrig).forEach(function (k) {
+    var o = _kfsThemeOrig[k];
+    if (o.prop === 'src') o.el.src = o.v; else o.el.textContent = o.v;
+    if (o.el.style) o.el.style.display = '';
+  });
+  _kfsThemeOrig = {};
+}
+(function () {
+  var t = window.__kfsEventTheme;
+  if (!t) return;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { kfsApplyThemeOverrides(t); });
+  else kfsApplyThemeOverrides(t);
 })();
 
 
@@ -5447,7 +5468,7 @@ function showAdminError(msg) {
 async function checkRoute() {
   // Wait for wrapped config to resolve before routing, so we never
   // briefly flash the wrapped page if it is disabled.
-  await _wrappedNavReady;
+  await Promise.race([_wrappedNavReady, new Promise(function (r) { setTimeout(r, 2500); })]);
   // Now safe to restore the wrapped page element — only if config says it is enabled.
   // Guarding here (in addition to the CSS rule below) prevents any JS-timing flash.
   const wp = document.getElementById('page-wrapped');
@@ -6365,6 +6386,31 @@ async function bulkDelete(section) {
 }
 // ── EVENT THEMES ADMIN ───────────────────────────────────────────────
 
+function _thEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function _thColor(c) { return /^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : ''; }
+function _isoToLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function _localInputToIso(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+}
+// live = switched on AND inside its date window
+function _themeIsLive(t) {
+  if (!t || !t.is_active) return false;
+  const now = Date.now();
+  if (t.active_from && new Date(t.active_from).getTime() > now) return false;
+  if (t.active_until && new Date(t.active_until).getTime() <= now) return false;
+  return true;
+}
+
 async function loadThemes() {
   const themes = await apiFetch('/api/admin/themes');
   const grid = document.getElementById('themes-list-grid');
@@ -6373,44 +6419,77 @@ async function loadThemes() {
     grid.innerHTML = '<p style="color:var(--grey);padding:40px 0;text-align:center">No themes yet. Create your first event theme.</p>';
     return;
   }
-  const now = new Date();
-  grid.innerHTML = themes.map(t => { const tJson=JSON.stringify(t).replace(/"/g,'&quot;');
-    const isLive = t.is_active && (!t.active_until || new Date(t.active_until) > now);
-    const isScheduled = !t.is_active && t.active_from && new Date(t.active_from) > now;
+  const now = Date.now();
+  grid.innerHTML = themes.map(t => {
+    const isLive = _themeIsLive(t);
+    const isScheduled = !!t.is_active && !!t.active_from && new Date(t.active_from).getTime() > now;
+    const isExpired = !!t.is_active && !!t.active_until && new Date(t.active_until).getTime() <= now;
     const badge = isLive
       ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;font-size:10px;font-weight:700;letter-spacing:.08em"><span style="width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e"></span>LIVE</span>`
       : isScheduled
       ? `<span style="padding:3px 10px;border-radius:20px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;font-size:10px;font-weight:700;letter-spacing:.08em">SCHEDULED</span>`
+      : isExpired
+      ? `<span style="padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--grey);font-size:10px;font-weight:700;letter-spacing:.08em">ENDED</span>`
       : `<span style="padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--grey);font-size:10px;font-weight:700;letter-spacing:.08em">INACTIVE</span>`;
     const swatches = [t.bg_color, t.accent_color, t.card_color, t.border_color, t.text_color].map(c =>
-      `<span title="${c||'default'}" style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${c||'var(--border)'};border:1px solid rgba(255,255,255,.15);flex-shrink:0"></span>`
+      `<span title="${_thEsc(c || 'default')}" style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${_thColor(c) || 'var(--border)'};border:1px solid rgba(255,255,255,.15);flex-shrink:0"></span>`
     ).join('');
+    const fmt = v => new Date(v).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
     const dates = (t.active_from || t.active_until)
-      ? `<div style="font-size:11px;color:var(--grey);margin-top:6px">${t.active_from?'From '+new Date(t.active_from).toLocaleDateString('en-IN'):''} ${t.active_until?'→ Until '+new Date(t.active_until).toLocaleDateString('en-IN'):''}</div>`
+      ? `<div style="font-size:11px;color:var(--grey);margin-top:6px">${t.active_from ? 'From ' + fmt(t.active_from) : ''} ${t.active_until ? '→ Until ' + fmt(t.active_until) : ''}</div>`
       : '';
-    return `<div style="background:var(--card);border:1px solid ${isLive?'rgba(34,197,94,.3)':'var(--border)'};border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    const a = (name, args) => `data-action="${name}" data-args="${_thEsc(JSON.stringify(args))}"`;
+    const isOn = !!t.is_active;
+    return `<div style="background:var(--card);border:1px solid ${isLive ? 'rgba(34,197,94,.3)' : 'var(--border)'};border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <span style="font-size:15px;font-weight:700">${t.name}</span>
+          <span style="font-size:15px;font-weight:700">${_thEsc(t.name)}</span>
           ${badge}
         </div>
         <div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">${swatches}</div>
-        ${t.font_family?`<div style="font-size:11px;color:var(--grey)">Font: ${t.font_family}</div>`:''}
+        ${t.font_family ? `<div style="font-size:11px;color:var(--grey)">Font: ${_thEsc(t.font_family)}</div>` : ''}
         ${dates}
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
-        <button class="btn-sm" onclick="toggleThemeActive('${t.id}',${!t.is_active})" style="${isLive?'background:rgba(231,76,60,.1);border-color:#e74c3c;color:#e74c3c':''}">${isLive?'Deactivate':'Activate'}</button>
-        <button class="btn-sm" onclick="openThemeEditor(${tJson})">Edit</button>
-        <button class="btn-sm btn-danger" onclick="deleteTheme('${t.id}','${t.name.replace(/'/g,'\\x27')}')">Delete</button>
+        <button class="btn-sm" ${a('toggleThemeActive', [t.id, !isOn])} style="${isOn ? 'background:rgba(231,76,60,.1);border-color:#e74c3c;color:#e74c3c' : ''}">${isOn ? 'Deactivate' : 'Activate'}</button>
+        <button class="btn-sm" ${a('openThemeEditor', [t])}>Edit</button>
+        <button class="btn-sm btn-danger" ${a('deleteTheme', [t.id, t.name || ''])}>Delete</button>
       </div>
     </div>`;
   }).join('');
 }
 
+// Show the saved theme on this page straight away (colours, font, banner), or take it off.
+function applyEventThemeToPage(t) {
+  removeActiveThemeFromPage();
+  if (!_themeIsLive(t)) return;
+  const map = [['--black', 'bg_color'], ['--white', 'text_color'], ['--accent', 'accent_color'], ['--card', 'card_color'], ['--border', 'border_color'], ['--grey', 'grey_color']];
+  const css = map.map(m => _thColor(t[m[1]]) ? `${m[0]}:${t[m[1]]};` : '').join('');
+  if (css) {
+    const s = document.createElement('style');
+    s.id = 'event-theme-vars';
+    s.textContent = 'html:root{' + css + '}';
+    document.head.appendChild(s);
+  }
+  const font = String(t.font_family || '').replace(/[^A-Za-z0-9 \-]/g, '').trim();
+  if (font) {
+    const l = document.createElement('link');
+    l.id = 'event-theme-font-link'; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font).replace(/%20/g, '+') + ':wght@400;700&display=swap';
+    document.head.appendChild(l);
+    const fs = document.createElement('style');
+    fs.id = 'event-theme-font';
+    fs.textContent = 'body{font-family:"' + font + '",sans-serif !important}';
+    document.head.appendChild(fs);
+  }
+  window.__kfsEventTheme = t;
+  kfsApplyThemeOverrides(t);
+}
+
 async function toggleThemeActive(id, activate) {
-  const ok = await apiFetch(`/api/admin/themes/${id}`, 'PUT', { is_active: activate });
-  if (ok) {
-    if (!activate) removeActiveThemeFromPage();
+  const res = await apiFetch(`/api/admin/themes/${id}`, 'PUT', { is_active: !!activate });
+  if (res && !res.error) {
+    applyEventThemeToPage(activate ? res : null);
     loadThemes();
   }
 }
@@ -6418,23 +6497,17 @@ async function toggleThemeActive(id, activate) {
 async function deleteTheme(id, name) {
   if (!confirm(`Delete theme "${name}"?`)) return;
   const res = await apiFetch(`/api/admin/themes/${id}`, 'DELETE');
-  if (res && res.success) {
-    removeActiveThemeFromPage();
-    loadThemes();
-  }
+  if (res && res.success) loadThemes();
 }
 
+// Only ever touches nodes the theme loader created (matched by id). The old version removed every
+// <style> in <head> containing "font-family" + "!important", which also deleted the site's main stylesheet.
 function removeActiveThemeFromPage() {
-  const el = document.getElementById('event-theme-vars');
-  if (el) el.remove();
-  // Remove dynamically injected font override styles
-  document.querySelectorAll('head style:not([id])').forEach(s => {
-    if (s.textContent.includes('font-family') && s.textContent.includes('!important')) s.remove();
+  ['event-theme-vars', 'event-theme-font', 'event-theme-font-link'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
   });
-  // Remove dynamically injected font links (not the static preconnect ones)
-  document.querySelectorAll('head link[rel=stylesheet][href*="fonts.googleapis"]').forEach(l => {
-    if (!l.dataset.static) l.remove();
-  });
+  kfsRemoveThemeOverrides();
   window.__kfsEventTheme = null;
 }
 
@@ -6457,8 +6530,8 @@ function openThemeEditor(theme) {
   document.getElementById('te-hero-tagline').value = theme ? (theme.hero_tagline || '') : '';
   document.getElementById('te-banner-msg').value = theme ? (theme.banner_message || '') : '';
   document.getElementById('te-logo-url').value = theme ? (theme.logo_url || '') : '';
-  document.getElementById('te-from').value = theme && theme.active_from ? theme.active_from.slice(0,16) : '';
-  document.getElementById('te-until').value = theme && theme.active_until ? theme.active_until.slice(0,16) : '';
+  document.getElementById('te-from').value = theme ? _isoToLocalInput(theme.active_from) : '';
+  document.getElementById('te-until').value = theme ? _isoToLocalInput(theme.active_until) : '';
   document.getElementById('te-activate-now').checked = theme ? !!theme.is_active : false;
   const err = document.getElementById('te-error');
   if (err) { err.textContent = ''; err.style.display = 'none'; }
@@ -6548,13 +6621,14 @@ async function saveTheme(activate) {
     banner_bg: document.getElementById('te-banner-bg').value || null,
     banner_text_color: document.getElementById('te-banner-text').value || null,
     logo_url: document.getElementById('te-logo-url').value.trim() || null,
-    active_from: document.getElementById('te-from').value || null,
-    active_until: document.getElementById('te-until').value || null,
+    active_from: _localInputToIso(document.getElementById('te-from').value),
+    active_until: _localInputToIso(document.getElementById('te-until').value),
   };
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/admin/themes/${id}` : '/api/admin/themes';
   const res = await apiFetch(url, method, payload);
   if (res && !res.error) {
+    applyEventThemeToPage(res);
     closeThemeEditor();
     loadThemes();
   } else {
@@ -11363,31 +11437,56 @@ const W_ICONS = {
 // Fun-card icon options for admin picker
 const W_FUN_ICONS = ['film','play','star','book','event','chart','globe','heart','lens','sun','tape','award'];
 
-// Card colour themes — cinematic palettes with accent glow colours
+// Card colour themes. Every card is a dark frame with ONE accent colour.
+// c1/c2 = background gradient stops, fg = text colour, ac = accent (icons, light leak).
 const WRAPPED_THEMES = [
-  { bg: 'linear-gradient(150deg,#0a0a0a 0%,#141414 100%)', fg: '#f5f5f5', glow: 'rgba(245,245,245,.12)' },
-  { bg: 'linear-gradient(150deg,#08080f 0%,#0e0e22 100%)', fg: '#c8c8ff', glow: 'rgba(120,120,255,.25)' },
-  { bg: 'linear-gradient(150deg,#070f07 0%,#0b1c0b 100%)', fg: '#b8f0b8', glow: 'rgba(80,200,80,.22)' },
-  { bg: 'linear-gradient(150deg,#120606 0%,#200b0b 100%)', fg: '#ffb8b8', glow: 'rgba(255,80,80,.22)' },
-  { bg: 'linear-gradient(150deg,#0f0c05 0%,#1c1605 100%)', fg: '#f5e8b0', glow: 'rgba(240,200,60,.22)' },
-  { bg: 'linear-gradient(150deg,#06060f 0%,#0c0c28 100%)', fg: '#b0c8ff', glow: 'rgba(80,120,255,.25)' },
-  { bg: 'linear-gradient(150deg,#0a0808 0%,#1a1010 100%)', fg: '#f0c8a0', glow: 'rgba(220,140,60,.22)' },
-  { bg: 'linear-gradient(150deg,#080a0f 0%,#0e1420 100%)', fg: '#a0e0ff', glow: 'rgba(60,180,255,.22)' },
+  { c1: '#101010', c2: '#1b1b1a', fg: '#f2f2ef', ac: '#d8d8d2' },
+  { c1: '#0d0f1f', c2: '#1a1f45', fg: '#e2e5ff', ac: '#8a95ff' },
+  { c1: '#0b130e', c2: '#13261b', fg: '#d9f5e2', ac: '#5fd08c' },
+  { c1: '#170b0c', c2: '#2b1315', fg: '#ffdede', ac: '#ff7070' },
+  { c1: '#15110a', c2: '#2b2109', fg: '#fcf0cc', ac: '#f3c24f' },
+  { c1: '#0a0e17', c2: '#10203a', fg: '#d6e7ff', ac: '#5aaaff' },
+  { c1: '#140e0a', c2: '#2b1b12', fg: '#f7ddc6', ac: '#ea9760' },
+  { c1: '#0a1215', c2: '#102429', fg: '#cff3ff', ac: '#4fcbea' },
 ];
 
+// Admin picks a broadcast theme by name (config.broadcast_theme); names kept for backwards compatibility.
 const BROADCAST_THEMES = {
-  dark:    'linear-gradient(150deg,#0a0a0a 0%,#1a1a1a 100%)',
-  slate:   'linear-gradient(150deg,#08090f 0%,#0c1020 100%)',
-  forest:  'linear-gradient(150deg,#060f06 0%,#0b1a0b 100%)',
-  crimson: 'linear-gradient(150deg,#120606 0%,#200b0b 100%)',
-  gold:    'linear-gradient(150deg,#100c03 0%,#1c1603 100%)',
+  dark:    WRAPPED_THEMES[0],
+  slate:   WRAPPED_THEMES[5],
+  forest:  WRAPPED_THEMES[2],
+  crimson: WRAPPED_THEMES[3],
+  gold:    WRAPPED_THEMES[4],
 };
 
 function _wrappedTheme(i) { return WRAPPED_THEMES[i % WRAPPED_THEMES.length]; }
 
-// ── Noise overlay for card depth (pure CSS, no image) ─────────────────────────
-function _noiseStyle() {
-  return `radial-gradient(circle at 20% 80%, rgba(255,255,255,.03) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,.02) 0%, transparent 50%)`;
+// ── Small helpers ─────────────────────────────────────────────────────────────
+// Everything that ends up inside card HTML is escaped (titles, admin text, URLs).
+function _wEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _wUrl(u) {
+  u = String(u || '').trim();
+  return (/^(https?:)?\/\//i.test(u) || u.charAt(0) === '/' || /^data:image\//i.test(u)) ? _wEsc(u) : '';
+}
+function _wFirstName(d) { return d ? String(d).split(/[,|]+/)[0].trim() : ''; }
+function _wReduceMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+const _W_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+
+// Credits-style list: hairline rows instead of nested cards.
+function _wList(items, total) {
+  if (!items.length) return '';
+  return `<div class="wrapped-card-events-row">${items.map(t =>
+    `<div class="wrapped-card-event-item">${_W_TICK}<span>${_wEsc(t)}</span></div>`).join('')}</div>` +
+    (total > items.length ? `<div class="wrapped-card-more">+${total - items.length} more</div>` : '');
+}
+function _wStat(n) {
+  return `<div class="wrapped-card-stat${String(n).length > 3 ? ' is-long' : ''}" data-count="${n}">${n}</div>`;
 }
 
 // ── Get registered events from localStorage ───────────────────────────────────
@@ -11397,6 +11496,8 @@ function getRegisteredEvents() {
 
 // ── Build the set of cards based on user data + server stats ──────────────────
 function buildWrappedCards(stats, config) {
+  stats = stats || {};
+  config = config || {};
   const cards = [];
   const watchedMovies    = getWatchedMovies();    // {id: timestamp}
   const readBlogs        = getBlogReadState();    // {id: timestamp}
@@ -11409,7 +11510,7 @@ function buildWrappedCards(stats, config) {
   const readCount    = readIds.length;
   const eventCount   = eventIds.length;
 
-  const allMovies = (stats && stats.allMovies) || [];
+  const allMovies = Array.isArray(stats.allMovies) ? stats.allMovies : [];
   const myMovies  = watchedIds.map(id => allMovies.find(m => String(m.id) === String(id))).filter(Boolean);
 
   // My genre breakdown
@@ -11418,276 +11519,238 @@ function buildWrappedCards(stats, config) {
     const genres = Array.isArray(m.genre) ? m.genre : [];
     genres.forEach(g => { if (g) myGenreCount[g] = (myGenreCount[g] || 0) + 1; });
   });
-  const myTopGenres = Object.entries(myGenreCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([g])=>g);
+  const myTopGenres = Object.entries(myGenreCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g);
 
-  // ── Most-liked movie: highest community average rating among watched movies ──
-  // Falls back to most recently watched if no ratings
+  // Most-liked movie: highest community average rating among watched movies,
+  // falling back to the most recently watched one when there is no rating data.
+  const ratings = stats.movieRatings || {}; // {id: {avg, count}}
   let myFavouriteMovie = null;
   if (myMovies.length > 0) {
-    const allReviewStats = (stats && stats.movieRatings) || {}; // {id: {avg, count}}
-    // Find watched movie with highest community avg (min 1 review); fallback to most recent
     let bestAvg = -1;
     myMovies.forEach(m => {
-      const r = allReviewStats[String(m.id)];
+      const r = ratings[String(m.id)];
       if (r && r.avg > bestAvg) { bestAvg = r.avg; myFavouriteMovie = m; }
     });
     if (!myFavouriteMovie) {
-      // No rating data — pick most recently watched
-      myFavouriteMovie = [...myMovies].sort((a,b)=>(watchedMovies[b.id]||0)-(watchedMovies[a.id]||0))[0];
+      myFavouriteMovie = [...myMovies].sort((a, b) => (watchedMovies[b.id] || 0) - (watchedMovies[a.id] || 0))[0];
     }
   }
 
-  // Most recently watched films (up to 3 for poster row), excluding favourite
+  // Most recently watched films (up to 3 for the poster fan), excluding the favourite
   const recentMovies = [...myMovies]
-    .sort((a,b)=>(watchedMovies[b.id]||0)-(watchedMovies[a.id]||0))
+    .sort((a, b) => (watchedMovies[b.id] || 0) - (watchedMovies[a.id] || 0))
     .filter(m => !myFavouriteMovie || String(m.id) !== String(myFavouriteMovie.id))
     .slice(0, 3);
 
-  // Registered event titles
-  const myEventTitles = eventIds.map(id => registeredEvents[id]?.title).filter(Boolean).slice(0,4);
+  const myEventTitles = eventIds.map(id => registeredEvents[id] && registeredEvents[id].title).filter(Boolean).slice(0, 4);
+  const year = String(config.year || new Date().getFullYear());
+  const y = _wEsc(year);
 
-  const year = (config.year || new Date().getFullYear()).toString();
-
-  // ── 0: Broadcast (admin message) ─────────────────────────────────────────
-  if (config.broadcast && config.broadcast.trim()) {
-    const themeName = config.broadcast_theme || 'dark';
-    const bg = BROADCAST_THEMES[themeName] || BROADCAST_THEMES.dark;
+  // ── Broadcast (admin message) ─────────────────────────────────────────────
+  if (config.broadcast && String(config.broadcast).trim()) {
     cards.push({
-      id: 'broadcast',
-      theme: { bg, fg: '#f5f5f5', glow: 'rgba(245,245,245,.15)' },
+      id: 'broadcast', theme: BROADCAST_THEMES[config.broadcast_theme] || BROADCAST_THEMES.dark,
+      label: 'A message from KFS',
+      share: { big: 'FROM KFS', label: '', sub: String(config.broadcast).trim() },
       render: () => `
         ${W_ICONS.broadcast}
         <div class="wrapped-card-eyebrow">From KFS</div>
-        <div class="wrapped-card-headline" style="font-size:clamp(20px,4.5vw,30px);line-height:1.15">${config.broadcast}</div>
-      `,
+        <div class="wrapped-card-headline is-small">${_wEsc(config.broadcast)}</div>`,
     });
   }
 
-  // ── 1: Intro ──────────────────────────────────────────────────────────────
+  // ── Intro ─────────────────────────────────────────────────────────────────
   cards.push({
-    id: 'intro',
-    theme: _wrappedTheme(0),
+    id: 'intro', theme: _wrappedTheme(0), label: 'Your year in cinema',
+    share: { big: 'YOUR YEAR\nIN CINEMA', label: 'KFS ' + year, sub: '' },
     render: () => `
       ${W_ICONS.tape}
-      <div class="wrapped-card-eyebrow">KFS · ${year}</div>
+      <div class="wrapped-card-eyebrow">KFS · ${y}</div>
       <div class="wrapped-card-headline">Your Year<br>in Cinema</div>
-      <div class="wrapped-card-sub">Tap or swipe to reveal how your KFS year unfolded — one card at a time.</div>
-    `,
+      <div class="wrapped-card-sub">Tap or swipe to see how your KFS year unfolded, one card at a time.</div>`,
   });
 
-  // ── 2: Your Most-Liked Movie (auto: highest community rating among watched) ─
+  // ── Your most-loved film ──────────────────────────────────────────────────
   if (myFavouriteMovie) {
     const fav = myFavouriteMovie;
-    const allReviewStats = (stats && stats.movieRatings) || {};
-    const favRating = allReviewStats[String(fav.id)];
+    const favRating = ratings[String(fav.id)];
+    const meta = [fav.release_year, _wFirstName(fav.director)].filter(Boolean).join(' · ');
     cards.push({
-      id: 'my-fav-movie',
-      theme: _wrappedTheme(1),
+      id: 'my-fav-movie', theme: _wrappedTheme(1), label: 'Your most-loved film: ' + fav.title,
+      share: { big: String(fav.title).toUpperCase(), label: 'my most-loved film', sub: favRating ? `${Number(favRating.avg).toFixed(1)} / 5 from the community` : '' },
       render: () => `
-        ${W_ICONS.award}
+        ${_wUrl(fav.poster_image)
+          ? `<img class="wrapped-card-film-poster is-hero" src="${_wUrl(fav.poster_image)}" alt="Poster of ${_wEsc(fav.title)}" loading="lazy" decoding="async">`
+          : W_ICONS.award}
         <div class="wrapped-card-eyebrow">Your most-loved film</div>
-        ${fav.poster_image ? `<img class="wrapped-card-film-poster" src="${fav.poster_image}" alt="${fav.title}" loading="lazy" style="width:80px;height:120px;margin-bottom:10px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5)">` : ''}
-        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${fav.title}</div>
-        <div class="wrapped-card-sub">${[fav.release_year, fav.director ? fav.director.split(/[,|]+/)[0].trim() : null].filter(Boolean).join(' · ')}</div>
-        ${favRating ? `<div class="wrapped-card-stat" style="font-size:clamp(22px,5vw,36px);margin-top:8px">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:middle;margin-right:3px;margin-top:-3px;display:inline"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${favRating.avg.toFixed(1)}
-          <span class="wrapped-card-sub" style="font-size:13px;margin-left:4px;display:inline">/5 · ${favRating.count} ${favRating.count===1?'review':'reviews'}</span>
-        </div>` : `<div class="wrapped-card-sub" style="margin-top:6px;opacity:.6">The one that stayed with you.</div>`}
-      `,
+        <div class="wrapped-card-headline is-title">${_wEsc(fav.title)}</div>
+        ${meta ? `<div class="wrapped-card-sub">${_wEsc(meta)}</div>` : ''}
+        ${favRating
+          ? `<div class="wrapped-card-rating">
+               <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+               <span data-count="${Number(favRating.avg).toFixed(1)}" data-dec="1">${Number(favRating.avg).toFixed(1)}</span>
+               <small>/5 · ${favRating.count} ${favRating.count === 1 ? 'review' : 'reviews'}</small>
+             </div>`
+          : `<div class="wrapped-card-sub">The one that stayed with you.</div>`}`,
     });
   }
 
-  // ── 3: Films watched count ─────────────────────────────────────────────────
+  // ── Films watched count ───────────────────────────────────────────────────
   cards.push({
-    id: 'films-watched',
-    theme: _wrappedTheme(2),
-    render: () => `
-      ${W_ICONS.film}
-      <div class="wrapped-card-eyebrow">Films on your list</div>
-      <div class="wrapped-card-stat">${watchedCount}</div>
-      <div class="wrapped-card-stat-label">${watchedCount === 1 ? 'film' : 'films'} watched</div>
-      ${watchedCount === 0
-        ? `<div class="wrapped-card-sub" style="margin-top:14px">Start exploring the KFS library — mark films as watched to track your journey.</div>`
-        : watchedCount >= 20
-          ? `<div class="wrapped-card-sub" style="margin-top:14px">Seriously cinematic. You live here.</div>`
-          : watchedCount >= 10
-            ? `<div class="wrapped-card-sub" style="margin-top:14px">Incredible dedication to the craft.</div>`
-            : watchedCount >= 5
-              ? `<div class="wrapped-card-sub" style="margin-top:14px">You're building a real filmography.</div>`
-              : `<div class="wrapped-card-sub" style="margin-top:14px">Every film is a new perspective.</div>`}
-      ${myMovies.length > 0 ? `<div class="wrapped-card-events-row" style="margin-top:10px">
-        ${myMovies.slice(0,4).map(m=>`<div class="wrapped-card-event-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          ${m.title}${m.release_year?' · '+m.release_year:''}
-        </div>`).join('')}
-        ${myMovies.length > 4 ? `<div class="wrapped-card-sub" style="margin-top:4px">+${myMovies.length-4} more</div>` : ''}
-      </div>` : ''}
-    `,
+    id: 'films-watched', theme: _wrappedTheme(2), label: `${watchedCount} ${watchedCount === 1 ? 'film' : 'films'} watched`,
+    share: { big: String(watchedCount), label: watchedCount === 1 ? 'film watched' : 'films watched', sub: 'on my KFS list' },
+    render: () => {
+      const msg = watchedCount === 0 ? 'Start exploring the KFS library. Mark films as watched to track your journey.'
+        : watchedCount >= 20 ? 'Seriously cinematic. You live here.'
+        : watchedCount >= 10 ? 'Incredible dedication to the craft.'
+        : watchedCount >= 5  ? "You're building a real filmography."
+        : 'Every film is a new perspective.';
+      return `
+        ${W_ICONS.film}
+        <div class="wrapped-card-eyebrow">Films on your list</div>
+        ${_wStat(watchedCount)}
+        <div class="wrapped-card-stat-label">${watchedCount === 1 ? 'film' : 'films'} watched</div>
+        <div class="wrapped-card-sub">${_wEsc(msg)}</div>
+        ${_wList(myMovies.slice(0, 4).map(m => m.title + (m.release_year ? ' · ' + m.release_year : '')), myMovies.length)}`;
+    },
   });
 
-  // ── 4: Other films poster row (recently watched, excl. favourite) ──────────
+  // ── More from the watchlist (poster fan) ──────────────────────────────────
   if (recentMovies.length > 0) {
+    const posters = recentMovies.filter(m => _wUrl(m.poster_image));
     cards.push({
-      id: 'my-films',
-      theme: _wrappedTheme(3),
+      id: 'my-films', theme: _wrappedTheme(3), label: 'More from your watchlist',
+      share: { big: String(recentMovies[0].title).toUpperCase(), label: 'also on my watchlist', sub: recentMovies.length > 1 ? `+${recentMovies.length - 1} more` : '' },
       render: () => `
+        ${posters.length ? `<div class="wrapped-card-film-row">${posters.map(m =>
+          `<img class="wrapped-card-film-poster" src="${_wUrl(m.poster_image)}" alt="Poster of ${_wEsc(m.title)}" loading="lazy" decoding="async">`).join('')}</div>` : W_ICONS.film}
         <div class="wrapped-card-eyebrow">More from your watchlist</div>
-        <div class="wrapped-card-film-row">
-          ${recentMovies.map(m => m.poster_image
-            ? `<img class="wrapped-card-film-poster" src="${m.poster_image}" alt="${m.title}" loading="lazy">`
-            : '').join('')}
-        </div>
-        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,24px);margin-top:12px">${recentMovies[0].title}</div>
-        <div class="wrapped-card-sub">${recentMovies[0].release_year || ''}${recentMovies[0].director ? ' · ' + recentMovies[0].director.split(/[,|]+/)[0].trim() : ''}</div>
-        ${recentMovies.length > 1 ? `<div class="wrapped-card-sub" style="margin-top:4px">+${recentMovies.length - 1} more on your list</div>` : ''}
-      `,
+        <div class="wrapped-card-headline is-title">${_wEsc(recentMovies[0].title)}</div>
+        <div class="wrapped-card-sub">${_wEsc([recentMovies[0].release_year, _wFirstName(recentMovies[0].director)].filter(Boolean).join(' · '))}</div>
+        ${recentMovies.length > 1 ? `<div class="wrapped-card-more">+${recentMovies.length - 1} more on your list</div>` : ''}`,
     });
   }
 
-  // ── 5: Top genre ─────────────────────────────────────────────────────────
+  // ── Top genre ─────────────────────────────────────────────────────────────
   if (myTopGenres.length > 0) {
     cards.push({
-      id: 'top-genre',
-      theme: _wrappedTheme(4),
+      id: 'top-genre', theme: _wrappedTheme(4), label: 'Your top genre: ' + myTopGenres[0],
+      share: { big: myTopGenres[0].toUpperCase(), label: 'my top genre', sub: '' },
       render: () => `
         ${W_ICONS.chart}
         <div class="wrapped-card-eyebrow">Your top genre</div>
-        <div class="wrapped-card-headline">${myTopGenres[0]}</div>
-        <div class="wrapped-card-sub">You gravitate towards ${myTopGenres[0].toLowerCase()} films.</div>
-        ${myTopGenres.length > 1
-          ? `<div class="wrapped-card-genres">${myTopGenres.map(g=>`<span class="wrapped-card-genre-pill">${g}</span>`).join('')}</div>`
-          : ''}
-      `,
+        <div class="wrapped-card-headline">${_wEsc(myTopGenres[0])}</div>
+        <div class="wrapped-card-sub">You gravitate towards ${_wEsc(myTopGenres[0].toLowerCase())} films.</div>
+        ${myTopGenres.length > 1 ? `<div class="wrapped-card-genres">${myTopGenres.map(g => `<span class="wrapped-card-genre-pill">${_wEsc(g)}</span>`).join('')}</div>` : ''}`,
     });
-  } else if (stats && stats.topGenres && stats.topGenres.length) {
+  } else if (Array.isArray(stats.topGenres) && stats.topGenres.length) {
+    const tg = stats.topGenres;
     cards.push({
-      id: 'top-genre-kfs',
-      theme: _wrappedTheme(4),
+      id: 'top-genre-kfs', theme: _wrappedTheme(4), label: "KFS's most made genre: " + tg[0].genre,
+      share: { big: String(tg[0].genre).toUpperCase(), label: "KFS's most made genre", sub: '' },
       render: () => `
         ${W_ICONS.chart}
         <div class="wrapped-card-eyebrow">KFS's most made genre</div>
-        <div class="wrapped-card-headline">${stats.topGenres[0].genre}</div>
-        <div class="wrapped-card-sub">KFS has made <strong>${stats.topGenres[0].count}</strong> ${stats.topGenres[0].genre.toLowerCase()} films.</div>
-        <div class="wrapped-card-genres">${stats.topGenres.slice(0,4).map(g=>`<span class="wrapped-card-genre-pill">${g.genre}</span>`).join('')}</div>
-      `,
+        <div class="wrapped-card-headline">${_wEsc(tg[0].genre)}</div>
+        <div class="wrapped-card-sub">KFS has made <strong>${_wEsc(tg[0].count)}</strong> ${_wEsc(String(tg[0].genre).toLowerCase())} films.</div>
+        <div class="wrapped-card-genres">${tg.slice(0, 4).map(g => `<span class="wrapped-card-genre-pill">${_wEsc(g.genre)}</span>`).join('')}</div>`,
     });
   }
 
-  // ── 6: Events attended ───────────────────────────────────────────────────
+  // ── Events attended ───────────────────────────────────────────────────────
   cards.push({
-    id: 'events-attended',
-    theme: _wrappedTheme(5),
+    id: 'events-attended', theme: _wrappedTheme(5), label: `${eventCount} ${eventCount === 1 ? 'event' : 'events'} this year`,
+    share: { big: String(eventCount), label: eventCount === 1 ? 'event attended' : 'events attended', sub: 'at KIIT Film Society' },
     render: () => `
       ${W_ICONS.event}
       <div class="wrapped-card-eyebrow">Events attended</div>
-      <div class="wrapped-card-stat">${eventCount}</div>
+      ${_wStat(eventCount)}
       <div class="wrapped-card-stat-label">${eventCount === 1 ? 'event' : 'events'} this year</div>
-      ${myEventTitles.length > 0
-        ? `<div class="wrapped-card-events-row">
-            ${myEventTitles.map(t => `<div class="wrapped-card-event-item">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              ${t}
-            </div>`).join('')}
-          </div>`
-        : eventCount === 0
-          ? `<div class="wrapped-card-sub" style="margin-top:14px">Register for KFS events to see them here.</div>`
-          : ''}
-    `,
+      ${eventCount === 0 ? '<div class="wrapped-card-sub">Register for KFS events to see them here.</div>' : ''}
+      ${_wList(myEventTitles, eventCount)}`,
   });
 
-  // ── 7: Blogs read ─────────────────────────────────────────────────────────
-  const allBlogs = (stats && stats.allBlogs) || [];
+  // ── Blogs read ────────────────────────────────────────────────────────────
+  const allBlogs = Array.isArray(stats.allBlogs) ? stats.allBlogs : [];
   const myBlogs = readIds.map(id => allBlogs.find(b => String(b.id) === String(id))).filter(Boolean);
-
   cards.push({
-    id: 'blogs-read',
-    theme: _wrappedTheme(6),
+    id: 'blogs-read', theme: _wrappedTheme(6), label: `${readCount} ${readCount === 1 ? 'article' : 'articles'} explored`,
+    share: { big: String(readCount), label: readCount === 1 ? 'article read' : 'articles read', sub: 'on the KFS blog' },
     render: () => `
       ${W_ICONS.book}
       <div class="wrapped-card-eyebrow">Blog posts read</div>
-      <div class="wrapped-card-stat">${readCount}</div>
+      ${_wStat(readCount)}
       <div class="wrapped-card-stat-label">${readCount === 1 ? 'article' : 'articles'} explored</div>
-      ${readCount === 0
-        ? `<div class="wrapped-card-sub" style="margin-top:14px">The KFS blog is full of film essays and behind-the-scenes stories.</div>`
-        : `<div class="wrapped-card-sub" style="margin-top:14px">Curiosity looks good on you.</div>`}
-      ${myBlogs.length > 0 ? `<div class="wrapped-card-events-row" style="margin-top:10px">
-        ${myBlogs.slice(0,4).map(b=>`<div class="wrapped-card-event-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          ${b.title}
-        </div>`).join('')}
-        ${myBlogs.length > 4 ? `<div class="wrapped-card-sub" style="margin-top:4px">+${myBlogs.length-4} more</div>` : ''}
-      </div>` : ''}
-    `,
+      <div class="wrapped-card-sub">${readCount === 0 ? 'The KFS blog is full of film essays and behind-the-scenes stories.' : 'Curiosity looks good on you.'}</div>
+      ${_wList(myBlogs.slice(0, 4).map(b => b.title), myBlogs.length)}`,
   });
 
-  // ── 8: Year Highlight Cards (admin-curated: what KFS did this year) ────────
-  if (config.blog_highlights && Array.isArray(config.blog_highlights)) {
+  // ── Year highlight cards (admin curated) ──────────────────────────────────
+  if (Array.isArray(config.blog_highlights)) {
     config.blog_highlights.forEach((bh, i) => {
-      if (!bh.headline) return;
+      if (!bh || !bh.headline) return;
       cards.push({
-        id: 'year-highlight-' + i,
-        theme: _wrappedTheme(i + 2),
+        id: 'year-highlight-' + i, theme: _wrappedTheme(i + 2), label: bh.headline,
+        share: { big: String(bh.headline).toUpperCase(), label: 'KFS ' + year, sub: bh.sub ? String(bh.sub) : '' },
         render: () => `
           <div class="wrapped-card-blog-highlight">
-            ${bh.image_url
-              ? `<img class="wrapped-card-blog-img" src="${bh.image_url}" alt="${bh.headline}" loading="lazy" style="border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.4)">`
-              : `<div style="margin-bottom:12px;opacity:.4"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></div>`}
-            <div class="wrapped-card-blog-title">${bh.headline}</div>
-            ${bh.sub ? `<div class="wrapped-card-blog-sub" style="white-space:pre-line">${bh.sub}</div>` : ''}
-          </div>
-        `,
+            ${_wUrl(bh.image_url)
+              ? `<img class="wrapped-card-blog-img" src="${_wUrl(bh.image_url)}" alt="${_wEsc(bh.headline)}" loading="lazy" decoding="async">`
+              : W_ICONS.film}
+            <div class="wrapped-card-blog-title">${_wEsc(bh.headline)}</div>
+            ${bh.sub ? `<div class="wrapped-card-blog-sub">${_wEsc(bh.sub)}</div>` : ''}
+          </div>`,
       });
     });
   }
 
-  // ── 9: KFS by the numbers ─────────────────────────────────────────────────
-  if (stats) {
-    const listIconSvg = `<svg class="wrapped-card-list-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+  // ── KFS by the numbers (only when the server really sent numbers) ─────────
+  if (typeof stats.totalMovies === 'number') {
+    const rows = [
+      [stats.totalMovies,  'films in the library'],
+      [stats.totalEvents,  'events hosted'],
+      [stats.totalBlogs,   'blog posts published'],
+      [stats.totalReviews, 'community reviews'],
+    ].filter(r => typeof r[0] === 'number');
     cards.push({
-      id: 'kfs-numbers',
-      theme: _wrappedTheme(7),
+      id: 'kfs-numbers', theme: _wrappedTheme(7), label: 'KFS by the numbers',
+      share: { big: String(stats.totalMovies), label: 'films in the KFS library', sub: `${stats.totalEvents || 0} events hosted` },
       render: () => `
         ${W_ICONS.globe}
-        <div class="wrapped-card-eyebrow">KFS · All Time</div>
+        <div class="wrapped-card-eyebrow">KFS · All time</div>
         <div class="wrapped-card-headline">By the<br>Numbers</div>
-        <ul class="wrapped-card-list">
-          <li>${listIconSvg}<strong>${stats.totalMovies}</strong>&nbsp;films in the library</li>
-          <li>${listIconSvg}<strong>${stats.totalEvents}</strong>&nbsp;events hosted</li>
-          <li>${listIconSvg}<strong>${stats.totalBlogs}</strong>&nbsp;blog posts published</li>
-          <li>${listIconSvg}<strong>${stats.totalReviews}</strong>&nbsp;community reviews</li>
-        </ul>
-      `,
+        <div class="wrapped-numbers">${rows.map(r =>
+          `<div class="wrapped-numbers-row"><b data-count="${r[0]}">${r[0]}</b><span>${_wEsc(r[1])}</span></div>`).join('')}</div>`,
     });
   }
 
-  // ── 10: Community top-rated / admin-featured film ──────────────────────────
+  // ── Community top-rated / admin-featured film ─────────────────────────────
   let featuredMovie = null;
   if (config.featured_movie_id && allMovies.length) {
     featuredMovie = allMovies.find(m => String(m.id) === String(config.featured_movie_id));
   }
-  if (!featuredMovie && stats && stats.topRatedMovie) {
-    featuredMovie = stats.topRatedMovie;
-  }
+  if (!featuredMovie && stats.topRatedMovie) featuredMovie = stats.topRatedMovie;
   if (featuredMovie) {
     const t = featuredMovie;
     const isAdminPicked = !!config.featured_movie_id;
+    const meta = [t.release_year, _wFirstName(t.director)].filter(Boolean).join(' · ');
     cards.push({
-      id: 'top-rated',
-      theme: _wrappedTheme(1),
+      id: 'top-rated', theme: _wrappedTheme(1), label: (isAdminPicked ? 'KFS Film of the Year: ' : "Community's top-rated film: ") + t.title,
+      share: { big: String(t.title).toUpperCase(), label: isAdminPicked ? 'KFS film of the year' : "the community's top-rated film", sub: t.score ? `${t.score} / 5` : '' },
       render: () => `
-        ${W_ICONS.award}
-        <div class="wrapped-card-eyebrow">${isAdminPicked ? "KFS Film of the Year" : "Community's top-rated film"}</div>
-        ${t.poster_image ? `<img class="wrapped-card-film-poster" src="${t.poster_image}" alt="${t.title}" loading="lazy" style="width:80px;height:120px;margin-bottom:8px">` : ''}
-        <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${t.title}</div>
-        ${t.score ? `<div class="wrapped-card-stat" style="font-size:clamp(28px,6vw,44px)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:middle;margin-right:4px;margin-top:-3px;display:inline"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${t.score}
-        </div>` : ''}
-        ${t.release_year || t.director ? `<div class="wrapped-card-sub">${[t.release_year, t.director ? t.director.split(/[,|]+/)[0].trim() : null].filter(Boolean).join(' · ')}</div>` : ''}
-      `,
+        ${_wUrl(t.poster_image)
+          ? `<img class="wrapped-card-film-poster is-hero" src="${_wUrl(t.poster_image)}" alt="Poster of ${_wEsc(t.title)}" loading="lazy" decoding="async">`
+          : W_ICONS.award}
+        <div class="wrapped-card-eyebrow">${isAdminPicked ? 'KFS Film of the Year' : "Community's top-rated film"}</div>
+        <div class="wrapped-card-headline is-title">${_wEsc(t.title)}</div>
+        ${t.score ? `<div class="wrapped-card-rating">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span data-count="${Number(t.score).toFixed(1)}" data-dec="1">${Number(t.score).toFixed(1)}</span><small>/5</small></div>` : ''}
+        ${meta ? `<div class="wrapped-card-sub">${_wEsc(meta)}</div>` : ''}`,
     });
   }
 
-  // ── 11: Genre personality ─────────────────────────────────────────────────
+  // ── Genre personality ─────────────────────────────────────────────────────
   const personalities = {
     'Drama':       { title: 'The Empath',       sub: 'You feel every scene.', icon: W_ICONS.heart },
     'Comedy':      { title: 'The Laughtrack',   sub: "Life's too short to be serious.", icon: W_ICONS.sun },
@@ -11697,134 +11760,255 @@ function buildWrappedCards(stats, config) {
     'Romance':     { title: 'The Hopeful',      sub: 'You believe in the happy ending.', icon: W_ICONS.heart },
     'Action':      { title: 'The Adrenaline',   sub: 'Still counting the explosions.', icon: W_ICONS.star },
   };
-  if (myTopGenres.length > 0) {
+  if (myTopGenres.length > 0 && personalities[myTopGenres[0]]) {
     const p = personalities[myTopGenres[0]];
-    if (p) {
-      cards.push({
-        id: 'personality',
-        theme: _wrappedTheme(2),
-        render: () => `
-          ${p.icon}
-          <div class="wrapped-card-eyebrow">Your film personality</div>
-          <div class="wrapped-card-headline">${p.title}</div>
-          <div class="wrapped-card-sub">${p.sub}</div>
-        `,
-      });
-    }
+    cards.push({
+      id: 'personality', theme: _wrappedTheme(2), label: 'Your film personality: ' + p.title,
+      share: { big: p.title.toUpperCase(), label: 'my film personality', sub: p.sub },
+      render: () => `
+        ${p.icon}
+        <div class="wrapped-card-eyebrow">Your film personality</div>
+        <div class="wrapped-card-headline">${_wEsc(p.title)}</div>
+        <div class="wrapped-card-sub">${_wEsc(p.sub)}</div>`,
+    });
   }
 
-  // ── 12: Admin fun cards ──────────────────────────────────────────────────
-  if (config.fun_cards && Array.isArray(config.fun_cards)) {
+  // ── Admin fun cards ───────────────────────────────────────────────────────
+  if (Array.isArray(config.fun_cards)) {
     config.fun_cards.forEach((fc, i) => {
-      if (!fc.text) return;
+      if (!fc || !fc.text) return;
       const iconKey = fc.icon && W_ICONS[fc.icon] ? fc.icon : 'film';
       cards.push({
-        id: 'fun-' + i,
-        theme: _wrappedTheme(i + 2),
+        id: 'fun-' + i, theme: _wrappedTheme(i + 2), label: fc.text,
+        share: { big: String(fc.text).toUpperCase(), label: 'KFS ' + year, sub: fc.sub ? String(fc.sub) : '' },
         render: () => `
           ${W_ICONS[iconKey]}
-          <div class="wrapped-card-headline" style="font-size:clamp(18px,4vw,26px)">${fc.text}</div>
-          ${fc.sub ? `<div class="wrapped-card-sub">${fc.sub}</div>` : ''}
-        `,
+          <div class="wrapped-card-headline is-small">${_wEsc(fc.text)}</div>
+          ${fc.sub ? `<div class="wrapped-card-sub">${_wEsc(fc.sub)}</div>` : ''}`,
       });
     });
   }
 
-  // ── 11: Outro ────────────────────────────────────────────────────────────
+  // ── Outro ─────────────────────────────────────────────────────────────────
   const outroText = config.outro || `Thanks for being part of KFS ${year}.\nSee you at the next screening.`;
   cards.push({
-    id: 'outro',
-    theme: _wrappedTheme(0),
+    id: 'outro', theme: _wrappedTheme(0), label: "That's a wrap",
+    share: { big: "THAT'S A\nWRAP.", label: 'KFS ' + year, sub: String(outroText) },
     render: () => `
       ${W_ICONS.award}
-      <div class="wrapped-card-eyebrow">KFS · ${year}</div>
-      <div class="wrapped-card-headline" style="font-size:clamp(40px,9vw,64px)">That's a<br>Wrap.</div>
-      <div class="wrapped-card-sub" style="white-space:pre-line;margin-top:14px;font-size:14px;opacity:.7">${outroText}</div>
-      <div style="margin-top:20px">
-        <button class="wrapped-start-btn" style="font-size:12px;padding:12px 24px" onclick="event.stopPropagation();shareWrappedCard()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      <div class="wrapped-card-eyebrow">KFS · ${y}</div>
+      <div class="wrapped-card-headline">That's a<br>Wrap.</div>
+      <div class="wrapped-card-sub">${_wEsc(outroText)}</div>
+      <div class="wrapped-card-actions">
+        <button type="button" class="wrapped-card-btn" data-w-share>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           Share your Wrapped
         </button>
-      </div>
-    `,
+      </div>`,
   });
 
   return cards;
 }
 
+// ── Deck engine ───────────────────────────────────────────────────────────────
+// Each card is one persistent DOM node. Navigation only flips data-state
+// (gone / active / next1 / next2 / far) so the CSS transitions really play.
+// (The old version rebuilt the whole deck 40ms after adding the exit class, which
+// removed the card before its exit animation could be seen.)
+let _wJustDragged = false;
+
 function renderWrappedDeck() {
   const deck = document.getElementById('wrapped-deck');
   if (!deck) return;
   deck.innerHTML = '';
+  const n = _wrappedCards.length;
 
   _wrappedCards.forEach((card, i) => {
     const t = card.theme;
-    const div = document.createElement('div');
-    div.className = 'wrapped-card';
-    if      (i === _wrappedIndex)     div.classList.add('is-active');
-    else if (i === _wrappedIndex + 1) div.classList.add('is-behind');
-    else if (i === _wrappedIndex + 2) div.classList.add('is-behind-2');
-    else div.style.opacity = '0';
+    const el = document.createElement('div');
+    el.className = 'wrapped-card';
+    el.setAttribute('role', 'group');
+    el.setAttribute('aria-roledescription', 'slide');
+    el.setAttribute('aria-label', `${i + 1} of ${n}: ${card.label || card.id}`);
+    el.style.cssText = `--c1:${t.c1};--c2:${t.c2};--fg:${t.fg};--ac:${t.ac}`;
 
-    // Progress bars keyed to _wrappedIndex (not i)
-    const progressHtml = _wrappedCards.map((_,j) =>
-      `<div class="wrapped-progress-bar ${j < _wrappedIndex ? 'done' : j === _wrappedIndex ? 'active' : ''}"></div>`
-    ).join('');
-
-    div.innerHTML = `
+    const bars = Array.from({ length: n }, (_, j) =>
+      `<i class="wrapped-progress-bar ${j < i ? 'done' : j === i ? 'active' : ''}"></i>`).join('');
+    el.innerHTML = `
+      <div class="wrapped-card-bg"><div class="wrapped-card-leak"></div><div class="wrapped-card-leak is-2"></div></div>
+      <div class="wrapped-card-grain"></div>
       <div class="wrapped-card-inner">
-        <div class="wrapped-card-bg" style="background:${t.bg};"></div>
-        <div class="wrapped-card-grain"></div>
-        ${t.glow ? `<div class="wrapped-card-glow" style="background:${t.glow}"></div>` : ''}
-        <div class="wrapped-card-content" style="color:${t.fg}">
-          <div class="wrapped-progress">${progressHtml}</div>
-          ${card.render()}
-        </div>
+        <div class="wrapped-progress" aria-hidden="true">${bars}</div>
+        <div class="wrapped-card-body">${card.render()}</div>
       </div>`;
 
-    // Click: right half → next, left half → prev (intuitive story UX)
-    div.addEventListener('click', e => {
-      if (!div.classList.contains('is-active')) return;
-      const rect = div.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      if (x < rect.width * 0.25) wrappedPrev();
-      else wrappedNext();
+    // staggered reveal: every direct child of the body gets an order index
+    el.querySelectorAll('.wrapped-card-body > *').forEach((c, k) => {
+      c.setAttribute('data-r', '');
+      c.style.setProperty('--i', k);
+    });
+    // a broken poster should vanish instead of leaving a grey box
+    el.querySelectorAll('img').forEach(img => img.addEventListener('error', () => img.remove(), { once: true }));
+    el.querySelectorAll('[data-w-share]').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); shareWrappedCard(); }));
+
+    // right side advances, left 30% goes back (story-style tap zones)
+    el.addEventListener('click', e => {
+      if (_wJustDragged) return;
+      if (el.getAttribute('data-state') !== 'active') return;
+      if (e.target.closest('button, a')) return;
+      const rect = el.getBoundingClientRect();
+      if (e.clientX - rect.left < rect.width * 0.3) wrappedPrev(); else wrappedNext();
     });
 
-    deck.appendChild(div);
+    deck.appendChild(el);
   });
 
-  // Swipe support
-  _attachWrappedSwipe(deck);
+  _wrappedBindDeck(deck);
+  _wrappedApplyStates();
 }
 
-let _wSwipeStartX = 0, _wSwipeStartY = 0, _wSwiping = false;
-function _attachWrappedSwipe(deck) {
-  deck.addEventListener('touchstart', e => {
-    _wSwipeStartX = e.touches[0].clientX;
-    _wSwipeStartY = e.touches[0].clientY;
-    _wSwiping = true;
-  }, { passive: true });
-  deck.addEventListener('touchend', e => {
-    if (!_wSwiping) return;
-    _wSwiping = false;
-    const dx = e.changedTouches[0].clientX - _wSwipeStartX;
-    const dy = e.changedTouches[0].clientY - _wSwipeStartY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-      if (dx < 0) wrappedNext(); else wrappedPrev();
+function _wrappedApplyStates() {
+  const deck = document.getElementById('wrapped-deck');
+  if (!deck) return;
+  const last = _wrappedCards.length - 1;
+  Array.prototype.forEach.call(deck.children, (el, i) => {
+    const d = i - _wrappedIndex;
+    const st = d < 0 ? 'gone' : d === 0 ? 'active' : d === 1 ? 'next1' : d === 2 ? 'next2' : 'far';
+    if (el.getAttribute('data-state') !== st) el.setAttribute('data-state', st);
+    el.toggleAttribute('inert', st !== 'active');
+    el.setAttribute('aria-hidden', st === 'active' ? 'false' : 'true');
+  });
+
+  const prev = document.querySelector('.wrapped-arrow-prev');
+  const next = document.querySelector('.wrapped-arrow-next');
+  if (prev) prev.disabled = _wrappedIndex <= 0;
+  if (next) next.disabled = _wrappedIndex >= last;
+
+  const cnt = document.getElementById('wrapped-count');
+  if (cnt) cnt.textContent = String(_wrappedIndex + 1).padStart(2, '0') + ' / ' + String(_wrappedCards.length).padStart(2, '0');
+  const live = document.getElementById('wrapped-live');
+  const cur = _wrappedCards[_wrappedIndex];
+  if (live && cur) live.textContent = `Card ${_wrappedIndex + 1} of ${_wrappedCards.length}: ${cur.label || ''}`;
+
+  // Replay button appears by itself once the last card is showing
+  const wrap = document.getElementById('wrapped-deck-wrap');
+  let row = document.getElementById('wrapped-restart-row');
+  if (_wrappedIndex >= last && last >= 0) {
+    if (!row && wrap) {
+      row = document.createElement('div');
+      row.id = 'wrapped-restart-row';
+      row.className = 'wrapped-restart-row';
+      row.innerHTML = `<button type="button" class="wrapped-start-btn" data-action="restartWrapped">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        Replay
+      </button>`;
+      wrap.appendChild(row);
     }
-  }, { passive: true });
-  // Keyboard
-  if (!deck._keyHandlerAttached) {
-    deck._keyHandlerAttached = true;
-    document.addEventListener('keydown', e => {
-      if (document.getElementById('page-wrapped')?.classList.contains('active')) {
-        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); wrappedNext(); }
-        if (e.key === 'ArrowLeft') { e.preventDefault(); wrappedPrev(); }
+  } else if (row) {
+    row.remove();
+  }
+
+  _wrappedCountUp(deck.querySelector('.wrapped-card[data-state="active"]'));
+}
+
+// Numbers count up when their card arrives (skipped for reduced-motion users).
+function _wrappedCountUp(root) {
+  if (!root || _wReduceMotion()) return;
+  root.querySelectorAll('[data-count]').forEach(el => {
+    const end = parseFloat(el.getAttribute('data-count'));
+    if (!isFinite(end) || end <= 0) return;
+    const dec = parseInt(el.getAttribute('data-dec') || '0', 10);
+    const dur = Math.min(1400, 520 + end * 16);
+    const tok = (el._wTok = (el._wTok || 0) + 1);
+    const t0 = performance.now() + 220;
+    el.textContent = (0).toFixed(dec);
+    (function tick(now) {
+      if (el._wTok !== tok) return;
+      if (now < t0) { requestAnimationFrame(tick); return; }
+      const p = Math.min(1, (now - t0) / dur);
+      el.textContent = (end * (1 - Math.pow(1 - p, 4))).toFixed(dec);
+      if (p < 1) requestAnimationFrame(tick); else el.textContent = end.toFixed(dec);
+    })(performance.now());
+  });
+}
+
+// Drag-to-swipe + mouse tilt. Bound once per deck element.
+function _wrappedBindDeck(deck) {
+  if (deck._wBound) return;
+  deck._wBound = true;
+  let sx = 0, sy = 0, dragging = false, moved = false, pid = null, card = null, raf = 0;
+
+  deck.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    card = deck.querySelector('.wrapped-card[data-state="active"]');
+    if (!card || !card.contains(e.target) || e.target.closest('button, a')) return;
+    sx = e.clientX; sy = e.clientY; pid = e.pointerId;
+    dragging = true; moved = false; _wJustDragged = false;
+  });
+
+  deck.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'touch' && !_wReduceMotion() && !dragging) {
+      const c = deck.querySelector('.wrapped-card[data-state="active"]');
+      if (c && !raf) {
+        const r = c.getBoundingClientRect(), cx = e.clientX, cy = e.clientY;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          c.style.setProperty('--px', Math.max(-1, Math.min(1, ((cx - r.left) / r.width - .5) * 2)).toFixed(3));
+          c.style.setProperty('--py', Math.max(-1, Math.min(1, ((cy - r.top) / r.height - .5) * 2)).toFixed(3));
+        });
       }
+    }
+    if (!dragging || e.pointerId !== pid) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) { dragging = false; return; } // vertical scroll wins
+      moved = true;
+      card.classList.add('is-dragging');
+      try { deck.setPointerCapture(pid); } catch (x) {}
+    }
+    const shown = (dx > 0 && _wrappedIndex === 0) ? dx * 0.25 : dx; // rubber-band at the first card
+    card.style.setProperty('--dx', shown + 'px');
+    card.style.setProperty('--rot', (shown / 22) + 'deg');
+  });
+
+  const finish = e => {
+    if (!dragging || e.pointerId !== pid) return;
+    dragging = false;
+    if (!moved) return;
+    card.classList.remove('is-dragging');
+    const dx = e.clientX - sx;
+    _wJustDragged = true; setTimeout(() => { _wJustDragged = false; }, 60);
+    if (dx < -60) wrappedNext(); else if (dx > 60) wrappedPrev();
+    card.style.removeProperty('--dx'); card.style.removeProperty('--rot'); // spring back if we did not navigate
+    try { deck.releasePointerCapture(pid); } catch (x) {}
+  };
+  deck.addEventListener('pointerup', finish);
+  deck.addEventListener('pointercancel', finish);
+  deck.addEventListener('pointerleave', () => {
+    const c = deck.querySelector('.wrapped-card[data-state="active"]');
+    if (c) { c.style.removeProperty('--px'); c.style.removeProperty('--py'); }
+  });
+
+  // Keyboard (document-level, registered once for the whole page)
+  if (!window._wrappedKeysBound) {
+    window._wrappedKeysBound = true;
+    document.addEventListener('keydown', e => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const page = document.getElementById('page-wrapped');
+      const wrap = document.getElementById('wrapped-deck-wrap');
+      if (!page || !page.classList.contains('active') || !wrap || wrap.style.display === 'none' || !_wrappedCards.length) return;
+      const tgt = e.target;
+      if (tgt && (/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName) || tgt.isContentEditable)) return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); wrappedNext(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); wrappedPrev(); }
+      else if ((e.key === ' ' || e.key === 'Spacebar') && !(tgt && tgt.closest && tgt.closest('button, a'))) { e.preventDefault(); wrappedNext(); }
     });
   }
 }
+
+// ── Loading + navigation ──────────────────────────────────────────────────────
+function _wrappedStatsOk() { return !!(_wrappedStats && typeof _wrappedStats.totalMovies === 'number'); }
 
 async function loadWrapped() {
   // Avoid double-loading
@@ -11849,7 +12033,7 @@ async function loadWrapped() {
     if (yearEl && _wrappedConfig.year) yearEl.textContent = `KFS · ${_wrappedConfig.year}`;
     if (subEl  && _wrappedConfig.sub)  subEl.textContent  = _wrappedConfig.sub;
 
-    // Populate hero stats from localStorage counts
+    // Hero tallies come from this device's localStorage
     const watchedCount = Object.keys(getWatchedMovies()).length;
     const readCount    = Object.keys(getBlogReadState()).length;
     const eventCount   = Object.keys(getRegisteredEvents()).length;
@@ -11859,72 +12043,66 @@ async function loadWrapped() {
       document.getElementById('whero-blogs').textContent  = readCount;
       statsEl.style.display = 'flex';
     }
-  } catch(e) {
+  } catch (e) {
     _wrappedStats = {}; _wrappedConfig = {};
   }
 }
 
 async function startWrapped() {
-  // Ensure data loaded (loadWrapped guards against double-loading)
-  _wrappedStats = null; // force fresh load each time Start is clicked
-  await loadWrapped();
-  _wrappedCards = buildWrappedCards(_wrappedStats, _wrappedConfig);
-  _wrappedIndex = 0;
+  const btn = document.getElementById('wrapped-start-btn');
+  const lbl = document.getElementById('wrapped-start-label');
+  if (btn && btn.getAttribute('aria-busy') === 'true') return; // ignore double taps
+  if (btn) btn.setAttribute('aria-busy', 'true');
+  if (lbl) lbl.textContent = 'Loading your year…';
+  try {
+    // Reuse the stats from page load; retry if that request had failed.
+    if (!_wrappedStatsOk()) { _wrappedStats = null; await loadWrapped(); }
+    _wrappedCards = buildWrappedCards(_wrappedStats, _wrappedConfig);
+    _wrappedIndex = 0;
 
-  // Hide hero, reveal deck with animation
-  const hero = document.getElementById('wrapped-hero');
-  const deck = document.getElementById('wrapped-deck-wrap');
-  const restartRow = document.getElementById('wrapped-restart-row');
-  if (restartRow) restartRow.remove();
-  if (hero) { hero.style.transition = 'opacity .35s ease, transform .35s ease'; hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)'; setTimeout(() => { hero.style.display = 'none'; }, 360); }
-  deck.style.display = 'flex';
-  deck.classList.remove('visible');
-  renderWrappedDeck();
-  requestAnimationFrame(() => requestAnimationFrame(() => { deck.classList.add('visible'); }));
+    const hero = document.getElementById('wrapped-hero');
+    const deck = document.getElementById('wrapped-deck-wrap');
+    const restartRow = document.getElementById('wrapped-restart-row');
+    if (restartRow) restartRow.remove();
+    if (hero) {
+      hero.style.transition = 'opacity .35s ease, transform .35s ease';
+      hero.style.opacity = '0'; hero.style.transform = 'translateY(-16px)';
+      setTimeout(() => { hero.style.display = 'none'; }, 360);
+    }
+    deck.style.display = 'flex';
+    deck.classList.remove('visible');
+    renderWrappedDeck();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      deck.classList.add('visible');
+      const d = document.getElementById('wrapped-deck');
+      if (d) d.focus({ preventScroll: true });
+    }));
+  } finally {
+    if (btn) btn.removeAttribute('aria-busy');
+    if (lbl) lbl.textContent = 'See Your Wrapped';
+  }
 }
 
 function wrappedNext() {
-  if (!_wrappedCards.length) return;
-  if (_wrappedIndex >= _wrappedCards.length - 1) {
-    let restartRow = document.getElementById('wrapped-restart-row');
-    if (!restartRow) {
-      restartRow = document.createElement('div');
-      restartRow.id = 'wrapped-restart-row';
-      restartRow.className = 'wrapped-restart-row';
-      restartRow.innerHTML = `<button class="wrapped-start-btn" style="margin-top:16px" onclick="restartWrapped()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
-        Replay
-      </button>`;
-      document.getElementById('wrapped-deck-wrap').appendChild(restartRow);
-    }
-    return;
-  }
-  // Animate exit-left before advancing
-  const activeCard = document.querySelector('.wrapped-card.is-active');
-  if (activeCard) {
-    activeCard.classList.remove('is-active');
-    activeCard.classList.add('is-exit-left');
-  }
+  if (!_wrappedCards.length || _wrappedIndex >= _wrappedCards.length - 1) return;
   _wrappedIndex++;
-  setTimeout(() => renderWrappedDeck(), 40);
+  _wrappedApplyStates();
 }
 
 function wrappedPrev() {
-  if (_wrappedIndex <= 0) return;
-  const activeCard = document.querySelector('.wrapped-card.is-active');
-  if (activeCard) {
-    activeCard.classList.remove('is-active');
-    activeCard.classList.add('is-exit-right');
-  }
+  if (!_wrappedCards.length || _wrappedIndex <= 0) return;
   _wrappedIndex--;
-  setTimeout(() => renderWrappedDeck(), 40);
+  _wrappedApplyStates();
 }
 
 function restartWrapped() {
+  if (!_wrappedCards.length) return;
   _wrappedIndex = 0;
-  const restartRow = document.getElementById('wrapped-restart-row');
-  if (restartRow) restartRow.remove();
-  renderWrappedDeck();
+  // hard cut back to the title card (the reveal animation still plays on it)
+  const deck = document.getElementById('wrapped-deck');
+  if (deck) deck.classList.add('no-anim');
+  _wrappedApplyStates();
+  if (deck) { void deck.offsetWidth; requestAnimationFrame(() => deck.classList.remove('no-anim')); }
 }
 
 function showWrappedHero() {
@@ -11940,109 +12118,132 @@ function showWrappedHero() {
   }
 }
 
-// Share current wrapped card as image using Canvas
+// ── Share: draws a 1080x1920 story image of the current card ──────────────────
+function _wHexA(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return `rgba(255,255,255,${a})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+function _wWrapText(ctx, text, maxW) {
+  const out = [];
+  String(text).split('\n').forEach(par => {
+    let line = '';
+    par.split(/\s+/).filter(Boolean).forEach(w => {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { out.push(line); line = w; } else line = test;
+    });
+    if (line) out.push(line);
+  });
+  return out;
+}
+
 async function shareWrappedCard() {
   if (!_wrappedCards.length) return;
   const card = _wrappedCards[_wrappedIndex];
   if (!card) return;
   const t = card.theme;
+  const yearStr = String(_wrappedConfig.year || new Date().getFullYear());
+  const pageUrl = 'https://kiitfilmsociety.in/wrapped';
   const canvas = document.getElementById('wrapped-share-canvas');
-  if (!canvas) { _copyShareFallback('https://kiitfilmsociety.in/wrapped'); return; }
+  if (!canvas) { _copyShareFallback(pageUrl); return; }
 
-  const W = 1080, H = 1080;
+  // make sure the brand fonts are ready before we paint them into the canvas
+  try {
+    await Promise.all([document.fonts.load('400 120px Anton'), document.fonts.load('500 30px "DM Mono"')]);
+  } catch (e) {}
+  const DISPLAY = 'Anton, Impact, "Arial Narrow Bold", sans-serif';
+  const MONO = '"DM Mono", ui-monospace, Menlo, monospace';
+  const BODY = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
+  const W = 1080, H = 1920, PAD = 84;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Background gradient
-  const grd = ctx.createLinearGradient(0, 0, W, H);
-  const bgColors = t.bg.match(/#[0-9a-f]{3,8}/gi) || ['#0a0a0a', '#181818'];
-  grd.addColorStop(0, bgColors[0]);
-  grd.addColorStop(1, bgColors[1] || bgColors[0]);
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, W, H);
+  // background + light leaks
+  const bg = ctx.createLinearGradient(0, 0, W * .6, H);
+  bg.addColorStop(0, t.c1); bg.addColorStop(1, t.c2);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  let g = ctx.createRadialGradient(W * .85, H * .9, 0, W * .85, H * .9, W * 1.0);
+  g.addColorStop(0, _wHexA(t.ac, .34)); g.addColorStop(1, _wHexA(t.ac, 0));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(W * .1, H * .08, 0, W * .1, H * .08, W * .6);
+  g.addColorStop(0, _wHexA(t.ac, .12)); g.addColorStop(1, _wHexA(t.ac, 0));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
-  // Subtle radial overlay
-  const r = ctx.createRadialGradient(W*.2, H*.8, 0, W*.2, H*.8, W*.6);
-  r.addColorStop(0, 'rgba(255,255,255,.03)');
-  r.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = r;
-  ctx.fillRect(0, 0, W, H);
-
-  // KFS wordmark
-  ctx.fillStyle = t.fg;
-  ctx.globalAlpha = 0.38;
-  ctx.font = '600 26px system-ui,sans-serif';
-  ctx.fillText('KFS — KIIT FILM SOCIETY', 72, 80);
+  // wordmark + progress
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = t.fg; ctx.globalAlpha = .7;
+  ctx.font = `500 30px ${MONO}`;
+  ctx.fillText('KIIT FILM SOCIETY', PAD, 118);
   ctx.globalAlpha = 1;
-
-  // Progress bars
-  const barW = (W - 144) / _wrappedCards.length - 4;
+  const n = _wrappedCards.length, gap = 8, barW = (W - PAD * 2 - gap * (n - 1)) / n;
   _wrappedCards.forEach((_, i) => {
-    ctx.globalAlpha = i < _wrappedIndex ? 0.8 : i === _wrappedIndex ? 1 : 0.2;
+    ctx.globalAlpha = i === _wrappedIndex ? 1 : i < _wrappedIndex ? .55 : .18;
     ctx.fillStyle = t.fg;
-    ctx.beginPath();
-    ctx.roundRect(72 + i * (barW + 4), 108, barW, 5, 2);
-    ctx.fill();
+    ctx.fillRect(PAD + i * (barW + gap), 150, barW, 6);
   });
   ctx.globalAlpha = 1;
 
-  // Card text content
-  ctx.fillStyle = t.fg;
-  const year = (_wrappedConfig.year || new Date().getFullYear()).toString();
-  const watched = watchedIds_share();
-  const read = readIds_share();
-  const events = eventIds_share();
-  const lines = [];
-  if      (card.id === 'films-watched')    { lines.push([String(watched), 96, 900]); lines.push(['films watched', 28, 400]); }
-  else if (card.id === 'events-attended')  { lines.push([String(events), 96, 900]); lines.push(['events attended', 28, 400]); }
-  else if (card.id === 'blogs-read')       { lines.push([String(read), 96, 900]); lines.push(['articles read', 28, 400]); }
-  else if (card.id === 'outro')            { lines.push(["That's a", 60, 800]); lines.push(['Wrap.', 96, 900]); }
-  else if (card.id === 'intro')            { lines.push(['Your Year', 60, 800]); lines.push(['in Cinema', 60, 400]); }
-  else if (card.id === 'top-genre' || card.id === 'top-genre-kfs') {
-    const g = _wrappedStats?.topGenres?.[0]?.genre || 'Cinema';
-    lines.push([g, 72, 900]);
+  // main content, anchored to the lower part of the frame
+  const s = card.share || { big: 'KFS', label: String(yearStr), sub: '' };
+  const maxW = W - PAD * 2;
+  let size = 300;
+  const bigLines = String(s.big).split('\n');
+  const fit = () => { ctx.font = `400 ${size}px ${DISPLAY}`; return Math.max.apply(null, bigLines.map(l => ctx.measureText(l).width)); };
+  while (size > 96 && fit() > maxW) size -= 6;
+  // very long titles: wrap instead of shrinking to nothing
+  let lines = bigLines;
+  if (fit() > maxW) { ctx.font = `400 ${size}px ${DISPLAY}`; lines = _wWrapText(ctx, s.big, maxW); }
+  lines = lines.slice(0, 4);
+
+  const subSize = 40;
+  ctx.font = `400 ${subSize}px ${BODY}`;
+  const subLines = s.sub ? _wWrapText(ctx, s.sub, maxW * .86).slice(0, 4) : [];
+  const blockH = lines.length * size * .98 + (s.label ? 70 : 0) + (subLines.length ? subLines.length * 56 + 34 : 0);
+  let y = Math.max(560, H * .72 - blockH);
+
+  if (s.label) {
+    ctx.fillStyle = t.ac; ctx.font = `500 36px ${MONO}`;
+    ctx.fillText(s.label, PAD, y); y += 40;
   }
-  else { lines.push(['KFS', 96, 900]); lines.push([year, 48, 400]); }
+  ctx.fillStyle = t.fg; ctx.font = `400 ${size}px ${DISPLAY}`;
+  lines.forEach(l => { y += size * .98; ctx.fillText(l, PAD, y); });
+  if (subLines.length) {
+    y += 34;
+    ctx.globalAlpha = .85; ctx.font = `400 ${subSize}px ${BODY}`;
+    subLines.forEach(l => { y += 56; ctx.fillText(l, PAD, y); });
+    ctx.globalAlpha = 1;
+  }
 
-  let y = H / 2 - 40;
-  lines.forEach(([text, size, weight]) => {
-    ctx.font = `${weight} ${size}px system-ui,sans-serif`;
-    ctx.fillText(text, 72, y);
-    y += size + 16;
-  });
-
-  // Bottom URL
-  ctx.globalAlpha = 0.32;
-  ctx.font = '400 22px system-ui,sans-serif';
-  ctx.fillText('kiitfilmsociety.in/wrapped', 72, H - 56);
+  // footer
+  ctx.fillStyle = t.fg; ctx.globalAlpha = .65; ctx.font = `500 30px ${MONO}`;
+  ctx.fillText(`KFS Wrapped ${yearStr}`, PAD, H - 118);
+  ctx.fillText('kiitfilmsociety.in/wrapped', PAD, H - 72);
   ctx.globalAlpha = 1;
 
   canvas.toBlob(async blob => {
-    const url = 'https://kiitfilmsociety.in/wrapped';
-    const yearStr = (_wrappedConfig.year || new Date().getFullYear()).toString();
-    if (navigator.share && blob) {
-      try {
-        await navigator.share({
-          title: `My KFS Wrapped ${yearStr}`,
-          text: `My KFS Wrapped ${yearStr} — kiitfilmsociety.in/wrapped`,
-          url,
-          files: [new File([blob], `kfs-wrapped-${yearStr}.png`, { type: 'image/png' })],
-        });
+    if (!blob) { _copyShareFallback(pageUrl); return; }
+    const title = `My KFS Wrapped ${yearStr}`;
+    const text = `${title}. ${pageUrl}`;
+    const file = new File([blob], `kfs-wrapped-${yearStr}.png`, { type: 'image/png' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title, text });
         return;
-      } catch(e) { /* fall through */ }
+      }
+      if (navigator.share) { await navigator.share({ title, text, url: pageUrl }); return; }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // the person closed the share sheet on purpose
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `kfs-wrapped-${yearStr}.png`;
-    a.click();
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     _showShareToast('Card downloaded!');
   }, 'image/png');
 }
-
-// Helper shims for share canvas (avoid closure over changing vars)
-function watchedIds_share() { return Object.keys(getWatchedMovies()).length; }
-function readIds_share()    { return Object.keys(getBlogReadState()).length; }
-function eventIds_share()   { return Object.keys(getRegisteredEvents()).length; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ADMIN — Wrapped Config Editor
