@@ -1090,7 +1090,7 @@ app.use(helmet({
       // 'unsafe-inline' removed — all JS is in /public/app.js (external, covered by 'self')
       // The one remaining inline script is the synchronous theme-loader; its hash is pinned below.
       // All 212 inline event handlers migrated to data-action delegation — scriptSrcAttr removed.
-      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-2asVaJiBS57Wr2ER9jyWn0odi19ZVJql169KxTpB7d4='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com", "https://accounts.google.com/gsi/client"],
+      scriptSrc: ["'self'", "'sha256-+66rGdTLpDfofX3X9tPnOXG2mk883HeaJVj/Zy2m7VQ='", "'sha256-iuwhEwY5AEDCXvgFXtV2dEPOu/vggkdVFBVyFPu95dc=='", "'sha256-BA2H1D/U01IDrFsnrXJATwOAqtE8Q6nevz3CatpZuww='", "https://cdnjs.cloudflare.com", "https://checkout.razorpay.com", "https://cdn.razorpay.com", "https://accounts.google.com/gsi/client"],
       scriptSrcAttr: ["'unsafe-inline'"], // required: movie/blog cards use onclick in JS templates
       imgSrc: [
         "'self'", "data:", "blob:",
@@ -1555,6 +1555,28 @@ function requireSection(section) {
       return res
         .status(403)
         .json({ error: `No permission for section: ${section}` });
+    } catch {
+      res.status(401).json({ error: "Invalid token" });
+    }
+  };
+}
+
+// Like requireSection, but passes if the admin holds ANY of the listed sections.
+// (Event Themes has its own "themes" permission in the admin UI, but the routes only accepted "settings".)
+function requireAnySection(...sections) {
+  return (req, res, next) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "No token" });
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+      if (decoded.jti && _revokedJtis.has(decoded.jti)) {
+        return res.status(401).json({ error: "Token revoked" });
+      }
+      req.admin = decoded;
+      if (decoded.role === "master") return next();
+      const perms = decoded.permissions || [];
+      if (sections.some((s) => perms.includes(s))) return next();
+      return res.status(403).json({ error: `No permission for section: ${sections.join(" / ")}` });
     } catch {
       res.status(401).json({ error: "Invalid token" });
     }
@@ -11750,15 +11772,15 @@ app.get("/events/:slug", async (req, res) => {
 // Public: get the wrapped config (year, taglines, fun cards) set by admin
 app.get("/api/wrapped/config", async (req, res) => {
   noStore(res);
-  const { data } = await supabasePublic
-    .from("settings")
-    .select("value")
-    .eq("key", "wrapped_config")
-    .maybeSingle();
   try {
-    res.json(data ? JSON.parse(data.value) : {});
+    const { data } = await supabasePublic
+      .from("settings")
+      .select("value")
+      .eq("key", "wrapped_config")
+      .maybeSingle();
+    res.json(data && data.value ? JSON.parse(data.value) : {});
   } catch {
-    res.json({});
+    res.json({}); // missing/garbled config -> defaults (Wrapped stays enabled)
   }
 });
 
@@ -11821,6 +11843,9 @@ app.get("/api/wrapped/stats", async (req, res) => {
         supabasePublic.from("events").select("id", { count: "exact", head: true }),
       ]);
 
+      [moviesRes, blogsRes, reviewsRes, eventsCountRes].forEach((r, i) => {
+        if (r && r.error) console.error("[wrapped/stats] query", i, r.error.message);
+      });
       const movies = moviesRes.data || [];
       const blogs  = blogsRes.data  || [];
       const reviews = reviewsRes.data || [];
@@ -11833,15 +11858,19 @@ app.get("/api/wrapped/stats", async (req, res) => {
       const yearMovies   = year ? movies.filter(m => m.release_year === year).length : null;
 
     // Genre frequency map across all KFS films
+    const parseGenres = (raw) => {
+      if (Array.isArray(raw)) return raw.map((g) => String(g).trim()).filter(Boolean);
+      if (!raw) return [];
+      try {
+        const p = JSON.parse(raw);
+        if (Array.isArray(p)) return p.map((g) => String(g).trim()).filter(Boolean);
+        if (typeof p === "string") return [p.trim()].filter(Boolean);
+      } catch {}
+      return String(raw).split(/[,|]+/).map((g) => g.trim()).filter(Boolean);
+    };
     const genreCount = {};
     movies.forEach((m) => {
-      let genres = [];
-      try {
-        genres = JSON.parse(m.genre || "[]");
-      } catch {
-        genres = m.genre ? [m.genre] : [];
-      }
-      if (!Array.isArray(genres)) genres = [genres];
+      const genres = parseGenres(m.genre);
       genres.forEach((g) => {
         if (g) genreCount[g] = (genreCount[g] || 0) + 1;
       });
@@ -11890,11 +11919,9 @@ app.get("/api/wrapped/stats", async (req, res) => {
           ]),
         ),
         allMovies: movies.map((m) => {
-          let genres = [];
-          try { genres = JSON.parse(m.genre || "[]"); } catch { genres = m.genre ? [m.genre] : []; }
           return {
             id: m.id, title: m.title,
-            genre: Array.isArray(genres) ? genres : [genres],
+            genre: parseGenres(m.genre),
             release_year: m.release_year, director: m.director, poster_image: m.poster_image,
           };
         }),
@@ -12784,29 +12811,51 @@ app.get(
 
 // ── EVENT THEMES ──────────────────────────────────────────────────────────────
 
+// Colour / font values go straight into a <style> on every page, so only accept clean values.
+function sanitizeThemeBody(b) {
+  b = b || {};
+  const col = (v) => (typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v.trim()) ? v.trim() : null);
+  const font = (v) => {
+    const f = typeof v === "string" ? v.replace(/[^A-Za-z0-9 \-]/g, "").trim() : "";
+    return f || null;
+  };
+  const out = { ...b };
+  ["accent_color", "bg_color", "card_color", "border_color", "text_color", "grey_color", "banner_bg", "banner_text_color"]
+    .forEach((k) => { if (k in b) out[k] = col(b[k]); });
+  if ("font_family" in b) out.font_family = font(b.font_family);
+  return out;
+}
+
 // PUBLIC: Get the currently active theme (or null)
+// - Read with the service client: the public (anon) client can be blocked by RLS on event_themes,
+//   which made the theme silently never appear. Only display fields leave the server.
+// - Honours BOTH active_from and active_until (a scheduled theme used to show immediately).
+// - Never 500s: the page loader reads this synchronously, so failures degrade to "no theme".
 app.get("/api/theme", async (req, res) => {
+  noStore(res);
   try {
-    noStore(res);
-    const theme = await memCache("theme:active", 60, async () => {
-      const now = new Date().toISOString();
-      const { data, error } = await supabasePublic
+    const theme = await memCache("theme:active", 30, async () => {
+      const { data, error } = await supabase
         .from("event_themes")
-        .select("*")
+        .select("id,name,is_active,active_from,active_until,accent_color,bg_color,card_color,border_color,text_color,grey_color,font_family,hero_title,hero_tagline,banner_message,banner_bg,banner_text_color,logo_url")
         .eq("is_active", true)
-        .or(`active_until.is.null,active_until.gt.${now}`)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(10);
       if (error) throw new Error(error.message);
-      return data || null;
+      const nowMs = Date.now();
+      return (data || []).find((t) =>
+        (!t.active_from || new Date(t.active_from).getTime() <= nowMs) &&
+        (!t.active_until || new Date(t.active_until).getTime() > nowMs)) || null;
     });
-    res.json(theme);
+    res.json(theme || null);
   } catch (e) {
-    res.status(500).json({ error: "Internal server error" });
+    console.error("[theme]", e.message);
+    res.json(null);
   }
 });
 
 // ADMIN: List all themes
-app.get("/api/admin/themes", requireSection("settings"), async (req, res) => {
+app.get("/api/admin/themes", requireAnySection("themes", "settings"), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("event_themes")
@@ -12820,7 +12869,7 @@ app.get("/api/admin/themes", requireSection("settings"), async (req, res) => {
 });
 
 // ADMIN: Create a new theme
-app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
+app.post("/api/admin/themes", requireAnySection("themes", "settings"), async (req, res) => {
   try {
     const {
       name,
@@ -12840,7 +12889,7 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
       banner_bg,
       banner_text_color,
       logo_url,
-    } = req.body;
+    } = sanitizeThemeBody(req.body);
 
     if (!name)
       return res.status(400).json({ error: "Theme name is required." });
@@ -12897,7 +12946,7 @@ app.post("/api/admin/themes", requireSection("settings"), async (req, res) => {
 // ADMIN: Update a theme (colors, name, dates, is_active toggle)
 app.put(
   "/api/admin/themes/:id",
-  requireSection("settings"),
+  requireAnySection("themes", "settings"),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -12919,7 +12968,7 @@ app.put(
         banner_bg,
         banner_text_color,
         logo_url,
-      } = req.body;
+      } = sanitizeThemeBody(req.body);
 
       // If activating this theme, deactivate all others first
       if (is_active === true) {
@@ -12980,7 +13029,7 @@ app.put(
 // ADMIN: Delete a theme (cannot delete an active one)
 app.delete(
   "/api/admin/themes/:id",
-  requireSection("settings"),
+  requireAnySection("themes", "settings"),
   async (req, res) => {
     try {
       const { id } = req.params;
