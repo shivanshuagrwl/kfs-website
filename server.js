@@ -1122,7 +1122,7 @@ app.use(helmet({
       ],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
-      mediaSrc: ["'self'", "https://res.cloudinary.com"], // About Us video (Cloudinary-hosted <video>)
+      mediaSrc: ["'self'", "https://res.cloudinary.com", "https://incompetech.com", "https://aux.incompetech.com"], // About Us video (Cloudinary) + Wrapped background music (incompetech.com, CC BY). Add the host here if admin sets a custom music_url.
     },
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
