@@ -289,6 +289,7 @@ function _doNavigate(page, pushState=true) {
   const pswOverlay = document.getElementById('psw-detail-overlay');
   if (pswOverlay) { pswOverlay.style.display = 'none'; document.body.style.overflow = ''; }
   hideScrollProgress();
+  if (page !== 'wrapped' && typeof wrappedMusicStop === 'function') wrappedMusicStop();
   if (page === 'admin') {
     if (adminToken) { showAdminPanel(); return; }
     document.getElementById('admin-login').classList.add('active');
@@ -11479,6 +11480,7 @@ function _wReduceMotion() {
 const _W_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
 // Credits-style list: hairline rows instead of nested cards.
+const _W_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 function _wList(items, total) {
   if (!items.length) return '';
   return `<div class="wrapped-card-events-row">${items.map(t =>
@@ -11493,6 +11495,218 @@ function _wStat(n) {
 function getRegisteredEvents() {
   try { return JSON.parse(localStorage.getItem('kfs_registered_events') || '{}'); } catch { return {}; }
 }
+
+
+// ── Personalisation helpers (all local: nothing leaves the device) ────────────
+const W_NAME_KEY = 'kfs_wrapped_name';
+const W_MUTE_KEY = 'kfs_wrapped_muted';
+const W_RESOLVE_KEY = 'kfs_wrapped_resolution';
+const W_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function _wName() {
+  try { return (localStorage.getItem(W_NAME_KEY) || '').replace(/\s+/g, ' ').trim().slice(0, 24); } catch (e) { return ''; }
+}
+function _wSetName(v) {
+  v = String(v || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
+  try { if (v) localStorage.setItem(W_NAME_KEY, v); else localStorage.removeItem(W_NAME_KEY); } catch (e) {}
+  return v;
+}
+function _wGreeting() {
+  const h = new Date().getHours();
+  return h < 5 ? 'Burning the midnight oil' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Good night';
+}
+// Long copy should not be set in 60px condensed capitals; pick a calmer style by length.
+function _wHeadCls(text) {
+  const n = String(text || '').trim().length;
+  return n > 70 ? 'is-message' : n > 34 ? 'is-small' : '';
+}
+function _wTitleCls(text) {
+  return String(text || '').trim().length > 26 ? 'is-small' : 'is-title';
+}
+
+// Every dated action this device remembers, oldest first.
+function _wTimeline(watched, read, events) {
+  const items = [];
+  const ok = ts => typeof ts === 'number' && ts > 1e11 && ts < 4e12;
+  Object.keys(watched).forEach(id => { const ts = Number(watched[id]); if (ok(ts)) items.push({ ts, kind: 'film', id }); });
+  Object.keys(read).forEach(id => { const ts = Number(read[id]); if (ok(ts)) items.push({ ts, kind: 'read', id }); });
+  Object.keys(events).forEach(id => { const ts = Number(events[id] && events[id].ts); if (ok(ts)) items.push({ ts, kind: 'event', id }); });
+  return items.sort((a, b) => a.ts - b.ts);
+}
+function _wDaypart(items) {
+  const b = { owl: 0, dawn: 0, day: 0, golden: 0 };
+  items.forEach(it => {
+    const h = new Date(it.ts).getHours();
+    if (h >= 22 || h < 5) b.owl++; else if (h < 10) b.dawn++; else if (h < 17) b.day++; else b.golden++;
+  });
+  const top = Object.keys(b).sort((x, y) => b[y] - b[x])[0];
+  const copy = {
+    owl:    { title: 'The Night Owl',           sub: 'Most of your KFS moments happen after dark. Hope the chai was strong.' },
+    dawn:   { title: 'The Early Bird',          sub: 'You catch the story before the rest of campus wakes up.' },
+    day:    { title: 'The Matinee Soul',        sub: 'Afternoons, a good film, no notes. Perfect.' },
+    golden: { title: 'The Golden-Hour Regular', sub: 'You show up when the evening light does. Smart.' },
+  };
+  return Object.assign({ key: top, n: b[top] }, copy[top]);
+}
+
+// ── Fit engine ────────────────────────────────────────────────────────────────
+// CSS sizes text in card-width units, then multiplies by --fit. This lowers --fit
+// until the content really fits the card (height and width). Only if even the
+// minimum is not enough does the body become softly scrollable. Nothing is clipped.
+const W_FIT_MIN = 0.52;
+function _wFitCard(card) {
+  if (!card) return;
+  const body = card.querySelector('.wrapped-card-body');
+  const fit = card.querySelector('.wrapped-card-fit');
+  if (!body || !fit) return;
+  body.classList.remove('is-scroll');
+  const wide = fit.querySelectorAll('.wrapped-card-headline,.wrapped-card-stat,.wrapped-card-blog-title,.wrapped-card-note-text');
+  const over = () => {
+    if (fit.offsetHeight > body.clientHeight + 1) return true;
+    for (let i = 0; i < wide.length; i++) if (wide[i].scrollWidth > wide[i].clientWidth + 1) return true;
+    return false;
+  };
+  let f = 1, guard = 0;
+  card.style.setProperty('--fit', '1');
+  while (over() && f > W_FIT_MIN && guard++ < 24) {
+    f = Math.max(W_FIT_MIN, +(f - 0.04).toFixed(2));
+    card.style.setProperty('--fit', String(f));
+  }
+  if (over()) body.classList.add('is-scroll');
+}
+function _wFitAll() {
+  const deck = document.getElementById('wrapped-deck');
+  if (!deck) return;
+  const cards = Array.prototype.slice.call(deck.children);
+  const active = deck.querySelector('.wrapped-card[data-state="active"]');
+  if (active) _wFitCard(active);
+  let i = 0;
+  (function next() {
+    if (i >= cards.length) return;
+    if (cards[i] !== active) _wFitCard(cards[i]);
+    i++;
+    setTimeout(next, 0);
+  })();
+}
+let _wFitTimer = 0;
+function _wFitSoon() { clearTimeout(_wFitTimer); _wFitTimer = setTimeout(_wFitAll, 120); }
+
+// ── Background music ──────────────────────────────────────────────────────────
+// Default: "Dreamy Flashback" by Kevin MacLeod (incompetech.com), CC BY 4.0: free with credit.
+// Admin can replace it in Wrapped settings (music_url / music_title). The host of a custom
+// URL must also be listed in mediaSrc in server.js.
+const W_MUSIC_DEFAULT = {
+  urls: [
+    'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dreamy%20Flashback.mp3',
+    'https://aux.incompetech.com/music/royalty-free/mp3-royaltyfree/Dreamy%20Flashback.mp3',
+  ],
+  credit: 'Music: \u201CDreamy Flashback\u201D by Kevin MacLeod (incompetech.com), CC BY 4.0',
+  title: 'Dreamy Flashback', artist: 'Kevin MacLeod',
+};
+const _wMusic = { el: null, idx: 0, dead: false, playing: false, resume: false, raf: 0, vol: 0.3 };
+
+function _wMusicCfg() {
+  const c = _wrappedConfig || {};
+  if (c.music_enabled === false) return null;
+  const custom = String(c.music_url || '').trim();
+  if (custom && /^https:\/\//i.test(custom)) {
+    return { urls: [custom], credit: c.music_title ? 'Music: ' + String(c.music_title) : '', title: c.music_title || 'KFS Wrapped', artist: 'KFS' };
+  }
+  return W_MUSIC_DEFAULT;
+}
+function _wMusicUi() {
+  const btn = document.getElementById('wrapped-music-btn');
+  const cr = document.getElementById('wrapped-music-credit');
+  const cfg = _wMusicCfg();
+  const show = !!cfg && !_wMusic.dead;
+  if (btn) {
+    btn.hidden = !show;
+    btn.setAttribute('data-on', _wMusic.playing ? 'true' : 'false');
+    btn.setAttribute('aria-pressed', _wMusic.playing ? 'true' : 'false');
+    btn.setAttribute('aria-label', _wMusic.playing ? 'Mute background music' : 'Play background music');
+  }
+  if (cr) { cr.textContent = show && cfg.credit ? cfg.credit : ''; cr.hidden = !(show && cfg.credit); }
+}
+function _wMusicEnsure() {
+  if (_wMusic.el || _wMusic.dead) return _wMusic.el;
+  const cfg = _wMusicCfg();
+  if (!cfg) return null;
+  const a = new Audio();
+  a.loop = true; a.preload = 'auto'; a.volume = 0;
+  a.setAttribute('playsinline', '');
+  a.addEventListener('error', () => {
+    // try the next mirror; if all fail, quietly hide the player (the page works fine without sound)
+    if (_wMusic.idx < cfg.urls.length - 1) {
+      _wMusic.idx++;
+      a.src = cfg.urls[_wMusic.idx];
+      if (_wMusic.playing) a.play().catch(() => {});
+    } else {
+      _wMusic.dead = true; _wMusic.playing = false; _wMusicUi();
+    }
+  });
+  a.src = cfg.urls[0];
+  _wMusic.el = a;
+  try {
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: cfg.title, artist: cfg.artist, album: 'KFS Wrapped' });
+    }
+  } catch (e) {}
+  return a;
+}
+function _wMusicFade(to, ms, done) {
+  const a = _wMusic.el;
+  if (!a) { if (done) done(); return; }
+  cancelAnimationFrame(_wMusic.raf);
+  const from = a.volume, t0 = performance.now();
+  (function step(now) {
+    const p = Math.min(1, (now - t0) / ms);
+    try { a.volume = Math.max(0, Math.min(1, from + (to - from) * (1 - Math.pow(1 - p, 3)))); } catch (e) {}
+    if (p < 1) _wMusic.raf = requestAnimationFrame(step); else if (done) done();
+  })(t0);
+}
+// Must be called straight from a tap/click (browsers block sound otherwise).
+function wrappedMusicStart() {
+  let muted = false;
+  try { muted = localStorage.getItem(W_MUTE_KEY) === '1'; } catch (e) {}
+  _wMusicUi();
+  if (muted) return;
+  const a = _wMusicEnsure();
+  if (!a) return;
+  const p = a.play();
+  _wMusic.playing = true; _wMusicUi();
+  const ok = () => _wMusicFade(_wMusic.vol, 2200);
+  if (p && p.then) {
+    p.then(ok).catch(() => { _wMusic.playing = false; _wMusicUi(); }); // blocked: the button lets people start it
+  } else ok();
+}
+function wrappedMusicStop() {
+  const a = _wMusic.el;
+  if (!a || !_wMusic.playing) { _wMusic.playing = false; _wMusicUi(); return; }
+  _wMusic.playing = false; _wMusicUi();
+  _wMusicFade(0, 500, () => { try { a.pause(); } catch (e) {} });
+}
+function toggleWrappedMusic() {
+  if (_wMusic.dead) return;
+  if (_wMusic.playing) {
+    try { localStorage.setItem(W_MUTE_KEY, '1'); } catch (e) {}
+    wrappedMusicStop();
+  } else {
+    try { localStorage.setItem(W_MUTE_KEY, '0'); } catch (e) {}
+    wrappedMusicStart();
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  const a = _wMusic.el;
+  if (!a) return;
+  if (document.hidden) {
+    _wMusic.resume = _wMusic.playing;
+    if (_wMusic.playing) { cancelAnimationFrame(_wMusic.raf); try { a.pause(); } catch (e) {} }
+  } else if (_wMusic.resume && _wMusic.playing) {
+    _wMusic.resume = false;
+    a.play().then(() => _wMusicFade(_wMusic.vol, 900)).catch(() => { _wMusic.playing = false; _wMusicUi(); });
+  }
+});
+window.addEventListener('pagehide', () => { try { if (_wMusic.el) _wMusic.el.pause(); } catch (e) {} });
 
 // ── Build the set of cards based on user data + server stats ──────────────────
 function buildWrappedCards(stats, config) {
@@ -11520,6 +11734,7 @@ function buildWrappedCards(stats, config) {
     genres.forEach(g => { if (g) myGenreCount[g] = (myGenreCount[g] || 0) + 1; });
   });
   const myTopGenres = Object.entries(myGenreCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g);
+  const genreTotal = Object.keys(myGenreCount).reduce((t, g) => t + myGenreCount[g], 0) || 1;
 
   // Most-liked movie: highest community average rating among watched movies,
   // falling back to the most recently watched one when there is no rating data.
@@ -11545,6 +11760,9 @@ function buildWrappedCards(stats, config) {
   const myEventTitles = eventIds.map(id => registeredEvents[id] && registeredEvents[id].title).filter(Boolean).slice(0, 4);
   const year = String(config.year || new Date().getFullYear());
   const y = _wEsc(year);
+  const myName = _wName();
+  const nmH = _wEsc(myName);
+  const timeline = _wTimeline(watchedMovies, readBlogs, registeredEvents);
 
   // ── Broadcast (admin message) ─────────────────────────────────────────────
   if (config.broadcast && String(config.broadcast).trim()) {
@@ -11555,20 +11773,38 @@ function buildWrappedCards(stats, config) {
       render: () => `
         ${W_ICONS.broadcast}
         <div class="wrapped-card-eyebrow">From KFS</div>
-        <div class="wrapped-card-headline is-small">${_wEsc(config.broadcast)}</div>`,
+        <div class="wrapped-card-headline ${String(config.broadcast).trim().length > 70 ? 'is-message' : 'is-small'}">${_wEsc(config.broadcast)}</div>`,
     });
   }
 
   // ── Intro ─────────────────────────────────────────────────────────────────
   cards.push({
     id: 'intro', theme: _wrappedTheme(0), label: 'Your year in cinema',
-    share: { big: 'YOUR YEAR\nIN CINEMA', label: 'KFS ' + year, sub: '' },
+    share: { big: myName ? (myName.toUpperCase() + '\u2019S YEAR\nIN CINEMA') : 'YOUR YEAR\nIN CINEMA', label: 'KFS ' + year, sub: '' },
     render: () => `
       ${W_ICONS.tape}
       <div class="wrapped-card-eyebrow">KFS · ${y}</div>
-      <div class="wrapped-card-headline">Your Year<br>in Cinema</div>
-      <div class="wrapped-card-sub">Tap or swipe to see how your KFS year unfolded, one card at a time.</div>`,
+      <div class="wrapped-card-headline">${myName ? nmH + '\u2019s Year<br>in Cinema' : 'Your Year<br>in Cinema'}</div>
+      <div class="wrapped-card-sub">${_wEsc(_wGreeting())}${myName ? ', ' + nmH : ''}. Grab a chai. Here is your year at KFS, one card at a time.</div>`,
   });
+
+  // ── Where it began: first film marked as watched ───────────────────────────
+  const firstFilm = timeline.find(it => it.kind === 'film');
+  const firstMovie = firstFilm ? allMovies.find(m => String(m.id) === String(firstFilm.id)) : null;
+  if (firstFilm && firstMovie) {
+    const when = new Date(firstFilm.ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
+    cards.push({
+      id: 'first-frame', theme: _wrappedTheme(5), label: 'Where it began: ' + firstMovie.title,
+      share: { big: String(firstMovie.title).toUpperCase(), label: 'where my KFS year began', sub: when },
+      render: () => `
+        ${_wUrl(firstMovie.poster_image)
+          ? `<img class="wrapped-card-film-poster is-hero" src="${_wUrl(firstMovie.poster_image)}" alt="Poster of ${_wEsc(firstMovie.title)}" loading="lazy" decoding="async">`
+          : W_ICONS.play}
+        <div class="wrapped-card-eyebrow">Where it began</div>
+        <div class="wrapped-card-headline ${_wTitleCls(firstMovie.title)}">${_wEsc(firstMovie.title)}</div>
+        <div class="wrapped-card-sub">${_wEsc(when)}. The first film you marked as watched. Everything after that was a bonus.</div>`,
+    });
+  }
 
   // ── Your most-loved film ──────────────────────────────────────────────────
   if (myFavouriteMovie) {
@@ -11583,7 +11819,7 @@ function buildWrappedCards(stats, config) {
           ? `<img class="wrapped-card-film-poster is-hero" src="${_wUrl(fav.poster_image)}" alt="Poster of ${_wEsc(fav.title)}" loading="lazy" decoding="async">`
           : W_ICONS.award}
         <div class="wrapped-card-eyebrow">Your most-loved film</div>
-        <div class="wrapped-card-headline is-title">${_wEsc(fav.title)}</div>
+        <div class="wrapped-card-headline ${_wTitleCls(fav.title)}">${_wEsc(fav.title)}</div>
         ${meta ? `<div class="wrapped-card-sub">${_wEsc(meta)}</div>` : ''}
         ${favRating
           ? `<div class="wrapped-card-rating">
@@ -11625,7 +11861,7 @@ function buildWrappedCards(stats, config) {
         ${posters.length ? `<div class="wrapped-card-film-row">${posters.map(m =>
           `<img class="wrapped-card-film-poster" src="${_wUrl(m.poster_image)}" alt="Poster of ${_wEsc(m.title)}" loading="lazy" decoding="async">`).join('')}</div>` : W_ICONS.film}
         <div class="wrapped-card-eyebrow">More from your watchlist</div>
-        <div class="wrapped-card-headline is-title">${_wEsc(recentMovies[0].title)}</div>
+        <div class="wrapped-card-headline ${_wTitleCls(recentMovies[0].title)}">${_wEsc(recentMovies[0].title)}</div>
         <div class="wrapped-card-sub">${_wEsc([recentMovies[0].release_year, _wFirstName(recentMovies[0].director)].filter(Boolean).join(' · '))}</div>
         ${recentMovies.length > 1 ? `<div class="wrapped-card-more">+${recentMovies.length - 1} more on your list</div>` : ''}`,
     });
@@ -11641,7 +11877,10 @@ function buildWrappedCards(stats, config) {
         <div class="wrapped-card-eyebrow">Your top genre</div>
         <div class="wrapped-card-headline">${_wEsc(myTopGenres[0])}</div>
         <div class="wrapped-card-sub">You gravitate towards ${_wEsc(myTopGenres[0].toLowerCase())} films.</div>
-        ${myTopGenres.length > 1 ? `<div class="wrapped-card-genres">${myTopGenres.map(g => `<span class="wrapped-card-genre-pill">${_wEsc(g)}</span>`).join('')}</div>` : ''}`,
+        ${myTopGenres.length > 1 ? `<div class="wrapped-taste">${myTopGenres.map((g, gi) => {
+          const pc = Math.round((myGenreCount[g] / genreTotal) * 100);
+          return `<div class="wrapped-taste-row"><span>${_wEsc(g)}</span><b>${pc}%</b><i style="--p:${(pc / 100).toFixed(2)};--k:${gi}"></i></div>`;
+        }).join('')}</div>` : ''}`,
     });
   } else if (Array.isArray(stats.topGenres) && stats.topGenres.length) {
     const tg = stats.topGenres;
@@ -11684,6 +11923,38 @@ function buildWrappedCards(stats, config) {
       <div class="wrapped-card-sub">${readCount === 0 ? 'The KFS blog is full of film essays and behind-the-scenes stories.' : 'Curiosity looks good on you.'}</div>
       ${_wList(myBlogs.slice(0, 4).map(b => b.title), myBlogs.length)}`,
   });
+
+  // ── Your busiest month + when you show up (needs dated activity) ──────────
+  if (timeline.length >= 2) {
+    const mc = new Array(12).fill(0);
+    timeline.forEach(it => { mc[new Date(it.ts).getMonth()]++; });
+    const maxC = Math.max.apply(null, mc);
+    const topM = mc.indexOf(maxC);
+    const monthName = W_MONTHS[topM];
+    cards.push({
+      id: 'busiest-month', theme: _wrappedTheme(3), label: 'Your busiest month: ' + monthName,
+      share: { big: monthName.toUpperCase(), label: 'my busiest KFS month', sub: `${maxC} ${maxC === 1 ? 'moment' : 'moments'} with KFS` },
+      render: () => `
+        ${W_ICONS.event}
+        <div class="wrapped-card-eyebrow">Your busiest month</div>
+        <div class="wrapped-card-headline">${_wEsc(monthName)}</div>
+        <div class="wrapped-card-sub">${maxC} ${maxC === 1 ? 'moment' : 'moments'} across films, events and reads. That is when KFS felt most like home.</div>
+        <div class="wrapped-months" aria-hidden="true">${mc.map((c, i) =>
+          `<i class="${i === topM ? 'is-top' : ''}" style="--h:${Math.max(0.07, c / maxC).toFixed(2)};--k:${i}"></i>`).join('')}</div>
+        <div class="wrapped-months-axis" aria-hidden="true">${'JFMAMJJASOND'.split('').map(l => `<span>${l}</span>`).join('')}</div>`,
+    });
+
+    const dp = _wDaypart(timeline);
+    cards.push({
+      id: 'daypart', theme: _wrappedTheme(7), label: 'You are ' + dp.title,
+      share: { big: dp.title.toUpperCase(), label: 'my KFS style', sub: dp.sub },
+      render: () => `
+        ${dp.key === 'owl' || dp.key === 'dawn' ? W_ICONS.lens : W_ICONS.sun}
+        <div class="wrapped-card-eyebrow">When you show up</div>
+        <div class="wrapped-card-headline">${_wEsc(dp.title)}</div>
+        <div class="wrapped-card-sub">${_wEsc(dp.sub)}</div>`,
+    });
+  }
 
   // ── Year highlight cards (admin curated) ──────────────────────────────────
   if (Array.isArray(config.blog_highlights)) {
@@ -11742,7 +12013,7 @@ function buildWrappedCards(stats, config) {
           ? `<img class="wrapped-card-film-poster is-hero" src="${_wUrl(t.poster_image)}" alt="Poster of ${_wEsc(t.title)}" loading="lazy" decoding="async">`
           : W_ICONS.award}
         <div class="wrapped-card-eyebrow">${isAdminPicked ? 'KFS Film of the Year' : "Community's top-rated film"}</div>
-        <div class="wrapped-card-headline is-title">${_wEsc(t.title)}</div>
+        <div class="wrapped-card-headline ${_wTitleCls(t.title)}">${_wEsc(t.title)}</div>
         ${t.score ? `<div class="wrapped-card-rating">
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           <span data-count="${Number(t.score).toFixed(1)}" data-dec="1">${Number(t.score).toFixed(1)}</span><small>/5</small></div>` : ''}
@@ -11773,6 +12044,48 @@ function buildWrappedCards(stats, config) {
     });
   }
 
+  if (!(myTopGenres.length > 0 && personalities[myTopGenres[0]])) {
+    const top = Math.max(watchedCount, eventCount, readCount);
+    const fp = top === 0
+      ? { title: 'The Curious Newcomer', sub: 'Every film society story starts at the door. Come on in.', icon: W_ICONS.lens }
+      : top === watchedCount
+        ? { title: 'The Screen Wanderer', sub: 'You roam the library, one film at a time.', icon: W_ICONS.film }
+        : top === eventCount
+          ? { title: 'The Front-Row Regular', sub: 'If there is a screening, you are already in your seat.', icon: W_ICONS.event }
+          : { title: 'The Margin Scribbler', sub: 'You read the essays behind the films.', icon: W_ICONS.book };
+    cards.push({
+      id: 'personality', theme: _wrappedTheme(2), label: 'Your film personality: ' + fp.title,
+      share: { big: fp.title.toUpperCase(), label: 'my film personality', sub: fp.sub },
+      render: () => `
+        ${fp.icon}
+        <div class="wrapped-card-eyebrow">Your film personality</div>
+        <div class="wrapped-card-headline">${_wEsc(fp.title)}</div>
+        <div class="wrapped-card-sub">${_wEsc(fp.sub)}</div>`,
+    });
+  }
+
+  // ── Badges earned this year ───────────────────────────────────────────────
+  const badgeDefs = [
+    { n: 'First Frame', c: 'Watched your first film',      ok: watchedCount >= 1 },
+    { n: 'Regular',     c: '5 films watched',              ok: watchedCount >= 5 },
+    { n: 'Cinephile',   c: '10 films watched',             ok: watchedCount >= 10 },
+    { n: 'Front Row',   c: 'Registered for an event',      ok: eventCount >= 1 },
+    { n: 'Page Turner', c: 'Read 3 blog posts',            ok: readCount >= 3 },
+    { n: 'Full Reel',   c: 'A film, an event and a read',  ok: watchedCount >= 1 && eventCount >= 1 && readCount >= 1 },
+  ];
+  const earned = badgeDefs.filter(b => b.ok).length;
+  cards.push({
+    id: 'badges', theme: _wrappedTheme(4), label: `${earned} of ${badgeDefs.length} badges earned`,
+    share: { big: String(earned), label: `of ${badgeDefs.length} KFS badges earned`, sub: badgeDefs.filter(b => b.ok).map(b => b.n).join(' · ') },
+    render: () => `
+      ${W_ICONS.award}
+      <div class="wrapped-card-eyebrow">Your KFS badges</div>
+      <div class="wrapped-card-headline">${earned} of ${badgeDefs.length}</div>
+      <div class="wrapped-card-sub">badges earned this year</div>
+      <div class="wrapped-badges">${badgeDefs.map(b =>
+        `<div class="wrapped-badge${b.ok ? ' is-on' : ''}">${b.ok ? _W_TICK : _W_LOCK}<div><b>${_wEsc(b.n)}</b><span>${_wEsc(b.c)}</span></div></div>`).join('')}</div>`,
+  });
+
   // ── Admin fun cards ───────────────────────────────────────────────────────
   if (Array.isArray(config.fun_cards)) {
     config.fun_cards.forEach((fc, i) => {
@@ -11783,14 +12096,44 @@ function buildWrappedCards(stats, config) {
         share: { big: String(fc.text).toUpperCase(), label: 'KFS ' + year, sub: fc.sub ? String(fc.sub) : '' },
         render: () => `
           ${W_ICONS[iconKey]}
-          <div class="wrapped-card-headline is-small">${_wEsc(fc.text)}</div>
+          <div class="wrapped-card-headline ${String(fc.text).trim().length > 70 ? 'is-message' : 'is-small'}">${_wEsc(fc.text)}</div>
           ${fc.sub ? `<div class="wrapped-card-sub">${_wEsc(fc.sub)}</div>` : ''}`,
       });
     });
   }
 
+  // ── A note from the KFS family ────────────────────────────────────────────
+  const noteBody = (config.family_note && String(config.family_note).trim())
+    || 'Thank you for making our little film family feel like home this year. Whether you came for the screenings, stayed for the adda, or just wandered in, we are glad you did. Come sit with us again soon.';
+  cards.push({
+    id: 'family-note', theme: WRAPPED_THEMES[6], label: 'A note from the KFS family',
+    share: { big: myName ? 'DEAR ' + myName.toUpperCase() : 'DEAR FRIEND', label: 'a note from the KFS family', sub: noteBody },
+    render: () => `
+      ${W_ICONS.heart}
+      <div class="wrapped-card-eyebrow">A note from the KFS family</div>
+      <div class="wrapped-card-note-text"><span class="wrapped-card-note-to">Dear ${myName ? nmH : 'friend'},</span> ${_wEsc(noteBody)}</div>
+      <div class="wrapped-card-note-sign">With love, Team KFS</div>`,
+  });
+
+  // ── One thing for next year (the only interactive card) ───────────────────
+  const nextYear = (parseInt(year, 10) || new Date().getFullYear()) + 1;
+  const picks = ['Watch ten more films', 'Make a short film', 'Join a crew', 'Bring a friend along'];
+  let savedPick = '';
+  try { savedPick = localStorage.getItem(W_RESOLVE_KEY) || ''; } catch (e) {}
+  if (picks.indexOf(savedPick) < 0) savedPick = '';
+  cards.push({
+    id: 'resolution', theme: _wrappedTheme(5), label: 'One thing for ' + nextYear,
+    share: { big: 'NEXT YEAR,\nI\u2019LL\u2026', label: 'KFS ' + nextYear, sub: savedPick },
+    render: () => `
+      ${W_ICONS.star}
+      <div class="wrapped-card-eyebrow">One for ${nextYear}</div>
+      <div class="wrapped-card-headline">Next year,<br>I\u2019ll\u2026</div>
+      <div class="wrapped-chips" role="group" aria-label="Pick one thing for next year">${picks.map(pk =>
+        `<button type="button" class="wrapped-chip" data-w-resolve="${_wEsc(pk)}" aria-pressed="${pk === savedPick}">${_wEsc(pk)}</button>`).join('')}</div>`,
+  });
+
   // ── Outro ─────────────────────────────────────────────────────────────────
-  const outroText = config.outro || `Thanks for being part of KFS ${year}.\nSee you at the next screening.`;
+  const outroText = config.outro || `Thanks for being part of KFS ${year}${myName ? ', ' + myName : ''}.\nSee you at the next screening.`;
   cards.push({
     id: 'outro', theme: _wrappedTheme(0), label: "That's a wrap",
     share: { big: "THAT'S A\nWRAP.", label: 'KFS ' + year, sub: String(outroText) },
@@ -11839,17 +12182,28 @@ function renderWrappedDeck() {
       <div class="wrapped-card-grain"></div>
       <div class="wrapped-card-inner">
         <div class="wrapped-progress" aria-hidden="true">${bars}</div>
-        <div class="wrapped-card-body">${card.render()}</div>
+        <div class="wrapped-card-body"><div class="wrapped-card-fit">${card.render()}</div></div>
       </div>`;
 
-    // staggered reveal: every direct child of the body gets an order index
-    el.querySelectorAll('.wrapped-card-body > *').forEach((c, k) => {
+    // staggered reveal: every direct child of the card content gets an order index
+    el.querySelectorAll('.wrapped-card-fit > *').forEach((c, k) => {
       c.setAttribute('data-r', '');
       c.style.setProperty('--i', k);
     });
     // a broken poster should vanish instead of leaving a grey box
     el.querySelectorAll('img').forEach(img => img.addEventListener('error', () => img.remove(), { once: true }));
     el.querySelectorAll('[data-w-share]').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); shareWrappedCard(); }));
+    // "one thing for next year" chips: remembered on this device and added to the share image
+    el.querySelectorAll('[data-w-resolve]').forEach(b => b.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const val = b.getAttribute('data-w-resolve');
+      const was = b.getAttribute('aria-pressed') === 'true';
+      el.querySelectorAll('[data-w-resolve]').forEach(x => x.setAttribute('aria-pressed', 'false'));
+      if (!was) b.setAttribute('aria-pressed', 'true');
+      try { if (was) localStorage.removeItem(W_RESOLVE_KEY); else localStorage.setItem(W_RESOLVE_KEY, val); } catch (e) {}
+      card.share.sub = was ? '' : val;
+      try { if (!was && navigator.vibrate) navigator.vibrate(10); } catch (e) {}
+    }));
 
     // right side advances, left 30% goes back (story-style tap zones)
     el.addEventListener('click', e => {
@@ -11865,6 +12219,14 @@ function renderWrappedDeck() {
 
   _wrappedBindDeck(deck);
   _wrappedApplyStates();
+  // size every card's text to its card once layout, fonts and posters have settled
+  requestAnimationFrame(() => { _wFitAll(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(_wFitSoon);
+  if (!window._wFitBound) {
+    window._wFitBound = true;
+    window.addEventListener('resize', _wFitSoon);
+    window.addEventListener('orientationchange', _wFitSoon);
+  }
 }
 
 function _wrappedApplyStates() {
@@ -11908,7 +12270,9 @@ function _wrappedApplyStates() {
     row.remove();
   }
 
-  _wrappedCountUp(deck.querySelector('.wrapped-card[data-state="active"]'));
+  const _activeCard = deck.querySelector('.wrapped-card[data-state="active"]');
+  if (_activeCard) _wFitCard(_activeCard);
+  _wrappedCountUp(_activeCard);
 }
 
 // Numbers count up when their card arrives (skipped for reduced-motion users).
@@ -12010,6 +12374,23 @@ function _wrappedBindDeck(deck) {
 // ── Loading + navigation ──────────────────────────────────────────────────────
 function _wrappedStatsOk() { return !!(_wrappedStats && typeof _wrappedStats.totalMovies === 'number'); }
 
+// Greeting + optional first name on the hero (stored only in this browser).
+function _wUpdateHello() {
+  const el = document.getElementById('wrapped-hello');
+  if (!el) return;
+  const n = _wName();
+  el.textContent = n ? `${_wGreeting()}, ${n}. Your year is ready.` : `${_wGreeting()}. Take a seat, your year is ready.`;
+}
+function _wInitHero() {
+  const input = document.getElementById('wrapped-name-input');
+  _wUpdateHello();
+  if (!input || input._wBound) return;
+  input._wBound = true;
+  input.value = _wName();
+  input.addEventListener('input', () => { _wSetName(input.value); _wUpdateHello(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); startWrapped(); } });
+}
+
 async function loadWrapped() {
   // Avoid double-loading
   if (_wrappedStats !== null) return;
@@ -12027,6 +12408,8 @@ async function loadWrapped() {
       wrappedNavLink.style.display = (_wrappedConfig.enabled === false) ? 'none' : '';
     }
 
+    _wInitHero();
+    _wMusicUi();
     const yearEl = document.getElementById('wrapped-year-label');
     const subEl  = document.getElementById('wrapped-hero-sub');
     const statsEl = document.getElementById('wrapped-hero-stats');
@@ -12049,6 +12432,10 @@ async function loadWrapped() {
 }
 
 async function startWrapped() {
+  // music has to begin inside this tap, before any awaiting, or browsers refuse to play it
+  try { wrappedMusicStart(); } catch (e) {}
+  const nameInput = document.getElementById('wrapped-name-input');
+  if (nameInput) _wSetName(nameInput.value);
   const btn = document.getElementById('wrapped-start-btn');
   const lbl = document.getElementById('wrapped-start-label');
   if (btn && btn.getAttribute('aria-busy') === 'true') return; // ignore double taps
@@ -12218,7 +12605,7 @@ async function shareWrappedCard() {
 
   // footer
   ctx.fillStyle = t.fg; ctx.globalAlpha = .65; ctx.font = `500 30px ${MONO}`;
-  ctx.fillText(`KFS Wrapped ${yearStr}`, PAD, H - 118);
+  ctx.fillText(`${_wName() ? _wName() + ' \u00B7 ' : ''}KFS Wrapped ${yearStr}`, PAD, H - 118);
   ctx.fillText('kiitfilmsociety.in/wrapped', PAD, H - 72);
   ctx.globalAlpha = 1;
 
@@ -12273,6 +12660,14 @@ async function loadWrappedAdminSection() {
     if (outroEl)   outroEl.value   = config.outro || '';
     if (bcEl)      bcEl.value      = config.broadcast || '';
     if (bcThemeEl) bcThemeEl.value = config.broadcast_theme || 'dark';
+    const mOn = document.getElementById('wrapped-cfg-music-enabled');
+    const mUrl = document.getElementById('wrapped-cfg-music-url');
+    const mTitle = document.getElementById('wrapped-cfg-music-title');
+    const noteEl = document.getElementById('wrapped-cfg-note');
+    if (mOn) mOn.checked = config.music_enabled !== false;
+    if (mUrl) mUrl.value = config.music_url || '';
+    if (mTitle) mTitle.value = config.music_title || '';
+    if (noteEl) noteEl.value = config.family_note || '';
 
     // Enabled toggle (default true if not set)
     const toggleEl = document.getElementById('wrapped-enabled-toggle');
@@ -12440,6 +12835,10 @@ async function saveWrappedConfig() {
     outro:            (document.getElementById('wrapped-cfg-outro')?.value    || '').trim(),
     broadcast:        (document.getElementById('wrapped-cfg-broadcast')?.value || '').trim(),
     broadcast_theme:  (document.getElementById('wrapped-cfg-broadcast-theme')?.value || 'dark').trim(),
+    music_enabled:    document.getElementById('wrapped-cfg-music-enabled')?.checked !== false,
+    music_url:        (document.getElementById('wrapped-cfg-music-url')?.value || '').trim(),
+    music_title:      (document.getElementById('wrapped-cfg-music-title')?.value || '').trim(),
+    family_note:      (document.getElementById('wrapped-cfg-note')?.value || '').trim(),
     featured_movie_id: (document.getElementById('wrapped-cfg-featured-movie')?.value || '').trim() || null,
     fun_cards:        _wrappedAdminFunCards.filter(fc => fc.text),
     blog_highlights:  _wrappedAdminBlogHighlights.filter(bh => bh.headline),
