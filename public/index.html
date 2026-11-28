@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
 <link rel="dns-prefetch" href="https://supabase.co">
 <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet" data-static="1">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Anton&family=Caveat:wght@600;700&display=swap" rel="stylesheet" data-static="1">
 
 <!-- ── Open Graph (WhatsApp / LinkedIn / Facebook previews) ─────────────── -->
 <meta property="og:type" content="website">
@@ -2726,55 +2726,66 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .wrapped-progress-bar{display:block;height:3px;flex:1;border-radius:3px;background:currentColor;opacity:.18;transition:opacity .4s}
 .wrapped-progress-bar.done{opacity:.55}
 .wrapped-progress-bar.active{opacity:1}
-.wrapped-card-body{margin-top:auto;display:flex;flex-direction:column;align-items:flex-start;min-height:0;width:100%}
-.wrapped-card[data-state="active"] .wrapped-card-body>[data-r]{
+.wrapped-card[data-state="active"] .wrapped-card-fit>[data-r]{
   animation:wReveal .85s var(--w-ease) backwards;animation-delay:calc(var(--i,0)*75ms + 140ms);
 }
 
-/* card typography */
-.wrapped-card-icon{width:34px;height:34px;margin-bottom:20px;display:block;color:var(--ac);flex-shrink:0}
-.wrapped-card-eyebrow{font:500 13px/1.35 var(--w-mono);letter-spacing:.01em;opacity:.8;margin-bottom:14px}
+/* card typography. Sizes follow the card width (--u = 1% of it) and are then multiplied by --fit,
+   which app.js lowers until the content really fits the card, so text can never run off the edge. */
+.wrapped-card{--fit:1;--u:calc(min(380px,90vw)/100);--uh:calc(min(640px,78vh)/100);container-type:size}
+@supports (width:1cqw){.wrapped-card{--u:1cqw;--uh:1cqh}}
+.wrapped-card-icon{width:calc(34px*var(--fit));height:calc(34px*var(--fit));margin-bottom:calc(18px*var(--fit));display:block;color:var(--ac);flex-shrink:0}
+.wrapped-card-eyebrow{font:500 13px/1.35 var(--w-mono);font-size:max(11.5px,calc(13px*var(--fit)));letter-spacing:.01em;opacity:.82;margin-bottom:calc(12px*var(--fit))}
 .wrapped-card-headline{
-  font:400 clamp(44px,13vw,64px)/.96 var(--w-display);text-transform:uppercase;letter-spacing:.005em;
-  margin:0 0 10px;text-wrap:balance;overflow-wrap:anywhere;max-width:100%;
+  font-family:var(--w-display);font-weight:400;text-transform:uppercase;letter-spacing:.005em;
+  font-size:calc(clamp(40px,calc(var(--u)*16),68px)*var(--fit));line-height:.98;
+  margin:0 0 calc(10px*var(--fit));text-wrap:balance;overflow-wrap:break-word;max-width:100%;
 }
-.wrapped-card-headline.is-title{font-size:clamp(34px,10vw,48px);line-height:1}
-.wrapped-card-headline.is-small{font-size:clamp(28px,8.4vw,38px);line-height:1.02}
-.wrapped-card-sub{font:400 15px/1.5 var(--w-body);opacity:.84;max-width:30ch;margin-top:6px;text-wrap:pretty;white-space:pre-line}
+.wrapped-card-headline.is-title{font-size:calc(clamp(30px,calc(var(--u)*11.5),50px)*var(--fit));line-height:1}
+.wrapped-card-headline.is-small{font-size:calc(clamp(24px,calc(var(--u)*8.6),38px)*var(--fit));line-height:1.04}
+/* long messages read better in a calm sentence-case face than in 60px condensed capitals */
+.wrapped-card-headline.is-message{
+  font-family:var(--w-body);font-weight:600;text-transform:none;letter-spacing:-.005em;text-wrap:pretty;
+  font-size:max(14.5px,calc(clamp(19px,calc(var(--u)*5.9),26px)*var(--fit)));line-height:1.32;
+}
+.wrapped-card-sub{
+  font:400 15px/1.5 var(--w-body);font-size:max(13px,calc(clamp(14px,calc(var(--u)*4.1),16px)*var(--fit)));
+  opacity:.86;max-width:34ch;margin-top:calc(6px*var(--fit));text-wrap:pretty;white-space:pre-line;overflow-wrap:break-word;
+}
 .wrapped-card-stat{
-  font:400 clamp(112px,36vw,164px)/.82 var(--w-display);letter-spacing:0;
-  font-variant-numeric:tabular-nums;margin:0;
+  font-family:var(--w-display);font-weight:400;font-size:calc(clamp(96px,calc(var(--u)*38),170px)*var(--fit));line-height:.82;letter-spacing:0;
+  font-variant-numeric:tabular-nums;margin:0;max-width:100%;
 }
-.wrapped-card-stat.is-long{font-size:clamp(84px,26vw,120px)}
-.wrapped-card-stat-label{font:500 14px/1.3 var(--w-mono);opacity:.84;margin-top:12px}
-.wrapped-card-rating{display:flex;align-items:baseline;gap:8px;margin-top:14px;font:400 36px/1 var(--w-display);font-variant-numeric:tabular-nums}
+.wrapped-card-stat.is-long{font-size:calc(clamp(76px,calc(var(--u)*28),124px)*var(--fit))}
+.wrapped-card-stat-label{font:500 14px/1.3 var(--w-mono);font-size:max(12px,calc(14px*var(--fit)));opacity:.86;margin-top:calc(12px*var(--fit))}
+.wrapped-card-rating{display:flex;align-items:baseline;gap:8px;margin-top:calc(14px*var(--fit));font:400 36px/1 var(--w-display);font-size:calc(36px*var(--fit));font-variant-numeric:tabular-nums}
 .wrapped-card-rating svg{width:20px;height:20px;color:var(--ac);align-self:center}
-.wrapped-card-rating small{font:500 12px/1.3 var(--w-mono);opacity:.8}
-.wrapped-card-genres{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.wrapped-card-rating small{font:500 12px/1.3 var(--w-mono);opacity:.82}
+.wrapped-card-genres{display:flex;flex-wrap:wrap;gap:8px;margin-top:calc(18px*var(--fit))}
 .wrapped-card-genre-pill{padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.26);font:500 12px/1 var(--w-mono)}
 .wrapped-card-film-poster{
-  width:112px;aspect-ratio:2/3;height:auto;object-fit:cover;border-radius:10px;margin-bottom:18px;display:block;
-  background:rgba(255,255,255,.06);box-shadow:0 20px 40px -14px rgba(0,0,0,.75);
+  width:calc(clamp(86px,calc(var(--u)*27),124px)*var(--fit));aspect-ratio:2/3;height:auto;object-fit:cover;border-radius:10px;margin-bottom:calc(16px*var(--fit));display:block;
+  background:rgba(255,255,255,.06);box-shadow:0 20px 40px -14px rgba(0,0,0,.75);flex-shrink:0;
 }
-.wrapped-card-film-poster.is-hero{width:clamp(104px,34vw,132px);rotate:-3deg;transform-origin:left bottom}
-.wrapped-card-film-row{display:flex;margin:0 0 22px;padding-left:4px}
-.wrapped-card-film-row .wrapped-card-film-poster{width:30%;max-width:104px;margin:0 -7% 0 0;border:2px solid var(--c1)}
+.wrapped-card-film-poster.is-hero{width:calc(clamp(92px,calc(var(--u)*31),132px)*var(--fit));rotate:-3deg;transform-origin:left bottom}
+.wrapped-card-film-row{display:flex;margin:0 0 calc(20px*var(--fit));padding-left:4px}
+.wrapped-card-film-row .wrapped-card-film-poster{width:30%;max-width:calc(104px*var(--fit));margin:0 -7% 0 0;border:2px solid var(--c1)}
 .wrapped-card-film-row .wrapped-card-film-poster:nth-child(1){rotate:-6deg}
 .wrapped-card-film-row .wrapped-card-film-poster:nth-child(2){z-index:2;translate:0 -6px}
 .wrapped-card-film-row .wrapped-card-film-poster:nth-child(3){rotate:6deg}
 
 /* credits-style lists: hairlines instead of nested cards */
-.wrapped-card-events-row{display:flex;flex-direction:column;margin-top:20px;width:100%;border-top:1px solid rgba(255,255,255,.16)}
+.wrapped-card-events-row{display:flex;flex-direction:column;margin-top:calc(18px*var(--fit));width:100%;border-top:1px solid rgba(255,255,255,.16)}
 .wrapped-card-event-item{
-  display:flex;align-items:center;gap:10px;padding:9px 0;min-width:0;
-  border-bottom:1px solid rgba(255,255,255,.16);font:400 13px/1.35 var(--w-mono);
+  display:flex;align-items:center;gap:10px;padding:calc(9px*var(--fit)) 0;min-width:0;
+  border-bottom:1px solid rgba(255,255,255,.16);font:400 13px/1.35 var(--w-mono);font-size:max(12px,calc(13px*var(--fit)));
 }
 .wrapped-card-event-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wrapped-card-event-item svg{flex-shrink:0;width:13px;height:13px;color:var(--ac)}
 .wrapped-card-more{font:500 12px/1.3 var(--w-mono);opacity:.75;margin-top:10px}
 .wrapped-numbers{width:100%;margin-top:18px;border-top:1px solid rgba(255,255,255,.16)}
 .wrapped-numbers-row{display:flex;align-items:baseline;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.16)}
-.wrapped-numbers-row b{font:400 40px/1 var(--w-display);letter-spacing:.01em;min-width:3.2ch;font-variant-numeric:tabular-nums}
+.wrapped-numbers-row b{font:400 40px/1 var(--w-display);font-size:calc(clamp(30px,calc(var(--u)*10.5),42px)*var(--fit));letter-spacing:.01em;min-width:3.2ch;font-variant-numeric:tabular-nums}
 .wrapped-numbers-row span{font:500 13px/1.3 var(--w-mono);opacity:.84}
 .wrapped-card-actions{display:flex;margin-top:22px}
 .wrapped-card-btn{
@@ -2787,13 +2798,13 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 
 /* admin-curated year highlight cards */
 .wrapped-card-blog-highlight{display:flex;flex-direction:column;align-items:flex-start;width:100%}
-.wrapped-card-blog-img{width:100%;height:clamp(120px,22vh,170px);object-fit:cover;border-radius:12px;margin-bottom:16px;display:block;box-shadow:0 18px 36px -14px rgba(0,0,0,.7)}
-.wrapped-card-blog-title{font:400 clamp(30px,9vw,42px)/1 var(--w-display);text-transform:uppercase;letter-spacing:.005em;text-wrap:balance;overflow-wrap:anywhere}
+.wrapped-card-blog-img{width:100%;height:calc(clamp(96px,calc(var(--uh)*24),170px)*var(--fit));object-fit:cover;border-radius:12px;margin-bottom:calc(16px*var(--fit));display:block;box-shadow:0 18px 36px -14px rgba(0,0,0,.7)}
+.wrapped-card-blog-title{font:400 42px/1 var(--w-display);font-size:calc(clamp(28px,calc(var(--u)*10.5),44px)*var(--fit));text-transform:uppercase;letter-spacing:.005em;text-wrap:balance;overflow-wrap:break-word;max-width:100%}
 .wrapped-card-blog-sub{font:400 15px/1.5 var(--w-body);opacity:.84;max-width:32ch;margin-top:10px;white-space:pre-line;text-wrap:pretty}
 
 @media (prefers-reduced-motion:reduce){
   .wrapped-hero-copy>*,.wrapped-art-card,.wrapped-restart-row,
-  .wrapped-card[data-state="active"] .wrapped-card-body>[data-r],
+  .wrapped-card[data-state="active"] .wrapped-card-fit>[data-r],
   .wrapped-card[data-state="active"] .wrapped-card-leak,.wrapped-hero-badge-dot{animation:none!important}
   .wrapped-card{transition:opacity .25s linear!important}
   .wrapped-card[data-state="gone"],.wrapped-card[data-state="next1"],.wrapped-card[data-state="next2"],.wrapped-card[data-state="far"]{transform:none!important;filter:none!important}
@@ -2814,6 +2825,118 @@ body.light-mode .perm-check-item:hover{background:rgba(0,0,0,.04)}
 .wrapped-admin-fun-icon-opt:hover,.wrapped-admin-fun-icon-opt.sel{border-color:var(--white);color:var(--white)}
 .wrapped-admin-highlight-row{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)}
 .wrapped-admin-highlight-thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border);background:var(--card)}
+
+
+/* ── Wrapped v2: fit-to-card body, calmer deck, personal cards, hero name, music ── */
+.wrapped-card-body{flex:1 1 auto;min-height:0;margin-top:14px;width:100%;position:relative;display:flex;flex-direction:column;justify-content:flex-end}
+.wrapped-card-fit{display:flex;flex-direction:column;align-items:flex-start;width:100%;flex:none}
+.wrapped-card-body.is-scroll{
+  justify-content:flex-start;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;touch-action:pan-y;
+  -webkit-mask-image:linear-gradient(#000 calc(100% - 30px),transparent);mask-image:linear-gradient(#000 calc(100% - 30px),transparent);
+}
+.wrapped-card-body.is-scroll::-webkit-scrollbar{display:none}
+
+/* only the front card shows its content; the cards peeking behind it are plain colour (no more text bleeding through) */
+.wrapped-card-inner{opacity:0;transition:opacity .28s var(--w-ease)}
+.wrapped-card[data-state="active"] .wrapped-card-inner{
+  opacity:1;transform:perspective(900px) rotateY(calc(var(--px,0)*4deg)) rotateX(calc(var(--py,0)*-4deg));
+  transition:transform .45s var(--w-ease),opacity .5s var(--w-ease) .12s;
+}
+@media(min-width:641px){
+  .wrapped-deck{width:min(420px,88vw);height:clamp(540px,calc(100dvh - 190px),720px)}
+}
+
+/* personal cards */
+.wrapped-taste{display:flex;flex-direction:column;gap:calc(12px*var(--fit));width:100%;margin-top:calc(18px*var(--fit))}
+.wrapped-taste-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;font:500 13px/1.3 var(--w-mono)}
+.wrapped-taste-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrapped-taste-row b{font-weight:500;opacity:.85;font-variant-numeric:tabular-nums}
+.wrapped-taste-row i{grid-column:1/-1;display:block;height:6px;border-radius:6px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}
+.wrapped-taste-row i::after{content:'';position:absolute;inset:0;border-radius:inherit;background:var(--ac);transform-origin:left center;transform:scaleX(var(--p,.5))}
+.wrapped-card[data-state="active"] .wrapped-taste-row i::after{animation:wBar 1.1s var(--w-ease) backwards;animation-delay:calc(var(--k,0)*90ms + 420ms)}
+@keyframes wBar{from{transform:scaleX(0)}}
+
+.wrapped-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;align-items:end;width:100%;height:calc(84px*var(--fit));margin-top:calc(18px*var(--fit))}
+.wrapped-months i{display:block;height:calc(var(--h,.1)*100%);border-radius:3px;background:currentColor;opacity:.26;transform-origin:bottom center}
+.wrapped-months i.is-top{background:var(--ac);opacity:1}
+.wrapped-card[data-state="active"] .wrapped-months i{animation:wGrow .9s var(--w-ease) backwards;animation-delay:calc(var(--k,0)*40ms + 380ms)}
+@keyframes wGrow{from{transform:scaleY(0)}}
+.wrapped-months-axis{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;width:100%;margin-top:6px;font:500 11px/1 var(--w-mono);opacity:.75;text-align:center}
+
+.wrapped-badges{display:flex;flex-direction:column;width:100%;margin-top:calc(14px*var(--fit));border-top:1px solid rgba(255,255,255,.16)}
+.wrapped-badge{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:center;gap:12px;padding:calc(7px*var(--fit)) 0;border-bottom:1px solid rgba(255,255,255,.16);min-width:0}
+.wrapped-badge svg{width:13px;height:13px;color:var(--ac)}
+.wrapped-badge div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wrapped-badge b{font:500 13px/1.25 var(--w-mono);font-size:max(12px,calc(13px*var(--fit)))}
+.wrapped-badge span{font:400 12px/1.25 var(--w-mono);font-size:max(11.5px,calc(12px*var(--fit)));opacity:.78}
+.wrapped-badge:not(.is-on){opacity:.55}
+.wrapped-badge:not(.is-on) svg{color:currentColor}
+
+.wrapped-card-note-text{
+  font-family:'Caveat','Segoe Script','Bradley Hand','Comic Sans MS',cursive;font-weight:600;
+  font-size:max(20px,calc(clamp(22px,calc(var(--u)*7.4),30px)*var(--fit)));line-height:1.26;
+  text-wrap:pretty;overflow-wrap:break-word;max-width:100%;margin-top:calc(4px*var(--fit));
+}
+.wrapped-card-note-to{color:var(--ac);font-weight:700}
+.wrapped-card-note-sign{
+  font-family:'Caveat','Segoe Script','Bradley Hand','Comic Sans MS',cursive;font-weight:700;color:var(--ac);
+  font-size:max(24px,calc(clamp(26px,calc(var(--u)*8.6),34px)*var(--fit)));margin-top:calc(14px*var(--fit));rotate:-2deg;transform-origin:left center;
+}
+
+.wrapped-chips{display:flex;flex-wrap:wrap;gap:8px;width:100%;margin-top:calc(18px*var(--fit))}
+.wrapped-chip{
+  min-height:44px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.32);background:transparent;color:var(--fg);
+  font:500 13px/1.2 var(--w-mono);cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background .3s var(--w-ease),color .3s var(--w-ease),border-color .3s,transform .3s var(--w-ease);
+}
+.wrapped-chip:hover{border-color:var(--fg)}
+.wrapped-chip:active{transform:scale(.97)}
+.wrapped-chip[aria-pressed="true"]{background:var(--fg);color:var(--c1);border-color:var(--fg)}
+.wrapped-chip:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+
+/* hero: greeting + name */
+.wrapped-hello{font:500 clamp(13px,1.5vw,14px)/1.45 var(--w-mono);color:var(--grey);margin:0 0 14px;max-width:44ch;text-wrap:pretty}
+.wrapped-hello:empty{display:none}
+.wrapped-hero-copy>*:nth-child(7){animation-delay:.58s}
+.wrapped-hero-copy>*:nth-child(8){animation-delay:.66s}
+.wrapped-name{display:flex;flex-direction:column;gap:8px;margin:0 0 20px;width:min(100%,340px);max-width:100%;box-sizing:border-box}
+.wrapped-name *{box-sizing:border-box}
+.wrapped-name label{font:500 12px/1.4 var(--w-mono);color:var(--grey)}
+.wrapped-name label span{opacity:.8}
+.wrapped-name input{
+  width:100%;min-width:0;height:48px;padding:0 20px;border-radius:999px;border:1px solid var(--w-line);background:var(--card);
+  color:var(--white);font:500 16px/1 var(--w-body); /* 16px stops iOS from zooming the page on focus */
+}
+.wrapped-name input::placeholder{color:var(--grey);opacity:1}
+.wrapped-name input:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+
+/* music: one small control + credit; equaliser moves only while sound is on */
+.wrapped-music-btn{
+  width:44px;height:44px;border-radius:50%;border:1px solid var(--w-line);background:transparent;color:var(--white);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative;flex-shrink:0;
+  transition:background .25s,transform .35s var(--w-ease);-webkit-tap-highlight-color:transparent;
+}
+.wrapped-music-btn[hidden]{display:none}
+.wrapped-music-btn:hover{background:var(--card)}
+.wrapped-music-btn:active{transform:scale(.94)}
+.wrapped-music-btn:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+.wrapped-eq{display:flex;align-items:flex-end;gap:2px;height:16px}
+.wrapped-eq i{display:block;width:3px;height:100%;border-radius:2px;background:currentColor;transform-origin:bottom center;transform:scaleY(.22)}
+.wrapped-music-btn[data-on="true"] .wrapped-eq i{animation:wEq .9s ease-in-out infinite alternate}
+.wrapped-music-btn[data-on="true"] .wrapped-eq i:nth-child(2){animation-duration:.7s;animation-delay:-.3s}
+.wrapped-music-btn[data-on="true"] .wrapped-eq i:nth-child(3){animation-duration:1.1s;animation-delay:-.6s}
+.wrapped-music-btn[data-on="true"] .wrapped-eq i:nth-child(4){animation-duration:.8s;animation-delay:-.1s}
+.wrapped-music-btn[data-on="false"]{color:var(--grey)}
+.wrapped-music-btn[data-on="false"]::after{content:'';position:absolute;width:22px;height:1.5px;background:currentColor;rotate:-45deg;border-radius:2px}
+@keyframes wEq{from{transform:scaleY(.22)}to{transform:scaleY(1)}}
+.wrapped-music-credit{font:400 11.5px/1.45 var(--w-mono);color:var(--grey);text-align:center;margin:10px auto 0;max-width:min(92vw,440px);padding:0 12px;text-wrap:balance}
+.wrapped-music-credit[hidden]{display:none}
+@media(max-width:380px){.wrapped-nav{gap:8px}.wrapped-share-btn{padding:11px 14px}}
+
+@media (prefers-reduced-motion:reduce){
+  .wrapped-taste-row i::after,.wrapped-months i,.wrapped-music-btn .wrapped-eq i{animation:none!important}
+  .wrapped-card-inner,.wrapped-chip{transition:opacity .2s linear!important}
+}
 
 /* ── SMART RECOMMENDATIONS ───────────────────────────────────── */
 .film-recs-section{margin-top:48px;padding-top:36px;border-top:1px solid var(--border)}
@@ -4230,6 +4353,7 @@ body.light-mode .psw-comment-gate a{color:#111}
           <span class="wrapped-hero-badge-dot"></span>
           <span id="wrapped-year-label">KFS · 2025</span>
         </div>
+        <p class="wrapped-hello" id="wrapped-hello" aria-live="polite"></p>
         <h1 class="wrapped-hero-title">Your Year<br><em>at KFS</em></h1>
         <p class="wrapped-hero-sub" id="wrapped-hero-sub">Films watched. Events attended. Stories read. Your KFS year, in cards.</p>
         <div class="wrapped-hero-stats" id="wrapped-hero-stats" style="display:none">
@@ -4248,11 +4372,15 @@ body.light-mode .psw-comment-gate a{color:#111}
             <div class="wrapped-hero-stat-label">Reads</div>
           </div>
         </div>
+        <div class="wrapped-name">
+          <label for="wrapped-name-input">What should we call you? <span>(optional, stays on this device)</span></label>
+          <input type="text" id="wrapped-name-input" maxlength="24" autocomplete="given-name" enterkeyhint="go" placeholder="Your first name">
+        </div>
         <button data-action="startWrapped" class="wrapped-start-btn" id="wrapped-start-btn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
           <span id="wrapped-start-label">See Your Wrapped</span>
         </button>
-        <p class="wrapped-hint">Use the arrow keys or tap the card. Swipe on mobile.</p>
+        <p class="wrapped-hint">Tap the card, use the arrow keys, or swipe. Soft music plays while you browse; mute it any time.</p>
       </div>
       <div class="wrapped-hero-art" aria-hidden="true">
         <div class="wrapped-art-card">
@@ -4280,11 +4408,15 @@ body.light-mode .psw-comment-gate a{color:#111}
     </div>
     <div class="wrapped-nav">
       <span class="wrapped-count" id="wrapped-count" aria-hidden="true"></span>
+      <button type="button" data-action="toggleWrappedMusic" class="wrapped-music-btn" id="wrapped-music-btn" aria-pressed="false" aria-label="Play background music" hidden>
+        <span class="wrapped-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </button>
       <button data-action="shareWrappedCard" class="wrapped-share-btn" id="wrapped-share-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         Share this card
       </button>
     </div>
+    <p class="wrapped-music-credit" id="wrapped-music-credit" hidden></p>
     <div class="wrapped-sr" id="wrapped-live" aria-live="polite"></div>
   </div>
 
@@ -6013,6 +6145,14 @@ KFS — KIIT Film Society"></textarea>
         <div class="form-group"><label>Year (shown on Wrapped page)</label><input type="text" id="wrapped-cfg-year" placeholder="e.g. 2025" style="max-width:160px"></div>
         <div class="form-group"><label>Hero subtitle</label><input type="text" id="wrapped-cfg-sub" placeholder="e.g. Films watched. Events attended. Stories read."></div>
         <div class="form-group"><label>Closing message (last card)</label><textarea id="wrapped-cfg-outro" rows="3" placeholder="e.g. Thanks for being part of KFS this year. See you at the next screening."></textarea></div>
+      </div>
+      <div class="admin-card" style="margin-bottom:20px">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Soundtrack &amp; Family Note</h3>
+        <p style="font-size:12px;color:var(--grey);margin-bottom:16px">Soft background music starts when someone taps See Your Wrapped. Leave the link blank to use the default track (Dreamy Flashback by Kevin MacLeod, CC BY 4.0, credited on the page).</p>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="wrapped-cfg-music-enabled" checked> Play background music</label></div>
+        <div class="form-group"><label>Custom music link (direct https .mp3 / .ogg)</label><input type="text" id="wrapped-cfg-music-url" placeholder="https://… (its host must be allowed in mediaSrc in server.js)"></div>
+        <div class="form-group"><label>Credit line (shown under the player)</label><input type="text" id="wrapped-cfg-music-title" placeholder="e.g. Song name by Artist, licence"></div>
+        <div class="form-group"><label>Note from the KFS family (shown to everyone as a letter card)</label><textarea id="wrapped-cfg-note" rows="4" placeholder="Leave blank to use the default letter"></textarea></div>
       </div>
       <div class="admin-card" style="margin-bottom:20px">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--white)">Featured Movie of the Year</h3>
